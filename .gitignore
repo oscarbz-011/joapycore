@@ -34,5 +34,8 @@ coverage/
 # pnpm
 .pnpm-store/
 
-# Front-end is a separate repo managed independently
-front/
+# Next.js build output
+.next/
+
+# Ignore all other files by default
+.claude/
