@@ -10,7 +10,7 @@ import {
   CheckCircle2,
   Lock,
 } from 'lucide-react';
-import { useAuth } from '../../lib/auth-context';
+import { useAuth } from '../../../lib/auth-context';
 
 const ALL_MODULES = [
   { key: 'sales', label: 'Ventas', icon: ShoppingCart },
