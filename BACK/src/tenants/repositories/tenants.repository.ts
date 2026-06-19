@@ -1,10 +1,11 @@
 import { Injectable } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { Industry, Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { PrismaClientOrTx } from '../../prisma/types';
 
 interface CreateTenantData {
   name: string;
+  industry: Industry;
   plan?: string;
 }
 

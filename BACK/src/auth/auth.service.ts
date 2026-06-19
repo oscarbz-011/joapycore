@@ -50,7 +50,7 @@ export class AuthService {
 
     const user = await this.prisma.$transaction(async (tx) => {
       const tenant = await this.tenantsRepository.create(
-        { name: dto.tenantName },
+        { name: dto.tenantName, industry: dto.industry },
         tx,
       );
       const ownerRole = await this.rolesRepository.create(
@@ -77,15 +77,13 @@ export class AuthService {
         tx,
       );
       await this.usersRepository.attachRole(createdUser.id, ownerRole.id, tx);
-      await this.tenantModulesRepository.seedDefaults(tenant.id, tx);
+      await this.tenantModulesRepository.seedDefaults(tenant.id, dto.industry, tx);
       return createdUser;
     });
 
     const tokens = await this.issueTokens(user);
-    this.eventEmitter.emit('user.registered', {
-      userId: user.id,
-      tenantId: user.tenantId,
-    });
+    this.eventEmitter.emit('user.registered', { userId: user.id, tenantId: user.tenantId });
+    this.eventEmitter.emit('tenant.registered', { tenantId: user.tenantId, industry: dto.industry });
     return tokens;
   }
 

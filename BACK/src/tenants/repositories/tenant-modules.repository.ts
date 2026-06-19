@@ -1,28 +1,20 @@
 import { Injectable } from '@nestjs/common';
+import { Industry } from '@prisma/client';
+import { ACTIVE_MODULES_BY_INDUSTRY, ALL_TENANT_MODULES } from '../../common/constants/modules.constant';
 import { PrismaService } from '../../prisma/prisma.service';
 import { PrismaClientOrTx } from '../../prisma/types';
-import {
-  DEFAULT_ACTIVE_MODULES,
-  DEFAULT_INACTIVE_MODULES,
-} from '../../common/constants/modules.constant';
 
 @Injectable()
 export class TenantModulesRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  seedDefaults(tenantId: string, client: PrismaClientOrTx = this.prisma) {
-    const rows = [
-      ...DEFAULT_ACTIVE_MODULES.map((moduleName) => ({
-        tenantId,
-        moduleName,
-        active: true,
-      })),
-      ...DEFAULT_INACTIVE_MODULES.map((moduleName) => ({
-        tenantId,
-        moduleName,
-        active: false,
-      })),
-    ];
+  seedDefaults(tenantId: string, industry: Industry, client: PrismaClientOrTx = this.prisma) {
+    const activeModules = ACTIVE_MODULES_BY_INDUSTRY[industry] ?? [];
+    const rows = ALL_TENANT_MODULES.map((moduleName) => ({
+      tenantId,
+      moduleName,
+      active: activeModules.includes(moduleName),
+    }));
     return client.tenantModule.createMany({ data: rows });
   }
 
