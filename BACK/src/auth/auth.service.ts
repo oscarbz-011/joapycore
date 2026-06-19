@@ -146,21 +146,21 @@ export class AuthService {
   private async issueTokens(user: User) {
     const userRoles = await this.usersRepository.findRolesForUser(user.id);
     const roles = userRoles.map((userRole) => userRole.role.name);
-    const permissions = Array.from(
-      new Set(
-        userRoles.flatMap((userRole) =>
-          userRole.role.rolePermissions.map(
-            (rolePermission) => rolePermission.permission.key,
-          ),
-        ),
-      ),
+    const rolePermissions = userRoles.flatMap((userRole) =>
+      userRole.role.rolePermissions.map((rp) => rp.permission.key),
     );
+    const userExtraPermissions = await this.usersRepository.findPermissionsForUser(user.id);
+    const extraKeys = userExtraPermissions.map((up) => up.permission.key);
+    const permissions = Array.from(new Set([...rolePermissions, ...extraKeys]));
     const activeModules =
       await this.tenantModulesRepository.findActiveModuleNames(user.tenantId);
+
+    const tenant = await this.tenantsRepository.findById(user.tenantId);
 
     const payload: JwtPayload = {
       sub: user.id,
       tenantId: user.tenantId,
+      tenantName: tenant?.name ?? '',
       email: user.email,
       roles,
       permissions,
