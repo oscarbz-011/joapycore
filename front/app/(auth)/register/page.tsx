@@ -8,14 +8,17 @@ import { useState } from 'react';
 import { useAuth } from '../../../lib/auth-context';
 import axios from 'axios';
 
+const INDUSTRIES = [
+  { value: 'electrodomesticos', label: 'Electrodomésticos' },
+] as const;
+
 const schema = z.object({
   tenantName: z.string().min(2, 'El nombre de la empresa debe tener al menos 2 caracteres'),
+  industry: z.enum(['electrodomesticos'], { required_error: 'Seleccioná un rubro' }),
   firstName: z.string().min(1, 'El nombre es requerido'),
   lastName: z.string().min(1, 'El apellido es requerido'),
   email: z.string().min(1, 'El email es requerido').email('Email inválido'),
-  password: z
-    .string()
-    .min(8, 'La contraseña debe tener al menos 8 caracteres'),
+  password: z.string().min(8, 'La contraseña debe tener al menos 8 caracteres'),
 });
 
 type FormValues = z.infer<typeof schema>;
@@ -44,6 +47,9 @@ export default function RegisterPage() {
     }
   };
 
+  const inputClass =
+    'w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900 placeholder-slate-400 outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-200';
+
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-8">
       <div className="mb-8 text-center">
@@ -64,11 +70,35 @@ export default function RegisterPage() {
             type="text"
             autoComplete="organization"
             {...register('tenantName')}
-            className="w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900 placeholder-slate-400 outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-200"
+            className={inputClass}
             placeholder="Mi Empresa S.A."
           />
           {errors.tenantName && (
             <p className="mt-1.5 text-xs text-red-600">{errors.tenantName.message}</p>
+          )}
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1.5" htmlFor="industry">
+            Rubro
+          </label>
+          <select
+            id="industry"
+            {...register('industry')}
+            className={inputClass}
+            defaultValue=""
+          >
+            <option value="" disabled>
+              Seleccioná tu rubro
+            </option>
+            {INDUSTRIES.map((ind) => (
+              <option key={ind.value} value={ind.value}>
+                {ind.label}
+              </option>
+            ))}
+          </select>
+          {errors.industry && (
+            <p className="mt-1.5 text-xs text-red-600">{errors.industry.message}</p>
           )}
         </div>
 
@@ -82,7 +112,7 @@ export default function RegisterPage() {
               type="text"
               autoComplete="given-name"
               {...register('firstName')}
-              className="w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900 placeholder-slate-400 outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-200"
+              className={inputClass}
               placeholder="Juan"
             />
             {errors.firstName && (
@@ -99,7 +129,7 @@ export default function RegisterPage() {
               type="text"
               autoComplete="family-name"
               {...register('lastName')}
-              className="w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900 placeholder-slate-400 outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-200"
+              className={inputClass}
               placeholder="García"
             />
             {errors.lastName && (
@@ -117,7 +147,7 @@ export default function RegisterPage() {
             type="email"
             autoComplete="email"
             {...register('email')}
-            className="w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900 placeholder-slate-400 outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-200"
+            className={inputClass}
             placeholder="tu@empresa.com"
           />
           {errors.email && (
@@ -134,7 +164,7 @@ export default function RegisterPage() {
             type="password"
             autoComplete="new-password"
             {...register('password')}
-            className="w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900 placeholder-slate-400 outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-200"
+            className={inputClass}
             placeholder="Mínimo 8 caracteres"
           />
           {errors.password && (
