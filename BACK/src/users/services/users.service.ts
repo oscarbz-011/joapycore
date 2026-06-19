@@ -10,6 +10,7 @@ import { UserStatus } from '@prisma/client';
 import { RolesRepository } from '../repositories/roles.repository';
 import { UsersRepository } from '../repositories/users.repository';
 import { AssignUserRolesDto } from '../dto/assign-user-roles.dto';
+import { ChangePasswordDto } from '../dto/change-password.dto';
 import { CreateUserDto } from '../dto/create-user.dto';
 import { UpdateUserDto } from '../dto/update-user.dto';
 import { toSafeUserWithRoles } from '../entities/user.entity';
@@ -78,6 +79,17 @@ export class UsersService {
 
     await this.usersRepository.setRoles(id, dto.roleIds);
     return this.getById(tenantId, id);
+  }
+
+  async changePassword(userId: string, dto: ChangePasswordDto) {
+    const user = await this.usersRepository.findByIdForAuth(userId);
+    if (!user) throw new NotFoundException('User not found');
+
+    const matches = await bcrypt.compare(dto.currentPassword, user.passwordHash);
+    if (!matches) throw new BadRequestException('La contraseña actual es incorrecta');
+
+    const newHash = await bcrypt.hash(dto.newPassword, SALT_ROUNDS);
+    await this.usersRepository.update(user.tenantId, userId, { passwordHash: newHash });
   }
 
   async setExtraPermissions(tenantId: string, id: string, permissionKeys: string[]) {

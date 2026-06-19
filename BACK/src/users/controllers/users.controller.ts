@@ -1,18 +1,47 @@
 import { Body, Controller, Get, Param, Patch, Post, Put } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CurrentTenant } from '../../common/decorators/current-tenant.decorator';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Permissions } from '../../common/decorators/permissions.decorator';
+import type { JwtPayload } from '../../common/types/jwt-payload.interface';
+import { AssignPermissionsDto } from '../dto/assign-permissions.dto';
 import { AssignUserRolesDto } from '../dto/assign-user-roles.dto';
+import { ChangePasswordDto } from '../dto/change-password.dto';
 import { CreateUserDto } from '../dto/create-user.dto';
 import { UpdateUserDto } from '../dto/update-user.dto';
 import { UsersService } from '../services/users.service';
-import { AssignPermissionsDto } from '../dto/assign-permissions.dto';
 
 @ApiTags('Users')
 @ApiBearerAuth()
 @Controller('users')
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
+
+  // ── Self-service (all authenticated users) ─────────────────────────────────
+
+  @Get('me')
+  @ApiOperation({ summary: 'Get own profile' })
+  getMe(@CurrentUser() user: JwtPayload, @CurrentTenant() tenantId: string) {
+    return this.usersService.getById(tenantId, user.sub);
+  }
+
+  @Patch('me')
+  @ApiOperation({ summary: 'Update own profile (firstName, lastName)' })
+  updateMe(
+    @CurrentUser() user: JwtPayload,
+    @CurrentTenant() tenantId: string,
+    @Body() dto: UpdateUserDto,
+  ) {
+    return this.usersService.update(tenantId, user.sub, dto);
+  }
+
+  @Post('me/change-password')
+  @ApiOperation({ summary: 'Change own password' })
+  changePassword(@CurrentUser() user: JwtPayload, @Body() dto: ChangePasswordDto) {
+    return this.usersService.changePassword(user.sub, dto);
+  }
+
+  // ── Admin operations ────────────────────────────────────────────────────────
 
   @Get()
   @Permissions('users:read')

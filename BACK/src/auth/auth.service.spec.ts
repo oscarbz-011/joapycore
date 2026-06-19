@@ -113,6 +113,7 @@ describe('AuthService', () => {
 
       const result = await service.register({
         tenantName: 'Acme',
+        industry: 'electrodomesticos',
         firstName: 'Ada',
         lastName: 'Lovelace',
         email: 'owner@example.com',
