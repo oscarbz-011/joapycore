@@ -10,6 +10,11 @@ interface CreateUserData {
   lastName: string;
 }
 
+const WITH_ROLES_AND_PERMISSIONS = {
+  userRoles: { include: { role: { select: { id: true, name: true } } } },
+  userPermissions: { include: { permission: { select: { id: true, key: true } } } },
+} as const;
+
 @Injectable()
 export class UsersRepository {
   constructor(private readonly prisma: PrismaService) {}
@@ -21,7 +26,10 @@ export class UsersRepository {
   }
 
   findById(tenantId: string, id: string) {
-    return this.prisma.user.findFirst({ where: { id, tenantId } });
+    return this.prisma.user.findFirst({
+      where: { id, tenantId },
+      include: WITH_ROLES_AND_PERMISSIONS,
+    });
   }
 
   // No tenant scoping: used only during authentication flows (e.g. refresh token
@@ -33,6 +41,7 @@ export class UsersRepository {
   findAll(tenantId: string) {
     return this.prisma.user.findMany({
       where: { tenantId },
+      include: WITH_ROLES_AND_PERMISSIONS,
       orderBy: { createdAt: 'asc' },
     });
   }
@@ -64,6 +73,13 @@ export class UsersRepository {
     });
   }
 
+  findPermissionsForUser(userId: string) {
+    return this.prisma.userPermission.findMany({
+      where: { userId },
+      include: { permission: true },
+    });
+  }
+
   attachRole(
     userId: string,
     roleId: string,
@@ -77,6 +93,15 @@ export class UsersRepository {
     if (roleIds.length > 0) {
       await this.prisma.userRole.createMany({
         data: roleIds.map((roleId) => ({ userId, roleId })),
+      });
+    }
+  }
+
+  async setPermissions(userId: string, permissionIds: string[]) {
+    await this.prisma.userPermission.deleteMany({ where: { userId } });
+    if (permissionIds.length > 0) {
+      await this.prisma.userPermission.createMany({
+        data: permissionIds.map((permissionId) => ({ userId, permissionId })),
       });
     }
   }

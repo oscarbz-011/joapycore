@@ -57,6 +57,10 @@ export class RolesService {
     await this.rolesRepository.delete(tenantId, id);
   }
 
+  listAllPermissions() {
+    return this.rolesRepository.findAllPermissions();
+  }
+
   async assignPermissions(
     tenantId: string,
     id: string,

@@ -70,4 +70,11 @@ export class RolesController {
   ) {
     return this.rolesService.assignPermissions(tenantId, id, dto);
   }
+
+  @Get('meta/permissions')
+  @Permissions('roles:manage')
+  @ApiOperation({ summary: 'List all available permission keys' })
+  listPermissions() {
+    return this.rolesService.listAllPermissions();
+  }
 }

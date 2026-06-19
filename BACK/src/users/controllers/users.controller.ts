@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Put } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CurrentTenant } from '../../common/decorators/current-tenant.decorator';
 import { Permissions } from '../../common/decorators/permissions.decorator';
@@ -6,6 +6,7 @@ import { AssignUserRolesDto } from '../dto/assign-user-roles.dto';
 import { CreateUserDto } from '../dto/create-user.dto';
 import { UpdateUserDto } from '../dto/update-user.dto';
 import { UsersService } from '../services/users.service';
+import { AssignPermissionsDto } from '../dto/assign-permissions.dto';
 
 @ApiTags('Users')
 @ApiBearerAuth()
@@ -61,5 +62,16 @@ export class UsersController {
     @Body() dto: AssignUserRolesDto,
   ) {
     return this.usersService.assignRoles(tenantId, id, dto);
+  }
+
+  @Put(':id/permissions')
+  @Permissions('roles:manage')
+  @ApiOperation({ summary: 'Set extra permissions for a user (on top of their roles)' })
+  setExtraPermissions(
+    @CurrentTenant() tenantId: string,
+    @Param('id') id: string,
+    @Body() dto: AssignPermissionsDto,
+  ) {
+    return this.usersService.setExtraPermissions(tenantId, id, dto.permissions);
   }
 }
