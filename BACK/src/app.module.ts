@@ -6,6 +6,10 @@ import { AuthModule } from './auth/auth.module';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { PermissionsGuard } from './common/guards/permissions.guard';
 import { TenantModuleGuard } from './common/guards/tenant-module.guard';
+import { BillingModule } from './modules/billing/billing.module';
+import { InventoryModule } from './modules/inventory/inventory.module';
+import { ProcurementModule } from './modules/procurement/procurement.module';
+import { SalesModule } from './modules/sales/sales.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { TenantsModule } from './tenants/tenants.module';
 import { UsersModule } from './users/users.module';
@@ -18,6 +22,10 @@ import { UsersModule } from './users/users.module';
     AuthModule,
     UsersModule,
     TenantsModule,
+    InventoryModule,
+    ProcurementModule,
+    SalesModule,
+    BillingModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },
