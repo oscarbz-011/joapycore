@@ -1,0 +1,188 @@
+'use client';
+
+import { useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { usersApi } from '../../../../../lib/api/users';
+
+function useProfile() {
+  return useQuery({ queryKey: ['me'], queryFn: usersApi.getMe });
+}
+
+function ProfileForm({ firstName, lastName }: { firstName: string; lastName: string }) {
+  const queryClient = useQueryClient();
+  const [form, setForm] = useState({ firstName, lastName });
+  const [success, setSuccess] = useState(false);
+
+  const mutation = useMutation({
+    mutationFn: () => usersApi.updateMe(form),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['me'] });
+      setSuccess(true);
+      setTimeout(() => setSuccess(false), 2500);
+    },
+  });
+
+  const isDirty = form.firstName !== firstName || form.lastName !== lastName;
+
+  return (
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        mutation.mutate();
+      }}
+      className="space-y-4"
+    >
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1">Nombre</label>
+          <input
+            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500"
+            value={form.firstName}
+            onChange={(e) => setForm((f) => ({ ...f, firstName: e.target.value }))}
+            required
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1">Apellido</label>
+          <input
+            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500"
+            value={form.lastName}
+            onChange={(e) => setForm((f) => ({ ...f, lastName: e.target.value }))}
+            required
+          />
+        </div>
+      </div>
+
+      <div className="flex items-center gap-3">
+        <button
+          type="submit"
+          disabled={!isDirty || mutation.isPending}
+          className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-50 transition-colors"
+        >
+          {mutation.isPending ? 'Guardando...' : 'Guardar cambios'}
+        </button>
+        {success && <span className="text-sm text-green-600">Cambios guardados</span>}
+        {mutation.isError && (
+          <span className="text-sm text-red-600">Error al guardar</span>
+        )}
+      </div>
+    </form>
+  );
+}
+
+function PasswordForm() {
+  const [form, setForm] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
+  const [success, setSuccess] = useState(false);
+  const [localError, setLocalError] = useState('');
+
+  const mutation = useMutation({
+    mutationFn: () =>
+      usersApi.changePassword({
+        currentPassword: form.currentPassword,
+        newPassword: form.newPassword,
+      }),
+    onSuccess: () => {
+      setForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
+      setSuccess(true);
+      setTimeout(() => setSuccess(false), 2500);
+    },
+    onError: (err: Error & { response?: { data?: { message?: string } } }) => {
+      setLocalError(err?.response?.data?.message ?? 'Error al cambiar contraseña');
+    },
+  });
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setLocalError('');
+    if (form.newPassword !== form.confirmPassword) {
+      setLocalError('Las contraseñas nuevas no coinciden');
+      return;
+    }
+    if (form.newPassword.length < 8) {
+      setLocalError('La contraseña nueva debe tener al menos 8 caracteres');
+      return;
+    }
+    mutation.mutate();
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div>
+        <label className="block text-sm font-medium text-slate-700 mb-1">Contraseña actual</label>
+        <input
+          type="password"
+          className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500"
+          value={form.currentPassword}
+          onChange={(e) => setForm((f) => ({ ...f, currentPassword: e.target.value }))}
+          required
+          autoComplete="current-password"
+        />
+      </div>
+      <div>
+        <label className="block text-sm font-medium text-slate-700 mb-1">Nueva contraseña</label>
+        <input
+          type="password"
+          className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500"
+          value={form.newPassword}
+          onChange={(e) => setForm((f) => ({ ...f, newPassword: e.target.value }))}
+          required
+          autoComplete="new-password"
+          minLength={8}
+        />
+      </div>
+      <div>
+        <label className="block text-sm font-medium text-slate-700 mb-1">Confirmar nueva contraseña</label>
+        <input
+          type="password"
+          className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500"
+          value={form.confirmPassword}
+          onChange={(e) => setForm((f) => ({ ...f, confirmPassword: e.target.value }))}
+          required
+          autoComplete="new-password"
+        />
+      </div>
+
+      <div className="flex items-center gap-3">
+        <button
+          type="submit"
+          disabled={mutation.isPending}
+          className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-50 transition-colors"
+        >
+          {mutation.isPending ? 'Guardando...' : 'Cambiar contraseña'}
+        </button>
+        {success && <span className="text-sm text-green-600">Contraseña actualizada</span>}
+        {localError && <span className="text-sm text-red-600">{localError}</span>}
+      </div>
+    </form>
+  );
+}
+
+export default function ProfilePage() {
+  const { data: me, isLoading } = useProfile();
+
+  if (isLoading) {
+    return (
+      <div className="p-6 text-sm text-slate-500">Cargando perfil...</div>
+    );
+  }
+
+  return (
+    <div className="mx-auto max-w-2xl space-y-8 p-6">
+      <div>
+        <h1 className="text-xl font-semibold text-slate-900">Mi perfil</h1>
+        <p className="mt-1 text-sm text-slate-500">{me?.email}</p>
+      </div>
+
+      <section className="rounded-xl border border-slate-200 bg-white p-6">
+        <h2 className="mb-4 text-sm font-semibold text-slate-900">Información personal</h2>
+        {me && <ProfileForm firstName={me.firstName} lastName={me.lastName} />}
+      </section>
+
+      <section className="rounded-xl border border-slate-200 bg-white p-6">
+        <h2 className="mb-1 text-sm font-semibold text-slate-900">Cambiar contraseña</h2>
+        <p className="mb-4 text-xs text-slate-500">La nueva contraseña debe tener al menos 8 caracteres.</p>
+        <PasswordForm />
+      </section>
+    </div>
+  );
+}

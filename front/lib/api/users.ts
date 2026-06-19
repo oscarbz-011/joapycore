@@ -20,7 +20,26 @@ export interface CreateUserPayload {
   password: string;
 }
 
+export interface UpdateProfilePayload {
+  firstName?: string;
+  lastName?: string;
+}
+
+export interface ChangePasswordPayload {
+  currentPassword: string;
+  newPassword: string;
+}
+
 export const usersApi = {
+  getMe: (): Promise<UserResponse> =>
+    apiClient.get('/users/me').then((r) => r.data),
+
+  updateMe: (dto: UpdateProfilePayload): Promise<UserResponse> =>
+    apiClient.patch('/users/me', dto).then((r) => r.data),
+
+  changePassword: (dto: ChangePasswordPayload): Promise<void> =>
+    apiClient.post('/users/me/change-password', dto).then((r) => r.data),
+
   list: (): Promise<UserResponse[]> =>
     apiClient.get('/users').then((r) => r.data),
 

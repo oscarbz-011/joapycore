@@ -14,7 +14,7 @@ const INDUSTRIES = [
 
 const schema = z.object({
   tenantName: z.string().min(2, 'El nombre de la empresa debe tener al menos 2 caracteres'),
-  industry: z.enum(['electrodomesticos'], { required_error: 'Seleccioná un rubro' }),
+  industry: z.enum(['electrodomesticos']),
   firstName: z.string().min(1, 'El nombre es requerido'),
   lastName: z.string().min(1, 'El apellido es requerido'),
   email: z.string().min(1, 'El email es requerido').email('Email inválido'),
