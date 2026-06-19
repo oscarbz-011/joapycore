@@ -92,6 +92,17 @@ model Tenant {
   @@map("tenants")
 }
 
+model UserPermission {
+  userId       String @map("user_id")
+  permissionId String @map("permission_id")
+
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([userId, permissionId])
+  @@map("user_permissions")
+}
+
 model TenantModule {
   id         String  @id @default(uuid())
   tenantId   String  @map("tenant_id")
@@ -116,9 +127,10 @@ model User {
   updatedAt    DateTime   @updatedAt @map("updated_at")
   deletedAt    DateTime?  @map("deleted_at")
 
-  tenant        Tenant         @relation(fields: [tenantId], references: [id])
-  userRoles     UserRole[]
-  refreshTokens RefreshToken[]
+  tenant          Tenant           @relation(fields: [tenantId], references: [id])
+  userRoles       UserRole[]
+  userPermissions UserPermission[]
+  refreshTokens   RefreshToken[]
 
   @@map("users")
 }
@@ -142,6 +154,7 @@ model Permission {
   key String @unique
 
   rolePermissions RolePermission[]
+  userPermissions UserPermission[]
 
   @@map("permissions")
 }
