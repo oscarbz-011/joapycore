@@ -1,14 +1,16 @@
+/// <reference types="jest" />
+
 import { ConflictException, UnauthorizedException } from '@nestjs/common';
 import { UserStatus } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
-import { createHash } from 'crypto';
+import { createHash } from 'node:crypto';
 import { AuthService } from './auth.service';
 
 jest.mock('bcryptjs');
 
 describe('AuthService', () => {
   let service: AuthService;
-  let prisma: { $transaction: jest.Mock };
+  let prisma: { $transaction: jest.Mock; user: { update: jest.Mock } };
   let configService: { get: jest.Mock };
   let jwtService: { signAsync: jest.Mock };
   let eventEmitter: { emit: jest.Mock };
@@ -17,6 +19,7 @@ describe('AuthService', () => {
     create: jest.Mock;
     attachRole: jest.Mock;
     findRolesForUser: jest.Mock;
+    findPermissionsForUser: jest.Mock;
     findByIdForAuth: jest.Mock;
   };
   let rolesRepository: {
@@ -24,7 +27,7 @@ describe('AuthService', () => {
     create: jest.Mock;
     attachPermissions: jest.Mock;
   };
-  let tenantsRepository: { create: jest.Mock };
+  let tenantsRepository: { create: jest.Mock; findById: jest.Mock };
   let tenantModulesRepository: {
     seedDefaults: jest.Mock;
     findActiveModuleNames: jest.Mock;
@@ -53,6 +56,7 @@ describe('AuthService', () => {
       $transaction: jest.fn((callback: (tx: unknown) => unknown) =>
         callback({}),
       ),
+      user: { update: jest.fn().mockResolvedValue({}) },
     };
     configService = {
       get: jest.fn((_key: string, fallback?: unknown) => fallback),
@@ -66,6 +70,7 @@ describe('AuthService', () => {
       create: jest.fn(),
       attachRole: jest.fn(),
       findRolesForUser: jest.fn().mockResolvedValue([]),
+      findPermissionsForUser: jest.fn().mockResolvedValue([]),
       findByIdForAuth: jest.fn(),
     };
     rolesRepository = {
@@ -73,7 +78,10 @@ describe('AuthService', () => {
       create: jest.fn(),
       attachPermissions: jest.fn(),
     };
-    tenantsRepository = { create: jest.fn() };
+    tenantsRepository = {
+      create: jest.fn(),
+      findById: jest.fn().mockResolvedValue({ id: 'tenant-1', name: 'Acme' }),
+    };
     tenantModulesRepository = {
       seedDefaults: jest.fn(),
       findActiveModuleNames: jest.fn().mockResolvedValue([]),
@@ -138,6 +146,7 @@ describe('AuthService', () => {
       );
       expect(tenantModulesRepository.seedDefaults).toHaveBeenCalledWith(
         'tenant-1',
+        'electrodomesticos',
         {},
       );
       expect(eventEmitter.emit).toHaveBeenCalledWith('user.registered', {
