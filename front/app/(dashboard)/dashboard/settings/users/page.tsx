@@ -137,6 +137,7 @@ export default function UsersPage() {
 
       {selectedUser && (
         <UserDetailPanel
+          key={selectedUser.id}
           user={selectedUser}
           currentUserId={jwtPayload?.sub}
           onClose={() => setSelectedUser(null)}

@@ -1,11 +1,11 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { X, ChevronDown, ChevronRight } from 'lucide-react';
 import { usersApi, type UserResponse } from '../../../../../../lib/api/users';
 import { rolesApi } from '../../../../../../lib/api/roles';
-import { PERMISSION_GROUPS, getPermissionLabel } from '../../../../../../lib/permissions';
+import { PERMISSION_GROUPS } from '../../../../../../lib/permissions';
 import { UserStatusBadge } from './user-status-badge';
 
 interface Props {
@@ -15,24 +15,18 @@ interface Props {
 }
 
 function PermissionsAccordion({
-  userId,
   rolePermissions,
   extraPermissions,
   onSave,
   saving,
 }: {
-  userId: string;
   rolePermissions: string[];
   extraPermissions: string[];
   onSave: (keys: string[]) => void;
   saving: boolean;
 }) {
-  const [selected, setSelected] = useState<Set<string>>(new Set(extraPermissions));
+  const [selected, setSelected] = useState<Set<string>>(() => new Set(extraPermissions));
   const [openGroups, setOpenGroups] = useState<Set<string>>(new Set());
-
-  useEffect(() => {
-    setSelected(new Set(extraPermissions));
-  }, [extraPermissions, userId]);
 
   const toggle = (key: string) =>
     setSelected((prev) => {
@@ -134,17 +128,12 @@ export function UserDetailPanel({ user, currentUserId, onClose }: Props) {
 
   const assignableRoles = roles.filter((r) => !r.isSystem);
   const [selectedRoleIds, setSelectedRoleIds] = useState<Set<string>>(
-    new Set(user.roles.map((r) => r.id)),
+    () => new Set(user.roles.map((r) => r.id)),
   );
-
-  useEffect(() => {
-    setSelectedRoleIds(new Set(user.roles.map((r) => r.id)));
-  }, [user.id, user.roles]);
 
   const rolePermissions = roles
     .filter((r) => selectedRoleIds.has(r.id))
-    .flatMap((r) => (r as { permissions?: Array<{ key: string }> }).permissions ?? [])
-    .map((p) => p.key);
+    .flatMap((r) => r.rolePermissions.map((rp) => rp.permission.key));
 
   const rolesChanged =
     JSON.stringify([...selectedRoleIds].sort()) !==
@@ -259,7 +248,6 @@ export function UserDetailPanel({ user, currentUserId, onClose }: Props) {
               Permisos extra sobre los que otorga su rol. Los permisos de rol no se pueden quitar desde aquí.
             </p>
             <PermissionsAccordion
-              userId={user.id}
               rolePermissions={rolePermissions}
               extraPermissions={user.extraPermissions}
               onSave={(keys) => setPermissionsMutation.mutate(keys)}
