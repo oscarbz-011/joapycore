@@ -52,6 +52,12 @@ export const usersApi = {
   deactivate: (id: string): Promise<UserResponse> =>
     apiClient.patch(`/users/${id}/deactivate`).then((r) => r.data),
 
+  reactivate: (id: string): Promise<UserResponse> =>
+    apiClient.patch(`/users/${id}/reactivate`).then((r) => r.data),
+
+  resetPassword: (id: string): Promise<{ tempPassword: string }> =>
+    apiClient.post(`/users/${id}/reset-password`).then((r) => r.data),
+
   assignRoles: (id: string, roleIds: string[]): Promise<UserResponse> =>
     apiClient.patch(`/users/${id}/roles`, { roleIds }).then((r) => r.data),
 

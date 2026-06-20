@@ -2,7 +2,9 @@
 
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { AlertTriangle } from 'lucide-react';
 import { usersApi } from '../../../../../lib/api/users';
+import { useAuth } from '../../../../../lib/auth-context';
 
 function useProfile() {
   return useQuery({ queryKey: ['me'], queryFn: usersApi.getMe });
@@ -70,7 +72,7 @@ function ProfileForm({ firstName, lastName }: { firstName: string; lastName: str
   );
 }
 
-function PasswordForm() {
+function PasswordForm({ onSuccess }: { onSuccess?: () => void }) {
   const [form, setForm] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
   const [success, setSuccess] = useState(false);
   const [localError, setLocalError] = useState('');
@@ -85,6 +87,7 @@ function PasswordForm() {
       setForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
       setSuccess(true);
       setTimeout(() => setSuccess(false), 2500);
+      onSuccess?.();
     },
     onError: (err: Error & { response?: { data?: { message?: string } } }) => {
       setLocalError(err?.response?.data?.message ?? 'Error al cambiar contraseña');
@@ -159,6 +162,7 @@ function PasswordForm() {
 
 export default function ProfilePage() {
   const { data: me, isLoading } = useProfile();
+  const { mustChangePassword, clearMustChangePassword } = useAuth();
 
   if (isLoading) {
     return (
@@ -167,7 +171,19 @@ export default function ProfilePage() {
   }
 
   return (
-    <div className="mx-auto max-w-2xl space-y-8 p-6">
+    <div className="mx-auto max-w-2xl space-y-6 p-6">
+      {mustChangePassword && (
+        <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+          <AlertTriangle size={18} className="mt-0.5 shrink-0 text-amber-500" />
+          <div>
+            <p className="text-sm font-medium text-amber-800">Debés cambiar tu contraseña</p>
+            <p className="text-xs text-amber-700 mt-0.5">
+              Tu cuenta fue creada con una contraseña temporal. Cambiala antes de continuar usando el sistema.
+            </p>
+          </div>
+        </div>
+      )}
+
       <div>
         <h1 className="text-xl font-semibold text-slate-900">Mi perfil</h1>
         <p className="mt-1 text-sm text-slate-500">{me?.email}</p>
@@ -181,7 +197,7 @@ export default function ProfilePage() {
       <section className="rounded-xl border border-slate-200 bg-white p-6">
         <h2 className="mb-1 text-sm font-semibold text-slate-900">Cambiar contraseña</h2>
         <p className="mb-4 text-xs text-slate-500">La nueva contraseña debe tener al menos 8 caracteres.</p>
-        <PasswordForm />
+        <PasswordForm onSuccess={mustChangePassword ? clearMustChangePassword : undefined} />
       </section>
     </div>
   );

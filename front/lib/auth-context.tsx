@@ -13,17 +13,21 @@ import { authApi } from './api/auth';
 import { decodeJwt, tokenStore } from './token-store';
 import type { JwtPayload, RegisterDto, User } from '../types/auth';
 
+const MCP_KEY = 'mcp'; // mustChangePassword sessionStorage key
+
 interface AuthState {
   user: User | null;
   jwtPayload: JwtPayload | null;
   isLoading: boolean;
   isAuthenticated: boolean;
+  mustChangePassword: boolean;
 }
 
 interface AuthContextValue extends AuthState {
   login: (email: string, password: string) => Promise<void>;
   register: (dto: RegisterDto) => Promise<void>;
   logout: () => Promise<void>;
+  clearMustChangePassword: () => void;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -34,6 +38,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     jwtPayload: null,
     isLoading: true,
     isAuthenticated: false,
+    mustChangePassword: false,
   });
   const router = useRouter();
 
@@ -48,16 +53,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .then((data) => {
         tokenStore.setAccessToken(data.accessToken);
         tokenStore.setRefreshToken(data.refreshToken);
+        const mustChangePassword =
+          typeof window !== 'undefined' &&
+          sessionStorage.getItem(MCP_KEY) === '1';
         setState({
           user: data.user,
           jwtPayload: decodeJwt(data.accessToken),
           isLoading: false,
           isAuthenticated: true,
+          mustChangePassword,
         });
       })
       .catch(() => {
         tokenStore.clear();
-        setState({ user: null, jwtPayload: null, isLoading: false, isAuthenticated: false });
+        setState({ user: null, jwtPayload: null, isLoading: false, isAuthenticated: false, mustChangePassword: false });
       });
   }, []);
 
@@ -66,11 +75,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const data = await authApi.login({ email, password });
       tokenStore.setAccessToken(data.accessToken);
       tokenStore.setRefreshToken(data.refreshToken);
+      const mustChangePassword = !!data.mustChangePassword;
+      if (mustChangePassword) sessionStorage.setItem(MCP_KEY, '1');
+      else sessionStorage.removeItem(MCP_KEY);
       setState({
         user: data.user,
         jwtPayload: decodeJwt(data.accessToken),
         isLoading: false,
         isAuthenticated: true,
+        mustChangePassword,
       });
       router.push('/dashboard');
     },
@@ -82,11 +95,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const data = await authApi.register(dto);
       tokenStore.setAccessToken(data.accessToken);
       tokenStore.setRefreshToken(data.refreshToken);
+      sessionStorage.removeItem(MCP_KEY);
       setState({
         user: data.user,
         jwtPayload: decodeJwt(data.accessToken),
         isLoading: false,
         isAuthenticated: true,
+        mustChangePassword: false,
       });
       router.push('/dashboard');
     },
@@ -103,12 +118,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     }
     tokenStore.clear();
-    setState({ user: null, jwtPayload: null, isLoading: false, isAuthenticated: false });
+    sessionStorage.removeItem(MCP_KEY);
+    setState({ user: null, jwtPayload: null, isLoading: false, isAuthenticated: false, mustChangePassword: false });
     router.push('/login');
   }, [router]);
 
+  const clearMustChangePassword = useCallback(() => {
+    sessionStorage.removeItem(MCP_KEY);
+    setState((s) => ({ ...s, mustChangePassword: false }));
+  }, []);
+
   return (
-    <AuthContext.Provider value={{ ...state, login, register, logout }}>
+    <AuthContext.Provider value={{ ...state, login, register, logout, clearMustChangePassword }}>
       {children}
     </AuthContext.Provider>
   );

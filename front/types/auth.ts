@@ -13,6 +13,7 @@ export interface AuthTokens {
   accessToken: string;
   refreshToken: string;
   user: User;
+  mustChangePassword?: boolean;
 }
 
 export interface JwtPayload {

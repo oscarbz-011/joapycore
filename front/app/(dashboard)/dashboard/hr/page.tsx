@@ -1,0 +1,447 @@
+'use client';
+
+import { useState } from 'react';
+import Link from 'next/link';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Plus, Copy, Check, X, Users2, LayoutGrid, Receipt } from 'lucide-react';
+import { hrApi, type CreateEmployeePayload, type Employee } from '../../../../lib/api/hr';
+
+// ── Label helpers ──────────────────────────────────────────────────────────────
+
+const CONTRACT_LABELS: Record<string, string> = {
+  PERMANENT: 'Permanente',
+  TEMPORARY: 'Temporal',
+  PART_TIME: 'Medio tiempo',
+  CONTRACTOR: 'Contratista',
+};
+
+const DOC_LABELS: Record<string, string> = {
+  CI: 'C.I.',
+  RUC: 'RUC',
+  PASSPORT: 'Pasaporte',
+};
+
+// ── Sub-nav ────────────────────────────────────────────────────────────────────
+
+function HrNav({ active }: { active: 'employees' | 'areas' | 'payroll' }) {
+  const links = [
+    { key: 'employees', label: 'Empleados', href: '/dashboard/hr', icon: Users2 },
+    { key: 'areas', label: 'Áreas y cargos', href: '/dashboard/hr/areas', icon: LayoutGrid },
+    { key: 'payroll', label: 'Nómina', href: '/dashboard/hr/payroll', icon: Receipt },
+  ] as const;
+
+  return (
+    <div className="flex gap-1 border-b border-slate-200 mb-6">
+      {links.map(({ key, label, href, icon: Icon }) => (
+        <Link
+          key={key}
+          href={href}
+          className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px ${
+            active === key
+              ? 'border-slate-900 text-slate-900'
+              : 'border-transparent text-slate-500 hover:text-slate-700'
+          }`}
+        >
+          <Icon size={15} />
+          {label}
+        </Link>
+      ))}
+    </div>
+  );
+}
+
+// ── Status badge ───────────────────────────────────────────────────────────────
+
+function StatusBadge({ isActive, terminationDate }: { isActive: boolean; terminationDate?: string | null }) {
+  if (!isActive || terminationDate) {
+    return (
+      <span className="inline-flex items-center rounded-full bg-red-50 px-2 py-0.5 text-xs font-medium text-red-700">
+        Baja
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">
+      Activo
+    </span>
+  );
+}
+
+// ── Create employee modal ──────────────────────────────────────────────────────
+
+const EMPTY_FORM: CreateEmployeePayload = {
+  firstName: '',
+  lastName: '',
+  documentType: 'CI',
+  documentNumber: '',
+  birthDate: '',
+  hireDate: '',
+  baseSalary: 0,
+  contractType: 'PERMANENT',
+  paymentMethod: 'BANK_TRANSFER',
+};
+
+function CreateEmployeeModal({
+  areas,
+  positions,
+  onClose,
+  onCreated,
+}: {
+  areas: Array<{ id: string; name: string }>;
+  positions: Array<{ id: string; name: string }>;
+  onClose: () => void;
+  onCreated: (tempPassword?: string) => void;
+}) {
+  const queryClient = useQueryClient();
+  const [form, setForm] = useState<CreateEmployeePayload>(EMPTY_FORM);
+  const [createAccount, setCreateAccount] = useState(false);
+  const [error, setError] = useState('');
+
+  const set = <K extends keyof CreateEmployeePayload>(k: K, v: CreateEmployeePayload[K]) =>
+    setForm((f) => ({ ...f, [k]: v }));
+
+  const mutation = useMutation({
+    mutationFn: () =>
+      hrApi.createEmployee({
+        ...form,
+        email: createAccount && form.email ? form.email : undefined,
+      }),
+    onSuccess: (data) => {
+      void queryClient.invalidateQueries({ queryKey: ['hr-employees'] });
+      onCreated(data.tempPassword);
+    },
+    onError: (err: Error & { response?: { data?: { message?: string | string[] } } }) => {
+      const msg = err?.response?.data?.message;
+      setError(Array.isArray(msg) ? msg[0] : (msg ?? 'Error al crear empleado'));
+    },
+  });
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError('');
+    mutation.mutate();
+  }
+
+  const inputCls = 'w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500';
+  const labelCls = 'block text-xs font-medium text-slate-600 mb-1';
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
+      <div className="relative z-10 w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl bg-white shadow-2xl">
+        <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
+          <h2 className="text-base font-semibold text-slate-900">Nuevo empleado</h2>
+          <button onClick={onClose} className="rounded-md p-1 text-slate-400 hover:bg-slate-100">
+            <X size={18} />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="px-6 py-5 space-y-5">
+          {/* Personal */}
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-3">Datos personales</p>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className={labelCls}>Nombre *</label>
+                <input className={inputCls} value={form.firstName} onChange={(e) => set('firstName', e.target.value)} required />
+              </div>
+              <div>
+                <label className={labelCls}>Apellido *</label>
+                <input className={inputCls} value={form.lastName} onChange={(e) => set('lastName', e.target.value)} required />
+              </div>
+              <div>
+                <label className={labelCls}>Tipo doc. *</label>
+                <select className={inputCls} value={form.documentType} onChange={(e) => set('documentType', e.target.value as CreateEmployeePayload['documentType'])}>
+                  <option value="CI">C.I.</option>
+                  <option value="RUC">RUC</option>
+                  <option value="PASSPORT">Pasaporte</option>
+                </select>
+              </div>
+              <div>
+                <label className={labelCls}>Nro. documento *</label>
+                <input className={inputCls} value={form.documentNumber} onChange={(e) => set('documentNumber', e.target.value)} required />
+              </div>
+              <div>
+                <label className={labelCls}>Fecha de nacimiento *</label>
+                <input type="date" className={inputCls} value={form.birthDate} onChange={(e) => set('birthDate', e.target.value)} required />
+              </div>
+              <div>
+                <label className={labelCls}>Género</label>
+                <select className={inputCls} value={form.gender ?? ''} onChange={(e) => set('gender', e.target.value as CreateEmployeePayload['gender'] || undefined)}>
+                  <option value="">— Seleccionar —</option>
+                  <option value="MALE">Masculino</option>
+                  <option value="FEMALE">Femenino</option>
+                  <option value="OTHER">Otro</option>
+                </select>
+              </div>
+              <div>
+                <label className={labelCls}>Teléfono</label>
+                <input className={inputCls} value={form.phone ?? ''} onChange={(e) => set('phone', e.target.value || undefined)} />
+              </div>
+              <div>
+                <label className={labelCls}>Celular</label>
+                <input className={inputCls} value={form.mobilePhone ?? ''} onChange={(e) => set('mobilePhone', e.target.value || undefined)} />
+              </div>
+            </div>
+          </div>
+
+          {/* Laboral */}
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-3">Datos laborales</p>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className={labelCls}>Fecha de ingreso *</label>
+                <input type="date" className={inputCls} value={form.hireDate} onChange={(e) => set('hireDate', e.target.value)} required />
+              </div>
+              <div>
+                <label className={labelCls}>Tipo de contrato</label>
+                <select className={inputCls} value={form.contractType ?? 'PERMANENT'} onChange={(e) => set('contractType', e.target.value as CreateEmployeePayload['contractType'])}>
+                  <option value="PERMANENT">Permanente</option>
+                  <option value="TEMPORARY">Temporal</option>
+                  <option value="PART_TIME">Medio tiempo</option>
+                  <option value="CONTRACTOR">Contratista</option>
+                </select>
+              </div>
+              <div>
+                <label className={labelCls}>Área</label>
+                <select className={inputCls} value={form.areaId ?? ''} onChange={(e) => set('areaId', e.target.value || undefined)}>
+                  <option value="">— Sin área —</option>
+                  {areas.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className={labelCls}>Cargo</label>
+                <select className={inputCls} value={form.positionId ?? ''} onChange={(e) => set('positionId', e.target.value || undefined)}>
+                  <option value="">— Sin cargo —</option>
+                  {positions.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className={labelCls}>Salario base (PYG) *</label>
+                <input
+                  type="number"
+                  min={0}
+                  className={inputCls}
+                  value={form.baseSalary || ''}
+                  onChange={(e) => set('baseSalary', parseInt(e.target.value) || 0)}
+                  required
+                />
+              </div>
+              <div>
+                <label className={labelCls}>Forma de pago</label>
+                <select className={inputCls} value={form.paymentMethod ?? 'BANK_TRANSFER'} onChange={(e) => set('paymentMethod', e.target.value as CreateEmployeePayload['paymentMethod'])}>
+                  <option value="BANK_TRANSFER">Transferencia bancaria</option>
+                  <option value="CASH">Efectivo</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          {/* Cuenta de usuario */}
+          <div>
+            <label className="flex items-center gap-2.5 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={createAccount}
+                onChange={(e) => setCreateAccount(e.target.checked)}
+                className="h-4 w-4 rounded border-slate-300 accent-slate-900"
+              />
+              <span className="text-sm font-medium text-slate-700">Crear cuenta de acceso al sistema</span>
+            </label>
+            {createAccount && (
+              <div className="mt-3">
+                <label className={labelCls}>Email</label>
+                <input
+                  type="email"
+                  className={inputCls}
+                  value={form.email ?? ''}
+                  onChange={(e) => set('email', e.target.value || undefined)}
+                  placeholder="empleado@empresa.com"
+                  required={createAccount}
+                />
+                <p className="mt-1 text-xs text-slate-500">
+                  Se generará una contraseña temporal que el empleado deberá cambiar al iniciar sesión.
+                </p>
+              </div>
+            )}
+          </div>
+
+          {error && (
+            <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+              {error}
+            </div>
+          )}
+
+          <div className="flex justify-end gap-3 pt-2 border-t border-slate-100">
+            <button type="button" onClick={onClose} className="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50">
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              disabled={mutation.isPending}
+              className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-50"
+            >
+              {mutation.isPending ? 'Creando...' : 'Crear empleado'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ── Temp password toast ────────────────────────────────────────────────────────
+
+function TempPasswordBanner({ password, onDismiss }: { password: string; onDismiss: () => void }) {
+  const [copied, setCopied] = useState(false);
+
+  const copy = () => {
+    void navigator.clipboard.writeText(password);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <div className="mb-4 flex items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+      <div className="flex-1">
+        <p className="text-sm font-medium text-amber-800">Empleado creado con contraseña temporal</p>
+        <div className="mt-1 flex items-center gap-2">
+          <span className="font-mono text-sm text-amber-900">{password}</span>
+          <button onClick={copy} className="rounded p-1 text-amber-600 hover:bg-amber-100">
+            {copied ? <Check size={14} /> : <Copy size={14} />}
+          </button>
+        </div>
+      </div>
+      <button onClick={onDismiss} className="text-amber-500 hover:text-amber-700">
+        <X size={16} />
+      </button>
+    </div>
+  );
+}
+
+// ── Main page ──────────────────────────────────────────────────────────────────
+
+export default function HrEmployeesPage() {
+  const [showCreate, setShowCreate] = useState(false);
+  const [tempPassword, setTempPassword] = useState<string | null>(null);
+
+  const { data: employees = [], isLoading } = useQuery({
+    queryKey: ['hr-employees'],
+    queryFn: hrApi.listEmployees,
+  });
+
+  const { data: areas = [] } = useQuery({
+    queryKey: ['hr-areas'],
+    queryFn: hrApi.listAreas,
+  });
+
+  const { data: positions = [] } = useQuery({
+    queryKey: ['hr-positions'],
+    queryFn: hrApi.listPositions,
+  });
+
+  function handleCreated(pw?: string) {
+    setShowCreate(false);
+    if (pw) setTempPassword(pw);
+  }
+
+  function formatSalary(n: number) {
+    return new Intl.NumberFormat('es-PY', { style: 'currency', currency: 'PYG', maximumFractionDigits: 0 }).format(n);
+  }
+
+  return (
+    <div>
+      <div className="mb-6 flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold text-slate-900">RRHH</h1>
+          <p className="mt-1 text-sm text-slate-500">Gestión de empleados, áreas y nómina</p>
+        </div>
+        <button
+          onClick={() => setShowCreate(true)}
+          className="flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700"
+        >
+          <Plus size={16} />
+          Nuevo empleado
+        </button>
+      </div>
+
+      <HrNav active="employees" />
+
+      {tempPassword && (
+        <TempPasswordBanner password={tempPassword} onDismiss={() => setTempPassword(null)} />
+      )}
+
+      {isLoading ? (
+        <div className="py-16 text-center text-sm text-slate-400">Cargando empleados...</div>
+      ) : employees.length === 0 ? (
+        <div className="py-16 text-center">
+          <p className="text-sm text-slate-400">No hay empleados registrados.</p>
+          <button
+            onClick={() => setShowCreate(true)}
+            className="mt-3 text-sm font-medium text-slate-900 underline underline-offset-2"
+          >
+            Crear el primero
+          </button>
+        </div>
+      ) : (
+        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+          <table className="w-full text-sm">
+            <thead className="border-b border-slate-100 bg-slate-50 text-xs font-semibold uppercase tracking-wider text-slate-500">
+              <tr>
+                <th className="px-4 py-3 text-left">Nro.</th>
+                <th className="px-4 py-3 text-left">Empleado</th>
+                <th className="px-4 py-3 text-left">Documento</th>
+                <th className="px-4 py-3 text-left">Área</th>
+                <th className="px-4 py-3 text-left">Cargo</th>
+                <th className="px-4 py-3 text-right">Salario base</th>
+                <th className="px-4 py-3 text-left">Contrato</th>
+                <th className="px-4 py-3 text-left">Estado</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {employees.map((emp: Employee) => (
+                <tr key={emp.id} className="hover:bg-slate-50">
+                  <td className="px-4 py-3 font-mono text-xs text-slate-500">
+                    #{String(emp.employeeNumber).padStart(4, '0')}
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="font-medium text-slate-900">
+                      {emp.firstName} {emp.lastName}
+                    </div>
+                    {emp.user && (
+                      <div className="text-xs text-slate-400">{emp.user.email}</div>
+                    )}
+                  </td>
+                  <td className="px-4 py-3 text-slate-600">
+                    <span className="text-xs text-slate-400">{DOC_LABELS[emp.documentType] ?? emp.documentType} </span>
+                    {emp.documentNumber}
+                  </td>
+                  <td className="px-4 py-3 text-slate-600">{emp.area?.name ?? '—'}</td>
+                  <td className="px-4 py-3 text-slate-600">{emp.position?.name ?? '—'}</td>
+                  <td className="px-4 py-3 text-right font-mono text-slate-700">
+                    {formatSalary(emp.baseSalary)}
+                  </td>
+                  <td className="px-4 py-3 text-slate-600">
+                    {CONTRACT_LABELS[emp.contractType] ?? emp.contractType}
+                  </td>
+                  <td className="px-4 py-3">
+                    <StatusBadge isActive={emp.isActive} terminationDate={emp.terminationDate} />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {showCreate && (
+        <CreateEmployeeModal
+          areas={areas}
+          positions={positions}
+          onClose={() => setShowCreate(false)}
+          onCreated={handleCreated}
+        />
+      )}
+    </div>
+  );
+}

@@ -75,6 +75,20 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
       { key: 'billing:cancel', label: 'Cancelar facturas' },
     ],
   },
+  {
+    module: 'hr',
+    label: 'RRHH',
+    permissions: [
+      { key: 'hr:read', label: 'Ver empleados y RRHH' },
+      { key: 'hr:employees:create', label: 'Crear empleados' },
+      { key: 'hr:employees:update', label: 'Editar empleados' },
+      { key: 'hr:employees:terminate', label: 'Dar de baja empleados' },
+      { key: 'hr:leaves:manage', label: 'Gestionar licencias' },
+      { key: 'hr:payroll:run', label: 'Liquidar nómina' },
+      { key: 'hr:payroll:pay', label: 'Marcar nómina como pagada' },
+      { key: 'hr:config:manage', label: 'Configurar parámetros de nómina' },
+    ],
+  },
 ];
 
 export const ALL_PERMISSIONS = PERMISSION_GROUPS.flatMap((g) => g.permissions);

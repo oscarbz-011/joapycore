@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { X, ChevronDown, ChevronRight } from 'lucide-react';
+import { X, ChevronDown, ChevronRight, Copy, Check } from 'lucide-react';
 import { usersApi, type UserResponse } from '../../../../../../lib/api/users';
 import { rolesApi } from '../../../../../../lib/api/roles';
 import { PERMISSION_GROUPS } from '../../../../../../lib/permissions';
@@ -117,9 +117,33 @@ function PermissionsAccordion({
   );
 }
 
+function TempPasswordDisplay({ password }: { password: string }) {
+  const [copied, setCopied] = useState(false);
+
+  const copy = () => {
+    void navigator.clipboard.writeText(password);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <div className="mt-3 flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
+      <span className="flex-1 font-mono text-sm font-medium text-amber-900">{password}</span>
+      <button
+        onClick={copy}
+        className="rounded p-1 text-amber-600 hover:bg-amber-100"
+        title="Copiar"
+      >
+        {copied ? <Check size={14} /> : <Copy size={14} />}
+      </button>
+    </div>
+  );
+}
+
 export function UserDetailPanel({ user, currentUserId, onClose }: Props) {
   const queryClient = useQueryClient();
   const isSelf = user.id === currentUserId;
+  const [tempPassword, setTempPassword] = useState<string | null>(null);
 
   const { data: roles = [] } = useQuery({
     queryKey: ['roles'],
@@ -139,20 +163,32 @@ export function UserDetailPanel({ user, currentUserId, onClose }: Props) {
     JSON.stringify([...selectedRoleIds].sort()) !==
     JSON.stringify(user.roles.map((r) => r.id).sort());
 
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: ['users'] });
+
   const deactivateMutation = useMutation({
     mutationFn: () => usersApi.deactivate(user.id),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['users'] }),
+    onSuccess: invalidate,
+  });
+
+  const reactivateMutation = useMutation({
+    mutationFn: () => usersApi.reactivate(user.id),
+    onSuccess: invalidate,
+  });
+
+  const resetPasswordMutation = useMutation({
+    mutationFn: () => usersApi.resetPassword(user.id),
+    onSuccess: (data) => setTempPassword(data.tempPassword),
   });
 
   const assignRolesMutation = useMutation({
     mutationFn: (roleIds: string[]) => usersApi.assignRoles(user.id, roleIds),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['users'] }),
+    onSuccess: invalidate,
   });
 
   const setPermissionsMutation = useMutation({
     mutationFn: (permissions: string[]) =>
       usersApi.setExtraPermissions(user.id, permissions),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['users'] }),
+    onSuccess: invalidate,
   });
 
   const toggleRole = (id: string) =>
@@ -198,17 +234,50 @@ export function UserDetailPanel({ user, currentUserId, onClose }: Props) {
                   <UserStatusBadge status={user.status} />
                 </div>
               </div>
-              {!isSelf && user.status === 'ACTIVE' && (
-                <button
-                  onClick={() => deactivateMutation.mutate()}
-                  disabled={deactivateMutation.isPending}
-                  className="rounded-lg border border-red-200 px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 disabled:opacity-50"
-                >
-                  Desactivar
-                </button>
+              {!isSelf && (
+                <div className="flex flex-col items-end gap-2">
+                  {user.status === 'ACTIVE' ? (
+                    <button
+                      onClick={() => deactivateMutation.mutate()}
+                      disabled={deactivateMutation.isPending}
+                      className="rounded-lg border border-red-200 px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 disabled:opacity-50"
+                    >
+                      Desactivar
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => reactivateMutation.mutate()}
+                      disabled={reactivateMutation.isPending}
+                      className="rounded-lg border border-emerald-200 px-3 py-1.5 text-sm text-emerald-600 hover:bg-emerald-50 disabled:opacity-50"
+                    >
+                      Reactivar
+                    </button>
+                  )}
+                </div>
               )}
             </div>
           </div>
+
+          {/* Reset contraseña */}
+          {!isSelf && (
+            <div className="border-b border-slate-100 px-6 py-4">
+              <p className="text-sm font-medium text-slate-700">Contraseña</p>
+              <p className="mt-1 text-xs text-slate-500">
+                Genera una contraseña temporal que el usuario deberá cambiar al ingresar.
+              </p>
+              <button
+                onClick={() => {
+                  setTempPassword(null);
+                  resetPasswordMutation.mutate();
+                }}
+                disabled={resetPasswordMutation.isPending}
+                className="mt-2 rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+              >
+                {resetPasswordMutation.isPending ? 'Generando...' : 'Resetear contraseña'}
+              </button>
+              {tempPassword && <TempPasswordDisplay password={tempPassword} />}
+            </div>
+          )}
 
           {/* Roles */}
           <div className="border-b border-slate-100 px-6 py-4">
