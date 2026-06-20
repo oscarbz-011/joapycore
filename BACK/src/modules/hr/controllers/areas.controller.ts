@@ -62,7 +62,10 @@ export class AreasController {
   @Post('positions')
   @Permissions('hr:config:manage')
   @ApiOperation({ summary: 'Create position/job title' })
-  createPosition(@CurrentTenant() tenantId: string, @Body() dto: CreatePositionDto) {
+  createPosition(
+    @CurrentTenant() tenantId: string,
+    @Body() dto: CreatePositionDto,
+  ) {
     return this.positionsRepository.create(tenantId, dto);
   }
 

@@ -17,14 +17,20 @@ export class BrandsRepository {
   }
 
   findByName(tenantId: string, name: string) {
-    return this.prisma.brand.findUnique({ where: { tenantId_name: { tenantId, name } } });
+    return this.prisma.brand.findUnique({
+      where: { tenantId_name: { tenantId, name } },
+    });
   }
 
   create(tenantId: string, name: string) {
     return this.prisma.brand.create({ data: { tenantId, name } });
   }
 
-  update(tenantId: string, id: string, data: { name?: string; isActive?: boolean }) {
+  update(
+    tenantId: string,
+    id: string,
+    data: { name?: string; isActive?: boolean },
+  ) {
     return this.prisma.brand.updateMany({ where: { tenantId, id }, data });
   }
 }

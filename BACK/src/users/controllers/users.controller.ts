@@ -37,7 +37,10 @@ export class UsersController {
 
   @Post('me/change-password')
   @ApiOperation({ summary: 'Change own password' })
-  changePassword(@CurrentUser() user: JwtPayload, @Body() dto: ChangePasswordDto) {
+  changePassword(
+    @CurrentUser() user: JwtPayload,
+    @Body() dto: ChangePasswordDto,
+  ) {
     return this.usersService.changePassword(user.sub, dto);
   }
 
@@ -91,7 +94,9 @@ export class UsersController {
 
   @Post(':id/reset-password')
   @Permissions('users:update')
-  @ApiOperation({ summary: 'Generate a new temporary password for a user (admin)' })
+  @ApiOperation({
+    summary: 'Generate a new temporary password for a user (admin)',
+  })
   resetPassword(@CurrentTenant() tenantId: string, @Param('id') id: string) {
     return this.usersService.resetPassword(tenantId, id);
   }
@@ -109,7 +114,9 @@ export class UsersController {
 
   @Put(':id/permissions')
   @Permissions('roles:manage')
-  @ApiOperation({ summary: 'Set extra permissions for a user (on top of their roles)' })
+  @ApiOperation({
+    summary: 'Set extra permissions for a user (on top of their roles)',
+  })
   setExtraPermissions(
     @CurrentTenant() tenantId: string,
     @Param('id') id: string,

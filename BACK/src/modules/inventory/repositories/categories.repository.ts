@@ -20,7 +20,11 @@ const DEFAULT_CATEGORIES: Record<Industry, string[]> = {
 export class CategoriesRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  seedDefaults(tenantId: string, industry: Industry, client: PrismaClientOrTx = this.prisma) {
+  seedDefaults(
+    tenantId: string,
+    industry: Industry,
+    client: PrismaClientOrTx = this.prisma,
+  ) {
     const names = DEFAULT_CATEGORIES[industry] ?? [];
     return client.category.createMany({
       data: names.map((name) => ({ tenantId, name })),
@@ -43,7 +47,11 @@ export class CategoriesRepository {
     return this.prisma.category.create({ data: { tenantId, name } });
   }
 
-  update(tenantId: string, id: string, data: { name?: string; isActive?: boolean }) {
+  update(
+    tenantId: string,
+    id: string,
+    data: { name?: string; isActive?: boolean },
+  ) {
     return this.prisma.category.updateMany({ where: { tenantId, id }, data });
   }
 }

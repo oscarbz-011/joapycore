@@ -18,7 +18,12 @@ export function toSafeUserWithRoles(
     userPermissions: Array<{ permission: { key: string } }>;
   },
 ): SafeUserWithRoles {
-  const { passwordHash: _passwordHash, userRoles, userPermissions, ...safeUser } = user;
+  const {
+    passwordHash: _passwordHash,
+    userRoles,
+    userPermissions,
+    ...safeUser
+  } = user;
   return {
     ...safeUser,
     roles: userRoles.map((ur) => ur.role),

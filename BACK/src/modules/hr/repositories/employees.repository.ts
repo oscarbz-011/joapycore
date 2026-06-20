@@ -3,7 +3,9 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
 
 const WITH_RELATIONS = {
-  user: { select: { id: true, email: true, status: true, mustChangePassword: true } },
+  user: {
+    select: { id: true, email: true, status: true, mustChangePassword: true },
+  },
   area: { select: { id: true, name: true } },
   position: { select: { id: true, name: true } },
   manager: { select: { id: true, firstName: true, lastName: true } },
@@ -45,12 +47,19 @@ export class EmployeesRepository {
     return this.prisma.employee.create({ data, include: WITH_RELATIONS });
   }
 
-  async update(tenantId: string, id: string, data: Prisma.EmployeeUncheckedUpdateInput) {
+  async update(
+    tenantId: string,
+    id: string,
+    data: Prisma.EmployeeUncheckedUpdateInput,
+  ) {
     await this.prisma.employee.updateMany({ where: { id, tenantId }, data });
     return this.findById(tenantId, id);
   }
 
   linkUser(tenantId: string, id: string, userId: string) {
-    return this.prisma.employee.updateMany({ where: { id, tenantId }, data: { userId } });
+    return this.prisma.employee.updateMany({
+      where: { id, tenantId },
+      data: { userId },
+    });
   }
 }

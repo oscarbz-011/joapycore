@@ -14,7 +14,9 @@ export class CustomersRepository {
   }
 
   findById(tenantId: string, id: string) {
-    return this.prisma.customer.findFirst({ where: { id, tenantId, deletedAt: null } });
+    return this.prisma.customer.findFirst({
+      where: { id, tenantId, deletedAt: null },
+    });
   }
 
   create(tenantId: string, dto: CreateCustomerDto) {
@@ -26,6 +28,9 @@ export class CustomersRepository {
   }
 
   softDelete(tenantId: string, id: string) {
-    return this.prisma.customer.update({ where: { id }, data: { deletedAt: new Date() } });
+    return this.prisma.customer.update({
+      where: { id },
+      data: { deletedAt: new Date() },
+    });
   }
 }

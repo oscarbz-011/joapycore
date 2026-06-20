@@ -31,7 +31,9 @@ export class BillingOnSaleListener {
 
     const total = order.items.reduce((sum, item) => {
       const price =
-        typeof item.unitPrice === 'object' ? item.unitPrice.toNumber() : item.unitPrice;
+        typeof item.unitPrice === 'object'
+          ? item.unitPrice.toNumber()
+          : item.unitPrice;
       return sum + price * item.quantity;
     }, 0);
 
@@ -49,7 +51,9 @@ export class BillingOnSaleListener {
 
       for (const item of order.items) {
         const unitPrice =
-          typeof item.unitPrice === 'object' ? item.unitPrice.toNumber() : item.unitPrice;
+          typeof item.unitPrice === 'object'
+            ? item.unitPrice.toNumber()
+            : item.unitPrice;
         await this.invoicesRepository.createItem(
           {
             invoiceId: inv.id,

@@ -15,5 +15,11 @@ export const ACTIVE_MODULES_BY_INDUSTRY: Record<Industry, string[]> = {
 };
 
 // Legacy defaults kept for reference — use ACTIVE_MODULES_BY_INDUSTRY instead
-export const DEFAULT_ACTIVE_MODULES = ['sales', 'inventory', 'billing', 'payments', 'procurement'];
+export const DEFAULT_ACTIVE_MODULES = [
+  'sales',
+  'inventory',
+  'billing',
+  'payments',
+  'procurement',
+];
 export const DEFAULT_INACTIVE_MODULES = ['hr'];

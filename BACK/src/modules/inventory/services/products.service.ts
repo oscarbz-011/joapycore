@@ -1,6 +1,13 @@
-import { Injectable, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  UnprocessableEntityException,
+} from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
-import { ProductsRepository, ProductFilters } from '../repositories/products.repository';
+import {
+  ProductsRepository,
+  ProductFilters,
+} from '../repositories/products.repository';
 import { ProductUnitsRepository } from '../repositories/product-units.repository';
 import { CreateProductDto } from '../dto/create-product.dto';
 import { UpdateProductDto } from '../dto/update-product.dto';

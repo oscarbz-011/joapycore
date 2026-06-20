@@ -1,5 +1,12 @@
 import { Body, Controller, Get, Param, Post, Put } from '@nestjs/common';
-import { ApiBearerAuth, ApiBody, ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBearerAuth,
+  ApiBody,
+  ApiOperation,
+  ApiParam,
+  ApiResponse,
+  ApiTags,
+} from '@nestjs/swagger';
 import { CurrentTenant } from '../../../common/decorators/current-tenant.decorator';
 import { Permissions } from '../../../common/decorators/permissions.decorator';
 import { RequiredModule } from '../../../common/decorators/required-module.decorator';
@@ -15,7 +22,9 @@ export class PayrollController {
 
   @Get('config')
   @Permissions('hr:config:manage')
-  @ApiOperation({ summary: 'Get payroll configuration (IPS rates, minimum wage)' })
+  @ApiOperation({
+    summary: 'Get payroll configuration (IPS rates, minimum wage)',
+  })
   getConfig(@CurrentTenant() tenantId: string) {
     return this.payrollService.getConfig(tenantId);
   }
@@ -23,7 +32,10 @@ export class PayrollController {
   @Put('config')
   @Permissions('hr:config:manage')
   @ApiOperation({ summary: 'Update payroll configuration' })
-  updateConfig(@CurrentTenant() tenantId: string, @Body() dto: UpdatePayrollConfigDto) {
+  updateConfig(
+    @CurrentTenant() tenantId: string,
+    @Body() dto: UpdatePayrollConfigDto,
+  ) {
     return this.payrollService.updateConfig(tenantId, dto);
   }
 
@@ -43,7 +55,9 @@ export class PayrollController {
 
   @Post('records/run')
   @Permissions('hr:payroll:run')
-  @ApiOperation({ summary: 'Liquidar nómina para un período (formato YYYY-MM)' })
+  @ApiOperation({
+    summary: 'Liquidar nómina para un período (formato YYYY-MM)',
+  })
   @ApiBody({
     schema: {
       type: 'object',
@@ -51,9 +65,18 @@ export class PayrollController {
       properties: { period: { type: 'string', example: '2025-12' } },
     },
   })
-  @ApiResponse({ status: 201, description: 'Liquidación generada en estado DRAFT' })
-  @ApiResponse({ status: 422, description: 'Ya existe una liquidación para ese período' })
-  runPayroll(@CurrentTenant() tenantId: string, @Body() body: { period: string }) {
+  @ApiResponse({
+    status: 201,
+    description: 'Liquidación generada en estado DRAFT',
+  })
+  @ApiResponse({
+    status: 422,
+    description: 'Ya existe una liquidación para ese período',
+  })
+  runPayroll(
+    @CurrentTenant() tenantId: string,
+    @Body() body: { period: string },
+  ) {
     return this.payrollService.runPayroll(tenantId, body.period);
   }
 

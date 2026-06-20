@@ -14,6 +14,9 @@ export class InventoryOnTenantListener {
 
   @OnEvent('tenant.registered')
   async handle(event: TenantRegisteredEvent) {
-    await this.categoriesRepository.seedDefaults(event.tenantId, event.industry);
+    await this.categoriesRepository.seedDefaults(
+      event.tenantId,
+      event.industry,
+    );
   }
 }

@@ -35,7 +35,12 @@ export class LeavesRepository {
     });
   }
 
-  upsertBalance(employeeId: string, tenantId: string, year: number, entitled: number) {
+  upsertBalance(
+    employeeId: string,
+    tenantId: string,
+    year: number,
+    entitled: number,
+  ) {
     return this.prisma.leaveBalance.upsert({
       where: { employeeId_year: { employeeId, year } },
       create: { employeeId, tenantId, year, entitled },

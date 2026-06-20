@@ -40,7 +40,9 @@ export class PurchaseOrdersService {
           purchaseType: dto.purchaseType,
           status: 'DRAFT',
           orderDate: new Date(dto.orderDate),
-          expectedDate: dto.expectedDate ? new Date(dto.expectedDate) : undefined,
+          expectedDate: dto.expectedDate
+            ? new Date(dto.expectedDate)
+            : undefined,
           exchangeRate: dto.exchangeRate,
           customsDuty: dto.customsDuty,
           customsRef: dto.customsRef,
@@ -68,7 +70,9 @@ export class PurchaseOrdersService {
   async confirm(tenantId: string, id: string) {
     const order = await this.findOne(tenantId, id);
     if (order.status !== 'DRAFT') {
-      throw new UnprocessableEntityException('Only DRAFT orders can be confirmed');
+      throw new UnprocessableEntityException(
+        'Only DRAFT orders can be confirmed',
+      );
     }
     await this.purchaseOrdersRepository.updateStatus(tenantId, id, 'CONFIRMED');
     return this.purchaseOrdersRepository.findById(tenantId, id);
@@ -77,17 +81,24 @@ export class PurchaseOrdersService {
   async receive(tenantId: string, id: string, dto: ReceiveItemsDto) {
     const order = await this.findOne(tenantId, id);
     if (!['CONFIRMED', 'PARTIALLY_RECEIVED'].includes(order.status)) {
-      throw new UnprocessableEntityException('Order must be CONFIRMED to receive items');
+      throw new UnprocessableEntityException(
+        'Order must be CONFIRMED to receive items',
+      );
     }
 
     await this.prisma.$transaction(async (tx) => {
       for (const received of dto.items) {
-        const item = await this.purchaseOrdersRepository.findItem(received.itemId);
+        const item = await this.purchaseOrdersRepository.findItem(
+          received.itemId,
+        );
         if (!item || item.purchaseOrder.tenantId !== tenantId) {
           throw new NotFoundException(`Item ${received.itemId} not found`);
         }
 
-        const product = await this.productsRepository.findById(tenantId, item.productId);
+        const product = await this.productsRepository.findById(
+          tenantId,
+          item.productId,
+        );
         if (!product) throw new NotFoundException('Product not found');
 
         if (product.isSerialized) {
@@ -128,8 +139,13 @@ export class PurchaseOrdersService {
         }
       }
 
-      const updated = await this.purchaseOrdersRepository.findById(tenantId, id);
-      const allReceived = updated!.items.every((i) => i.receivedQty >= i.quantity);
+      const updated = await this.purchaseOrdersRepository.findById(
+        tenantId,
+        id,
+      );
+      const allReceived = updated!.items.every(
+        (i) => i.receivedQty >= i.quantity,
+      );
       await this.purchaseOrdersRepository.updateStatus(
         tenantId,
         id,
@@ -139,7 +155,10 @@ export class PurchaseOrdersService {
     });
 
     const final = await this.purchaseOrdersRepository.findById(tenantId, id);
-    this.eventEmitter.emit('purchase.order.received', { tenantId, purchaseOrderId: id });
+    this.eventEmitter.emit('purchase.order.received', {
+      tenantId,
+      purchaseOrderId: id,
+    });
     return final;
   }
 }

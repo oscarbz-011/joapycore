@@ -1,5 +1,12 @@
 import { Body, Controller, Get, Param, Patch, Post } from '@nestjs/common';
-import { ApiBearerAuth, ApiBody, ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBearerAuth,
+  ApiBody,
+  ApiOperation,
+  ApiParam,
+  ApiResponse,
+  ApiTags,
+} from '@nestjs/swagger';
 import { CurrentTenant } from '../../../common/decorators/current-tenant.decorator';
 import { Permissions } from '../../../common/decorators/permissions.decorator';
 import { RequiredModule } from '../../../common/decorators/required-module.decorator';
@@ -30,7 +37,9 @@ export class EmployeesController {
 
   @Post()
   @Permissions('hr:employees:create')
-  @ApiOperation({ summary: 'Create employee (optionally creates linked user account)' })
+  @ApiOperation({
+    summary: 'Create employee (optionally creates linked user account)',
+  })
   create(@CurrentTenant() tenantId: string, @Body() dto: CreateEmployeeDto) {
     return this.employeesService.create(tenantId, dto);
   }
@@ -48,12 +57,20 @@ export class EmployeesController {
 
   @Post(':id/terminate')
   @Permissions('hr:employees:terminate')
-  @ApiOperation({ summary: 'Dar de baja a un empleado (desactiva el usuario vinculado)' })
+  @ApiOperation({
+    summary: 'Dar de baja a un empleado (desactiva el usuario vinculado)',
+  })
   @ApiParam({ name: 'id', description: 'Employee UUID' })
   @ApiBody({
     schema: {
       type: 'object',
-      properties: { terminationDate: { type: 'string', format: 'date', example: '2025-12-31' } },
+      properties: {
+        terminationDate: {
+          type: 'string',
+          format: 'date',
+          example: '2025-12-31',
+        },
+      },
     },
   })
   @ApiResponse({ status: 200, description: 'Empleado dado de baja' })
@@ -68,21 +85,40 @@ export class EmployeesController {
 
   @Post(':id/reset-password')
   @Permissions('hr:employees:update')
-  @ApiOperation({ summary: 'Generar nueva contraseña temporal para el usuario del empleado' })
+  @ApiOperation({
+    summary: 'Generar nueva contraseña temporal para el usuario del empleado',
+  })
   @ApiParam({ name: 'id', description: 'Employee UUID' })
-  @ApiResponse({ status: 201, schema: { example: { tempPassword: 'aB3kR7mN2p' } } })
-  @ApiResponse({ status: 422, description: 'El empleado no tiene usuario vinculado' })
+  @ApiResponse({
+    status: 201,
+    schema: { example: { tempPassword: 'aB3kR7mN2p' } },
+  })
+  @ApiResponse({
+    status: 422,
+    description: 'El empleado no tiene usuario vinculado',
+  })
   resetPassword(@CurrentTenant() tenantId: string, @Param('id') id: string) {
     return this.employeesService.resetUserPassword(tenantId, id);
   }
 
   @Post(':id/link-user')
   @Permissions('hr:employees:update')
-  @ApiOperation({ summary: 'Vincular usuario externo existente a este empleado' })
+  @ApiOperation({
+    summary: 'Vincular usuario externo existente a este empleado',
+  })
   @ApiParam({ name: 'id', description: 'Employee UUID' })
-  @ApiBody({ schema: { type: 'object', required: ['email'], properties: { email: { type: 'string', format: 'email' } } } })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['email'],
+      properties: { email: { type: 'string', format: 'email' } },
+    },
+  })
   @ApiResponse({ status: 201, description: 'Usuario vinculado correctamente' })
-  @ApiResponse({ status: 409, description: 'El usuario ya está vinculado a otro empleado' })
+  @ApiResponse({
+    status: 409,
+    description: 'El usuario ya está vinculado a otro empleado',
+  })
   linkUser(
     @CurrentTenant() tenantId: string,
     @Param('id') id: string,

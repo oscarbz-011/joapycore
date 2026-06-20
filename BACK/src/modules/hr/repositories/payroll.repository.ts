@@ -10,7 +10,14 @@ export class PayrollRepository {
     return this.prisma.payrollConfig.findUnique({ where: { tenantId } });
   }
 
-  upsertConfig(tenantId: string, data: { minimumWage: number; ipsEmployeeRate: number; ipsEmployerRate: number }) {
+  upsertConfig(
+    tenantId: string,
+    data: {
+      minimumWage: number;
+      ipsEmployeeRate: number;
+      ipsEmployerRate: number;
+    },
+  ) {
     return this.prisma.payrollConfig.upsert({
       where: { tenantId },
       create: { tenantId, ...data },
@@ -30,7 +37,16 @@ export class PayrollRepository {
       where: { id, tenantId },
       include: {
         items: {
-          include: { employee: { select: { id: true, firstName: true, lastName: true, employeeNumber: true } } },
+          include: {
+            employee: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                employeeNumber: true,
+              },
+            },
+          },
         },
       },
     });
@@ -40,8 +56,15 @@ export class PayrollRepository {
     return this.prisma.payrollRecord.create({ data });
   }
 
-  updateRecord(tenantId: string, id: string, data: Prisma.PayrollRecordUncheckedUpdateInput) {
-    return this.prisma.payrollRecord.updateMany({ where: { id, tenantId }, data });
+  updateRecord(
+    tenantId: string,
+    id: string,
+    data: Prisma.PayrollRecordUncheckedUpdateInput,
+  ) {
+    return this.prisma.payrollRecord.updateMany({
+      where: { id, tenantId },
+      data,
+    });
   }
 
   createItem(data: Prisma.PayrollRecordItemUncheckedCreateInput) {

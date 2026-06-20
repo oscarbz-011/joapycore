@@ -1,6 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { Industry } from '@prisma/client';
-import { ACTIVE_MODULES_BY_INDUSTRY, ALL_TENANT_MODULES } from '../../common/constants/modules.constant';
+import {
+  ACTIVE_MODULES_BY_INDUSTRY,
+  ALL_TENANT_MODULES,
+} from '../../common/constants/modules.constant';
 import { PrismaService } from '../../prisma/prisma.service';
 import { PrismaClientOrTx } from '../../prisma/types';
 
@@ -8,7 +11,11 @@ import { PrismaClientOrTx } from '../../prisma/types';
 export class TenantModulesRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  seedDefaults(tenantId: string, industry: Industry, client: PrismaClientOrTx = this.prisma) {
+  seedDefaults(
+    tenantId: string,
+    industry: Industry,
+    client: PrismaClientOrTx = this.prisma,
+  ) {
     const activeModules = ACTIVE_MODULES_BY_INDUSTRY[industry] ?? [];
     const rows = ALL_TENANT_MODULES.map((moduleName) => ({
       tenantId,

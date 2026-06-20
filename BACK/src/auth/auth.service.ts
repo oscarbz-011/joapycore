@@ -77,13 +77,23 @@ export class AuthService {
         tx,
       );
       await this.usersRepository.attachRole(createdUser.id, ownerRole.id, tx);
-      await this.tenantModulesRepository.seedDefaults(tenant.id, dto.industry, tx);
+      await this.tenantModulesRepository.seedDefaults(
+        tenant.id,
+        dto.industry,
+        tx,
+      );
       return createdUser;
     });
 
     const tokens = await this.issueTokens(user);
-    this.eventEmitter.emit('user.registered', { userId: user.id, tenantId: user.tenantId });
-    this.eventEmitter.emit('tenant.registered', { tenantId: user.tenantId, industry: dto.industry });
+    this.eventEmitter.emit('user.registered', {
+      userId: user.id,
+      tenantId: user.tenantId,
+    });
+    this.eventEmitter.emit('tenant.registered', {
+      tenantId: user.tenantId,
+      industry: dto.industry,
+    });
     return tokens;
   }
 
@@ -107,7 +117,10 @@ export class AuthService {
     });
 
     const tokens = await this.issueTokens(user);
-    this.eventEmitter.emit('user.logged_in', { userId: user.id, tenantId: user.tenantId });
+    this.eventEmitter.emit('user.logged_in', {
+      userId: user.id,
+      tenantId: user.tenantId,
+    });
     return { ...tokens, mustChangePassword: user.mustChangePassword };
   }
 
@@ -151,7 +164,8 @@ export class AuthService {
     const rolePermissions = userRoles.flatMap((userRole) =>
       userRole.role.rolePermissions.map((rp) => rp.permission.key),
     );
-    const userExtraPermissions = await this.usersRepository.findPermissionsForUser(user.id);
+    const userExtraPermissions =
+      await this.usersRepository.findPermissionsForUser(user.id);
     const extraKeys = userExtraPermissions.map((up) => up.permission.key);
     const permissions = Array.from(new Set([...rolePermissions, ...extraKeys]));
     const activeModules =

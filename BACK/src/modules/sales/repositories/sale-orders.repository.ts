@@ -37,13 +37,19 @@ export class SaleOrdersRepository {
     return db.saleOrder.create({ data, include: this.include });
   }
 
-  createItem(data: Prisma.SaleOrderItemUncheckedCreateInput, client?: PrismaClientOrTx) {
+  createItem(
+    data: Prisma.SaleOrderItemUncheckedCreateInput,
+    client?: PrismaClientOrTx,
+  ) {
     const db = client ?? this.prisma;
     return db.saleOrderItem.create({ data });
   }
 
   updateStatus(id: string, status: string, client?: PrismaClientOrTx) {
     const db = client ?? this.prisma;
-    return db.saleOrder.update({ where: { id }, data: { status: status as never } });
+    return db.saleOrder.update({
+      where: { id },
+      data: { status: status as never },
+    });
   }
 }

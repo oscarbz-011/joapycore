@@ -38,14 +38,17 @@ export class EmployeesService {
   }
 
   async create(tenantId: string, dto: CreateEmployeeDto) {
-    const employeeNumber = await this.employeesRepository.nextEmployeeNumber(tenantId);
+    const employeeNumber =
+      await this.employeesRepository.nextEmployeeNumber(tenantId);
 
     return this.prisma.$transaction(async (tx) => {
       let userId: string | undefined;
       let tempPassword: string | undefined;
 
       if (dto.email) {
-        const existing = await tx.user.findUnique({ where: { email: dto.email } });
+        const existing = await tx.user.findUnique({
+          where: { email: dto.email },
+        });
         if (existing) throw new ConflictException('El email ya está en uso');
 
         tempPassword = generateTempPassword();
@@ -98,7 +101,14 @@ export class EmployeesService {
           bankAccount: dto.bankAccount,
         },
         include: {
-          user: { select: { id: true, email: true, status: true, mustChangePassword: true } },
+          user: {
+            select: {
+              id: true,
+              email: true,
+              status: true,
+              mustChangePassword: true,
+            },
+          },
           area: { select: { id: true, name: true } },
           position: { select: { id: true, name: true } },
           manager: { select: { id: true, firstName: true, lastName: true } },
@@ -159,10 +169,15 @@ export class EmployeesService {
     return this.getById(tenantId, id);
   }
 
-  async resetUserPassword(tenantId: string, id: string): Promise<{ tempPassword: string }> {
+  async resetUserPassword(
+    tenantId: string,
+    id: string,
+  ): Promise<{ tempPassword: string }> {
     const employee = await this.getById(tenantId, id);
     if (!employee.userId) {
-      throw new UnprocessableEntityException('Este empleado no tiene usuario del sistema vinculado');
+      throw new UnprocessableEntityException(
+        'Este empleado no tiene usuario del sistema vinculado',
+      );
     }
 
     const tempPassword = generateTempPassword();
@@ -180,11 +195,18 @@ export class EmployeesService {
     await this.getById(tenantId, id);
 
     const existing = await this.prisma.user.findUnique({ where: { email } });
-    if (!existing) throw new NotFoundException('Usuario no encontrado con ese email');
-    if (existing.tenantId !== tenantId) throw new ConflictException('El usuario no pertenece a este tenant');
+    if (!existing)
+      throw new NotFoundException('Usuario no encontrado con ese email');
+    if (existing.tenantId !== tenantId)
+      throw new ConflictException('El usuario no pertenece a este tenant');
 
-    const alreadyLinked = await this.employeesRepository.findByUserId(existing.id);
-    if (alreadyLinked) throw new ConflictException('Ese usuario ya está vinculado a otro empleado');
+    const alreadyLinked = await this.employeesRepository.findByUserId(
+      existing.id,
+    );
+    if (alreadyLinked)
+      throw new ConflictException(
+        'Ese usuario ya está vinculado a otro empleado',
+      );
 
     await this.employeesRepository.linkUser(tenantId, id, existing.id);
     return this.getById(tenantId, id);

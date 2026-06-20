@@ -47,7 +47,9 @@ export class CreatePurchaseOrderDto {
   @IsDateString()
   expectedDate?: string;
 
-  @ApiPropertyOptional({ description: 'Tipo de cambio (solo para importaciones)' })
+  @ApiPropertyOptional({
+    description: 'Tipo de cambio (solo para importaciones)',
+  })
   @IsOptional()
   @IsNumber({ maxDecimalPlaces: 4 })
   @IsPositive()

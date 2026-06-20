@@ -12,7 +12,9 @@ interface CreateUserData {
 
 const WITH_ROLES_AND_PERMISSIONS = {
   userRoles: { include: { role: { select: { id: true, name: true } } } },
-  userPermissions: { include: { permission: { select: { id: true, key: true } } } },
+  userPermissions: {
+    include: { permission: { select: { id: true, key: true } } },
+  },
 } as const;
 
 @Injectable()

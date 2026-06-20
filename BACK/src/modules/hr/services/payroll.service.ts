@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  UnprocessableEntityException,
+} from '@nestjs/common';
 import { PayrollRepository } from '../repositories/payroll.repository';
 import { EmployeesRepository } from '../repositories/employees.repository';
 import { UpdatePayrollConfigDto } from '../dto/payroll-config.dto';
@@ -38,15 +42,23 @@ export class PayrollService {
   async runPayroll(tenantId: string, period: string) {
     const existing = await this.payrollRepository.findRecords(tenantId);
     if (existing.find((r) => r.period === period)) {
-      throw new UnprocessableEntityException(`Ya existe una liquidación para el período ${period}`);
+      throw new UnprocessableEntityException(
+        `Ya existe una liquidación para el período ${period}`,
+      );
     }
 
     const config = await this.payrollRepository.getConfig(tenantId);
-    const ipsEmployeeRate = Number(config?.ipsEmployeeRate ?? DEFAULT_IPS_EMPLOYEE);
-    const ipsEmployerRate = Number(config?.ipsEmployerRate ?? DEFAULT_IPS_EMPLOYER);
+    const ipsEmployeeRate = Number(
+      config?.ipsEmployeeRate ?? DEFAULT_IPS_EMPLOYEE,
+    );
+    const ipsEmployerRate = Number(
+      config?.ipsEmployerRate ?? DEFAULT_IPS_EMPLOYER,
+    );
 
     const employees = await this.employeesRepository.findAll(tenantId);
-    const activeEmployees = employees.filter((e) => e.isActive && !e.terminationDate);
+    const activeEmployees = employees.filter(
+      (e) => e.isActive && !e.terminationDate,
+    );
 
     const record = await this.payrollRepository.createRecord({
       tenantId,

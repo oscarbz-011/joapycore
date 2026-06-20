@@ -43,8 +43,12 @@ export class SaleOrdersService {
       });
 
       for (const item of dto.items) {
-        const product = await this.productsRepository.findById(tenantId, item.productId);
-        if (!product) throw new NotFoundException(`Product ${item.productId} not found`);
+        const product = await this.productsRepository.findById(
+          tenantId,
+          item.productId,
+        );
+        if (!product)
+          throw new NotFoundException(`Product ${item.productId} not found`);
 
         if (product.isSerialized) {
           const serials = item.serialNumbers ?? [];
@@ -67,10 +71,16 @@ export class SaleOrdersService {
         if (product.isSerialized && (item.serialNumbers?.length ?? 0) > 0) {
           for (const serial of item.serialNumbers!) {
             const unit = await tx.productUnit.findFirst({
-              where: { tenantId, productId: item.productId, serialNumber: serial },
+              where: {
+                tenantId,
+                productId: item.productId,
+                serialNumber: serial,
+              },
             });
             if (!unit) {
-              throw new NotFoundException(`Serial number "${serial}" not found`);
+              throw new NotFoundException(
+                `Serial number "${serial}" not found`,
+              );
             }
             if (unit.status !== 'IN_STOCK') {
               throw new UnprocessableEntityException(
@@ -95,13 +105,19 @@ export class SaleOrdersService {
   async confirm(tenantId: string, id: string) {
     const order = await this.findOne(tenantId, id);
     if (order.status !== 'DRAFT') {
-      throw new UnprocessableEntityException('Only DRAFT orders can be confirmed');
+      throw new UnprocessableEntityException(
+        'Only DRAFT orders can be confirmed',
+      );
     }
 
     await this.prisma.$transaction(async (tx) => {
       for (const item of order.items) {
-        const product = await this.productsRepository.findById(tenantId, item.productId);
-        if (!product) throw new NotFoundException(`Product ${item.productId} not found`);
+        const product = await this.productsRepository.findById(
+          tenantId,
+          item.productId,
+        );
+        if (!product)
+          throw new NotFoundException(`Product ${item.productId} not found`);
 
         if (product.isSerialized) {
           const units = await tx.productUnit.findMany({
@@ -147,7 +163,10 @@ export class SaleOrdersService {
         }
       }
 
-      await tx.saleOrder.update({ where: { id }, data: { status: 'CONFIRMED' } });
+      await tx.saleOrder.update({
+        where: { id },
+        data: { status: 'CONFIRMED' },
+      });
     });
 
     const confirmed = await this.saleOrdersRepository.findById(tenantId, id);
@@ -166,6 +185,9 @@ export class SaleOrdersService {
         'Confirmed orders cannot be cancelled. Use a credit note instead.',
       );
     }
-    return this.prisma.saleOrder.update({ where: { id }, data: { status: 'CANCELLED' } });
+    return this.prisma.saleOrder.update({
+      where: { id },
+      data: { status: 'CANCELLED' },
+    });
   }
 }

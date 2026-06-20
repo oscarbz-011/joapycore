@@ -24,7 +24,11 @@ export class PositionsRepository {
     });
   }
 
-  update(tenantId: string, id: string, data: { name?: string; isActive?: boolean }) {
+  update(
+    tenantId: string,
+    id: string,
+    data: { name?: string; isActive?: boolean },
+  ) {
     return this.prisma.position.updateMany({ where: { id, tenantId }, data });
   }
 }

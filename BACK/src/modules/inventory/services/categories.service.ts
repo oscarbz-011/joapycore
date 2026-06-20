@@ -1,4 +1,8 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { CategoriesRepository } from '../repositories/categories.repository';
 import { CreateCategoryDto } from '../dto/create-category.dto';
 import { UpdateCategoryDto } from '../dto/update-category.dto';
@@ -30,8 +34,10 @@ export class CategoriesService {
   }
 
   private prismaCheck(tenantId: string, name: string) {
-    return this.categoriesRepository.findAll(tenantId).then((cats) =>
-      cats.find((c) => c.name.toLowerCase() === name.toLowerCase()),
-    );
+    return this.categoriesRepository
+      .findAll(tenantId)
+      .then((cats) =>
+        cats.find((c) => c.name.toLowerCase() === name.toLowerCase()),
+      );
   }
 }

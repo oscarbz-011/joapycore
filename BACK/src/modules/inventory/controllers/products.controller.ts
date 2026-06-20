@@ -1,4 +1,13 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+} from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CurrentTenant } from '../../../common/decorators/current-tenant.decorator';
 import { Permissions } from '../../../common/decorators/permissions.decorator';
@@ -19,7 +28,10 @@ export class ProductsController {
   @Get()
   @Permissions('inventory:read')
   @ApiOperation({ summary: 'Listar productos' })
-  findAll(@CurrentTenant() tenantId: string, @Query() filters: FilterProductDto) {
+  findAll(
+    @CurrentTenant() tenantId: string,
+    @Query() filters: FilterProductDto,
+  ) {
     return this.productsService.findAll(tenantId, filters);
   }
 

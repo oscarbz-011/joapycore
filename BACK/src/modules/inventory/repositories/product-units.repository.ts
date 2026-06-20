@@ -7,7 +7,11 @@ import { PrismaClientOrTx } from '../../../prisma/types';
 export class ProductUnitsRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  findByProduct(tenantId: string, productId: string, status?: ProductUnitStatus) {
+  findByProduct(
+    tenantId: string,
+    productId: string,
+    status?: ProductUnitStatus,
+  ) {
     return this.prisma.productUnit.findMany({
       where: { tenantId, productId, ...(status && { status }) },
       orderBy: { createdAt: 'desc' },
@@ -16,7 +20,9 @@ export class ProductUnitsRepository {
 
   findBySerial(tenantId: string, productId: string, serialNumber: string) {
     return this.prisma.productUnit.findUnique({
-      where: { tenantId_productId_serialNumber: { tenantId, productId, serialNumber } },
+      where: {
+        tenantId_productId_serialNumber: { tenantId, productId, serialNumber },
+      },
     });
   }
 

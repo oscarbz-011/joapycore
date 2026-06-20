@@ -17,7 +17,7 @@ async function bootstrap() {
     .setTitle('JoapyCore API')
     .setDescription(
       'API del ERP SaaS JoapyCore. Multi-tenant, modular. ' +
-      'Autenticarse con **POST /auth/login** y usar el token en el botón **Authorize**.',
+        'Autenticarse con **POST /auth/login** y usar el token en el botón **Authorize**.',
     )
     .setVersion('1.0')
     .addServer('http://localhost:3000', 'Local')

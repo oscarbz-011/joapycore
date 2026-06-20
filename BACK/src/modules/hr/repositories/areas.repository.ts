@@ -21,11 +21,18 @@ export class AreasRepository {
     return this.prisma.area.upsert({
       where: { tenantId_name: { tenantId, name: data.name } },
       create: { ...data, tenantId },
-      update: { isActive: true, ...(data.parentId !== undefined ? { parentId: data.parentId } : {}) },
+      update: {
+        isActive: true,
+        ...(data.parentId !== undefined ? { parentId: data.parentId } : {}),
+      },
     });
   }
 
-  update(tenantId: string, id: string, data: { name?: string; parentId?: string; isActive?: boolean }) {
+  update(
+    tenantId: string,
+    id: string,
+    data: { name?: string; parentId?: string; isActive?: boolean },
+  ) {
     return this.prisma.area.updateMany({ where: { id, tenantId }, data });
   }
 }

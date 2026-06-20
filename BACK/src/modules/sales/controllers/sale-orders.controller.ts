@@ -36,7 +36,9 @@ export class SaleOrdersController {
 
   @Post(':id/confirm')
   @Permissions('sales:update')
-  @ApiOperation({ summary: 'Confirmar orden de venta (ajusta stock y genera factura)' })
+  @ApiOperation({
+    summary: 'Confirmar orden de venta (ajusta stock y genera factura)',
+  })
   confirm(@CurrentTenant() tenantId: string, @Param('id') id: string) {
     return this.saleOrdersService.confirm(tenantId, id);
   }

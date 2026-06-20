@@ -20,7 +20,9 @@ export class ProductsRepository {
       deletedAt: null,
       ...(filters.categoryId && { categoryId: filters.categoryId }),
       ...(filters.brandId && { brandId: filters.brandId }),
-      ...(filters.isSerialized !== undefined && { isSerialized: filters.isSerialized }),
+      ...(filters.isSerialized !== undefined && {
+        isSerialized: filters.isSerialized,
+      }),
       ...(filters.isActive !== undefined && { isActive: filters.isActive }),
       ...(filters.search && {
         OR: [
@@ -43,12 +45,18 @@ export class ProductsRepository {
     });
   }
 
-  create(tenantId: string, data: Omit<Prisma.ProductUncheckedCreateInput, 'tenantId'>) {
+  create(
+    tenantId: string,
+    data: Omit<Prisma.ProductUncheckedCreateInput, 'tenantId'>,
+  ) {
     return this.prisma.product.create({ data: { ...data, tenantId } });
   }
 
   update(tenantId: string, id: string, data: Prisma.ProductUpdateInput) {
-    return this.prisma.product.updateMany({ where: { tenantId, id, deletedAt: null }, data });
+    return this.prisma.product.updateMany({
+      where: { tenantId, id, deletedAt: null },
+      data,
+    });
   }
 
   softDelete(tenantId: string, id: string) {

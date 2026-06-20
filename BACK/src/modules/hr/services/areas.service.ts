@@ -1,4 +1,8 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { AreasRepository } from '../repositories/areas.repository';
 
 @Injectable()
@@ -15,7 +19,11 @@ export class AreasService {
     });
   }
 
-  async update(tenantId: string, id: string, data: { name?: string; parentId?: string; isActive?: boolean }) {
+  async update(
+    tenantId: string,
+    id: string,
+    data: { name?: string; parentId?: string; isActive?: boolean },
+  ) {
     const area = await this.areasRepository.findById(tenantId, id);
     if (!area) throw new NotFoundException('Área no encontrada');
     await this.areasRepository.update(tenantId, id, data);

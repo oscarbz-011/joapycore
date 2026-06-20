@@ -20,7 +20,12 @@ export class PurchaseOrdersRepository {
       where: { tenantId, id },
       include: {
         supplier: true,
-        items: { include: { product: { include: { brand: true } }, productUnits: true } },
+        items: {
+          include: {
+            product: { include: { brand: true } },
+            productUnits: true,
+          },
+        },
       },
     });
   }
@@ -39,7 +44,10 @@ export class PurchaseOrdersRepository {
     status: PurchaseOrderStatus,
     client: PrismaClientOrTx = this.prisma,
   ) {
-    return client.purchaseOrder.updateMany({ where: { tenantId, id }, data: { status } });
+    return client.purchaseOrder.updateMany({
+      where: { tenantId, id },
+      data: { status },
+    });
   }
 
   createItem(
@@ -61,6 +69,9 @@ export class PurchaseOrdersRepository {
     receivedQty: number,
     client: PrismaClientOrTx = this.prisma,
   ) {
-    return client.purchaseOrderItem.update({ where: { id }, data: { receivedQty } });
+    return client.purchaseOrderItem.update({
+      where: { id },
+      data: { receivedQty },
+    });
   }
 }

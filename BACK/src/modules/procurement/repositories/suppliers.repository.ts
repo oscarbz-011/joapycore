@@ -14,15 +14,23 @@ export class SuppliersRepository {
   }
 
   findById(tenantId: string, id: string) {
-    return this.prisma.supplier.findFirst({ where: { tenantId, id, deletedAt: null } });
+    return this.prisma.supplier.findFirst({
+      where: { tenantId, id, deletedAt: null },
+    });
   }
 
-  create(tenantId: string, data: Omit<Prisma.SupplierUncheckedCreateInput, 'tenantId'>) {
+  create(
+    tenantId: string,
+    data: Omit<Prisma.SupplierUncheckedCreateInput, 'tenantId'>,
+  ) {
     return this.prisma.supplier.create({ data: { ...data, tenantId } });
   }
 
   update(tenantId: string, id: string, data: Prisma.SupplierUpdateInput) {
-    return this.prisma.supplier.updateMany({ where: { tenantId, id, deletedAt: null }, data });
+    return this.prisma.supplier.updateMany({
+      where: { tenantId, id, deletedAt: null },
+      data,
+    });
   }
 
   softDelete(tenantId: string, id: string) {
