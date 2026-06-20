@@ -64,6 +64,60 @@ enum InvoiceStatus {
   CANCELLED
 }
 
+enum DocumentType {
+  CI
+  RUC
+  PASSPORT
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+}
+
+enum MaritalStatus {
+  SINGLE
+  MARRIED
+  DIVORCED
+  WIDOWED
+  OTHER
+}
+
+enum ContractType {
+  PERMANENT
+  TEMPORARY
+  PART_TIME
+  CONTRACTOR
+}
+
+enum PaymentMethod {
+  BANK_TRANSFER
+  CASH
+}
+
+enum LeaveType {
+  VACATION
+  SICK
+  MATERNITY
+  PATERNITY
+  PERSONAL
+  OTHER
+}
+
+enum LeaveStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+enum PayrollStatus {
+  DRAFT
+  PROCESSED
+  PAID
+}
+
 // ─── Core ─────────────────────────────────────────────────────────────────────
 
 model Tenant {
@@ -88,6 +142,11 @@ model Tenant {
   purchaseOrders PurchaseOrder[]
   saleOrders     SaleOrder[]
   invoices       Invoice[]
+  areas          Area[]
+  positions      Position[]
+  employees      Employee[]
+  payrollConfig  PayrollConfig?
+  payrollRecords PayrollRecord[]
 
   @@map("tenants")
 }
@@ -116,21 +175,24 @@ model TenantModule {
 }
 
 model User {
-  id           String     @id @default(uuid())
-  tenantId     String     @map("tenant_id")
-  email        String     @unique
-  passwordHash String     @map("password_hash")
-  firstName    String     @map("first_name")
-  lastName     String     @map("last_name")
-  status       UserStatus @default(ACTIVE)
-  createdAt    DateTime   @default(now()) @map("created_at")
-  updatedAt    DateTime   @updatedAt @map("updated_at")
-  deletedAt    DateTime?  @map("deleted_at")
+  id                 String     @id @default(uuid())
+  tenantId           String     @map("tenant_id")
+  email              String     @unique
+  passwordHash       String     @map("password_hash")
+  firstName          String     @map("first_name")
+  lastName           String     @map("last_name")
+  status             UserStatus @default(ACTIVE)
+  mustChangePassword Boolean    @default(false) @map("must_change_password")
+  lastLoginAt        DateTime?  @map("last_login_at")
+  createdAt          DateTime   @default(now()) @map("created_at")
+  updatedAt          DateTime   @updatedAt @map("updated_at")
+  deletedAt          DateTime?  @map("deleted_at")
 
   tenant          Tenant           @relation(fields: [tenantId], references: [id])
   userRoles       UserRole[]
   userPermissions UserPermission[]
   refreshTokens   RefreshToken[]
+  employee        Employee?
 
   @@map("users")
 }
@@ -432,4 +494,188 @@ model InvoiceItem {
   invoice Invoice @relation(fields: [invoiceId], references: [id])
 
   @@map("invoice_items")
+}
+
+// ─── HR ───────────────────────────────────────────────────────────────────────
+
+model Area {
+  id       String  @id @default(uuid())
+  tenantId String  @map("tenant_id")
+  parentId String? @map("parent_id")
+  name     String
+  isActive Boolean @default(true) @map("is_active")
+
+  tenant    Tenant     @relation(fields: [tenantId], references: [id])
+  parent    Area?      @relation("AreaHierarchy", fields: [parentId], references: [id])
+  children  Area[]     @relation("AreaHierarchy")
+  employees Employee[]
+
+  @@unique([tenantId, name])
+  @@map("areas")
+}
+
+model Position {
+  id       String  @id @default(uuid())
+  tenantId String  @map("tenant_id")
+  name     String
+  isActive Boolean @default(true) @map("is_active")
+
+  tenant    Tenant     @relation(fields: [tenantId], references: [id])
+  employees Employee[]
+
+  @@unique([tenantId, name])
+  @@map("positions")
+}
+
+model Employee {
+  id             String        @id @default(uuid())
+  tenantId       String        @map("tenant_id")
+  userId         String?       @unique @map("user_id")
+  employeeNumber Int           @map("employee_number")
+  areaId         String?       @map("area_id")
+  positionId     String?       @map("position_id")
+  managerId      String?       @map("manager_id")
+
+  // Personal
+  firstName    String        @map("first_name")
+  lastName     String        @map("last_name")
+  documentType DocumentType  @default(CI) @map("document_type")
+  documentNumber String      @map("document_number")
+  ci           String?
+  ipsNumber    String?       @map("ips_number")
+  ruc          String?
+  birthDate    DateTime      @map("birth_date")
+  gender       Gender?
+  nationality  String?
+  maritalStatus MaritalStatus? @map("marital_status")
+
+  // Contact
+  phone                    String?
+  mobilePhone              String? @map("mobile_phone")
+  address                  String?
+  city                     String?
+  emergencyContactName     String? @map("emergency_contact_name")
+  emergencyContactPhone    String? @map("emergency_contact_phone")
+  emergencyContactRelation String? @map("emergency_contact_relation")
+
+  // Employment
+  hireDate        DateTime      @map("hire_date")
+  terminationDate DateTime?     @map("termination_date")
+  contractType    ContractType  @default(PERMANENT) @map("contract_type")
+
+  // Payroll (PYG — integer, no decimals)
+  baseSalary     Int           @map("base_salary")
+  paymentMethod  PaymentMethod @default(BANK_TRANSFER) @map("payment_method")
+  bankName       String?       @map("bank_name")
+  bankAccount    String?       @map("bank_account")
+
+  isActive  Boolean   @default(true) @map("is_active")
+  deletedAt DateTime? @map("deleted_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+
+  tenant           Tenant              @relation(fields: [tenantId], references: [id])
+  user             User?               @relation(fields: [userId], references: [id])
+  area             Area?               @relation(fields: [areaId], references: [id])
+  position         Position?           @relation(fields: [positionId], references: [id])
+  manager          Employee?           @relation("EmployeeHierarchy", fields: [managerId], references: [id])
+  subordinates     Employee[]          @relation("EmployeeHierarchy")
+  leaves           Leave[]
+  leaveBalances    LeaveBalance[]
+  payrollItems     PayrollRecordItem[]
+  approvedLeaves   Leave[]             @relation("LeaveApprover")
+
+  @@unique([tenantId, employeeNumber])
+  @@unique([tenantId, documentType, documentNumber])
+  @@map("employees")
+}
+
+model Leave {
+  id           String      @id @default(uuid())
+  tenantId     String      @map("tenant_id")
+  employeeId   String      @map("employee_id")
+  approvedById String?     @map("approved_by_id")
+  type         LeaveType
+  status       LeaveStatus @default(PENDING)
+  startDate    DateTime    @map("start_date")
+  endDate      DateTime    @map("end_date")
+  days         Int
+  notes        String?
+  approvedAt   DateTime?   @map("approved_at")
+  createdAt    DateTime    @default(now()) @map("created_at")
+  updatedAt    DateTime    @updatedAt @map("updated_at")
+
+  employee   Employee  @relation(fields: [employeeId], references: [id])
+  approvedBy Employee? @relation("LeaveApprover", fields: [approvedById], references: [id])
+
+  @@map("leaves")
+}
+
+model LeaveBalance {
+  id         String @id @default(uuid())
+  tenantId   String @map("tenant_id")
+  employeeId String @map("employee_id")
+  year       Int
+  entitled   Int
+  taken      Int    @default(0)
+  pending    Int    @default(0)
+
+  employee Employee @relation(fields: [employeeId], references: [id])
+
+  @@unique([employeeId, year])
+  @@map("leave_balances")
+}
+
+model PayrollConfig {
+  id              String  @id @default(uuid())
+  tenantId        String  @unique @map("tenant_id")
+  minimumWage     Int     @map("minimum_wage")
+  ipsEmployeeRate Decimal @db.Decimal(5, 4) @default(0.0900) @map("ips_employee_rate")
+  ipsEmployerRate Decimal @db.Decimal(5, 4) @default(0.1650) @map("ips_employer_rate")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@map("payroll_config")
+}
+
+model PayrollRecord {
+  id          String        @id @default(uuid())
+  tenantId    String        @map("tenant_id")
+  period      String        // "2024-12" format
+  status      PayrollStatus @default(DRAFT)
+  processedAt DateTime?     @map("processed_at")
+  paidAt      DateTime?     @map("paid_at")
+  createdAt   DateTime      @default(now()) @map("created_at")
+  updatedAt   DateTime      @updatedAt @map("updated_at")
+
+  tenant Tenant              @relation(fields: [tenantId], references: [id])
+  items  PayrollRecordItem[]
+
+  @@unique([tenantId, period])
+  @@map("payroll_records")
+}
+
+model PayrollRecordItem {
+  id              String @id @default(uuid())
+  payrollRecordId String @map("payroll_record_id")
+  employeeId      String @map("employee_id")
+
+  // All amounts in PYG (integer)
+  baseSalary   Int @map("base_salary")
+  bonuses      Int @default(0)
+  deductions   Int @default(0)
+  ipsEmployee  Int @map("ips_employee")
+  ipsEmployer  Int @map("ips_employer")
+  irp          Int @default(0)
+  aguinaldo    Int @default(0)
+  grossSalary  Int @map("gross_salary")
+  netSalary    Int @map("net_salary")
+  notes        String?
+
+  payrollRecord PayrollRecord @relation(fields: [payrollRecordId], references: [id])
+  employee      Employee      @relation(fields: [employeeId], references: [id])
+
+  @@unique([payrollRecordId, employeeId])
+  @@map("payroll_record_items")
 }

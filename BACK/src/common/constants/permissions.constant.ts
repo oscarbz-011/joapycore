@@ -35,6 +35,15 @@ export const PERMISSIONS = [
   'billing:read',
   'billing:issue',
   'billing:cancel',
+  // HR
+  'hr:read',
+  'hr:employees:create',
+  'hr:employees:update',
+  'hr:employees:terminate',
+  'hr:leaves:manage',
+  'hr:payroll:run',
+  'hr:payroll:pay',
+  'hr:config:manage',
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
