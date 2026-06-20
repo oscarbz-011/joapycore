@@ -7,6 +7,7 @@ import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { PermissionsGuard } from './common/guards/permissions.guard';
 import { TenantModuleGuard } from './common/guards/tenant-module.guard';
 import { BillingModule } from './modules/billing/billing.module';
+import { HrModule } from './modules/hr/hr.module';
 import { InventoryModule } from './modules/inventory/inventory.module';
 import { ProcurementModule } from './modules/procurement/procurement.module';
 import { SalesModule } from './modules/sales/sales.module';
@@ -26,6 +27,7 @@ import { UsersModule } from './users/users.module';
     ProcurementModule,
     SalesModule,
     BillingModule,
+    HrModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },
