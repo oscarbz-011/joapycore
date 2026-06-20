@@ -101,12 +101,14 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    const tokens = await this.issueTokens(user);
-    this.eventEmitter.emit('user.logged_in', {
-      userId: user.id,
-      tenantId: user.tenantId,
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: { lastLoginAt: new Date() },
     });
-    return tokens;
+
+    const tokens = await this.issueTokens(user);
+    this.eventEmitter.emit('user.logged_in', { userId: user.id, tenantId: user.tenantId });
+    return { ...tokens, mustChangePassword: user.mustChangePassword };
   }
 
   async refresh(dto: RefreshTokenDto) {

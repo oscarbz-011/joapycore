@@ -82,6 +82,20 @@ export class UsersController {
     return this.usersService.deactivate(tenantId, id);
   }
 
+  @Patch(':id/reactivate')
+  @Permissions('users:deactivate')
+  @ApiOperation({ summary: 'Reactivate a user' })
+  reactivate(@CurrentTenant() tenantId: string, @Param('id') id: string) {
+    return this.usersService.reactivate(tenantId, id);
+  }
+
+  @Post(':id/reset-password')
+  @Permissions('users:update')
+  @ApiOperation({ summary: 'Generate a new temporary password for a user (admin)' })
+  resetPassword(@CurrentTenant() tenantId: string, @Param('id') id: string) {
+    return this.usersService.resetPassword(tenantId, id);
+  }
+
   @Patch(':id/roles')
   @Permissions('users:update')
   @ApiOperation({ summary: 'Assign roles to a user' })

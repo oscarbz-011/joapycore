@@ -6,6 +6,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import * as bcrypt from 'bcryptjs';
+import * as crypto from 'crypto';
 import { UserStatus } from '@prisma/client';
 import { RolesRepository } from '../repositories/roles.repository';
 import { UsersRepository } from '../repositories/users.repository';
@@ -64,6 +65,23 @@ export class UsersService {
     return this.getById(tenantId, id);
   }
 
+  async reactivate(tenantId: string, id: string) {
+    const count = await this.usersRepository.update(tenantId, id, {
+      status: UserStatus.ACTIVE,
+    });
+    if (count === 0) throw new NotFoundException('User not found');
+    return this.getById(tenantId, id);
+  }
+
+  async resetPassword(tenantId: string, id: string): Promise<{ tempPassword: string }> {
+    const user = await this.usersRepository.findById(tenantId, id);
+    if (!user) throw new NotFoundException('User not found');
+    const tempPassword = crypto.randomBytes(8).toString('base64url').slice(0, 10);
+    const passwordHash = await bcrypt.hash(tempPassword, SALT_ROUNDS);
+    await this.usersRepository.update(tenantId, id, { passwordHash, mustChangePassword: true });
+    return { tempPassword };
+  }
+
   async assignRoles(tenantId: string, id: string, dto: AssignUserRolesDto) {
     await this.getById(tenantId, id);
 
@@ -89,7 +107,10 @@ export class UsersService {
     if (!matches) throw new BadRequestException('La contraseña actual es incorrecta');
 
     const newHash = await bcrypt.hash(dto.newPassword, SALT_ROUNDS);
-    await this.usersRepository.update(user.tenantId, userId, { passwordHash: newHash });
+    await this.usersRepository.update(user.tenantId, userId, {
+      passwordHash: newHash,
+      mustChangePassword: false,
+    });
   }
 
   async setExtraPermissions(tenantId: string, id: string, permissionKeys: string[]) {
