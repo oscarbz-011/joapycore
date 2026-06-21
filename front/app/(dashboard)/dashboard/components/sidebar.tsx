@@ -54,7 +54,7 @@ const MODULE_PERM_MAP: Record<string, string[]> = {
   inventory:   ['inventory:read', 'inventory:create', 'inventory:update', 'inventory:delete'],
   billing:     ['billing:read', 'billing:issue', 'billing:cancel'],
   procurement: ['procurement:read', 'procurement:create', 'procurement:update', 'procurement:receive', 'suppliers:read', 'suppliers:create', 'suppliers:update'],
-  payments:    [],
+  payments:    ['payments:read', 'payments:register'],
   hr:          ['hr:read', 'hr:employees:create', 'hr:employees:update', 'hr:employees:terminate', 'hr:payroll:run', 'hr:payroll:pay', 'hr:config:manage'],
 };
 
