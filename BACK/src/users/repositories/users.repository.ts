@@ -27,6 +27,13 @@ export class UsersRepository {
     return this.prisma.user.findUnique({ where: { email } });
   }
 
+  // Used by login — accepts email OR username interchangeably.
+  findByEmailOrUsername(emailOrUsername: string) {
+    return this.prisma.user.findFirst({
+      where: { OR: [{ email: emailOrUsername }, { username: emailOrUsername }] },
+    });
+  }
+
   findById(tenantId: string, id: string) {
     return this.prisma.user.findFirst({
       where: { id, tenantId },

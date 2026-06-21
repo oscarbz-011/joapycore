@@ -1,10 +1,71 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsOptional, IsString, MinLength } from 'class-validator';
+import { IsEmail, IsInt, IsOptional, IsString, IsUrl, Min, MinLength } from 'class-validator';
 
 export class UpdateTenantDto {
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ description: 'Nombre comercial / fantasia' })
   @IsOptional()
   @IsString()
   @MinLength(2)
   name?: string;
+
+  @ApiPropertyOptional({ description: 'Razón social legal' })
+  @IsOptional()
+  @IsString()
+  razonSocial?: string;
+
+  @ApiPropertyOptional({ description: 'RUC de la empresa' })
+  @IsOptional()
+  @IsString()
+  ruc?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  address?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  postalCode?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  city?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  department?: string;
+
+  @ApiPropertyOptional({ default: 'Paraguay' })
+  @IsOptional()
+  @IsString()
+  country?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  phone?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsEmail()
+  email?: string;
+
+  @ApiPropertyOptional({ description: 'URL del logo (subido via /files)' })
+  @IsOptional()
+  @IsUrl()
+  logoUrl?: string;
+
+  @ApiPropertyOptional({ description: 'Cantidad aproximada de empleados', minimum: 1 })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  employeeCount?: number;
+
+  @ApiPropertyOptional({ description: 'Moneda base', default: 'PYG' })
+  @IsOptional()
+  @IsString()
+  currency?: string;
 }

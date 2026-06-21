@@ -8,7 +8,7 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import { JwtService } from '@nestjs/jwt';
 import { User, UserStatus } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
-import { createHash, randomBytes, timingSafeEqual } from 'crypto';
+import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { JwtPayload } from '../common/types/jwt-payload.interface';
 import { parseDurationMs } from '../common/utils/duration.util';
 import { PrismaService } from '../prisma/prisma.service';
@@ -50,7 +50,7 @@ export class AuthService {
 
     const user = await this.prisma.$transaction(async (tx) => {
       const tenant = await this.tenantsRepository.create(
-        { name: dto.tenantName, industry: dto.industry },
+        { name: dto.tenantName, industry: dto.industry, employeeCount: dto.employeeCount },
         tx,
       );
       const ownerRole = await this.rolesRepository.create(
@@ -98,7 +98,7 @@ export class AuthService {
   }
 
   async login(dto: LoginDto) {
-    const user = await this.usersRepository.findByEmail(dto.email);
+    const user = await this.usersRepository.findByEmailOrUsername(dto.emailOrUsername);
     if (!user || user.status !== UserStatus.ACTIVE) {
       throw new UnauthorizedException('Invalid credentials');
     }

@@ -7,6 +7,7 @@ interface CreateTenantData {
   name: string;
   industry: Industry;
   plan?: string;
+  employeeCount?: number;
 }
 
 @Injectable()

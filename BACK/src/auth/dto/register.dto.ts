@@ -1,6 +1,6 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Industry } from '@prisma/client';
-import { IsEmail, IsEnum, IsString, MinLength } from 'class-validator';
+import { IsEmail, IsEnum, IsInt, IsOptional, IsString, Min, MinLength } from 'class-validator';
 
 export class RegisterDto {
   @ApiProperty()
@@ -28,4 +28,10 @@ export class RegisterDto {
   @IsString()
   @MinLength(8)
   password: string;
+
+  @ApiPropertyOptional({ description: 'Approximate number of employees (used for plan sizing)', minimum: 1 })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  employeeCount?: number;
 }
