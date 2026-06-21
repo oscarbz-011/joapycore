@@ -214,6 +214,9 @@ export function UserDetailPanel({ user, currentUserId, onClose }: Props) {
                 {user.firstName} {user.lastName}
               </p>
               <p className="text-xs text-slate-500">{user.email}</p>
+              {user.username && (
+                <p className="text-xs text-slate-400">@{user.username}</p>
+              )}
             </div>
           </div>
           <button

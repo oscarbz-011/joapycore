@@ -3,6 +3,7 @@ import { apiClient } from './client';
 export interface UserResponse {
   id: string;
   email: string;
+  username: string | null;
   firstName: string;
   lastName: string;
   status: 'ACTIVE' | 'INACTIVE';
@@ -23,6 +24,7 @@ export interface CreateUserPayload {
 export interface UpdateProfilePayload {
   firstName?: string;
   lastName?: string;
+  username?: string;
 }
 
 export interface ChangePasswordPayload {

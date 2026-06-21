@@ -5,11 +5,12 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import Link from 'next/link';
 import { useState } from 'react';
+import { Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '../../../lib/auth-context';
 import axios from 'axios';
 
 const schema = z.object({
-  email: z.string().min(1, 'El email es requerido').email('Email inválido'),
+  emailOrUsername: z.string().min(1, 'El email o usuario es requerido'),
   password: z.string().min(1, 'La contraseña es requerida'),
 });
 
@@ -18,6 +19,7 @@ type FormValues = z.infer<typeof schema>;
 export default function LoginPage() {
   const { login } = useAuth();
   const [serverError, setServerError] = useState<string | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
 
   const {
     register,
@@ -28,7 +30,7 @@ export default function LoginPage() {
   const onSubmit = async (values: FormValues) => {
     setServerError(null);
     try {
-      await login(values.email, values.password);
+      await login(values.emailOrUsername, values.password);
     } catch (err) {
       if (axios.isAxiosError(err)) {
         const msg = err.response?.data?.message ?? 'Credenciales inválidas';
@@ -38,6 +40,9 @@ export default function LoginPage() {
       }
     }
   };
+
+  const inputClass =
+    'w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900 placeholder-slate-400 outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-200 disabled:opacity-50';
 
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-8">
@@ -51,19 +56,19 @@ export default function LoginPage() {
 
       <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-5">
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1.5" htmlFor="email">
-            Email
+          <label className="block text-sm font-medium text-slate-700 mb-1.5" htmlFor="emailOrUsername">
+            Email o usuario
           </label>
           <input
-            id="email"
-            type="email"
-            autoComplete="email"
-            {...register('email')}
-            className="w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900 placeholder-slate-400 outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-200 disabled:opacity-50"
+            id="emailOrUsername"
+            type="text"
+            autoComplete="username"
+            {...register('emailOrUsername')}
+            className={inputClass}
             placeholder="tu@empresa.com"
           />
-          {errors.email && (
-            <p className="mt-1.5 text-xs text-red-600">{errors.email.message}</p>
+          {errors.emailOrUsername && (
+            <p className="mt-1.5 text-xs text-red-600">{errors.emailOrUsername.message}</p>
           )}
         </div>
 
@@ -71,14 +76,25 @@ export default function LoginPage() {
           <label className="block text-sm font-medium text-slate-700 mb-1.5" htmlFor="password">
             Contraseña
           </label>
-          <input
-            id="password"
-            type="password"
-            autoComplete="current-password"
-            {...register('password')}
-            className="w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900 placeholder-slate-400 outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-200 disabled:opacity-50"
-            placeholder="••••••••"
-          />
+          <div className="relative">
+            <input
+              id="password"
+              type={showPassword ? 'text' : 'password'}
+              autoComplete="current-password"
+              {...register('password')}
+              className={`${inputClass} pr-10`}
+              placeholder="••••••••"
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword((v) => !v)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+              tabIndex={-1}
+              aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+            >
+              {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+            </button>
+          </div>
           {errors.password && (
             <p className="mt-1.5 text-xs text-red-600">{errors.password.message}</p>
           )}

@@ -10,26 +10,48 @@ function useProfile() {
   return useQuery({ queryKey: ['me'], queryFn: usersApi.getMe });
 }
 
-function ProfileForm({ firstName, lastName }: { firstName: string; lastName: string }) {
+function ProfileForm({
+  firstName,
+  lastName,
+  username,
+}: {
+  firstName: string;
+  lastName: string;
+  username: string | null;
+}) {
   const queryClient = useQueryClient();
-  const [form, setForm] = useState({ firstName, lastName });
+  const [form, setForm] = useState({ firstName, lastName, username: username ?? '' });
   const [success, setSuccess] = useState(false);
+  const [serverError, setServerError] = useState('');
 
   const mutation = useMutation({
-    mutationFn: () => usersApi.updateMe(form),
+    mutationFn: () =>
+      usersApi.updateMe({
+        firstName: form.firstName,
+        lastName: form.lastName,
+        username: form.username.trim() || undefined,
+      }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['me'] });
       setSuccess(true);
+      setServerError('');
       setTimeout(() => setSuccess(false), 2500);
+    },
+    onError: (err: Error & { response?: { data?: { message?: string } } }) => {
+      setServerError(err?.response?.data?.message ?? 'Error al guardar');
     },
   });
 
-  const isDirty = form.firstName !== firstName || form.lastName !== lastName;
+  const isDirty =
+    form.firstName !== firstName ||
+    form.lastName !== lastName ||
+    (form.username.trim() || null) !== username;
 
   return (
     <form
       onSubmit={(e) => {
         e.preventDefault();
+        setServerError('');
         mutation.mutate();
       }}
       className="space-y-4"
@@ -55,6 +77,28 @@ function ProfileForm({ firstName, lastName }: { firstName: string; lastName: str
         </div>
       </div>
 
+      <div>
+        <label className="block text-sm font-medium text-slate-700 mb-1">
+          Nombre de usuario
+          <span className="ml-1 text-xs font-normal text-slate-400">(para iniciar sesión)</span>
+        </label>
+        <div className="flex items-center rounded-lg border border-slate-300 px-3 py-2 focus-within:border-slate-500 focus-within:ring-1 focus-within:ring-slate-500">
+          <span className="select-none text-sm text-slate-400 mr-1">@</span>
+          <input
+            className="flex-1 text-sm text-slate-900 outline-none bg-transparent"
+            value={form.username}
+            onChange={(e) => setForm((f) => ({ ...f, username: e.target.value }))}
+            placeholder="juan.garcia"
+            pattern="[a-zA-Z0-9._]+"
+            minLength={3}
+            maxLength={30}
+          />
+        </div>
+        <p className="mt-1 text-xs text-slate-400">
+          Solo letras, números, puntos y guiones bajos. Mínimo 3 caracteres.
+        </p>
+      </div>
+
       <div className="flex items-center gap-3">
         <button
           type="submit"
@@ -64,9 +108,7 @@ function ProfileForm({ firstName, lastName }: { firstName: string; lastName: str
           {mutation.isPending ? 'Guardando...' : 'Guardar cambios'}
         </button>
         {success && <span className="text-sm text-green-600">Cambios guardados</span>}
-        {mutation.isError && (
-          <span className="text-sm text-red-600">Error al guardar</span>
-        )}
+        {serverError && <span className="text-sm text-red-600">{serverError}</span>}
       </div>
     </form>
   );
@@ -191,7 +233,7 @@ export default function ProfilePage() {
 
       <section className="rounded-xl border border-slate-200 bg-white p-6">
         <h2 className="mb-4 text-sm font-semibold text-slate-900">Información personal</h2>
-        {me && <ProfileForm firstName={me.firstName} lastName={me.lastName} />}
+        {me && <ProfileForm firstName={me.firstName} lastName={me.lastName} username={me.username} />}
       </section>
 
       <section className="rounded-xl border border-slate-200 bg-white p-6">

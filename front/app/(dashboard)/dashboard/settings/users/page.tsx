@@ -54,6 +54,9 @@ export default function UsersPage() {
                   Usuario
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">
+                  Nombre de usuario
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">
                   Estado
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">
@@ -84,13 +87,16 @@ export default function UsersPage() {
                         <p className="font-medium text-slate-900">
                           {user.firstName} {user.lastName}
                           {user.id === jwtPayload?.sub && (
-                            <span className="ml-2 text-xs text-slate-400">(vos)</span>
+                            <span className="ml-2 text-xs text-slate-400">
+                              (vos)
+                            </span>
                           )}
                         </p>
                         <p className="text-xs text-slate-500">{user.email}</p>
                       </div>
                     </div>
                   </td>
+                  <td className="px-4 py-3">{user.username || '—'}</td>
                   <td className="px-4 py-3">
                     <UserStatusBadge status={user.status} />
                   </td>
@@ -120,10 +126,10 @@ export default function UsersPage() {
                     )}
                   </td>
                   <td className="px-4 py-3 text-xs text-slate-500">
-                    {new Date(user.createdAt).toLocaleDateString('es-AR', {
-                      day: '2-digit',
-                      month: 'short',
-                      year: 'numeric',
+                    {new Date(user.createdAt).toLocaleDateString("es-AR", {
+                      day: "2-digit",
+                      month: "short",
+                      year: "numeric",
                     })}
                   </td>
                 </tr>

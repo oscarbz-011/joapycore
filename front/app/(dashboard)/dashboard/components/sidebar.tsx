@@ -16,7 +16,6 @@ import {
   Building2,
   LayoutGrid,
   LogOut,
-  Lock,
   ChevronDown,
   Bell,
   Wrench,
@@ -133,16 +132,6 @@ function NavLink({ item }: { item: NavItem }) {
   );
 }
 
-function LockedNavItem({ item }: { item: NavItem }) {
-  const Icon = item.icon;
-  return (
-    <span className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-slate-500 opacity-50 cursor-not-allowed select-none">
-      <Icon size={16} />
-      <span className="flex-1">{item.label}</span>
-      <Lock size={12} />
-    </span>
-  );
-}
 
 function SettingsLink({ item }: { item: SettingsItem }) {
   const pathname = usePathname();
@@ -267,7 +256,7 @@ export function Sidebar() {
 
   const visibleNavItems = NAV_ITEMS.filter((item) => {
     if (!item.module) return true;
-    if (!activeModules.includes(item.module)) return true; // show as locked
+    if (!activeModules.includes(item.module)) return false;
     return hasModulePermission(item.module, permissions);
   });
 
@@ -294,13 +283,9 @@ export function Sidebar() {
       {/* Scrollable nav */}
       <nav className="flex-1 overflow-y-auto px-3 py-3 space-y-0.5">
         {/* Business modules */}
-        {visibleNavItems.map((item) =>
-          item.module && !activeModules.includes(item.module) ? (
-            <LockedNavItem key={item.href} item={item} />
-          ) : (
-            <NavLink key={item.href} item={item} />
-          ),
-        )}
+        {visibleNavItems.map((item) => (
+          <NavLink key={item.href} item={item} />
+        ))}
 
         {/* Settings sections */}
         {visibleSections.length > 0 && (
