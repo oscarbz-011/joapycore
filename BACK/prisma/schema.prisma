@@ -72,6 +72,13 @@ enum InvoiceStatus {
   CANCELLED
 }
 
+enum ARStatus {
+  PENDING
+  PARTIAL
+  PAID
+  CANCELLED
+}
+
 enum DocumentType {
   CI
   RUC
@@ -165,8 +172,10 @@ model Tenant {
   suppliers      Supplier[]
   purchaseOrders PurchaseOrder[]
   saleOrders     SaleOrder[]
-  invoices       Invoice[]
-  areas          Area[]
+  invoices           Invoice[]
+  accountsReceivable AccountsReceivable[]
+  paymentRecords     PaymentRecord[]
+  areas              Area[]
   positions      Position[]
   employees      Employee[]
   payrollConfig  PayrollConfig?
@@ -536,9 +545,10 @@ model Invoice {
   createdAt   DateTime      @default(now()) @map("created_at")
   updatedAt   DateTime      @updatedAt @map("updated_at")
 
-  tenant    Tenant        @relation(fields: [tenantId], references: [id])
-  saleOrder SaleOrder     @relation(fields: [saleOrderId], references: [id])
-  items     InvoiceItem[]
+  tenant             Tenant              @relation(fields: [tenantId], references: [id])
+  saleOrder          SaleOrder           @relation(fields: [saleOrderId], references: [id])
+  items              InvoiceItem[]
+  accountsReceivable AccountsReceivable?
 
   @@map("invoices")
 }
@@ -745,4 +755,41 @@ model PayrollRecordItem {
 
   @@unique([payrollRecordId, employeeId])
   @@map("payroll_record_items")
+}
+
+// ─── Payments ─────────────────────────────────────────────────────────────────
+
+model AccountsReceivable {
+  id         String   @id @default(uuid())
+  tenantId   String   @map("tenant_id")
+  invoiceId  String   @unique @map("invoice_id")
+  amount     Decimal  @db.Decimal(12, 2)
+  paidAmount Decimal  @default(0) @db.Decimal(12, 2) @map("paid_amount")
+  status     ARStatus @default(PENDING)
+  dueDate    DateTime? @map("due_date")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
+
+  tenant         Tenant          @relation(fields: [tenantId], references: [id])
+  invoice        Invoice         @relation(fields: [invoiceId], references: [id])
+  paymentRecords PaymentRecord[]
+
+  @@map("accounts_receivable")
+}
+
+model PaymentRecord {
+  id                   String        @id @default(uuid())
+  tenantId             String        @map("tenant_id")
+  accountsReceivableId String        @map("accounts_receivable_id")
+  amount               Decimal       @db.Decimal(12, 2)
+  paymentMethod        PaymentMethod @map("payment_method")
+  paymentDate          DateTime      @map("payment_date")
+  reference            String?
+  notes                String?
+  createdAt            DateTime      @default(now()) @map("created_at")
+
+  tenant             Tenant             @relation(fields: [tenantId], references: [id])
+  accountsReceivable AccountsReceivable @relation(fields: [accountsReceivableId], references: [id])
+
+  @@map("payment_records")
 }

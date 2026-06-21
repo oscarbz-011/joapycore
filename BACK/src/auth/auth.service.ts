@@ -161,13 +161,24 @@ export class AuthService {
   private async issueTokens(user: User) {
     const userRoles = await this.usersRepository.findRolesForUser(user.id);
     const roles = userRoles.map((userRole) => userRole.role.name);
-    const rolePermissions = userRoles.flatMap((userRole) =>
-      userRole.role.rolePermissions.map((rp) => rp.permission.key),
-    );
-    const userExtraPermissions =
-      await this.usersRepository.findPermissionsForUser(user.id);
-    const extraKeys = userExtraPermissions.map((up) => up.permission.key);
-    const permissions = Array.from(new Set([...rolePermissions, ...extraKeys]));
+
+    const hasSystemRole = userRoles.some((ur) => ur.role.isSystem);
+    let permissions: string[];
+
+    if (hasSystemRole) {
+      // System (Owner) role always gets every permission in the catalog so that
+      // adding new permissions to the seed doesn't require re-assigning them.
+      const allPerms = await this.rolesRepository.findAllPermissions();
+      permissions = allPerms.map((p) => p.key);
+    } else {
+      const rolePermissions = userRoles.flatMap((userRole) =>
+        userRole.role.rolePermissions.map((rp) => rp.permission.key),
+      );
+      const userExtraPermissions =
+        await this.usersRepository.findPermissionsForUser(user.id);
+      const extraKeys = userExtraPermissions.map((up) => up.permission.key);
+      permissions = Array.from(new Set([...rolePermissions, ...extraKeys]));
+    }
     const activeModules =
       await this.tenantModulesRepository.findActiveModuleNames(user.tenantId);
 

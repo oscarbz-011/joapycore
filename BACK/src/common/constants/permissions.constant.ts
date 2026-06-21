@@ -35,6 +35,12 @@ export const PERMISSIONS = [
   'billing:read',
   'billing:issue',
   'billing:cancel',
+  // Payments
+  'payments:read',
+  'payments:register',
+  // Branches
+  'branches:read',
+  'branches:manage',
   // HR
   'hr:read',
   'hr:employees:create',

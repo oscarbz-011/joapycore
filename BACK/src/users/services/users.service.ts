@@ -6,7 +6,8 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import * as bcrypt from 'bcryptjs';
-import * as crypto from 'crypto';
+import * as crypto from 'node:crypto';
+import { Prisma } from '@prisma/client';
 import { UserStatus } from '@prisma/client';
 import { RolesRepository } from '../repositories/roles.repository';
 import { UsersRepository } from '../repositories/users.repository';
@@ -52,8 +53,15 @@ export class UsersService {
   }
 
   async update(tenantId: string, id: string, dto: UpdateUserDto) {
-    const count = await this.usersRepository.update(tenantId, id, dto);
-    if (count === 0) throw new NotFoundException('User not found');
+    try {
+      const count = await this.usersRepository.update(tenantId, id, dto);
+      if (count === 0) throw new NotFoundException('User not found');
+    } catch (e) {
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
+        throw new ConflictException('El username ya está en uso');
+      }
+      throw e;
+    }
     return this.getById(tenantId, id);
   }
 
