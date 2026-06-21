@@ -35,9 +35,10 @@ export interface RegisterDto {
   lastName: string;
   email: string;
   password: string;
+  employeeCount: 'RANGE_1_5' | 'RANGE_6_20' | 'RANGE_21_50' | 'RANGE_51_200' | 'RANGE_201';
 }
 
 export interface LoginDto {
-  email: string;
+  emailOrUsername: string;
   password: string;
 }

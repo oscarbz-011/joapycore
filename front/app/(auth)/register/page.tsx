@@ -5,6 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import Link from 'next/link';
 import { useState } from 'react';
+import { Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '../../../lib/auth-context';
 import axios from 'axios';
 
@@ -12,13 +13,22 @@ const INDUSTRIES = [
   { value: 'electrodomesticos', label: 'Electrodomésticos' },
 ] as const;
 
+const EMPLOYEE_RANGES = [
+  { value: 'RANGE_1_5',    label: '1 – 5 empleados' },
+  { value: 'RANGE_6_20',   label: '6 – 20 empleados' },
+  { value: 'RANGE_21_50',  label: '21 – 50 empleados' },
+  { value: 'RANGE_51_200', label: '51 – 200 empleados' },
+  { value: 'RANGE_201',    label: '201+ empleados' },
+] as const;
+
 const schema = z.object({
-  tenantName: z.string().min(2, 'El nombre de la empresa debe tener al menos 2 caracteres'),
+  tenantName: z.string().min(2, 'El nombre debe tener al menos 2 caracteres'),
   industry: z.enum(['electrodomesticos']),
   firstName: z.string().min(1, 'El nombre es requerido'),
   lastName: z.string().min(1, 'El apellido es requerido'),
   email: z.string().min(1, 'El email es requerido').email('Email inválido'),
   password: z.string().min(8, 'La contraseña debe tener al menos 8 caracteres'),
+  employeeCount: z.enum(['RANGE_1_5', 'RANGE_6_20', 'RANGE_21_50', 'RANGE_51_200', 'RANGE_201']),
 });
 
 type FormValues = z.infer<typeof schema>;
@@ -26,6 +36,7 @@ type FormValues = z.infer<typeof schema>;
 export default function RegisterPage() {
   const { register: registerUser } = useAuth();
   const [serverError, setServerError] = useState<string | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
 
   const {
     register,
@@ -36,7 +47,15 @@ export default function RegisterPage() {
   const onSubmit = async (values: FormValues) => {
     setServerError(null);
     try {
-      await registerUser(values);
+      await registerUser({
+        tenantName: values.tenantName,
+        industry: values.industry,
+        firstName: values.firstName,
+        lastName: values.lastName,
+        email: values.email,
+        password: values.password,
+        employeeCount: values.employeeCount,
+      });
     } catch (err) {
       if (axios.isAxiosError(err)) {
         const msg = err.response?.data?.message ?? 'No se pudo crear la cuenta';
@@ -57,34 +76,73 @@ export default function RegisterPage() {
           <span className="text-white font-bold text-sm">J</span>
         </div>
         <h1 className="text-2xl font-semibold text-slate-900">Crear cuenta</h1>
-        <p className="text-slate-500 text-sm mt-1">Registrá tu empresa en JoapyCore</p>
+        <p className="text-slate-500 text-sm mt-1">
+          Registrá tu empresa en JoapyCore
+        </p>
       </div>
 
       <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-5">
-        <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1.5" htmlFor="tenantName">
-            Nombre de la empresa
-          </label>
-          <input
-            id="tenantName"
-            type="text"
-            autoComplete="organization"
-            {...register('tenantName')}
-            className={inputClass}
-            placeholder="Mi Empresa S.A."
-          />
-          {errors.tenantName && (
-            <p className="mt-1.5 text-xs text-red-600">{errors.tenantName.message}</p>
-          )}
+        {/* Empresa */}
+        <div className="grid grid-cols-2 gap-4">
+          <div className="col-span-2 sm:col-span-1">
+            <label
+              className="block text-sm font-medium text-slate-700 mb-1.5"
+              htmlFor="tenantName"
+            >
+              Nombre de la empresa
+            </label>
+            <input
+              id="tenantName"
+              type="text"
+              autoComplete="organization"
+              {...register("tenantName")}
+              className={inputClass}
+              placeholder="Mi Empresa S.A."
+            />
+            {errors.tenantName && (
+              <p className="mt-1.5 text-xs text-red-600">
+                {errors.tenantName.message}
+              </p>
+            )}
+          </div>
+
+          <div className="col-span-2 sm:col-span-1">
+            <label
+              className="block text-sm font-medium text-slate-700 mb-1.5"
+              htmlFor="employeeCount"
+            >
+              Tamaño
+            </label>
+            <select
+              id="employeeCount"
+              {...register("employeeCount")}
+              className={inputClass}
+              defaultValue="RANGE_1_5"
+            >
+              {EMPLOYEE_RANGES.map((r) => (
+                <option key={r.value} value={r.value}>
+                  {r.label}
+                </option>
+              ))}
+            </select>
+            {errors.employeeCount && (
+              <p className="mt-1.5 text-xs text-red-600">
+                {errors.employeeCount.message as string}
+              </p>
+            )}
+          </div>
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1.5" htmlFor="industry">
+          <label
+            className="block text-sm font-medium text-slate-700 mb-1.5"
+            htmlFor="industry"
+          >
             Rubro
           </label>
           <select
             id="industry"
-            {...register('industry')}
+            {...register("industry")}
             className={inputClass}
             defaultValue=""
           >
@@ -98,77 +156,114 @@ export default function RegisterPage() {
             ))}
           </select>
           {errors.industry && (
-            <p className="mt-1.5 text-xs text-red-600">{errors.industry.message}</p>
+            <p className="mt-1.5 text-xs text-red-600">
+              {errors.industry.message}
+            </p>
           )}
         </div>
 
+        {/* Responsable */}
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1.5" htmlFor="firstName">
+            <label
+              className="block text-sm font-medium text-slate-700 mb-1.5"
+              htmlFor="firstName"
+            >
               Nombre
             </label>
             <input
               id="firstName"
               type="text"
               autoComplete="given-name"
-              {...register('firstName')}
+              {...register("firstName")}
               className={inputClass}
               placeholder="Juan"
             />
             {errors.firstName && (
-              <p className="mt-1.5 text-xs text-red-600">{errors.firstName.message}</p>
+              <p className="mt-1.5 text-xs text-red-600">
+                {errors.firstName.message}
+              </p>
             )}
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1.5" htmlFor="lastName">
+            <label
+              className="block text-sm font-medium text-slate-700 mb-1.5"
+              htmlFor="lastName"
+            >
               Apellido
             </label>
             <input
               id="lastName"
               type="text"
               autoComplete="family-name"
-              {...register('lastName')}
+              {...register("lastName")}
               className={inputClass}
               placeholder="García"
             />
             {errors.lastName && (
-              <p className="mt-1.5 text-xs text-red-600">{errors.lastName.message}</p>
+              <p className="mt-1.5 text-xs text-red-600">
+                {errors.lastName.message}
+              </p>
             )}
           </div>
         </div>
 
+        {/* Credenciales */}
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1.5" htmlFor="email">
+          <label
+            className="block text-sm font-medium text-slate-700 mb-1.5"
+            htmlFor="email"
+          >
             Email
           </label>
           <input
             id="email"
             type="email"
             autoComplete="email"
-            {...register('email')}
+            {...register("email")}
             className={inputClass}
             placeholder="tu@empresa.com"
           />
           {errors.email && (
-            <p className="mt-1.5 text-xs text-red-600">{errors.email.message}</p>
+            <p className="mt-1.5 text-xs text-red-600">
+              {errors.email.message}
+            </p>
           )}
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1.5" htmlFor="password">
+          <label
+            className="block text-sm font-medium text-slate-700 mb-1.5"
+            htmlFor="password"
+          >
             Contraseña
           </label>
-          <input
-            id="password"
-            type="password"
-            autoComplete="new-password"
-            {...register('password')}
-            className={inputClass}
-            placeholder="Mínimo 8 caracteres"
-          />
+          <div className="relative">
+            <input
+              id="password"
+              type={showPassword ? "text" : "password"}
+              autoComplete="new-password"
+              {...register("password")}
+              className={`${inputClass} pr-10`}
+              placeholder="Mínimo 8 caracteres"
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword((v) => !v)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+              tabIndex={-1}
+              aria-label={
+                showPassword ? "Ocultar contraseña" : "Mostrar contraseña"
+              }
+            >
+              {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+            </button>
+          </div>
           {errors.password && (
-            <p className="mt-1.5 text-xs text-red-600">{errors.password.message}</p>
+            <p className="mt-1.5 text-xs text-red-600">
+              {errors.password.message}
+            </p>
           )}
         </div>
 
@@ -183,13 +278,16 @@ export default function RegisterPage() {
           disabled={isSubmitting}
           className="w-full rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          {isSubmitting ? 'Creando cuenta...' : 'Crear cuenta'}
+          {isSubmitting ? "Creando cuenta..." : "Crear cuenta"}
         </button>
       </form>
 
       <p className="mt-6 text-center text-sm text-slate-500">
-        ¿Ya tenés cuenta?{' '}
-        <Link href="/login" className="font-medium text-slate-900 hover:underline">
+        ¿Ya tenés cuenta?{" "}
+        <Link
+          href="/login"
+          className="font-medium text-slate-900 hover:underline"
+        >
           Iniciá sesión
         </Link>
       </p>
