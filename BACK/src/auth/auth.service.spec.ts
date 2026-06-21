@@ -16,6 +16,7 @@ describe('AuthService', () => {
   let eventEmitter: { emit: jest.Mock };
   let usersRepository: {
     findByEmail: jest.Mock;
+    findByEmailOrUsername: jest.Mock;
     create: jest.Mock;
     attachRole: jest.Mock;
     findRolesForUser: jest.Mock;
@@ -67,6 +68,7 @@ describe('AuthService', () => {
     eventEmitter = { emit: jest.fn() };
     usersRepository = {
       findByEmail: jest.fn(),
+      findByEmailOrUsername: jest.fn(),
       create: jest.fn(),
       attachRole: jest.fn(),
       findRolesForUser: jest.fn().mockResolvedValue([]),
@@ -168,12 +170,12 @@ describe('AuthService', () => {
   });
 
   describe('login', () => {
-    it('issues tokens for valid credentials', async () => {
-      usersRepository.findByEmail.mockResolvedValue(baseUser);
+    it('issues tokens for valid credentials with email', async () => {
+      usersRepository.findByEmailOrUsername.mockResolvedValue(baseUser);
       (bcrypt.compare as jest.Mock).mockResolvedValue(true);
 
       const result = await service.login({
-        email: baseUser.email,
+        emailOrUsername: baseUser.email,
         password: 'secret',
       });
 
@@ -188,21 +190,33 @@ describe('AuthService', () => {
       expect(result.accessToken).toBe('signed-access-token');
     });
 
+    it('issues tokens for valid credentials with username', async () => {
+      usersRepository.findByEmailOrUsername.mockResolvedValue(baseUser);
+      (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+
+      const result = await service.login({
+        emailOrUsername: 'ada_lovelace',
+        password: 'secret',
+      });
+
+      expect(result.accessToken).toBe('signed-access-token');
+    });
+
     it('rejects an incorrect password', async () => {
-      usersRepository.findByEmail.mockResolvedValue(baseUser);
+      usersRepository.findByEmailOrUsername.mockResolvedValue(baseUser);
       (bcrypt.compare as jest.Mock).mockResolvedValue(false);
 
       await expect(
-        service.login({ email: baseUser.email, password: 'wrong' } as any),
+        service.login({ emailOrUsername: baseUser.email, password: 'wrong' } as any),
       ).rejects.toBeInstanceOf(UnauthorizedException);
     });
 
-    it('rejects an unknown email', async () => {
-      usersRepository.findByEmail.mockResolvedValue(null);
+    it('rejects an unknown email or username', async () => {
+      usersRepository.findByEmailOrUsername.mockResolvedValue(null);
 
       await expect(
         service.login({
-          email: 'nobody@example.com',
+          emailOrUsername: 'nobody@example.com',
           password: 'secret',
         } as any),
       ).rejects.toBeInstanceOf(UnauthorizedException);
