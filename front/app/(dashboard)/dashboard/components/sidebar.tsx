@@ -95,9 +95,10 @@ const SETTINGS_SECTIONS: SettingsSection[] = [
     label: 'Configuración',
     requiredAnyPermission: ['tenants:read', 'tenants:update', 'tenants:modules:manage', 'roles:manage'],
     items: [
-      { label: 'Mi empresa', href: '/dashboard/settings/tenant',  icon: Building2,  requiredPermission: 'tenants:read' },
-      { label: 'Módulos',    href: '/dashboard/settings/modules', icon: LayoutGrid,  requiredPermission: 'tenants:modules:manage' },
-      { label: 'Alertas',    href: '/dashboard/settings/alerts',  icon: Bell,        requiredPermission: 'roles:manage' },
+      { label: 'Mi empresa',  href: '/dashboard/settings/tenant',    icon: Building2,  requiredPermission: 'tenants:read' },
+      { label: 'Sucursales',  href: '/dashboard/settings/branches',  icon: LayoutGrid, requiredPermission: 'branches:read' },
+      { label: 'Módulos',     href: '/dashboard/settings/modules',   icon: LayoutGrid, requiredPermission: 'tenants:modules:manage' },
+      { label: 'Alertas',     href: '/dashboard/settings/alerts',    icon: Bell,       requiredPermission: 'roles:manage' },
     ],
   },
   {
