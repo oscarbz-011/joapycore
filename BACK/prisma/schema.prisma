@@ -18,6 +18,14 @@ enum Industry {
   electrodomesticos
 }
 
+enum EmployeeCount {
+  RANGE_1_5    @map("1-5")
+  RANGE_6_20   @map("6-20")
+  RANGE_21_50  @map("21-50")
+  RANGE_51_200 @map("51-200")
+  RANGE_201    @map("201+")
+}
+
 enum UserStatus {
   ACTIVE
   INACTIVE
@@ -138,7 +146,7 @@ model Tenant {
   phone         String?
   email         String?
   logoUrl       String? @map("logo_url")
-  employeeCount Int?    @map("employee_count")
+  employeeCount EmployeeCount? @map("employee_count")
   currency      String  @default("PYG")
 
   createdAt DateTime @default(now()) @map("created_at")
