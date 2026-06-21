@@ -24,10 +24,11 @@ interface AuthState {
 }
 
 interface AuthContextValue extends AuthState {
-  login: (email: string, password: string) => Promise<void>;
+  login: (emailOrUsername: string, password: string) => Promise<void>;
   register: (dto: RegisterDto) => Promise<void>;
   logout: () => Promise<void>;
   clearMustChangePassword: () => void;
+  refreshSession: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -71,8 +72,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const login = useCallback(
-    async (email: string, password: string) => {
-      const data = await authApi.login({ email, password });
+    async (emailOrUsername: string, password: string) => {
+      const data = await authApi.login({ emailOrUsername, password });
       tokenStore.setAccessToken(data.accessToken);
       tokenStore.setRefreshToken(data.refreshToken);
       const mustChangePassword = !!data.mustChangePassword;
@@ -128,8 +129,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setState((s) => ({ ...s, mustChangePassword: false }));
   }, []);
 
+  const refreshSession = useCallback(async () => {
+    const storedRefresh = tokenStore.getRefreshToken();
+    if (!storedRefresh) return;
+    const data = await authApi.refresh(storedRefresh);
+    tokenStore.setAccessToken(data.accessToken);
+    tokenStore.setRefreshToken(data.refreshToken);
+    setState((s) => ({
+      ...s,
+      user: data.user,
+      jwtPayload: decodeJwt(data.accessToken),
+    }));
+  }, []);
+
   return (
-    <AuthContext.Provider value={{ ...state, login, register, logout, clearMustChangePassword }}>
+    <AuthContext.Provider value={{ ...state, login, register, logout, clearMustChangePassword, refreshSession }}>
       {children}
     </AuthContext.Provider>
   );

@@ -23,7 +23,7 @@ const MODULE_META: Record<string, { label: string; description: string; icon: Re
 
 export default function ModulesPage() {
   const queryClient = useQueryClient();
-  const { jwtPayload } = useAuth();
+  const { jwtPayload, refreshSession } = useAuth();
   const canToggle = jwtPayload?.permissions.includes('tenants:modules:manage') ?? false;
 
   const { data: modules = [], isLoading } = useQuery({
@@ -34,8 +34,9 @@ export default function ModulesPage() {
   const toggleMutation = useMutation({
     mutationFn: ({ moduleName, active }: { moduleName: string; active: boolean }) =>
       tenantsApi.toggleModule(moduleName, active),
-    onSuccess: (updated) => {
+    onSuccess: async (updated) => {
       queryClient.setQueryData(['tenant-modules'], updated);
+      await refreshSession();
     },
   });
 
