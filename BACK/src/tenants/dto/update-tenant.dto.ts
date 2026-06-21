@@ -1,5 +1,6 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsEmail, IsInt, IsOptional, IsString, IsUrl, Min, MinLength } from 'class-validator';
+import { EmployeeCount } from '@prisma/client';
+import { IsEmail, IsEnum, IsOptional, IsString, IsUrl, MinLength } from 'class-validator';
 
 export class UpdateTenantDto {
   @ApiPropertyOptional({ description: 'Nombre comercial / fantasia' })
@@ -58,11 +59,10 @@ export class UpdateTenantDto {
   @IsUrl()
   logoUrl?: string;
 
-  @ApiPropertyOptional({ description: 'Cantidad aproximada de empleados', minimum: 1 })
+  @ApiPropertyOptional({ enum: EmployeeCount, description: 'Rango aproximado de empleados' })
   @IsOptional()
-  @IsInt()
-  @Min(1)
-  employeeCount?: number;
+  @IsEnum(EmployeeCount)
+  employeeCount?: EmployeeCount;
 
   @ApiPropertyOptional({ description: 'Moneda base', default: 'PYG' })
   @IsOptional()

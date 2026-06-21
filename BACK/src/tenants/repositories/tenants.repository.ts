@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { Industry, Prisma } from '@prisma/client';
+import { EmployeeCount, Industry, Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { PrismaClientOrTx } from '../../prisma/types';
 
@@ -7,7 +7,7 @@ interface CreateTenantData {
   name: string;
   industry: Industry;
   plan?: string;
-  employeeCount?: number;
+  employeeCount?: EmployeeCount;
 }
 
 @Injectable()
