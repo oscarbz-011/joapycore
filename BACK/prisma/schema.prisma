@@ -180,6 +180,7 @@ model Tenant {
   employees      Employee[]
   payrollConfig  PayrollConfig?
   payrollRecords PayrollRecord[]
+  auditLogs      AuditLog[]
 
   @@map("tenants")
 }
@@ -238,6 +239,7 @@ model User {
   userPermissions UserPermission[]
   refreshTokens   RefreshToken[]
   employee        Employee?
+  auditLogs       AuditLog[]
 
   @@map("users")
 }
@@ -792,4 +794,26 @@ model PaymentRecord {
   accountsReceivable AccountsReceivable @relation(fields: [accountsReceivableId], references: [id])
 
   @@map("payment_records")
+}
+
+// ─── Audit ────────────────────────────────────────────────────────────────────
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  tenantId   String   @map("tenant_id")
+  userId     String?  @map("user_id")
+  module     String
+  action     String
+  resourceId String?  @map("resource_id")
+  before     Json?
+  after      Json?
+  ipAddress  String?  @map("ip_address")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+  user   User?  @relation(fields: [userId], references: [id])
+
+  @@index([tenantId, createdAt(sort: Desc)])
+  @@index([tenantId, module])
+  @@map("audit_logs")
 }

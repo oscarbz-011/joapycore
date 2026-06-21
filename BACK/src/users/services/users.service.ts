@@ -48,6 +48,7 @@ export class UsersService {
       passwordHash,
       firstName: dto.firstName,
       lastName: dto.lastName,
+      username: dto.username,
     });
     return this.getById(tenantId, user.id);
   }

@@ -73,6 +73,7 @@ export class AuthService {
           passwordHash,
           firstName: dto.firstName,
           lastName: dto.lastName,
+          username: dto.username,
         },
         tx,
       );

@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { EmployeeCount, Industry } from '@prisma/client';
-import { IsEmail, IsEnum, IsOptional, IsString, MinLength } from 'class-validator';
+import { IsEmail, IsEnum, IsOptional, IsString, Matches, MinLength } from 'class-validator';
 
 export class RegisterDto {
   @ApiProperty()
@@ -28,6 +28,12 @@ export class RegisterDto {
   @IsString()
   @MinLength(8)
   password: string;
+
+  @ApiPropertyOptional({ description: 'Si no se provee, se auto-genera desde nombre y apellido' })
+  @IsOptional()
+  @IsString()
+  @Matches(/^[a-z0-9_.]+$/, { message: 'username solo puede tener minúsculas, números, puntos y guiones bajos' })
+  username?: string;
 
   @ApiPropertyOptional({ enum: EmployeeCount, description: 'Rango aproximado de empleados' })
   @IsOptional()

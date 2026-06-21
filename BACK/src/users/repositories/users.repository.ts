@@ -8,6 +8,7 @@ interface CreateUserData {
   passwordHash: string;
   firstName: string;
   lastName: string;
+  username?: string;
 }
 
 const WITH_ROLES_AND_PERMISSIONS = {
@@ -55,12 +56,25 @@ export class UsersRepository {
     });
   }
 
-  create(
+  async generateUniqueUsername(firstName: string, lastName: string): Promise<string> {
+    const normalize = (s: string) =>
+      s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]/g, '');
+    const base = `${normalize(firstName)}.${normalize(lastName)}`;
+    let candidate = base;
+    let suffix = 2;
+    while (await this.prisma.user.findUnique({ where: { username: candidate } })) {
+      candidate = `${base}${suffix++}`;
+    }
+    return candidate;
+  }
+
+  async create(
     tenantId: string,
     data: CreateUserData,
     client: PrismaClientOrTx = this.prisma,
   ) {
-    return client.user.create({ data: { ...data, tenantId } });
+    const username = data.username ?? await this.generateUniqueUsername(data.firstName, data.lastName);
+    return client.user.create({ data: { ...data, username, tenantId } });
   }
 
   async update(tenantId: string, id: string, data: Prisma.UserUpdateInput) {
