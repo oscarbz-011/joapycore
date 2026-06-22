@@ -67,7 +67,7 @@ export class PayrollController {
   })
   @ApiResponse({
     status: 201,
-    description: 'Liquidación generada en estado DRAFT',
+    description: 'Liquidación generada en estado PENDING',
   })
   @ApiResponse({
     status: 422,

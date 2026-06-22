@@ -22,7 +22,7 @@ function makeOrder(overrides = {}) {
     id: 'order-1',
     tenantId: 'tenant-1',
     customerId: 'cust-1',
-    status: 'DRAFT',
+    status: 'PENDING',
     orderDate: new Date(),
     notes: null,
     customer: { id: 'cust-1', firstName: 'María', lastName: 'González', email: null },
@@ -128,7 +128,7 @@ describe('SaleOrdersService', () => {
       items: [{ productId: 'prod-1', quantity: 2, unitPrice: 2_500_000 }],
     };
 
-    it('creates a DRAFT order with non-serialized product', async () => {
+    it('creates a PENDING order with non-serialized product', async () => {
       productsRepository.findById.mockResolvedValue(makeProduct({ isSerialized: false }));
 
       const result = await service.create('tenant-1', baseDto);
@@ -167,7 +167,7 @@ describe('SaleOrdersService', () => {
   // ── confirm ────────────────────────────────────────────────────────────────
 
   describe('confirm', () => {
-    it('throws UnprocessableEntityException when order is not DRAFT', async () => {
+    it('throws UnprocessableEntityException when order is not PENDING', async () => {
       saleOrdersRepository.findById.mockResolvedValue(makeOrder({ status: 'CONFIRMED' }));
 
       await expect(service.confirm('tenant-1', 'order-1')).rejects.toBeInstanceOf(
@@ -175,9 +175,9 @@ describe('SaleOrdersService', () => {
       );
     });
 
-    it('confirms a DRAFT order with non-serialized products and emits event', async () => {
+    it('confirms a PENDING order with non-serialized products and emits event', async () => {
       const order = makeOrder({
-        status: 'DRAFT',
+        status: 'PENDING',
         items: [makeOrderItem({ isSerialized: false })],
       });
       saleOrdersRepository.findById
@@ -206,8 +206,8 @@ describe('SaleOrdersService', () => {
       );
     });
 
-    it('cancels a DRAFT order', async () => {
-      saleOrdersRepository.findById.mockResolvedValue(makeOrder({ status: 'DRAFT' }));
+    it('cancels a PENDING order', async () => {
+      saleOrdersRepository.findById.mockResolvedValue(makeOrder({ status: 'PENDING' }));
 
       const result = await service.cancel('tenant-1', 'order-1');
 

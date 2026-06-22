@@ -63,7 +63,7 @@ export class PayrollService {
     const record = await this.payrollRepository.createRecord({
       tenantId,
       period,
-      status: 'DRAFT',
+      status: 'PENDING',
     });
 
     const isDecember = period.endsWith('-12');

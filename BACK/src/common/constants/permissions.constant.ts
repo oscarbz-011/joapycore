@@ -43,6 +43,14 @@ export const PERMISSIONS = [
   'branches:manage',
   // Audit
   'audit:read',
+  // Alerts
+  'alerts:read',
+  'alerts:manage',
+  // Files
+  'files:upload',
+  'files:read',
+  // Reports
+  'reports:read',
   // HR
   'hr:read',
   'hr:employees:create',

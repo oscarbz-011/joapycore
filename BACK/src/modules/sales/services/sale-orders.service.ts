@@ -38,7 +38,7 @@ export class SaleOrdersService {
           customerId: dto.customerId,
           orderDate: new Date(),
           notes: dto.notes,
-          status: 'DRAFT',
+          status: 'PENDING',
         },
       });
 
@@ -104,9 +104,9 @@ export class SaleOrdersService {
 
   async confirm(tenantId: string, id: string) {
     const order = await this.findOne(tenantId, id);
-    if (order.status !== 'DRAFT') {
+    if (order.status !== 'PENDING') {
       throw new UnprocessableEntityException(
-        'Only DRAFT orders can be confirmed',
+        'Only PENDING orders can be confirmed',
       );
     }
 

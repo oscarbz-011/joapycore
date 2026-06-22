@@ -139,7 +139,7 @@ describe('RolesService', () => {
       repo.findById.mockResolvedValue(makeRole());
       repo.findPermissionsByKeys.mockResolvedValue([makePerm('sales:read')]);
       await expect(
-        service.assignPermissions('tenant-1', 'role-1', { permissions: ['sales:read', 'fake:perm'] }),
+        service.assignPermissions('tenant-1', 'role-1', { permissions: ['sales:read', 'fake:perm'] as never }),
       ).rejects.toBeInstanceOf(BadRequestException);
     });
 

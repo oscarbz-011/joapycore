@@ -45,13 +45,24 @@ enum StockMovementType {
   TRANSFER
 }
 
+enum AlertType {
+  STOCK_LOW
+  PAYMENT_DUE
+  INVOICE_OVERDUE
+}
+
+enum AlertChannel {
+  EMAIL
+  SYSTEM
+}
+
 enum PurchaseType {
   LOCAL
   IMPORT
 }
 
 enum PurchaseOrderStatus {
-  DRAFT
+  PENDING
   CONFIRMED
   PARTIALLY_RECEIVED
   RECEIVED
@@ -59,14 +70,14 @@ enum PurchaseOrderStatus {
 }
 
 enum SaleOrderStatus {
-  DRAFT
+  PENDING
   CONFIRMED
   INVOICED
   CANCELLED
 }
 
 enum InvoiceStatus {
-  DRAFT
+  PENDING
   ISSUED
   PAID
   CANCELLED
@@ -128,7 +139,7 @@ enum LeaveStatus {
 }
 
 enum PayrollStatus {
-  DRAFT
+  PENDING
   PROCESSED
   PAID
 }
@@ -181,6 +192,8 @@ model Tenant {
   payrollConfig  PayrollConfig?
   payrollRecords PayrollRecord[]
   auditLogs      AuditLog[]
+  alertConfigs   AlertConfig[]
+  fileRecords    FileRecord[]
 
   @@map("tenants")
 }
@@ -439,7 +452,7 @@ model PurchaseOrder {
   supplierId   String              @map("supplier_id")
   branchId     String?             @map("branch_id")
   purchaseType PurchaseType        @default(LOCAL) @map("purchase_type")
-  status       PurchaseOrderStatus @default(DRAFT)
+  status       PurchaseOrderStatus @default(PENDING)
   orderDate    DateTime            @map("order_date")
   expectedDate DateTime?           @map("expected_date")
   exchangeRate Decimal?            @db.Decimal(10, 4) @map("exchange_rate")
@@ -499,7 +512,7 @@ model SaleOrder {
   tenantId   String          @map("tenant_id")
   customerId String          @map("customer_id")
   branchId   String?         @map("branch_id")
-  status     SaleOrderStatus @default(DRAFT)
+  status     SaleOrderStatus @default(PENDING)
   orderDate  DateTime        @map("order_date")
   notes      String?
   createdAt  DateTime        @default(now()) @map("created_at")
@@ -539,7 +552,7 @@ model Invoice {
   id          String        @id @default(uuid())
   tenantId    String        @map("tenant_id")
   saleOrderId String        @unique @map("sale_order_id")
-  status      InvoiceStatus @default(DRAFT)
+  status      InvoiceStatus @default(PENDING)
   issuedAt    DateTime?     @map("issued_at")
   dueDate     DateTime?     @map("due_date")
   total       Decimal       @db.Decimal(12, 2)
@@ -722,7 +735,7 @@ model PayrollRecord {
   id          String        @id @default(uuid())
   tenantId    String        @map("tenant_id")
   period      String        // "2024-12" format
-  status      PayrollStatus @default(DRAFT)
+  status      PayrollStatus @default(PENDING)
   processedAt DateTime?     @map("processed_at")
   paidAt      DateTime?     @map("paid_at")
   createdAt   DateTime      @default(now()) @map("created_at")
@@ -816,4 +829,45 @@ model AuditLog {
   @@index([tenantId, createdAt(sort: Desc)])
   @@index([tenantId, module])
   @@map("audit_logs")
+}
+
+// ─── Alerts ───────────────────────────────────────────────────────────────────
+
+model AlertConfig {
+  id        String       @id @default(uuid())
+  tenantId  String       @map("tenant_id")
+  type      AlertType
+  channel   AlertChannel @default(SYSTEM)
+  isActive  Boolean      @default(true) @map("is_active")
+  threshold Int?
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt      @map("updated_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@unique([tenantId, type])
+  @@map("alert_configs")
+}
+
+// ─── Files ────────────────────────────────────────────────────────────────────
+
+model FileRecord {
+  id           String    @id @default(uuid())
+  tenantId     String    @map("tenant_id")
+  module       String
+  entityType   String    @map("entity_type")
+  entityId     String?   @map("entity_id")
+  bucket       String    @default("local")
+  key          String
+  originalName String    @map("original_name")
+  mimeType     String    @map("mime_type")
+  sizeBytes    Int       @map("size_bytes")
+  uploadedBy   String?   @map("uploaded_by")
+  url          String?
+  createdAt    DateTime  @default(now()) @map("created_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@map("file_records")
 }

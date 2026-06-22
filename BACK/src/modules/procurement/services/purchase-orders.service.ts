@@ -38,7 +38,7 @@ export class PurchaseOrdersService {
         {
           supplierId: dto.supplierId,
           purchaseType: dto.purchaseType,
-          status: 'DRAFT',
+          status: 'PENDING',
           orderDate: new Date(dto.orderDate),
           expectedDate: dto.expectedDate
             ? new Date(dto.expectedDate)
@@ -69,9 +69,9 @@ export class PurchaseOrdersService {
 
   async confirm(tenantId: string, id: string) {
     const order = await this.findOne(tenantId, id);
-    if (order.status !== 'DRAFT') {
+    if (order.status !== 'PENDING') {
       throw new UnprocessableEntityException(
-        'Only DRAFT orders can be confirmed',
+        'Only PENDING orders can be confirmed',
       );
     }
     await this.purchaseOrdersRepository.updateStatus(tenantId, id, 'CONFIRMED');

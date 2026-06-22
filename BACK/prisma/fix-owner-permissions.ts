@@ -18,14 +18,20 @@ async function main() {
     include: { rolePermissions: true },
   });
 
-  console.log(`Found ${systemRoles.length} system role(s), ${allPermissions.length} permissions`);
+  console.log(
+    `Found ${systemRoles.length} system role(s), ${allPermissions.length} permissions`,
+  );
 
   for (const role of systemRoles) {
-    const existingIds = new Set(systemRoles[0].rolePermissions.map((rp) => rp.permissionId));
+    const existingIds = new Set(
+      systemRoles[0].rolePermissions.map((rp) => rp.permissionId),
+    );
     const missing = allPermissions.filter((p) => !existingIds.has(p.id));
 
     if (missing.length === 0) {
-      console.log(`  Role "${role.name}" (${role.tenantId}): already up to date`);
+      console.log(
+        `  Role "${role.name}" (${role.tenantId}): already up to date`,
+      );
       continue;
     }
 
@@ -33,10 +39,15 @@ async function main() {
       data: missing.map((p) => ({ roleId: role.id, permissionId: p.id })),
       skipDuplicates: true,
     });
-    console.log(`  Role "${role.name}" (${role.tenantId}): attached ${missing.length} missing permission(s)`);
+    console.log(
+      `  Role "${role.name}" (${role.tenantId}): attached ${missing.length} missing permission(s)`,
+    );
   }
 
   await prisma.$disconnect();
 }
 
-main().catch((e) => { console.error(e); process.exit(1); });
+main().catch((e) => {
+  console.error(e);
+  process.exit(1);
+});

@@ -1,5 +1,11 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsEmail, IsOptional, IsString, Matches, MinLength } from 'class-validator';
+import {
+  IsEmail,
+  IsOptional,
+  IsString,
+  Matches,
+  MinLength,
+} from 'class-validator';
 
 export class CreateUserDto {
   @ApiProperty()
@@ -19,9 +25,14 @@ export class CreateUserDto {
   @IsString()
   lastName: string;
 
-  @ApiPropertyOptional({ description: 'Si no se provee, se auto-genera desde nombre y apellido' })
+  @ApiPropertyOptional({
+    description: 'Si no se provee, se auto-genera desde nombre y apellido',
+  })
   @IsOptional()
   @IsString()
-  @Matches(/^[a-z0-9_.]+$/, { message: 'username solo puede tener minúsculas, números, puntos y guiones bajos' })
+  @Matches(/^[a-z0-9_.]+$/, {
+    message:
+      'username solo puede tener minúsculas, números, puntos y guiones bajos',
+  })
   username?: string;
 }

@@ -31,7 +31,9 @@ export class UsersRepository {
   // Used by login — accepts email OR username interchangeably.
   findByEmailOrUsername(emailOrUsername: string) {
     return this.prisma.user.findFirst({
-      where: { OR: [{ email: emailOrUsername }, { username: emailOrUsername }] },
+      where: {
+        OR: [{ email: emailOrUsername }, { username: emailOrUsername }],
+      },
     });
   }
 
@@ -56,13 +58,22 @@ export class UsersRepository {
     });
   }
 
-  async generateUniqueUsername(firstName: string, lastName: string): Promise<string> {
+  async generateUniqueUsername(
+    firstName: string,
+    lastName: string,
+  ): Promise<string> {
     const normalize = (s: string) =>
-      s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]/g, '');
+      s
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[̀-ͯ]/g, '')
+        .replace(/[^a-z0-9]/g, '');
     const base = `${normalize(firstName)}.${normalize(lastName)}`;
     let candidate = base;
     let suffix = 2;
-    while (await this.prisma.user.findUnique({ where: { username: candidate } })) {
+    while (
+      await this.prisma.user.findUnique({ where: { username: candidate } })
+    ) {
       candidate = `${base}${suffix++}`;
     }
     return candidate;
@@ -73,7 +84,9 @@ export class UsersRepository {
     data: CreateUserData,
     client: PrismaClientOrTx = this.prisma,
   ) {
-    const username = data.username ?? await this.generateUniqueUsername(data.firstName, data.lastName);
+    const username =
+      data.username ??
+      (await this.generateUniqueUsername(data.firstName, data.lastName));
     return client.user.create({ data: { ...data, username, tenantId } });
   }
 

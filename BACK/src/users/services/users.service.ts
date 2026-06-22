@@ -58,7 +58,10 @@ export class UsersService {
       const count = await this.usersRepository.update(tenantId, id, dto);
       if (count === 0) throw new NotFoundException('User not found');
     } catch (e) {
-      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
+      if (
+        e instanceof Prisma.PrismaClientKnownRequestError &&
+        e.code === 'P2002'
+      ) {
         throw new ConflictException('El username ya está en uso');
       }
       throw e;

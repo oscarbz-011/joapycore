@@ -11,7 +11,7 @@ function makeRecord(overrides = {}) {
     id: 'rec-1',
     tenantId: 'tenant-1',
     period: '2025-06',
-    status: 'DRAFT',
+    status: 'PENDING',
     totalGross: 0,
     totalNet: 0,
     totalIpsEmployee: 0,
@@ -180,9 +180,9 @@ describe('PayrollService', () => {
   // ── markPaid ───────────────────────────────────────────────────────────────
 
   describe('markPaid', () => {
-    it('marks a DRAFT record as PAID', async () => {
+    it('marks a PENDING record as PAID', async () => {
       payrollRepository.findRecord
-        .mockResolvedValueOnce(makeRecord({ status: 'DRAFT' }))
+        .mockResolvedValueOnce(makeRecord({ status: 'PENDING' }))
         .mockResolvedValueOnce(makeRecord({ status: 'PAID' }));
 
       const result = await service.markPaid('tenant-1', 'rec-1');

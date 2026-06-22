@@ -8,7 +8,7 @@ function makeInvoice(overrides = {}) {
     id: 'inv-1',
     tenantId: 'tenant-1',
     saleOrderId: 'order-1',
-    status: 'DRAFT' as const,
+    status: 'PENDING' as const,
     total: 2_500_000,
     issuedAt: null,
     dueDate: null,
@@ -86,10 +86,10 @@ describe('InvoicesService', () => {
       expect(invoicesRepository.updateStatus).not.toHaveBeenCalled();
     });
 
-    it('cancels a DRAFT invoice and emits event', async () => {
+    it('cancels a PENDING invoice and emits event', async () => {
       const cancelled = makeInvoice({ status: 'CANCELLED' });
       invoicesRepository.findById
-        .mockResolvedValueOnce(makeInvoice({ status: 'DRAFT' }))
+        .mockResolvedValueOnce(makeInvoice({ status: 'PENDING' }))
         .mockResolvedValueOnce(cancelled);
 
       const result = await service.cancel('tenant-1', 'inv-1');
