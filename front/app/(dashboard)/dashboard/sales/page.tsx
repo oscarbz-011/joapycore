@@ -4,8 +4,16 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus, Search, ShoppingCart, Users, X, Trash2 } from 'lucide-react';
-import { salesApi, type Customer, type CreateSaleOrderItem, type SaleOrder, type SaleOrderStatus } from '../../../../lib/api/sales';
+import {
+  salesApi,
+  type Customer,
+  type CreateSaleOrderItem,
+  type SaleOrder,
+  type SaleOrderStatus,
+  type SaleType,
+} from '../../../../lib/api/sales';
 import { inventoryApi, type Product } from '../../../../lib/api/inventory';
+import { SearchSelect } from '../components/search-select';
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -55,14 +63,17 @@ function SalesNav() {
 // ── Status badge ───────────────────────────────────────────────────────────────
 
 const STATUS_MAP: Record<SaleOrderStatus, { label: string; className: string }> = {
-  PENDING:     { label: 'Pendiente',   className: 'bg-slate-100 text-slate-600' },
-  CONFIRMED: { label: 'Confirmado', className: 'bg-blue-50 text-blue-700' },
-  INVOICED:  { label: 'Facturado',  className: 'bg-emerald-50 text-emerald-700' },
-  CANCELLED: { label: 'Cancelado',  className: 'bg-red-50 text-red-600' },
+  PENDING:                 { label: 'Pendiente',         className: 'bg-slate-100 text-slate-600' },
+  PENDING_CREDIT_APPROVAL: { label: 'En evaluación',     className: 'bg-amber-50 text-amber-700' },
+  CREDIT_APPROVED:         { label: 'Crédito aprobado',  className: 'bg-sky-50 text-sky-700' },
+  CREDIT_REJECTED:         { label: 'Crédito rechazado', className: 'bg-red-50 text-red-700' },
+  CONFIRMED:               { label: 'Confirmado',        className: 'bg-blue-50 text-blue-700' },
+  INVOICED:                { label: 'Facturado',         className: 'bg-emerald-50 text-emerald-700' },
+  CANCELLED:               { label: 'Cancelado',         className: 'bg-red-50 text-red-600' },
 };
 
 function StatusBadge({ status }: { status: SaleOrderStatus }) {
-  const { label, className } = STATUS_MAP[status];
+  const { label, className } = STATUS_MAP[status] ?? STATUS_MAP.PENDING;
   return (
     <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${className}`}>
       {label}
@@ -70,14 +81,14 @@ function StatusBadge({ status }: { status: SaleOrderStatus }) {
   );
 }
 
-// ── Line item row (inside create modal) ───────────────────────────────────────
+// ── Line item row ──────────────────────────────────────────────────────────────
 
 interface LineItem {
   productId: string;
   product: Product | null;
   quantity: number;
   unitPrice: number;
-  serialInput: string; // newline-separated
+  serialInput: string;
 }
 
 function LineItemRow({
@@ -94,36 +105,33 @@ function LineItemRow({
   const inputCls =
     'w-full rounded-lg border border-slate-300 px-2.5 py-1.5 text-sm focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500';
 
-  function handleProductChange(productId: string) {
-    const product = products.find((p) => p.id === productId) ?? null;
-    onChange({
-      ...item,
-      productId,
-      product,
-      unitPrice: product ? Number(product.salePrice) : 0,
-      serialInput: '',
-    });
-  }
-
   const subtotal = item.quantity * item.unitPrice;
 
   return (
     <div className="rounded-lg border border-slate-200 p-3 space-y-2">
       <div className="flex gap-2 items-start">
         <div className="flex-1">
-          <select
-            className={inputCls}
+          <SearchSelect<Product>
+            items={products}
             value={item.productId}
-            onChange={(e) => handleProductChange(e.target.value)}
+            onChange={(id, product) =>
+              onChange({
+                ...item,
+                productId: id,
+                product,
+                unitPrice: product ? Number(product.salePrice) : 0,
+                serialInput: '',
+              })
+            }
+            getKey={(p) => p.id}
+            getLabel={(p) => `${p.name}${p.model ? ` (${p.model})` : ''}`}
+            getDescription={(p) => p.category?.name ?? null}
+            filterFn={(p, q) =>
+              `${p.name} ${p.model ?? ''} ${p.category?.name ?? ''}`.toLowerCase().includes(q.toLowerCase())
+            }
+            placeholder="Buscar producto..."
             required
-          >
-            <option value="">— Seleccionar producto —</option>
-            {products.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}{p.model ? ` (${p.model})` : ''}
-              </option>
-            ))}
-          </select>
+          />
         </div>
         <div className="w-20">
           <input
@@ -177,6 +185,57 @@ function LineItemRow({
   );
 }
 
+// ── Credit plan selector ───────────────────────────────────────────────────────
+
+const INSTALLMENT_OPTIONS = [3, 6, 12, 18, 24];
+
+function CreditOptions({
+  total,
+  installments,
+  onInstallmentsChange,
+}: {
+  total: number;
+  installments: number;
+  onInstallmentsChange: (n: number) => void;
+}) {
+  const monthly = installments > 0 ? total / installments : 0;
+
+  return (
+    <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 space-y-3">
+      <p className="text-xs font-semibold text-amber-800 uppercase tracking-wide">Venta a crédito</p>
+      <div>
+        <label className="block text-xs font-medium text-slate-600 mb-1">Cuotas</label>
+        <div className="flex gap-2 flex-wrap">
+          {INSTALLMENT_OPTIONS.map((n) => (
+            <button
+              key={n}
+              type="button"
+              onClick={() => onInstallmentsChange(n)}
+              className={`rounded-lg px-3 py-1.5 text-sm font-medium border transition-colors ${
+                installments === n
+                  ? 'border-slate-900 bg-slate-900 text-white'
+                  : 'border-slate-300 text-slate-700 hover:border-slate-500'
+              }`}
+            >
+              {n}x
+            </button>
+          ))}
+        </div>
+      </div>
+      {installments > 0 && total > 0 && (
+        <p className="text-sm text-amber-800">
+          Cuota estimada:{' '}
+          <strong>{formatPrice(Math.ceil(monthly))}</strong> / mes
+          <span className="text-xs text-amber-600 ml-1">(sin recargo configurado)</span>
+        </p>
+      )}
+      <p className="text-xs text-amber-700">
+        El pedido quedará en estado <strong>En evaluación</strong> hasta que el analista de crédito lo apruebe.
+      </p>
+    </div>
+  );
+}
+
 // ── Create order modal ─────────────────────────────────────────────────────────
 
 function CreateOrderModal({
@@ -192,26 +251,13 @@ function CreateOrderModal({
 }) {
   const queryClient = useQueryClient();
   const [customerId, setCustomerId] = useState('');
+  const [saleType, setSaleType] = useState<SaleType>('CASH');
+  const [installments, setInstallments] = useState(6);
   const [notes, setNotes] = useState('');
   const [items, setItems] = useState<LineItem[]>([
     { productId: '', product: null, quantity: 1, unitPrice: 0, serialInput: '' },
   ]);
   const [error, setError] = useState('');
-
-  function addItem() {
-    setItems((prev) => [
-      ...prev,
-      { productId: '', product: null, quantity: 1, unitPrice: 0, serialInput: '' },
-    ]);
-  }
-
-  function updateItem(index: number, updated: LineItem) {
-    setItems((prev) => prev.map((it, i) => (i === index ? updated : it)));
-  }
-
-  function removeItem(index: number) {
-    setItems((prev) => prev.filter((_, i) => i !== index));
-  }
 
   const total = items.reduce((sum, i) => sum + i.quantity * i.unitPrice, 0);
 
@@ -219,6 +265,8 @@ function CreateOrderModal({
     mutationFn: () => {
       const dto: Parameters<typeof salesApi.createOrder>[0] = {
         customerId,
+        saleType,
+        installments: saleType === 'CREDIT' ? installments : undefined,
         notes: notes.trim() || undefined,
         items: items.map((it): CreateSaleOrderItem => ({
           productId: it.productId,
@@ -260,10 +308,7 @@ function CreateOrderModal({
           onSubmit={(e) => {
             e.preventDefault();
             setError('');
-            if (items.length === 0) {
-              setError('Agregá al menos un producto');
-              return;
-            }
+            if (items.length === 0) { setError('Agregá al menos un producto'); return; }
             mutation.mutate();
           }}
           className="px-6 py-5 space-y-5"
@@ -271,21 +316,63 @@ function CreateOrderModal({
           {/* Cliente */}
           <div>
             <label className={labelCls}>Cliente *</label>
-            <select
-              className={inputCls}
+            <SearchSelect<Customer>
+              items={customers}
               value={customerId}
-              onChange={(e) => setCustomerId(e.target.value)}
+              onChange={(id) => setCustomerId(id)}
+              getKey={(c) => c.id}
+              getLabel={(c) => `${c.firstName} ${c.lastName}`}
+              getDescription={(c) =>
+                [
+                  c.documentNumber ?? null,
+                  c.phone ?? null,
+                ]
+                  .filter(Boolean)
+                  .join(' · ') || null
+              }
+              filterFn={(c, q) =>
+                `${c.firstName} ${c.lastName} ${c.documentNumber ?? ''} ${c.customerCode ?? ''}`.toLowerCase().includes(q.toLowerCase())
+              }
+              placeholder="Buscar cliente..."
+              emptyMessage="Sin clientes. Creá uno primero."
               required
-            >
-              <option value="">— Seleccionar cliente —</option>
-              {customers.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.firstName} {c.lastName}
-                  {c.taxId ? ` · RUC ${c.taxId}` : ''}
-                </option>
-              ))}
-            </select>
+            />
           </div>
+
+          {/* Tipo de venta */}
+          <div>
+            <label className={labelCls}>Tipo de venta</label>
+            <div className="flex gap-3">
+              {(['CASH', 'CREDIT'] as SaleType[]).map((type) => (
+                <label
+                  key={type}
+                  className={`flex-1 flex items-center justify-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-medium cursor-pointer transition-colors ${
+                    saleType === type
+                      ? 'border-slate-900 bg-slate-900 text-white'
+                      : 'border-slate-300 text-slate-700 hover:border-slate-500'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    className="sr-only"
+                    value={type}
+                    checked={saleType === type}
+                    onChange={() => setSaleType(type)}
+                  />
+                  {type === 'CASH' ? 'Contado' : 'Crédito'}
+                </label>
+              ))}
+            </div>
+          </div>
+
+          {/* Opciones de crédito */}
+          {saleType === 'CREDIT' && (
+            <CreditOptions
+              total={total}
+              installments={installments}
+              onInstallmentsChange={setInstallments}
+            />
+          )}
 
           {/* Productos */}
           <div>
@@ -305,14 +392,21 @@ function CreateOrderModal({
                   key={idx}
                   item={item}
                   products={products}
-                  onChange={(updated) => updateItem(idx, updated)}
-                  onRemove={() => removeItem(idx)}
+                  onChange={(updated) =>
+                    setItems((prev) => prev.map((it, i) => (i === idx ? updated : it)))
+                  }
+                  onRemove={() => setItems((prev) => prev.filter((_, i) => i !== idx))}
                 />
               ))}
             </div>
             <button
               type="button"
-              onClick={addItem}
+              onClick={() =>
+                setItems((prev) => [
+                  ...prev,
+                  { productId: '', product: null, quantity: 1, unitPrice: 0, serialInput: '' },
+                ])
+              }
               className="mt-2 flex items-center gap-1.5 text-sm text-slate-600 hover:text-slate-900"
             >
               <Plus size={14} />
@@ -370,13 +464,7 @@ function CreateOrderModal({
 
 // ── Order detail panel ─────────────────────────────────────────────────────────
 
-function OrderDetailPanel({
-  order,
-  onClose,
-}: {
-  order: SaleOrder;
-  onClose: () => void;
-}) {
+function OrderDetailPanel({ order, onClose }: { order: SaleOrder; onClose: () => void }) {
   const queryClient = useQueryClient();
   const [confirmAction, setConfirmAction] = useState<'confirm' | 'cancel' | null>(null);
 
@@ -399,6 +487,8 @@ function OrderDetailPanel({
   });
 
   const total = orderTotal(order);
+  const canConfirm = order.status === 'PENDING' || order.status === 'CREDIT_APPROVED';
+  const canCancel = ['PENDING', 'PENDING_CREDIT_APPROVAL', 'CREDIT_APPROVED', 'CREDIT_REJECTED'].includes(order.status);
 
   return (
     <div className="fixed inset-0 z-40 flex justify-end">
@@ -407,16 +497,28 @@ function OrderDetailPanel({
         {/* Header */}
         <div className="flex items-start justify-between border-b border-slate-100 px-5 py-4">
           <div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <p className="font-semibold text-slate-900">
                 {order.customer.firstName} {order.customer.lastName}
               </p>
               <StatusBadge status={order.status} />
+              {order.saleType === 'CREDIT' && (
+                <span className="inline-flex rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">
+                  Crédito {order.installments ? `${order.installments}x` : ''}
+                </span>
+              )}
             </div>
-            {order.customer.email && (
-              <p className="text-xs text-slate-400 mt-0.5">{order.customer.email}</p>
+            {order.customer.documentNumber && (
+              <p className="text-xs text-slate-400 mt-0.5">
+                {order.customer.documentType}: {order.customer.documentNumber}
+              </p>
             )}
             <p className="text-xs text-slate-400 mt-0.5">{formatDate(order.orderDate)}</p>
+            {order.createdBy && (
+              <p className="text-xs text-slate-400 mt-0.5">
+                Vendedor: {order.createdBy.firstName} {order.createdBy.lastName}
+              </p>
+            )}
           </div>
           <button
             onClick={onClose}
@@ -425,6 +527,27 @@ function OrderDetailPanel({
             <X size={18} />
           </button>
         </div>
+
+        {/* Credit decision */}
+        {order.status === 'CREDIT_APPROVED' && order.approvedBy && (
+          <div className="border-b border-slate-100 px-5 py-3 bg-sky-50">
+            <p className="text-xs text-sky-700">
+              Aprobado por <strong>{order.approvedBy.firstName} {order.approvedBy.lastName}</strong>
+              {order.approvedAt ? ` el ${formatDate(order.approvedAt)}` : ''}
+            </p>
+          </div>
+        )}
+        {order.status === 'CREDIT_REJECTED' && order.rejectedBy && (
+          <div className="border-b border-slate-100 px-5 py-3 bg-red-50">
+            <p className="text-xs text-red-700">
+              Rechazado por <strong>{order.rejectedBy.firstName} {order.rejectedBy.lastName}</strong>
+              {order.rejectedAt ? ` el ${formatDate(order.rejectedAt)}` : ''}
+            </p>
+            {order.rejectionReason && (
+              <p className="text-xs text-red-600 mt-0.5">{order.rejectionReason}</p>
+            )}
+          </div>
+        )}
 
         {/* Items */}
         <div className="border-b border-slate-100 px-5 py-4">
@@ -444,10 +567,17 @@ function OrderDetailPanel({
                       S/N: {item.productUnits.map((u) => u.serialNumber).join(', ')}
                     </p>
                   )}
+                  {item.batch && (
+                    <p className="text-xs text-slate-400">Lote: {item.batch.batchNumber}</p>
+                  )}
                 </div>
                 <div className="text-right shrink-0">
-                  <p className="text-sm text-slate-500">{item.quantity} × {formatPrice(item.unitPrice)}</p>
-                  <p className="text-sm font-medium text-slate-800">{formatPrice(item.quantity * item.unitPrice)}</p>
+                  <p className="text-sm text-slate-500">
+                    {item.quantity} × {formatPrice(item.unitPrice)}
+                  </p>
+                  <p className="text-sm font-medium text-slate-800">
+                    {formatPrice(item.quantity * item.unitPrice)}
+                  </p>
                 </div>
               </div>
             ))}
@@ -456,6 +586,11 @@ function OrderDetailPanel({
             <span className="text-sm font-semibold text-slate-700">Total</span>
             <span className="text-base font-bold text-slate-900">{formatPrice(total)}</span>
           </div>
+          {order.saleType === 'CREDIT' && order.installments && (
+            <p className="text-xs text-slate-500 text-right mt-1">
+              {order.installments} cuotas de ≈ {formatPrice(Math.ceil(total / order.installments))}
+            </p>
+          )}
         </div>
 
         {/* Notes */}
@@ -475,22 +610,26 @@ function OrderDetailPanel({
         )}
 
         {/* Actions */}
-        {order.status === 'PENDING' && (
+        {(canConfirm || canCancel) && (
           <div className="px-5 py-4 space-y-2">
             {confirmAction === null && (
               <>
-                <button
-                  onClick={() => setConfirmAction('confirm')}
-                  className="w-full rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700"
-                >
-                  Confirmar pedido
-                </button>
-                <button
-                  onClick={() => setConfirmAction('cancel')}
-                  className="w-full rounded-lg border border-red-200 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50"
-                >
-                  Cancelar pedido
-                </button>
+                {canConfirm && (
+                  <button
+                    onClick={() => setConfirmAction('confirm')}
+                    className="w-full rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700"
+                  >
+                    Confirmar pedido
+                  </button>
+                )}
+                {canCancel && (
+                  <button
+                    onClick={() => setConfirmAction('cancel')}
+                    className="w-full rounded-lg border border-red-200 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50"
+                  >
+                    Cancelar pedido
+                  </button>
+                )}
               </>
             )}
 
@@ -617,7 +756,10 @@ export default function SalesPage() {
           onChange={(e) => setStatusFilter(e.target.value as '' | SaleOrderStatus)}
         >
           <option value="">Todos los estados</option>
-          <option value="PENDING">Borrador</option>
+          <option value="PENDING">Pendiente</option>
+          <option value="PENDING_CREDIT_APPROVAL">En evaluación</option>
+          <option value="CREDIT_APPROVED">Crédito aprobado</option>
+          <option value="CREDIT_REJECTED">Crédito rechazado</option>
           <option value="CONFIRMED">Confirmado</option>
           <option value="INVOICED">Facturado</option>
           <option value="CANCELLED">Cancelado</option>
@@ -645,7 +787,8 @@ export default function SalesPage() {
                 <th className="px-4 py-3 text-left">Cliente</th>
                 <th className="px-4 py-3 text-left">Fecha</th>
                 <th className="px-4 py-3 text-left">Estado</th>
-                <th className="px-4 py-3 text-center">Productos</th>
+                <th className="px-4 py-3 text-left hidden md:table-cell">Tipo</th>
+                <th className="px-4 py-3 text-center">Prods.</th>
                 <th className="px-4 py-3 text-right">Total</th>
               </tr>
             </thead>
@@ -660,13 +803,22 @@ export default function SalesPage() {
                     <div className="font-medium text-slate-900">
                       {order.customer.firstName} {order.customer.lastName}
                     </div>
-                    {order.customer.email && (
-                      <div className="text-xs text-slate-400">{order.customer.email}</div>
+                    {order.customer.documentNumber && (
+                      <div className="text-xs text-slate-400">{order.customer.documentNumber}</div>
                     )}
                   </td>
                   <td className="px-4 py-3 text-slate-500">{formatDate(order.orderDate)}</td>
                   <td className="px-4 py-3">
                     <StatusBadge status={order.status} />
+                  </td>
+                  <td className="px-4 py-3 hidden md:table-cell">
+                    {order.saleType === 'CREDIT' ? (
+                      <span className="text-xs font-medium text-amber-700">
+                        Crédito {order.installments ? `${order.installments}x` : ''}
+                      </span>
+                    ) : (
+                      <span className="text-xs text-slate-500">Contado</span>
+                    )}
                   </td>
                   <td className="px-4 py-3 text-center text-slate-500">{order.items.length}</td>
                   <td className="px-4 py-3 text-right font-mono font-medium text-slate-800">

@@ -1,36 +1,58 @@
 import { apiClient } from './client';
 
+export type DocumentType = 'CI' | 'RUC' | 'PASSPORT';
+export type SaleType = 'CASH' | 'CREDIT';
+export type SaleOrderStatus =
+  | 'PENDING'
+  | 'PENDING_CREDIT_APPROVAL'
+  | 'CREDIT_APPROVED'
+  | 'CREDIT_REJECTED'
+  | 'CONFIRMED'
+  | 'INVOICED'
+  | 'CANCELLED';
+
 export interface Customer {
   id: string;
+  customerCode: string | null;
   firstName: string;
   lastName: string;
+  documentType: DocumentType | null;
+  documentNumber: string | null;
   email: string | null;
   phone: string | null;
   address: string | null;
-  taxId: string | null;
+  city: string | null;
+  profession: string | null;
+  monthlyIncome: number | null;
+  notes: string | null;
   isActive: boolean;
 }
-
-export type SaleOrderStatus = 'PENDING' | 'CONFIRMED' | 'INVOICED' | 'CANCELLED';
 
 export interface SaleOrderItem {
   id: string;
   productId: string;
   quantity: number;
   unitPrice: number;
+  ivaRate: number | null;
+  ivaAmount: number | null;
   product: {
     id: string;
     name: string;
     model: string | null;
     isSerialized: boolean;
+    usesLots: boolean;
     unit: string;
   };
   productUnits: { id: string; serialNumber: string }[];
+  batch: { id: string; batchNumber: string } | null;
 }
 
 export interface SaleOrder {
   id: string;
   status: SaleOrderStatus;
+  saleType: SaleType;
+  installments: number | null;
+  interestRate: number | null;
   orderDate: string;
   notes: string | null;
   customer: {
@@ -38,7 +60,15 @@ export interface SaleOrder {
     firstName: string;
     lastName: string;
     email: string | null;
+    documentNumber: string | null;
+    documentType: DocumentType | null;
   };
+  createdBy: { id: string; firstName: string; lastName: string } | null;
+  approvedBy: { id: string; firstName: string; lastName: string } | null;
+  rejectedBy: { id: string; firstName: string; lastName: string } | null;
+  approvedAt: string | null;
+  rejectedAt: string | null;
+  rejectionReason: string | null;
   items: SaleOrderItem[];
   invoice: { id: string; status: string } | null;
 }
@@ -48,10 +78,13 @@ export interface CreateSaleOrderItem {
   quantity: number;
   unitPrice: number;
   serialNumbers?: string[];
+  batchId?: string;
 }
 
 export interface CreateSaleOrderPayload {
   customerId: string;
+  saleType?: SaleType;
+  installments?: number;
   notes?: string;
   items: CreateSaleOrderItem[];
 }
@@ -59,10 +92,16 @@ export interface CreateSaleOrderPayload {
 export interface CreateCustomerPayload {
   firstName: string;
   lastName: string;
+  customerCode?: string;
+  documentType?: DocumentType;
+  documentNumber?: string;
   email?: string;
   phone?: string;
   address?: string;
-  taxId?: string;
+  city?: string;
+  profession?: string;
+  monthlyIncome?: number;
+  notes?: string;
 }
 
 export type UpdateCustomerPayload = Partial<CreateCustomerPayload>;
