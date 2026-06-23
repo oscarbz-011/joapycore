@@ -1,5 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsEmail, IsOptional, IsString } from 'class-validator';
+import { IsEmail, IsEnum, IsNumber, IsOptional, IsPositive, IsString } from 'class-validator';
+import { DocumentType } from '@prisma/client';
 
 export class CreateCustomerDto {
   @ApiProperty()
@@ -9,6 +10,21 @@ export class CreateCustomerDto {
   @ApiProperty()
   @IsString()
   lastName: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  customerCode?: string;
+
+  @ApiPropertyOptional({ enum: DocumentType })
+  @IsOptional()
+  @IsEnum(DocumentType)
+  documentType?: DocumentType;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  documentNumber?: string;
 
   @ApiPropertyOptional()
   @IsOptional()
@@ -25,8 +41,24 @@ export class CreateCustomerDto {
   @IsString()
   address?: string;
 
-  @ApiPropertyOptional({ description: 'RUT o CUIT' })
+  @ApiPropertyOptional()
   @IsOptional()
   @IsString()
-  taxId?: string;
+  city?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  profession?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsNumber()
+  @IsPositive()
+  monthlyIncome?: number;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  notes?: string;
 }
