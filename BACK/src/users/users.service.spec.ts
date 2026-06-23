@@ -67,7 +67,8 @@ describe('UsersService', () => {
       findPermissionsByKeys: jest.fn(),
     };
 
-    service = new UsersService(usersRepository as any, rolesRepository as any);
+    const eventEmitter = { emit: jest.fn() };
+    service = new UsersService(usersRepository as any, rolesRepository as any, eventEmitter as any);
   });
 
   // ── list ───────────────────────────────────────────────────────────────────

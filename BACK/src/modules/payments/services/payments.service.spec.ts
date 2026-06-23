@@ -43,7 +43,8 @@ describe('PaymentsService', () => {
     };
     paymentRecordsRepository = { create: jest.fn().mockResolvedValue({ id: 'pr-1' }) };
 
-    service = new PaymentsService(arRepository as any, paymentRecordsRepository as any);
+    const eventEmitter = { emit: jest.fn() };
+    service = new PaymentsService(arRepository as any, paymentRecordsRepository as any, eventEmitter as any);
   });
 
   const baseDto = {
