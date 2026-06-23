@@ -21,6 +21,7 @@ import { LoginDto } from './dto/login.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { RegisterDto } from './dto/register.dto';
 import { RefreshTokensRepository } from './repositories/refresh-tokens.repository';
+import type { AuditLogEvent } from '../audit/audit-log.event';
 
 const SALT_ROUNDS = 10;
 const OWNER_ROLE_NAME = 'Owner';
@@ -87,14 +88,15 @@ export class AuthService {
     });
 
     const tokens = await this.issueTokens(user);
-    this.eventEmitter.emit('user.registered', {
+    this.eventEmitter.emit('user.registered', { userId: user.id, tenantId: user.tenantId });
+    this.eventEmitter.emit('tenant.registered', { tenantId: user.tenantId, industry: dto.industry });
+    this.eventEmitter.emit('audit.log', {
+      tenantId: user.tenantId,
       userId: user.id,
-      tenantId: user.tenantId,
-    });
-    this.eventEmitter.emit('tenant.registered', {
-      tenantId: user.tenantId,
-      industry: dto.industry,
-    });
+      module: 'auth',
+      action: 'user.registered',
+      resourceId: user.id,
+    } satisfies AuditLogEvent);
     return tokens;
   }
 
@@ -118,10 +120,14 @@ export class AuthService {
     });
 
     const tokens = await this.issueTokens(user);
-    this.eventEmitter.emit('user.logged_in', {
-      userId: user.id,
+    this.eventEmitter.emit('user.logged_in', { userId: user.id, tenantId: user.tenantId });
+    this.eventEmitter.emit('audit.log', {
       tenantId: user.tenantId,
-    });
+      userId: user.id,
+      module: 'auth',
+      action: 'user.logged_in',
+      resourceId: user.id,
+    } satisfies AuditLogEvent);
     return { ...tokens, mustChangePassword: user.mustChangePassword };
   }
 

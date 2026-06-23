@@ -9,8 +9,10 @@ import * as bcrypt from 'bcryptjs';
 import * as crypto from 'node:crypto';
 import { Prisma } from '@prisma/client';
 import { UserStatus } from '@prisma/client';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { RolesRepository } from '../repositories/roles.repository';
 import { UsersRepository } from '../repositories/users.repository';
+import type { AuditLogEvent } from '../../audit/audit-log.event';
 import { AssignUserRolesDto } from '../dto/assign-user-roles.dto';
 import { ChangePasswordDto } from '../dto/change-password.dto';
 import { CreateUserDto } from '../dto/create-user.dto';
@@ -25,6 +27,7 @@ export class UsersService {
   constructor(
     private readonly usersRepository: UsersRepository,
     private readonly rolesRepository: RolesRepository,
+    private readonly eventEmitter: EventEmitter2,
   ) {}
 
   async list(tenantId: string) {
@@ -38,7 +41,7 @@ export class UsersService {
     return toSafeUserWithRoles(user);
   }
 
-  async create(tenantId: string, dto: CreateUserDto) {
+  async create(tenantId: string, dto: CreateUserDto, actorId?: string) {
     const existing = await this.usersRepository.findByEmail(dto.email);
     if (existing) throw new ConflictException('Email already in use');
 
@@ -50,6 +53,13 @@ export class UsersService {
       lastName: dto.lastName,
       username: dto.username,
     });
+    this.eventEmitter.emit('audit.log', {
+      tenantId,
+      userId: actorId,
+      module: 'users',
+      action: 'user.created',
+      resourceId: user.id,
+    } satisfies AuditLogEvent);
     return this.getById(tenantId, user.id);
   }
 
@@ -69,25 +79,40 @@ export class UsersService {
     return this.getById(tenantId, id);
   }
 
-  async deactivate(tenantId: string, id: string) {
+  async deactivate(tenantId: string, id: string, actorId?: string) {
     const count = await this.usersRepository.update(tenantId, id, {
       status: UserStatus.INACTIVE,
     });
     if (count === 0) throw new NotFoundException('User not found');
+    this.eventEmitter.emit('audit.log', {
+      tenantId,
+      userId: actorId,
+      module: 'users',
+      action: 'user.deactivated',
+      resourceId: id,
+    } satisfies AuditLogEvent);
     return this.getById(tenantId, id);
   }
 
-  async reactivate(tenantId: string, id: string) {
+  async reactivate(tenantId: string, id: string, actorId?: string) {
     const count = await this.usersRepository.update(tenantId, id, {
       status: UserStatus.ACTIVE,
     });
     if (count === 0) throw new NotFoundException('User not found');
+    this.eventEmitter.emit('audit.log', {
+      tenantId,
+      userId: actorId,
+      module: 'users',
+      action: 'user.reactivated',
+      resourceId: id,
+    } satisfies AuditLogEvent);
     return this.getById(tenantId, id);
   }
 
   async resetPassword(
     tenantId: string,
     id: string,
+    actorId?: string,
   ): Promise<{ tempPassword: string }> {
     const user = await this.usersRepository.findById(tenantId, id);
     if (!user) throw new NotFoundException('User not found');
@@ -100,6 +125,13 @@ export class UsersService {
       passwordHash,
       mustChangePassword: true,
     });
+    this.eventEmitter.emit('audit.log', {
+      tenantId,
+      userId: actorId,
+      module: 'users',
+      action: 'user.password_reset',
+      resourceId: id,
+    } satisfies AuditLogEvent);
     return { tempPassword };
   }
 

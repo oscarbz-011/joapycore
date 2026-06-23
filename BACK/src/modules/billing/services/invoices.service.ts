@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { InvoicesRepository } from '../repositories/invoices.repository';
+import type { AuditLogEvent } from '../../../audit/audit-log.event';
 
 @Injectable()
 export class InvoicesService {
@@ -23,7 +24,7 @@ export class InvoicesService {
     return invoice;
   }
 
-  async cancel(tenantId: string, id: string) {
+  async cancel(tenantId: string, id: string, userId?: string) {
     const invoice = await this.findOne(tenantId, id);
     if (invoice.status === 'CANCELLED') {
       throw new UnprocessableEntityException('Invoice is already cancelled');
@@ -35,6 +36,13 @@ export class InvoicesService {
     }
     await this.invoicesRepository.updateStatus(tenantId, id, 'CANCELLED');
     this.eventEmitter.emit('invoice.cancelled', { tenantId, invoiceId: id });
+    this.eventEmitter.emit('audit.log', {
+      tenantId,
+      userId,
+      module: 'billing',
+      action: 'invoice.cancelled',
+      resourceId: id,
+    } satisfies AuditLogEvent);
     return this.invoicesRepository.findById(tenantId, id);
   }
 }

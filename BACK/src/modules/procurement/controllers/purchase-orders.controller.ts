@@ -44,8 +44,12 @@ export class PurchaseOrdersController {
   @Post(':id/confirm')
   @Permissions('procurement:update')
   @ApiOperation({ summary: 'Confirmar orden de compra' })
-  confirm(@CurrentTenant() tenantId: string, @Param('id') id: string) {
-    return this.purchaseOrdersService.confirm(tenantId, id);
+  confirm(
+    @CurrentTenant() tenantId: string,
+    @CurrentUser() user: JwtPayload,
+    @Param('id') id: string,
+  ) {
+    return this.purchaseOrdersService.confirm(tenantId, id, user.sub);
   }
 
   @Post(':id/receive')
@@ -53,9 +57,10 @@ export class PurchaseOrdersController {
   @ApiOperation({ summary: 'Registrar recepción de mercadería' })
   receive(
     @CurrentTenant() tenantId: string,
+    @CurrentUser() user: JwtPayload,
     @Param('id') id: string,
     @Body() dto: ReceiveItemsDto,
   ) {
-    return this.purchaseOrdersService.receive(tenantId, id, dto);
+    return this.purchaseOrdersService.receive(tenantId, id, dto, user.sub);
   }
 }

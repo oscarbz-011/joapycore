@@ -9,6 +9,7 @@ import { ProductUnitsRepository } from '../../inventory/repositories/product-uni
 import { ProductsRepository } from '../../inventory/repositories/products.repository';
 import { CreateSaleOrderDto } from '../dto/create-sale-order.dto';
 import { SaleOrdersRepository } from '../repositories/sale-orders.repository';
+import type { AuditLogEvent } from '../../../audit/audit-log.event';
 
 @Injectable()
 export class SaleOrdersService {
@@ -30,7 +31,7 @@ export class SaleOrdersService {
     return order;
   }
 
-  async create(tenantId: string, dto: CreateSaleOrderDto) {
+  async create(tenantId: string, dto: CreateSaleOrderDto, userId?: string) {
     return this.prisma.$transaction(async (tx) => {
       const order = await tx.saleOrder.create({
         data: {
@@ -95,14 +96,23 @@ export class SaleOrdersService {
         }
       }
 
-      return tx.saleOrder.findUnique({
+      const created = await tx.saleOrder.findUnique({
         where: { id: order.id },
         include: { customer: true, items: { include: { product: true } } },
       });
+      this.eventEmitter.emit('audit.log', {
+        tenantId,
+        userId,
+        module: 'sales',
+        action: 'sale.order.created',
+        resourceId: order.id,
+        after: created,
+      } satisfies AuditLogEvent);
+      return created;
     });
   }
 
-  async confirm(tenantId: string, id: string) {
+  async confirm(tenantId: string, id: string, userId?: string) {
     const order = await this.findOne(tenantId, id);
     if (order.status !== 'PENDING') {
       throw new UnprocessableEntityException(
@@ -175,19 +185,34 @@ export class SaleOrdersService {
       saleOrderId: id,
       order: confirmed,
     });
+    this.eventEmitter.emit('audit.log', {
+      tenantId,
+      userId,
+      module: 'sales',
+      action: 'sale.order.confirmed',
+      resourceId: id,
+    } satisfies AuditLogEvent);
     return confirmed;
   }
 
-  async cancel(tenantId: string, id: string) {
+  async cancel(tenantId: string, id: string, userId?: string) {
     const order = await this.findOne(tenantId, id);
     if (order.status === 'CONFIRMED') {
       throw new UnprocessableEntityException(
         'Confirmed orders cannot be cancelled. Use a credit note instead.',
       );
     }
-    return this.prisma.saleOrder.update({
+    const cancelled = await this.prisma.saleOrder.update({
       where: { id },
       data: { status: 'CANCELLED' },
     });
+    this.eventEmitter.emit('audit.log', {
+      tenantId,
+      userId,
+      module: 'sales',
+      action: 'sale.order.cancelled',
+      resourceId: id,
+    } satisfies AuditLogEvent);
+    return cancelled;
   }
 }

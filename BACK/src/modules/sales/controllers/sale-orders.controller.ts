@@ -1,8 +1,10 @@
 import { Body, Controller, Get, Param, Post } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CurrentTenant } from '../../../common/decorators/current-tenant.decorator';
+import { CurrentUser } from '../../../common/decorators/current-user.decorator';
 import { Permissions } from '../../../common/decorators/permissions.decorator';
 import { RequiredModule } from '../../../common/decorators/required-module.decorator';
+import type { JwtPayload } from '../../../common/types/jwt-payload.interface';
 import { CreateSaleOrderDto } from '../dto/create-sale-order.dto';
 import { SaleOrdersService } from '../services/sale-orders.service';
 
@@ -30,23 +32,33 @@ export class SaleOrdersController {
   @Post()
   @Permissions('sales:create')
   @ApiOperation({ summary: 'Crear orden de venta' })
-  create(@CurrentTenant() tenantId: string, @Body() dto: CreateSaleOrderDto) {
-    return this.saleOrdersService.create(tenantId, dto);
+  create(
+    @CurrentTenant() tenantId: string,
+    @CurrentUser() user: JwtPayload,
+    @Body() dto: CreateSaleOrderDto,
+  ) {
+    return this.saleOrdersService.create(tenantId, dto, user.sub);
   }
 
   @Post(':id/confirm')
   @Permissions('sales:update')
-  @ApiOperation({
-    summary: 'Confirmar orden de venta (ajusta stock y genera factura)',
-  })
-  confirm(@CurrentTenant() tenantId: string, @Param('id') id: string) {
-    return this.saleOrdersService.confirm(tenantId, id);
+  @ApiOperation({ summary: 'Confirmar orden de venta (ajusta stock y genera factura)' })
+  confirm(
+    @CurrentTenant() tenantId: string,
+    @CurrentUser() user: JwtPayload,
+    @Param('id') id: string,
+  ) {
+    return this.saleOrdersService.confirm(tenantId, id, user.sub);
   }
 
   @Post(':id/cancel')
   @Permissions('sales:cancel')
   @ApiOperation({ summary: 'Cancelar orden de venta' })
-  cancel(@CurrentTenant() tenantId: string, @Param('id') id: string) {
-    return this.saleOrdersService.cancel(tenantId, id);
+  cancel(
+    @CurrentTenant() tenantId: string,
+    @CurrentUser() user: JwtPayload,
+    @Param('id') id: string,
+  ) {
+    return this.saleOrdersService.cancel(tenantId, id, user.sub);
   }
 }

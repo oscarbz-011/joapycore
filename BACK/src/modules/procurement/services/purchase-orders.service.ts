@@ -10,6 +10,7 @@ import { ProductsRepository } from '../../inventory/repositories/products.reposi
 import { PurchaseOrdersRepository } from '../repositories/purchase-orders.repository';
 import { CreatePurchaseOrderDto } from '../dto/create-purchase-order.dto';
 import { ReceiveItemsDto } from '../dto/receive-items.dto';
+import type { AuditLogEvent } from '../../../audit/audit-log.event';
 
 @Injectable()
 export class PurchaseOrdersService {
@@ -63,11 +64,18 @@ export class PurchaseOrdersService {
         );
       }
 
+      this.eventEmitter.emit('audit.log', {
+        tenantId,
+        userId,
+        module: 'procurement',
+        action: 'purchase.order.created',
+        resourceId: order.id,
+      } satisfies AuditLogEvent);
       return order;
     });
   }
 
-  async confirm(tenantId: string, id: string) {
+  async confirm(tenantId: string, id: string, userId?: string) {
     const order = await this.findOne(tenantId, id);
     if (order.status !== 'PENDING') {
       throw new UnprocessableEntityException(
@@ -75,10 +83,17 @@ export class PurchaseOrdersService {
       );
     }
     await this.purchaseOrdersRepository.updateStatus(tenantId, id, 'CONFIRMED');
+    this.eventEmitter.emit('audit.log', {
+      tenantId,
+      userId,
+      module: 'procurement',
+      action: 'purchase.order.confirmed',
+      resourceId: id,
+    } satisfies AuditLogEvent);
     return this.purchaseOrdersRepository.findById(tenantId, id);
   }
 
-  async receive(tenantId: string, id: string, dto: ReceiveItemsDto) {
+  async receive(tenantId: string, id: string, dto: ReceiveItemsDto, userId?: string) {
     const order = await this.findOne(tenantId, id);
     if (!['CONFIRMED', 'PARTIALLY_RECEIVED'].includes(order.status)) {
       throw new UnprocessableEntityException(
@@ -155,10 +170,14 @@ export class PurchaseOrdersService {
     });
 
     const final = await this.purchaseOrdersRepository.findById(tenantId, id);
-    this.eventEmitter.emit('purchase.order.received', {
+    this.eventEmitter.emit('purchase.order.received', { tenantId, purchaseOrderId: id });
+    this.eventEmitter.emit('audit.log', {
       tenantId,
-      purchaseOrderId: id,
-    });
+      userId,
+      module: 'procurement',
+      action: 'purchase.order.received',
+      resourceId: id,
+    } satisfies AuditLogEvent);
     return final;
   }
 }

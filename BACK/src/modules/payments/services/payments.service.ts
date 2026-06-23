@@ -3,15 +3,18 @@ import {
   NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { AccountsReceivableRepository } from '../repositories/accounts-receivable.repository';
 import { PaymentRecordsRepository } from '../repositories/payment-records.repository';
 import { RegisterPaymentDto } from '../dto/register-payment.dto';
+import type { AuditLogEvent } from '../../../audit/audit-log.event';
 
 @Injectable()
 export class PaymentsService {
   constructor(
     private readonly arRepository: AccountsReceivableRepository,
     private readonly paymentRecordsRepository: PaymentRecordsRepository,
+    private readonly eventEmitter: EventEmitter2,
   ) {}
 
   findAll(tenantId: string) {
@@ -24,7 +27,7 @@ export class PaymentsService {
     return ar;
   }
 
-  async registerPayment(tenantId: string, arId: string, dto: RegisterPaymentDto) {
+  async registerPayment(tenantId: string, arId: string, dto: RegisterPaymentDto, userId?: string) {
     const ar = await this.findOne(tenantId, arId);
 
     if (ar.status === 'PAID') {
@@ -58,6 +61,15 @@ export class PaymentsService {
       newPaid >= Number(ar.amount) - 0.01 ? 'PAID' : 'PARTIAL';
 
     await this.arRepository.updateAmounts(arId, newPaid, newStatus);
+
+    this.eventEmitter.emit('audit.log', {
+      tenantId,
+      userId,
+      module: 'payments',
+      action: 'payment.registered',
+      resourceId: arId,
+      after: { amount: dto.amount, method: dto.paymentMethod, status: newStatus },
+    } satisfies AuditLogEvent);
 
     return this.arRepository.findById(tenantId, arId);
   }

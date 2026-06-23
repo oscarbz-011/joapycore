@@ -63,8 +63,12 @@ export class UsersController {
   @Post()
   @Permissions('users:create')
   @ApiOperation({ summary: 'Create a teammate user in the current tenant' })
-  create(@CurrentTenant() tenantId: string, @Body() dto: CreateUserDto) {
-    return this.usersService.create(tenantId, dto);
+  create(
+    @CurrentTenant() tenantId: string,
+    @CurrentUser() user: JwtPayload,
+    @Body() dto: CreateUserDto,
+  ) {
+    return this.usersService.create(tenantId, dto, user.sub);
   }
 
   @Patch(':id')
@@ -81,24 +85,34 @@ export class UsersController {
   @Patch(':id/deactivate')
   @Permissions('users:deactivate')
   @ApiOperation({ summary: 'Deactivate a user' })
-  deactivate(@CurrentTenant() tenantId: string, @Param('id') id: string) {
-    return this.usersService.deactivate(tenantId, id);
+  deactivate(
+    @CurrentTenant() tenantId: string,
+    @CurrentUser() user: JwtPayload,
+    @Param('id') id: string,
+  ) {
+    return this.usersService.deactivate(tenantId, id, user.sub);
   }
 
   @Patch(':id/reactivate')
   @Permissions('users:deactivate')
   @ApiOperation({ summary: 'Reactivate a user' })
-  reactivate(@CurrentTenant() tenantId: string, @Param('id') id: string) {
-    return this.usersService.reactivate(tenantId, id);
+  reactivate(
+    @CurrentTenant() tenantId: string,
+    @CurrentUser() user: JwtPayload,
+    @Param('id') id: string,
+  ) {
+    return this.usersService.reactivate(tenantId, id, user.sub);
   }
 
   @Post(':id/reset-password')
   @Permissions('users:update')
-  @ApiOperation({
-    summary: 'Generate a new temporary password for a user (admin)',
-  })
-  resetPassword(@CurrentTenant() tenantId: string, @Param('id') id: string) {
-    return this.usersService.resetPassword(tenantId, id);
+  @ApiOperation({ summary: 'Generate a new temporary password for a user (admin)' })
+  resetPassword(
+    @CurrentTenant() tenantId: string,
+    @CurrentUser() user: JwtPayload,
+    @Param('id') id: string,
+  ) {
+    return this.usersService.resetPassword(tenantId, id, user.sub);
   }
 
   @Patch(':id/roles')

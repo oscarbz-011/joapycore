@@ -1,8 +1,10 @@
 import { Controller, Get, Param, Post } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CurrentTenant } from '../../../common/decorators/current-tenant.decorator';
+import { CurrentUser } from '../../../common/decorators/current-user.decorator';
 import { Permissions } from '../../../common/decorators/permissions.decorator';
 import { RequiredModule } from '../../../common/decorators/required-module.decorator';
+import type { JwtPayload } from '../../../common/types/jwt-payload.interface';
 import { InvoicesService } from '../services/invoices.service';
 
 @ApiTags('Billing')
@@ -29,7 +31,11 @@ export class InvoicesController {
   @Post(':id/cancel')
   @Permissions('billing:cancel')
   @ApiOperation({ summary: 'Cancelar factura' })
-  cancel(@CurrentTenant() tenantId: string, @Param('id') id: string) {
-    return this.invoicesService.cancel(tenantId, id);
+  cancel(
+    @CurrentTenant() tenantId: string,
+    @CurrentUser() user: JwtPayload,
+    @Param('id') id: string,
+  ) {
+    return this.invoicesService.cancel(tenantId, id, user.sub);
   }
 }

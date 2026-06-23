@@ -69,10 +69,12 @@ export class BillingOnSaleListener {
       return inv;
     });
 
-    this.eventEmitter.emit('invoice.issued', {
+    this.eventEmitter.emit('invoice.issued', { tenantId, invoiceId: invoice.id, saleOrderId });
+    this.eventEmitter.emit('audit.log', {
       tenantId,
-      invoiceId: invoice.id,
-      saleOrderId,
+      module: 'billing',
+      action: 'invoice.issued',
+      resourceId: invoice.id,
     });
   }
 }

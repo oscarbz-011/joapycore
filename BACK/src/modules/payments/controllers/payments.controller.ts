@@ -1,8 +1,10 @@
 import { Body, Controller, Get, Param, Post } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CurrentTenant } from '../../../common/decorators/current-tenant.decorator';
+import { CurrentUser } from '../../../common/decorators/current-user.decorator';
 import { Permissions } from '../../../common/decorators/permissions.decorator';
 import { RequiredModule } from '../../../common/decorators/required-module.decorator';
+import type { JwtPayload } from '../../../common/types/jwt-payload.interface';
 import { RegisterPaymentDto } from '../dto/register-payment.dto';
 import { PaymentsService } from '../services/payments.service';
 
@@ -32,9 +34,10 @@ export class PaymentsController {
   @ApiOperation({ summary: 'Registrar un pago sobre una cuenta por cobrar' })
   registerPayment(
     @CurrentTenant() tenantId: string,
+    @CurrentUser() user: JwtPayload,
     @Param('id') id: string,
     @Body() dto: RegisterPaymentDto,
   ) {
-    return this.paymentsService.registerPayment(tenantId, id, dto);
+    return this.paymentsService.registerPayment(tenantId, id, dto, user.sub);
   }
 }
