@@ -1,6 +1,6 @@
 import { apiClient } from './client';
 
-export type InvoiceStatus = 'DRAFT' | 'ISSUED' | 'PAID' | 'CANCELLED';
+export type InvoiceStatus = 'PENDING' | 'ISSUED' | 'PAID' | 'CANCELLED';
 
 export interface InvoiceItem {
   id: string;

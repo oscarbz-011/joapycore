@@ -6,7 +6,7 @@ export type Gender = 'MALE' | 'FEMALE' | 'OTHER';
 export type MaritalStatus = 'SINGLE' | 'MARRIED' | 'DIVORCED' | 'WIDOWED' | 'OTHER';
 export type ContractType = 'PERMANENT' | 'TEMPORARY' | 'PART_TIME' | 'CONTRACTOR';
 export type PaymentMethod = 'BANK_TRANSFER' | 'CASH';
-export type PayrollStatus = 'DRAFT' | 'PROCESSED' | 'PAID';
+export type PayrollStatus = 'PENDING' | 'PROCESSED' | 'PAID';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 export interface Employee {

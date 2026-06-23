@@ -2,7 +2,7 @@ import { apiClient } from './client';
 
 export type PurchaseType = 'LOCAL' | 'IMPORT';
 export type PurchaseOrderStatus =
-  | 'DRAFT'
+  | 'PENDING'
   | 'CONFIRMED'
   | 'PARTIALLY_RECEIVED'
   | 'RECEIVED'

@@ -55,7 +55,7 @@ function SalesNav() {
 // ── Status badge ───────────────────────────────────────────────────────────────
 
 const STATUS_MAP: Record<SaleOrderStatus, { label: string; className: string }> = {
-  DRAFT:     { label: 'Borrador',   className: 'bg-slate-100 text-slate-600' },
+  PENDING:     { label: 'Pendiente',   className: 'bg-slate-100 text-slate-600' },
   CONFIRMED: { label: 'Confirmado', className: 'bg-blue-50 text-blue-700' },
   INVOICED:  { label: 'Facturado',  className: 'bg-emerald-50 text-emerald-700' },
   CANCELLED: { label: 'Cancelado',  className: 'bg-red-50 text-red-600' },
@@ -475,7 +475,7 @@ function OrderDetailPanel({
         )}
 
         {/* Actions */}
-        {order.status === 'DRAFT' && (
+        {order.status === 'PENDING' && (
           <div className="px-5 py-4 space-y-2">
             {confirmAction === null && (
               <>
@@ -617,7 +617,7 @@ export default function SalesPage() {
           onChange={(e) => setStatusFilter(e.target.value as '' | SaleOrderStatus)}
         >
           <option value="">Todos los estados</option>
-          <option value="DRAFT">Borrador</option>
+          <option value="PENDING">Borrador</option>
           <option value="CONFIRMED">Confirmado</option>
           <option value="INVOICED">Facturado</option>
           <option value="CANCELLED">Cancelado</option>

@@ -64,7 +64,7 @@ function ProcurementNav() {
 // ── Status badge ───────────────────────────────────────────────────────────────
 
 const STATUS_MAP: Record<PurchaseOrderStatus, { label: string; className: string }> = {
-  DRAFT:              { label: 'Borrador',            className: 'bg-slate-100 text-slate-600' },
+  PENDING:              { label: 'Borrador',            className: 'bg-slate-100 text-slate-600' },
   CONFIRMED:          { label: 'Confirmada',           className: 'bg-blue-50 text-blue-700' },
   PARTIALLY_RECEIVED: { label: 'Recepción parcial',   className: 'bg-amber-50 text-amber-700' },
   RECEIVED:           { label: 'Recibida',             className: 'bg-emerald-50 text-emerald-700' },
@@ -563,7 +563,7 @@ function OrderDetailPanel({
     },
   });
 
-  const canConfirm = order.status === 'DRAFT';
+  const canConfirm = order.status === 'PENDING';
   const canReceive = order.status === 'CONFIRMED' || order.status === 'PARTIALLY_RECEIVED';
 
   return (
@@ -641,7 +641,7 @@ function OrderDetailPanel({
                         <p className="text-xs text-slate-400">Recibido: {received}/{total}</p>
                       </div>
                     </div>
-                    {order.status !== 'DRAFT' && (
+                    {order.status !== 'PENDING' && (
                       <div className="mt-1.5 h-1.5 w-full rounded-full bg-slate-100">
                         <div
                           className="h-1.5 rounded-full bg-emerald-500 transition-all"
@@ -776,7 +776,7 @@ export default function ProcurementPage() {
           onChange={(e) => setStatusFilter(e.target.value as '' | PurchaseOrderStatus)}
         >
           <option value="">Todos los estados</option>
-          <option value="DRAFT">Borrador</option>
+          <option value="PENDING">Borrador</option>
           <option value="CONFIRMED">Confirmada</option>
           <option value="PARTIALLY_RECEIVED">Recepción parcial</option>
           <option value="RECEIVED">Recibida</option>

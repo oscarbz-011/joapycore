@@ -1,6 +1,6 @@
 # JoapyCore — Frontend
 
-Interfaz web del ERP SaaS modular construida con Next.js 16. Se conecta al backend de JoapyCore y adapta la navegación según los módulos activos del tenant.
+Interfaz web del ERP SaaS modular construida con Next.js 16. Se conecta al backend de JoapyCore y adapta la navegación según los módulos activos y permisos del tenant.
 
 ## Stack
 
@@ -53,30 +53,95 @@ pnpm lint       # ESLint
 ## Estructura
 
 ```
-app/
-├── (auth)/          # Páginas de login y registro (rutas públicas)
-├── (dashboard)/     # Shell del dashboard protegido por auth
-│   ├── components/  # Sidebar y componentes del layout
-│   └── page.tsx     # Página de inicio
-├── providers.tsx    # QueryClientProvider + AuthProvider
-└── layout.tsx       # Layout raíz
-
-lib/
-├── api/
-│   ├── client.ts    # Axios con interceptores (Bearer + auto-refresh en 401)
-│   └── auth.ts      # Llamadas a /auth/*
-├── auth-context.tsx # AuthProvider y hook useAuth
-└── token-store.ts   # Access token en memoria, refresh token en localStorage
-
-types/
-└── auth.ts          # Interfaces User, AuthTokens, JwtPayload, DTOs
+front/
+├── app/
+│   ├── (auth)/
+│   │   ├── login/page.tsx          # Inicio de sesión
+│   │   └── register/page.tsx       # Registro de tenant
+│   ├── (dashboard)/
+│   │   └── dashboard/
+│   │       ├── page.tsx            # Inicio del dashboard
+│   │       ├── components/
+│   │       │   └── sidebar.tsx     # Navegación con control de permisos y módulos
+│   │       ├── billing/            # Facturación
+│   │       ├── hr/
+│   │       │   ├── page.tsx        # Empleados
+│   │       │   ├── areas/          # Áreas / departamentos
+│   │       │   └── payroll/        # Nómina
+│   │       ├── inventory/
+│   │       │   ├── page.tsx        # Productos y stock
+│   │       │   └── config/         # Categorías y unidades
+│   │       ├── payments/           # Cuentas por cobrar y pagos
+│   │       ├── procurement/
+│   │       │   ├── page.tsx        # Órdenes de compra
+│   │       │   └── suppliers/      # Proveedores
+│   │       ├── sales/
+│   │       │   ├── page.tsx        # Órdenes de venta
+│   │       │   └── customers/      # Clientes
+│   │       └── settings/
+│   │           ├── alerts/         # Configuración de alertas por canal
+│   │           ├── audit/          # Registro de auditoría del tenant
+│   │           ├── branches/       # Sucursales
+│   │           ├── modules/        # Activar/desactivar módulos del tenant
+│   │           ├── profile/        # Perfil y cambio de contraseña
+│   │           ├── reports/        # Reportes: ventas, stock, cuentas por cobrar
+│   │           ├── roles/          # Roles y asignación de permisos
+│   │           ├── tenant/         # Datos generales del tenant
+│   │           └── users/          # Gestión de usuarios del tenant
+│   ├── providers.tsx               # QueryClientProvider + AuthProvider
+│   └── layout.tsx
+│
+├── lib/
+│   ├── api/
+│   │   ├── client.ts       # Axios: Bearer token + auto-refresh en 401
+│   │   ├── auth.ts         # /auth/login, /register, /refresh, /logout
+│   │   ├── sales.ts        # Órdenes de venta y clientes
+│   │   ├── billing.ts      # Facturas
+│   │   ├── inventory.ts    # Productos, stock, movimientos
+│   │   ├── procurement.ts  # Órdenes de compra y proveedores
+│   │   ├── payments.ts     # Cuentas por cobrar
+│   │   ├── hr.ts           # Empleados, áreas, nómina
+│   │   ├── audit.ts        # Logs de auditoría
+│   │   ├── alerts.ts       # Configuración de alertas
+│   │   ├── reports.ts      # Reportes agregados
+│   │   ├── files.ts        # Subida y descarga de archivos
+│   │   ├── roles.ts        # Roles y permisos
+│   │   ├── users.ts        # Usuarios del tenant
+│   │   ├── tenants.ts      # Datos y módulos del tenant
+│   │   └── branches.ts     # Sucursales
+│   ├── auth-context.tsx    # AuthProvider y hook useAuth
+│   ├── permissions.ts      # Helper hasPermission / hasAnyPermission
+│   └── token-store.ts      # Access token en memoria; refresh en localStorage
+│
+└── types/
+    └── auth.ts             # JwtPayload, User, AuthTokens
 ```
 
 ## Flujo de autenticación
 
-1. El usuario se registra (`/register`) o inicia sesión (`/login`)
-2. El backend devuelve access token (15m) + refresh token (7d)
-3. El access token se guarda en memoria; el refresh token en `localStorage`
-4. Al montar la app, si hay refresh token se renueva automáticamente el access token
-5. Axios intercepta los 401 y reintenta con un nuevo par de tokens transparentemente
-6. El sidebar muestra con candado los módulos inactivos del tenant (leídos desde el JWT)
+1. El usuario se registra (`/register`) o inicia sesión (`/login`).
+2. El backend devuelve access token (15 min) + refresh token (7 días).
+3. El access token se guarda en **memoria** (`token-store.ts`); el refresh token en `localStorage`.
+4. Al montar la app, si hay refresh token almacenado se renueva el access token automáticamente.
+5. Axios intercepta los `401` y reintenta la request con un nuevo par de tokens de forma transparente.
+
+## Control de acceso en el sidebar
+
+El sidebar (`components/sidebar.tsx`) evalúa cada item contra el payload del JWT:
+
+- **`requiredPermission`** — el usuario debe tener ese permiso exacto.
+- **`requiredAnyPermission`** — basta con tener al menos uno de la lista.
+- Si el módulo no está activo para el tenant, el item aparece bloqueado.
+
+Formato de permiso: `<módulo>:<acción>` — ej. `sales:create`, `billing:cancel`, `reports:read`.
+
+## Patrones de data fetching
+
+Todos los módulos usan TanStack Query. Lectura con `useQuery`, escritura con `useMutation` e invalidación del cache en `onSuccess`:
+
+```tsx
+const mutation = useMutation({
+  mutationFn: (dto) => salesApi.createOrder(dto),
+  onSuccess: () => queryClient.invalidateQueries({ queryKey: ['sales-orders'] }),
+});
+```

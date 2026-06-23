@@ -27,7 +27,7 @@ function formatDate(iso: string | null) {
 // ── Status badge ───────────────────────────────────────────────────────────────
 
 const STATUS_MAP: Record<InvoiceStatus, { label: string; className: string }> = {
-  DRAFT:     { label: 'Borrador',  className: 'bg-slate-100 text-slate-600' },
+  PENDING:     { label: 'Borrador',  className: 'bg-slate-100 text-slate-600' },
   ISSUED:    { label: 'Emitida',   className: 'bg-blue-50 text-blue-700' },
   PAID:      { label: 'Pagada',    className: 'bg-emerald-50 text-emerald-700' },
   CANCELLED: { label: 'Cancelada', className: 'bg-red-50 text-red-600' },
@@ -63,7 +63,7 @@ function InvoiceDetailPanel({
     },
   });
 
-  const canCancel = invoice.status === 'DRAFT' || invoice.status === 'ISSUED';
+  const canCancel = invoice.status === 'PENDING' || invoice.status === 'ISSUED';
 
   return (
     <div className="fixed inset-0 z-40 flex justify-end">
@@ -239,7 +239,7 @@ export default function BillingPage() {
           onChange={(e) => setStatusFilter(e.target.value as '' | InvoiceStatus)}
         >
           <option value="">Todos los estados</option>
-          <option value="DRAFT">Borrador</option>
+          <option value="PENDING">Borrador</option>
           <option value="ISSUED">Emitida</option>
           <option value="PAID">Pagada</option>
           <option value="CANCELLED">Cancelada</option>

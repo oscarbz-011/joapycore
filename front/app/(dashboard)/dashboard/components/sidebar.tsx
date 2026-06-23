@@ -93,20 +93,20 @@ const SETTINGS_SECTIONS: SettingsSection[] = [
   },
   {
     label: 'Configuración',
-    requiredAnyPermission: ['tenants:read', 'tenants:update', 'tenants:modules:manage', 'roles:manage'],
+    requiredAnyPermission: ['tenants:read', 'tenants:update', 'tenants:modules:manage', 'roles:manage', 'alerts:manage'],
     items: [
       { label: 'Mi empresa',  href: '/dashboard/settings/tenant',    icon: Building2,  requiredPermission: 'tenants:read' },
       { label: 'Sucursales',  href: '/dashboard/settings/branches',  icon: LayoutGrid, requiredPermission: 'branches:read' },
       { label: 'Módulos',     href: '/dashboard/settings/modules',   icon: LayoutGrid, requiredPermission: 'tenants:modules:manage' },
-      { label: 'Alertas',     href: '/dashboard/settings/alerts',    icon: Bell,       requiredPermission: 'roles:manage' },
+      { label: 'Alertas',     href: '/dashboard/settings/alerts',    icon: Bell,       requiredPermission: 'alerts:manage' },
     ],
   },
   {
     label: 'Herramientas',
-    requiredAnyPermission: ['roles:manage'],
+    requiredAnyPermission: ['audit:read', 'reports:read'],
     items: [
-      { label: 'Auditoría', href: '/dashboard/settings/audit',   icon: ClipboardList, requiredPermission: 'roles:manage' },
-      { label: 'Reportes',  href: '/dashboard/settings/reports', icon: Wrench,        requiredPermission: 'roles:manage' },
+      { label: 'Auditoría', href: '/dashboard/settings/audit',   icon: ClipboardList, requiredPermission: 'audit:read' },
+      { label: 'Reportes',  href: '/dashboard/settings/reports', icon: Wrench,        requiredPermission: 'reports:read' },
     ],
   },
 ];

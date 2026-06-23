@@ -34,13 +34,13 @@ function HrNav({ active }: { active: 'employees' | 'areas' | 'payroll' }) {
 }
 
 const STATUS_LABELS: Record<string, string> = {
-  DRAFT: 'Borrador',
+  PENDING: 'Borrador',
   PROCESSED: 'Procesado',
   PAID: 'Pagado',
 };
 
 const STATUS_COLORS: Record<string, string> = {
-  DRAFT: 'bg-slate-100 text-slate-600',
+  PENDING: 'bg-slate-100 text-slate-600',
   PROCESSED: 'bg-amber-50 text-amber-700',
   PAID: 'bg-emerald-50 text-emerald-700',
 };
@@ -194,7 +194,7 @@ function RecordDetail({ record, onPay }: { record: PayrollRecord; onPay: (id: st
           ))}
         </tbody>
       </table>
-      {record.status === 'DRAFT' && (
+      {record.status === 'PENDING' && (
         <div className="border-t border-slate-100 px-3 py-2">
           <button
             onClick={() => onPay(record.id)}

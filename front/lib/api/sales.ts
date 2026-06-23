@@ -11,7 +11,7 @@ export interface Customer {
   isActive: boolean;
 }
 
-export type SaleOrderStatus = 'DRAFT' | 'CONFIRMED' | 'INVOICED' | 'CANCELLED';
+export type SaleOrderStatus = 'PENDING' | 'CONFIRMED' | 'INVOICED' | 'CANCELLED';
 
 export interface SaleOrderItem {
   id: string;
