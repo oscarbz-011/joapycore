@@ -21,6 +21,8 @@ import {
   Wrench,
   ClipboardList,
   UserCog,
+  Tag,
+  Percent,
 } from 'lucide-react';
 import { useAuth } from '../../../../lib/auth-context';
 
@@ -98,6 +100,8 @@ const SETTINGS_SECTIONS: SettingsSection[] = [
       { label: 'Mi empresa',  href: '/dashboard/settings/tenant',    icon: Building2,  requiredPermission: 'tenants:read' },
       { label: 'Sucursales',  href: '/dashboard/settings/branches',  icon: LayoutGrid, requiredPermission: 'branches:read' },
       { label: 'Módulos',     href: '/dashboard/settings/modules',   icon: LayoutGrid, requiredPermission: 'tenants:modules:manage' },
+      { label: 'Precios',     href: '/dashboard/settings/pricing',   icon: Tag,        requiredPermission: 'tenants:update' },
+      { label: 'Crédito',     href: '/dashboard/settings/credit',    icon: Percent,    requiredPermission: 'tenants:update' },
       { label: 'Alertas',     href: '/dashboard/settings/alerts',    icon: Bell,       requiredPermission: 'alerts:manage' },
     ],
   },
