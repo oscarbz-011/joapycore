@@ -61,6 +61,7 @@ describe('UsersService', () => {
       update: jest.fn().mockResolvedValue(1),
       setRoles: jest.fn(),
       setPermissions: jest.fn(),
+      generateUniqueUsername: jest.fn().mockResolvedValue('john.doe'),
     };
     rolesRepository = {
       findManyByIds: jest.fn(),

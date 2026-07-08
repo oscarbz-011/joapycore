@@ -1,4 +1,8 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { CreditConfigRepository } from '../repositories/credit-config.repository';
 import { CreateCreditPlanDto } from '../dto/create-credit-plan.dto';
 import { UpdateCreditPlanDto } from '../dto/update-credit-plan.dto';
@@ -16,10 +20,18 @@ export class CreditConfigService {
   }
 
   async addPlan(tenantId: string, dto: CreateCreditPlanDto) {
-    const config = await this.repo.upsertConfig(tenantId, false);
-    const duplicate = config.plans.find((p) => p.installments === dto.installments);
+    const existing = await this.repo.findByTenant(tenantId);
+    const config = await this.repo.upsertConfig(
+      tenantId,
+      existing?.isEnabled ?? false,
+    );
+    const duplicate = config.plans.find(
+      (p) => p.installments === dto.installments,
+    );
     if (duplicate) {
-      throw new ConflictException(`Ya existe un plan de ${dto.installments} cuotas`);
+      throw new ConflictException(
+        `Ya existe un plan de ${dto.installments} cuotas`,
+      );
     }
     return this.repo.createPlan(config.id, dto.installments, dto.interestRate);
   }

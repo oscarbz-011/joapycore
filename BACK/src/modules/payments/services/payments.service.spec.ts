@@ -30,21 +30,35 @@ describe('PaymentsService', () => {
     findAll: jest.Mock;
     findById: jest.Mock;
     create: jest.Mock;
-    updateAmounts: jest.Mock;
+    incrementPaid: jest.Mock;
+    updateStatus: jest.Mock;
   };
   let paymentRecordsRepository: { create: jest.Mock };
+  let eventEmitter: { emit: jest.Mock };
+  let prisma: { $transaction: jest.Mock };
 
   beforeEach(() => {
     arRepository = {
       findAll: jest.fn(),
       findById: jest.fn(),
       create: jest.fn(),
-      updateAmounts: jest.fn().mockResolvedValue(undefined),
+      incrementPaid: jest.fn().mockResolvedValue(makeAR({ paidAmount: 0 })),
+      updateStatus: jest.fn().mockResolvedValue(undefined),
     };
     paymentRecordsRepository = { create: jest.fn().mockResolvedValue({ id: 'pr-1' }) };
+    eventEmitter = { emit: jest.fn() };
 
-    const eventEmitter = { emit: jest.fn() };
-    service = new PaymentsService(arRepository as any, paymentRecordsRepository as any, eventEmitter as any);
+    const tx = {};
+    prisma = {
+      $transaction: jest.fn().mockImplementation((cb) => cb(tx)),
+    };
+
+    service = new PaymentsService(
+      prisma as any,
+      arRepository as any,
+      paymentRecordsRepository as any,
+      eventEmitter as any,
+    );
   });
 
   const baseDto = {
@@ -109,6 +123,9 @@ describe('PaymentsService', () => {
 
     it('creates payment and sets status to PARTIAL for partial payment', async () => {
       const updatedAR = makeAR({ paidAmount: 1_000_000, status: 'PARTIAL' });
+      arRepository.incrementPaid.mockResolvedValue(
+        makeAR({ paidAmount: 1_000_000, amount: 2_500_000, invoiceId: 'inv-1' }),
+      );
       arRepository.findById
         .mockResolvedValueOnce(makeAR({ amount: 2_500_000, paidAmount: 0 }))
         .mockResolvedValueOnce(updatedAR);
@@ -117,20 +134,56 @@ describe('PaymentsService', () => {
 
       expect(paymentRecordsRepository.create).toHaveBeenCalledWith(
         expect.objectContaining({ amount: 1_000_000, paymentMethod: 'CASH' }),
+        expect.anything(),
       );
-      expect(arRepository.updateAmounts).toHaveBeenCalledWith('ar-1', 1_000_000, 'PARTIAL');
+      expect(arRepository.incrementPaid).toHaveBeenCalledWith('ar-1', 1_000_000, expect.anything());
+      expect(arRepository.updateStatus).toHaveBeenCalledWith('ar-1', 'PARTIAL', expect.anything());
       expect(result?.status).toBe('PARTIAL');
     });
 
     it('creates payment and sets status to PAID when balance is cleared', async () => {
       const updatedAR = makeAR({ paidAmount: 2_500_000, status: 'PAID' });
+      arRepository.incrementPaid.mockResolvedValue(
+        makeAR({ paidAmount: 2_500_000, amount: 2_500_000, invoiceId: 'inv-1' }),
+      );
       arRepository.findById
         .mockResolvedValueOnce(makeAR({ amount: 2_500_000, paidAmount: 0 }))
         .mockResolvedValueOnce(updatedAR);
 
       await service.registerPayment('tenant-1', 'ar-1', { ...baseDto, amount: 2_500_000 });
 
-      expect(arRepository.updateAmounts).toHaveBeenCalledWith('ar-1', 2_500_000, 'PAID');
+      expect(arRepository.incrementPaid).toHaveBeenCalledWith('ar-1', 2_500_000, expect.anything());
+      expect(arRepository.updateStatus).toHaveBeenCalledWith('ar-1', 'PAID', expect.anything());
+    });
+
+    it('emits payment.ar.completed when AR is fully paid', async () => {
+      arRepository.incrementPaid.mockResolvedValue(
+        makeAR({ paidAmount: 2_500_000, amount: 2_500_000, invoiceId: 'inv-1' }),
+      );
+      arRepository.findById
+        .mockResolvedValueOnce(makeAR({ amount: 2_500_000, paidAmount: 0 }))
+        .mockResolvedValueOnce(makeAR({ paidAmount: 2_500_000, status: 'PAID' }));
+
+      await service.registerPayment('tenant-1', 'ar-1', { ...baseDto, amount: 2_500_000 });
+
+      expect(eventEmitter.emit).toHaveBeenCalledWith(
+        'payment.ar.completed',
+        expect.objectContaining({ tenantId: 'tenant-1', arId: 'ar-1', invoiceId: 'inv-1' }),
+      );
+    });
+
+    it('does NOT emit payment.ar.completed for partial payments', async () => {
+      arRepository.incrementPaid.mockResolvedValue(
+        makeAR({ paidAmount: 1_000_000, amount: 2_500_000, invoiceId: 'inv-1' }),
+      );
+      arRepository.findById
+        .mockResolvedValueOnce(makeAR({ amount: 2_500_000, paidAmount: 0 }))
+        .mockResolvedValueOnce(makeAR({ paidAmount: 1_000_000, status: 'PARTIAL' }));
+
+      await service.registerPayment('tenant-1', 'ar-1', baseDto);
+
+      const calls = (eventEmitter.emit as jest.Mock).mock.calls.map((c) => c[0]);
+      expect(calls).not.toContain('payment.ar.completed');
     });
   });
 });

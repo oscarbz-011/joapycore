@@ -2,6 +2,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
   IsArray,
+  IsEnum,
   IsInt,
   IsNumber,
   IsOptional,
@@ -11,6 +12,7 @@ import {
   Min,
   ValidateNested,
 } from 'class-validator';
+import { SaleType } from '@prisma/client';
 
 export class SaleOrderItemDto {
   @ApiProperty()
@@ -41,6 +43,22 @@ export class CreateSaleOrderDto {
   @ApiProperty()
   @IsUUID()
   customerId: string;
+
+  @ApiPropertyOptional({ description: 'Override del vendedor (solo con sales:manage)' })
+  @IsOptional()
+  @IsUUID()
+  sellerId?: string;
+
+  @ApiPropertyOptional({ enum: SaleType })
+  @IsOptional()
+  @IsEnum(SaleType)
+  saleType?: SaleType;
+
+  @ApiPropertyOptional({ description: 'Número de cuotas (solo para CREDIT)' })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  installments?: number;
 
   @ApiPropertyOptional()
   @IsOptional()

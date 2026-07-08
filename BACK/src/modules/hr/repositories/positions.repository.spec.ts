@@ -61,11 +61,13 @@ describe('PositionsRepository', () => {
 
       const result = await repository.create('tenant-1', { name: 'Vendedor' });
 
-      expect(prisma.position.upsert).toHaveBeenCalledWith({
-        where: { tenantId_name: { tenantId: 'tenant-1', name: 'Vendedor' } },
-        create: { name: 'Vendedor', tenantId: 'tenant-1' },
-        update: { isActive: true },
-      });
+      expect(prisma.position.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { tenantId_name: { tenantId: 'tenant-1', name: 'Vendedor' } },
+          create: { name: 'Vendedor', tenantId: 'tenant-1' },
+          update: expect.objectContaining({ isActive: true }),
+        }),
+      );
       expect(result.name).toBe('Vendedor');
     });
 
@@ -83,7 +85,9 @@ describe('PositionsRepository', () => {
 
       // upsert must fire with update: { isActive: true } — NO unique constraint error
       expect(prisma.position.upsert).toHaveBeenCalledWith(
-        expect.objectContaining({ update: { isActive: true } }),
+        expect.objectContaining({
+          update: expect.objectContaining({ isActive: true }),
+        }),
       );
       expect(result.isActive).toBe(true);
     });

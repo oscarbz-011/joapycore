@@ -28,6 +28,7 @@ describe('CustomersService', () => {
   let customersRepository: {
     findAll: jest.Mock;
     findById: jest.Mock;
+    findLastCode: jest.Mock;
     create: jest.Mock;
     update: jest.Mock;
     softDelete: jest.Mock;
@@ -37,6 +38,7 @@ describe('CustomersService', () => {
     customersRepository = {
       findAll: jest.fn(),
       findById: jest.fn(),
+      findLastCode: jest.fn().mockResolvedValue(null),
       create: jest.fn(),
       update: jest.fn(),
       softDelete: jest.fn(),
@@ -73,13 +75,30 @@ describe('CustomersService', () => {
   // ── create ─────────────────────────────────────────────────────────────────
 
   describe('create', () => {
-    it('delegates to repository with tenantId and dto', async () => {
+    it('auto-generates CLI-001 for the first customer and delegates to repository', async () => {
       const dto = { firstName: 'María', lastName: 'González', email: 'maria@ejemplo.com' };
+      customersRepository.findLastCode.mockResolvedValue(null);
       customersRepository.create.mockResolvedValue(makeCustomer());
 
       await service.create('tenant-1', dto);
 
-      expect(customersRepository.create).toHaveBeenCalledWith('tenant-1', dto);
+      expect(customersRepository.create).toHaveBeenCalledWith(
+        'tenant-1',
+        expect.objectContaining({ firstName: 'María', customerCode: 'CLI-001' }),
+      );
+    });
+
+    it('increments the customer code when prior customers exist', async () => {
+      const dto = { firstName: 'Ana', lastName: 'López' };
+      customersRepository.findLastCode.mockResolvedValue({ customerCode: 'CLI-003' });
+      customersRepository.create.mockResolvedValue(makeCustomer({ customerCode: 'CLI-004' }));
+
+      await service.create('tenant-1', dto);
+
+      expect(customersRepository.create).toHaveBeenCalledWith(
+        'tenant-1',
+        expect.objectContaining({ customerCode: 'CLI-004' }),
+      );
     });
   });
 

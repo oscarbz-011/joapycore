@@ -16,8 +16,9 @@ export class CustomersService {
     return customer;
   }
 
-  create(tenantId: string, dto: CreateCustomerDto) {
-    return this.customersRepository.create(tenantId, dto);
+  async create(tenantId: string, dto: CreateCustomerDto) {
+    const customerCode = await this.generateCustomerCode(tenantId);
+    return this.customersRepository.create(tenantId, { ...dto, customerCode });
   }
 
   async update(tenantId: string, id: string, dto: Partial<CreateCustomerDto>) {
@@ -28,5 +29,14 @@ export class CustomersService {
   async delete(tenantId: string, id: string) {
     await this.findOne(tenantId, id);
     return this.customersRepository.softDelete(tenantId, id);
+  }
+
+  private async generateCustomerCode(tenantId: string): Promise<string> {
+    const last = await this.customersRepository.findLastCode(tenantId);
+    if (!last?.customerCode) return 'CLI-001';
+    const match = last.customerCode.match(/^CLI-(\d+)$/);
+    if (!match) return 'CLI-001';
+    const next = parseInt(match[1], 10) + 1;
+    return `CLI-${String(next).padStart(3, '0')}`;
   }
 }

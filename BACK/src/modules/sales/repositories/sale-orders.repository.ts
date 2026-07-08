@@ -8,15 +8,34 @@ export class SaleOrdersRepository {
   constructor(private readonly prisma: PrismaService) {}
 
   private get include() {
+    const userSelect = { select: { id: true, firstName: true, lastName: true } };
     return {
       customer: true,
-      items: { include: { product: true, productUnits: true } },
+      items: { include: { product: true, productUnits: true, batch: true } },
+      createdBy: userSelect,
+      seller:    userSelect,
+      approvedBy: userSelect,
+      rejectedBy: userSelect,
+      invoice: { select: { id: true, status: true } },
     };
   }
 
-  findAll(tenantId: string) {
+  findPendingApprovals(tenantId: string) {
     return this.prisma.saleOrder.findMany({
-      where: { tenantId },
+      where: { tenantId, status: 'PENDING_CREDIT_APPROVAL' },
+      include: this.include,
+      orderBy: { createdAt: 'asc' },
+    });
+  }
+
+  findAll(tenantId: string, sellerId?: string) {
+    return this.prisma.saleOrder.findMany({
+      where: {
+        tenantId,
+        ...(sellerId
+          ? { OR: [{ sellerId }, { sellerId: null, createdById: sellerId }] }
+          : {}),
+      },
       include: this.include,
       orderBy: { createdAt: 'desc' },
     });

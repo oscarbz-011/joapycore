@@ -6,6 +6,7 @@ import {
   IsPositive,
   IsString,
   IsUUID,
+  Min,
 } from 'class-validator';
 
 export class UpdateProductDto {
@@ -55,4 +56,28 @@ export class UpdateProductDto {
   @IsOptional()
   @IsBoolean()
   isActive?: boolean;
+
+  @ApiPropertyOptional({ description: 'Peso en kilogramos' })
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 3 })
+  @Min(0)
+  weightKg?: number | null;
+
+  @ApiPropertyOptional({ description: 'Alto en centímetros' })
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 1 })
+  @Min(0)
+  heightCm?: number | null;
+
+  @ApiPropertyOptional({ description: 'Ancho en centímetros' })
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 1 })
+  @Min(0)
+  widthCm?: number | null;
+
+  @ApiPropertyOptional({ description: 'Profundidad en centímetros' })
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 1 })
+  @Min(0)
+  depthCm?: number | null;
 }

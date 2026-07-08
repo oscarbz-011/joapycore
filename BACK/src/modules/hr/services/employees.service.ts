@@ -11,6 +11,7 @@ import { EmployeesRepository } from '../repositories/employees.repository';
 import { CreateEmployeeDto } from '../dto/create-employee.dto';
 import { UpdateEmployeeDto } from '../dto/update-employee.dto';
 import { PrismaService } from '../../../prisma/prisma.service';
+import { buildUsernameBase, resolveUsername } from '../../../common/utils/username.util';
 
 const SALT_ROUNDS = 10;
 
@@ -51,6 +52,17 @@ export class EmployeesService {
         });
         if (existing) throw new ConflictException('El email ya está en uso');
 
+        // Auto-generate unique username: jose.benitez → jose.benitez2 …
+        const usernameBase = buildUsernameBase(dto.firstName, dto.lastName);
+        const takenMatches = await tx.user.findMany({
+          where: { username: { startsWith: usernameBase } },
+          select: { username: true },
+        });
+        const username = resolveUsername(
+          usernameBase,
+          takenMatches.map((u) => u.username).filter(Boolean) as string[],
+        );
+
         tempPassword = generateTempPassword();
         const passwordHash = await bcrypt.hash(tempPassword, SALT_ROUNDS);
 
@@ -58,6 +70,7 @@ export class EmployeesService {
           data: {
             tenantId,
             email: dto.email,
+            username,
             passwordHash,
             firstName: dto.firstName,
             lastName: dto.lastName,
@@ -65,6 +78,19 @@ export class EmployeesService {
           },
         });
         userId = user.id;
+
+        // Auto-assign the role linked to the employee's position
+        if (dto.positionId) {
+          const position = await tx.position.findFirst({
+            where: { id: dto.positionId, tenantId },
+            select: { roleId: true },
+          });
+          if (position?.roleId) {
+            await tx.userRole.create({
+              data: { userId: user.id, roleId: position.roleId },
+            });
+          }
+        }
       }
 
       const employee = await tx.employee.create({

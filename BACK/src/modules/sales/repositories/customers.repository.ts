@@ -19,7 +19,15 @@ export class CustomersRepository {
     });
   }
 
-  create(tenantId: string, dto: CreateCustomerDto) {
+  findLastCode(tenantId: string) {
+    return this.prisma.customer.findFirst({
+      where: { tenantId, customerCode: { startsWith: 'CLI-' } },
+      orderBy: { customerCode: 'desc' },
+      select: { customerCode: true },
+    });
+  }
+
+  create(tenantId: string, dto: CreateCustomerDto & { customerCode?: string }) {
     return this.prisma.customer.create({ data: { tenantId, ...dto } });
   }
 

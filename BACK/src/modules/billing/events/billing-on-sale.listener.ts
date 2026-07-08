@@ -29,31 +29,26 @@ export class BillingOnSaleListener {
   async handle(event: SaleOrderCompletedEvent) {
     const { tenantId, saleOrderId, order } = event;
 
+    // Idempotency: skip if an invoice already exists for this order.
+    // Prevents duplicate invoices if the event fires more than once.
+    const existing = await this.invoicesRepository.findBySaleOrder(tenantId, saleOrderId);
+    if (existing) return;
+
     const total = order.items.reduce((sum, item) => {
       const price =
-        typeof item.unitPrice === 'object'
-          ? item.unitPrice.toNumber()
-          : item.unitPrice;
+        typeof item.unitPrice === 'object' ? item.unitPrice.toNumber() : item.unitPrice;
       return sum + price * item.quantity;
     }, 0);
 
     const invoice = await this.prisma.$transaction(async (tx) => {
       const inv = await this.invoicesRepository.create(
-        {
-          tenantId,
-          saleOrderId,
-          status: 'ISSUED',
-          issuedAt: new Date(),
-          total,
-        },
+        { tenantId, saleOrderId, status: 'ISSUED', issuedAt: new Date(), total },
         tx,
       );
 
       for (const item of order.items) {
         const unitPrice =
-          typeof item.unitPrice === 'object'
-            ? item.unitPrice.toNumber()
-            : item.unitPrice;
+          typeof item.unitPrice === 'object' ? item.unitPrice.toNumber() : item.unitPrice;
         await this.invoicesRepository.createItem(
           {
             invoiceId: inv.id,

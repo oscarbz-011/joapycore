@@ -3,6 +3,8 @@ import {
   Controller,
   Delete,
   Get,
+  HttpCode,
+  HttpStatus,
   Param,
   Patch,
   Post,
@@ -17,6 +19,9 @@ import { CreateProductDto } from '../dto/create-product.dto';
 import { UpdateProductDto } from '../dto/update-product.dto';
 import { FilterProductDto } from '../dto/filter-product.dto';
 import { AddProductUnitsDto } from '../dto/add-product-units.dto';
+import { CreateStockMovementDto } from '../dto/create-stock-movement.dto';
+import { CreateProductSupplierDto } from '../dto/create-product-supplier.dto';
+import { UpdateProductSupplierDto } from '../dto/update-product-supplier.dto';
 
 @ApiTags('Inventory')
 @ApiBearerAuth()
@@ -33,6 +38,16 @@ export class ProductsController {
     @Query() filters: FilterProductDto,
   ) {
     return this.productsService.findAll(tenantId, filters);
+  }
+
+  @Get('with-stock')
+  @Permissions('inventory:read')
+  @ApiOperation({ summary: 'Listar productos con stock actual' })
+  findAllWithStock(
+    @CurrentTenant() tenantId: string,
+    @Query() filters: FilterProductDto,
+  ) {
+    return this.productsService.findAllWithStock(tenantId, filters);
   }
 
   @Get(':id')
@@ -67,6 +82,17 @@ export class ProductsController {
     return this.productsService.delete(tenantId, id);
   }
 
+  @Post(':id/stock-movements')
+  @Permissions('inventory:create')
+  @ApiOperation({ summary: 'Registrar movimiento de stock manual (IN / ADJUSTMENT)' })
+  addStockMovement(
+    @CurrentTenant() tenantId: string,
+    @Param('id') id: string,
+    @Body() dto: CreateStockMovementDto,
+  ) {
+    return this.productsService.addStockMovement(tenantId, id, dto);
+  }
+
   @Get(':id/units')
   @Permissions('inventory:read')
   @ApiOperation({ summary: 'Listar unidades serializadas del producto' })
@@ -83,5 +109,49 @@ export class ProductsController {
     @Body() dto: AddProductUnitsDto,
   ) {
     return this.productsService.addUnits(tenantId, id, dto);
+  }
+
+  // ── Suppliers ────────────────────────────────────────────────────────────────
+
+  @Get(':id/suppliers')
+  @Permissions('inventory:read')
+  @ApiOperation({ summary: 'Listar proveedores asociados al producto' })
+  getProductSuppliers(@CurrentTenant() tenantId: string, @Param('id') id: string) {
+    return this.productsService.getProductSuppliers(tenantId, id);
+  }
+
+  @Post(':id/suppliers')
+  @Permissions('inventory:update')
+  @ApiOperation({ summary: 'Asociar proveedor al producto' })
+  addProductSupplier(
+    @CurrentTenant() tenantId: string,
+    @Param('id') id: string,
+    @Body() dto: CreateProductSupplierDto,
+  ) {
+    return this.productsService.addProductSupplier(tenantId, id, dto);
+  }
+
+  @Patch(':id/suppliers/:supplierId')
+  @Permissions('inventory:update')
+  @ApiOperation({ summary: 'Actualizar asociación proveedor-producto' })
+  updateProductSupplier(
+    @CurrentTenant() tenantId: string,
+    @Param('id') id: string,
+    @Param('supplierId') supplierId: string,
+    @Body() dto: UpdateProductSupplierDto,
+  ) {
+    return this.productsService.updateProductSupplier(tenantId, id, supplierId, dto);
+  }
+
+  @Delete(':id/suppliers/:supplierId')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @Permissions('inventory:delete')
+  @ApiOperation({ summary: 'Desasociar proveedor del producto' })
+  removeProductSupplier(
+    @CurrentTenant() tenantId: string,
+    @Param('id') id: string,
+    @Param('supplierId') supplierId: string,
+  ) {
+    return this.productsService.removeProductSupplier(tenantId, id, supplierId);
   }
 }

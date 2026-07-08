@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { Prisma, StockMovementType } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
 
 export interface ProductFilters {
@@ -45,6 +45,13 @@ export class ProductsRepository {
     });
   }
 
+  // Fetches multiple products in a single query — use this in loops to avoid N+1.
+  findManyByIds(tenantId: string, ids: string[]) {
+    return this.prisma.product.findMany({
+      where: { tenantId, id: { in: ids }, deletedAt: null },
+    });
+  }
+
   create(
     tenantId: string,
     data: Omit<Prisma.ProductUncheckedCreateInput, 'tenantId'>,
@@ -66,6 +73,41 @@ export class ProductsRepository {
     });
   }
 
+  async findAllWithStock(tenantId: string, filters: ProductFilters = {}) {
+    const products = await this.findAll(tenantId, filters);
+    if (products.length === 0) return [];
+
+    const nonSerialized = products.filter((p) => !p.isSerialized).map((p) => p.id);
+    const serialized    = products.filter((p) =>  p.isSerialized).map((p) => p.id);
+
+    const [movSums, unitCounts] = await Promise.all([
+      nonSerialized.length > 0
+        ? this.prisma.stockMovement.groupBy({
+            by: ['productId'],
+            where: { tenantId, productId: { in: nonSerialized } },
+            _sum: { quantity: true },
+          })
+        : [],
+      serialized.length > 0
+        ? this.prisma.productUnit.groupBy({
+            by: ['productId'],
+            where: { tenantId, productId: { in: serialized }, status: 'IN_STOCK' },
+            _count: { id: true },
+          })
+        : [],
+    ]);
+
+    const stockMap = new Map<string, number>();
+    (movSums as { productId: string; _sum: { quantity: number | null } }[]).forEach((s) =>
+      stockMap.set(s.productId, s._sum.quantity ?? 0),
+    );
+    (unitCounts as { productId: string; _count: { id: number } }[]).forEach((s) =>
+      stockMap.set(s.productId, s._count.id),
+    );
+
+    return products.map((p) => ({ ...p, stock: stockMap.get(p.id) ?? 0 }));
+  }
+
   // Stock for non-serialized products: sum of movements
   async getStock(tenantId: string, productId: string): Promise<number> {
     const result = await this.prisma.stockMovement.aggregate({
@@ -79,6 +121,16 @@ export class ProductsRepository {
   getSerializedStock(tenantId: string, productId: string) {
     return this.prisma.productUnit.count({
       where: { tenantId, productId, status: 'IN_STOCK' },
+    });
+  }
+
+  createStockMovement(
+    tenantId: string,
+    productId: string,
+    data: { type: StockMovementType; quantity: number; notes?: string },
+  ) {
+    return this.prisma.stockMovement.create({
+      data: { tenantId, productId, ...data },
     });
   }
 }

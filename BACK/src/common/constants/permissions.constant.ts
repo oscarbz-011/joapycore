@@ -31,10 +31,12 @@ export const PERMISSIONS = [
   'sales:create',
   'sales:update',
   'sales:cancel',
+  'sales:manage',
   // Billing
   'billing:read',
   'billing:issue',
   'billing:cancel',
+  'billing:manage',
   // Payments
   'payments:read',
   'payments:register',

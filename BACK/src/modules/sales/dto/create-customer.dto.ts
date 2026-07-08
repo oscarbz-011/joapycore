@@ -7,6 +7,11 @@ export class CreateCustomerDto {
   @IsString()
   firstName: string;
 
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  secondFirstName?: string;
+
   @ApiProperty()
   @IsString()
   lastName: string;
@@ -14,7 +19,7 @@ export class CreateCustomerDto {
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
-  customerCode?: string;
+  secondLastName?: string;
 
   @ApiPropertyOptional({ enum: DocumentType })
   @IsOptional()
@@ -61,4 +66,36 @@ export class CreateCustomerDto {
   @IsOptional()
   @IsString()
   notes?: string;
+
+  // Structured delivery address — Casa
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  homeStreet?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  homeNeighborhood?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  homeReference?: string;
+
+  // Structured delivery address — Departamento / Apto
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  aptBuilding?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  aptFloor?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  aptNumber?: string;
 }

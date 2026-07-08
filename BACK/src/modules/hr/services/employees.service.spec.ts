@@ -53,6 +53,7 @@ describe('EmployeesService', () => {
     $transaction: jest.Mock;
     user: {
       findUnique: jest.Mock;
+      findMany: jest.Mock;
       create: jest.Mock;
       update: jest.Mock;
       updateMany: jest.Mock;
@@ -71,6 +72,7 @@ describe('EmployeesService', () => {
       ),
       user: {
         findUnique: jest.fn(),
+        findMany: jest.fn().mockResolvedValue([]),
         create: jest.fn(),
         update: jest.fn(),
         updateMany: jest.fn(),

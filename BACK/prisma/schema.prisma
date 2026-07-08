@@ -96,6 +96,11 @@ enum InvoiceStatus {
   CANCELLED
 }
 
+enum CreditNoteStatus {
+  ISSUED
+  APPLIED
+}
+
 enum ARStatus {
   PENDING
   PARTIAL
@@ -186,11 +191,13 @@ model Tenant {
   users          User[]
   roles          Role[]
   tenantModules  TenantModule[]
+  creditNotes    CreditNote[]
   branches       Branch[]
   categories     Category[]
   brands         Brand[]
-  products       Product[]
-  productUnits   ProductUnit[]
+  products         Product[]
+  productSuppliers ProductSupplier[]
+  productUnits     ProductUnit[]
   productBatches ProductBatch[]
   stockMovements StockMovement[]
   customers      Customer[]
@@ -210,6 +217,7 @@ model Tenant {
   fileRecords    FileRecord[]
   creditConfig   CreditConfig?
   pricingConfig  PricingConfig?
+  saleTargets    SaleTarget[]
 
   @@map("tenants")
 }
@@ -270,8 +278,10 @@ model User {
   employee             Employee?
   auditLogs            AuditLog[]
   createdSaleOrders    SaleOrder[]      @relation("SaleCreator")
+  selledSaleOrders     SaleOrder[]      @relation("SaleSeller")
   approvedSaleOrders   SaleOrder[]      @relation("CreditApprover")
   rejectedSaleOrders   SaleOrder[]      @relation("CreditRejecter")
+  saleTargets          SaleTarget[]
 
   @@map("users")
 }
@@ -296,6 +306,7 @@ model Role {
   tenant          Tenant           @relation(fields: [tenantId], references: [id])
   userRoles       UserRole[]
   rolePermissions RolePermission[]
+  positions       Position[]
 
   @@unique([tenantId, name])
   @@map("roles")
@@ -385,6 +396,10 @@ model Product {
   isSerialized Boolean   @default(false) @map("is_serialized")
   usesLots     Boolean   @default(false) @map("uses_lots")
   unit         String    @default("unidad")
+  weightKg     Float?    @map("weight_kg")
+  heightCm     Float?    @map("height_cm")
+  widthCm      Float?    @map("width_cm")
+  depthCm      Float?    @map("depth_cm")
   costPrice    Decimal   @db.Decimal(12, 2) @map("cost_price")
   salePrice    Decimal   @db.Decimal(12, 2) @map("sale_price")
   stockMin     Int       @default(0) @map("stock_min")
@@ -404,8 +419,27 @@ model Product {
   stockMovements     StockMovement[]
   purchaseOrderItems PurchaseOrderItem[]
   saleOrderItems     SaleOrderItem[]
+  productSuppliers   ProductSupplier[]
 
   @@map("products")
+}
+
+model ProductSupplier {
+  id          String   @id @default(uuid())
+  tenantId    String   @map("tenant_id")
+  productId   String   @map("product_id")
+  supplierId  String   @map("supplier_id")
+  costPrice   Decimal? @db.Decimal(12, 2) @map("cost_price")
+  isPreferred Boolean  @default(false) @map("is_preferred")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  tenant   Tenant   @relation(fields: [tenantId], references: [id])
+  product  Product  @relation(fields: [productId], references: [id])
+  supplier Supplier @relation(fields: [supplierId], references: [id])
+
+  @@unique([productId, supplierId])
+  @@map("product_suppliers")
 }
 
 model ProductUnit {
@@ -487,8 +521,9 @@ model Supplier {
   createdAt   DateTime  @default(now()) @map("created_at")
   updatedAt   DateTime  @updatedAt @map("updated_at")
 
-  tenant         Tenant          @relation(fields: [tenantId], references: [id])
-  purchaseOrders PurchaseOrder[]
+  tenant           Tenant            @relation(fields: [tenantId], references: [id])
+  purchaseOrders   PurchaseOrder[]
+  productSuppliers ProductSupplier[]
 
   @@map("suppliers")
 }
@@ -536,24 +571,37 @@ model PurchaseOrderItem {
 // ─── Sales ────────────────────────────────────────────────────────────────────
 
 model Customer {
-  id             String        @id @default(uuid())
-  tenantId       String        @map("tenant_id")
-  customerCode   String?       @map("customer_code")
-  firstName      String        @map("first_name")
-  lastName       String        @map("last_name")
-  documentType   DocumentType? @map("document_type")
-  documentNumber String?       @map("document_number")
-  email          String?
-  phone          String?
-  address        String?
-  city           String?
-  profession     String?
-  monthlyIncome  Decimal?      @db.Decimal(12, 2) @map("monthly_income")
-  notes          String?
-  isActive       Boolean       @default(true) @map("is_active")
-  deletedAt      DateTime?     @map("deleted_at")
-  createdAt      DateTime      @default(now()) @map("created_at")
-  updatedAt      DateTime      @updatedAt @map("updated_at")
+  id              String        @id @default(uuid())
+  tenantId        String        @map("tenant_id")
+  customerCode    String?       @map("customer_code")
+  firstName       String        @map("first_name")
+  secondFirstName String?       @map("second_first_name")
+  lastName        String        @map("last_name")
+  secondLastName  String?       @map("second_last_name")
+  documentType    DocumentType? @map("document_type")
+  documentNumber  String?       @map("document_number")
+  email           String?
+  phone           String?
+  address         String?
+  city            String?
+  profession      String?
+  monthlyIncome   Decimal?      @db.Decimal(12, 2) @map("monthly_income")
+  notes           String?
+
+  // Structured delivery address — Casa
+  homeStreet       String? @map("home_street")
+  homeNeighborhood String? @map("home_neighborhood")
+  homeReference    String? @map("home_reference")
+
+  // Structured delivery address — Departamento / Apto
+  aptBuilding      String? @map("apt_building")
+  aptFloor         String? @map("apt_floor")
+  aptNumber        String? @map("apt_number")
+
+  isActive  Boolean   @default(true) @map("is_active")
+  deletedAt DateTime? @map("deleted_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
 
   tenant     Tenant      @relation(fields: [tenantId], references: [id])
   saleOrders SaleOrder[]
@@ -568,6 +616,7 @@ model SaleOrder {
   customerId String          @map("customer_id")
   branchId   String?         @map("branch_id")
   createdById String?        @map("created_by_id")
+  sellerId   String?         @map("seller_id")
   status     SaleOrderStatus @default(PENDING)
   saleType   SaleType        @default(CASH) @map("sale_type")
   installments Int?
@@ -589,6 +638,7 @@ model SaleOrder {
   customer   Customer        @relation(fields: [customerId], references: [id])
   branch     Branch?         @relation(fields: [branchId], references: [id])
   createdBy  User?           @relation("SaleCreator", fields: [createdById], references: [id])
+  seller     User?           @relation("SaleSeller", fields: [sellerId], references: [id])
   approvedBy User?           @relation("CreditApprover", fields: [approvedById], references: [id])
   rejectedBy User?           @relation("CreditRejecter", fields: [rejectedById], references: [id])
   items      SaleOrderItem[]
@@ -629,13 +679,28 @@ model Invoice {
   dueDate     DateTime?     @map("due_date")
   total       Decimal       @db.Decimal(12, 2)
   notes       String?
-  createdAt   DateTime      @default(now()) @map("created_at")
-  updatedAt   DateTime      @updatedAt @map("updated_at")
+
+  // Numbering (timbrado / serie)
+  invoiceNumber String? @map("invoice_number")
+  invoicePrefix String? @map("invoice_prefix")
+
+  // PDF storage
+  pdfUrl String? @map("pdf_url")
+
+  // SIFEN / e-billing fields (null until electronic billing integration)
+  cdc         String?   // Código de Control Digital
+  xmlContent  String?   @map("xml_content")
+  qrUrl       String?   @map("qr_url")
+  electronicAt DateTime? @map("electronic_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   tenant             Tenant              @relation(fields: [tenantId], references: [id])
   saleOrder          SaleOrder           @relation(fields: [saleOrderId], references: [id])
   items              InvoiceItem[]
   accountsReceivable AccountsReceivable?
+  creditNotes        CreditNote[]
 
   @@map("invoices")
 }
@@ -656,6 +721,23 @@ model InvoiceItem {
   invoice Invoice @relation(fields: [invoiceId], references: [id])
 
   @@map("invoice_items")
+}
+
+model CreditNote {
+  id        String           @id @default(uuid())
+  tenantId  String           @map("tenant_id")
+  invoiceId String           @map("invoice_id")
+  number    String?          @map("number")
+  reason    String
+  total     Decimal          @db.Decimal(12, 2)
+  status    CreditNoteStatus @default(ISSUED)
+  issuedAt  DateTime         @default(now()) @map("issued_at")
+  createdAt DateTime         @default(now()) @map("created_at")
+
+  tenant  Tenant  @relation(fields: [tenantId], references: [id])
+  invoice Invoice @relation(fields: [invoiceId], references: [id])
+
+  @@map("credit_notes")
 }
 
 // ─── Payments ─────────────────────────────────────────────────────────────────
@@ -708,6 +790,7 @@ model Area {
   parent    Area?      @relation("AreaHierarchy", fields: [parentId], references: [id])
   children  Area[]     @relation("AreaHierarchy")
   employees Employee[]
+  positions Position[]
 
   @@unique([tenantId, name])
   @@map("areas")
@@ -716,10 +799,14 @@ model Area {
 model Position {
   id       String  @id @default(uuid())
   tenantId String  @map("tenant_id")
+  areaId   String? @map("area_id")
+  roleId   String? @map("role_id")
   name     String
   isActive Boolean @default(true) @map("is_active")
 
   tenant    Tenant     @relation(fields: [tenantId], references: [id])
+  area      Area?      @relation(fields: [areaId], references: [id])
+  role      Role?      @relation(fields: [roleId], references: [id])
   employees Employee[]
 
   @@unique([tenantId, name])
@@ -986,4 +1073,21 @@ model PricingConfig {
   tenant Tenant @relation(fields: [tenantId], references: [id])
 
   @@map("pricing_configs")
+}
+
+// ─── Sales targets ────────────────────────────────────────────────────────────
+
+model SaleTarget {
+  id           String   @id @default(uuid())
+  tenantId     String   @map("tenant_id")
+  userId       String?  @map("user_id")   // null = company-wide target
+  period       String   // "YYYY-MM"
+  targetAmount Decimal  @db.Decimal(14, 2) @map("target_amount")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+  user   User?  @relation(fields: [userId], references: [id])
+
+  @@map("sale_targets")
 }

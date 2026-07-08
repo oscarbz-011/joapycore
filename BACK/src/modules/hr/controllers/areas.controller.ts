@@ -15,6 +15,8 @@ class CreateAreaDto {
 
 class CreatePositionDto {
   @ApiProperty() @IsString() name: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() areaId?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() roleId?: string;
 }
 
 @ApiTags('HR')

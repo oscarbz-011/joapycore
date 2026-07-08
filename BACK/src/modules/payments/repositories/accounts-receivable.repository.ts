@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
+import { PrismaClientOrTx } from '../../../prisma/types';
 
 @Injectable()
 export class AccountsReceivableRepository {
@@ -23,8 +24,8 @@ export class AccountsReceivableRepository {
     });
   }
 
-  findById(tenantId: string, id: string) {
-    return this.prisma.accountsReceivable.findFirst({
+  findById(tenantId: string, id: string, client: PrismaClientOrTx = this.prisma) {
+    return client.accountsReceivable.findFirst({
       where: { id, tenantId },
       include: {
         invoice: {
@@ -37,10 +38,44 @@ export class AccountsReceivableRepository {
     });
   }
 
-  create(data: Prisma.AccountsReceivableUncheckedCreateInput) {
-    return this.prisma.accountsReceivable.create({ data });
+  findByInvoice(tenantId: string, invoiceId: string) {
+    return this.prisma.accountsReceivable.findFirst({
+      where: { tenantId, invoiceId },
+    });
   }
 
+  create(
+    data: Prisma.AccountsReceivableUncheckedCreateInput,
+    client: PrismaClientOrTx = this.prisma,
+  ) {
+    return client.accountsReceivable.create({ data });
+  }
+
+  // Atomic increment — eliminates read-modify-write race condition
+  incrementPaid(
+    id: string,
+    amount: number,
+    client: PrismaClientOrTx = this.prisma,
+  ) {
+    return client.accountsReceivable.update({
+      where: { id },
+      data: { paidAmount: { increment: amount } },
+      select: { paidAmount: true, amount: true, invoiceId: true },
+    });
+  }
+
+  updateStatus(
+    id: string,
+    status: 'PENDING' | 'PARTIAL' | 'PAID' | 'CANCELLED',
+    client: PrismaClientOrTx = this.prisma,
+  ) {
+    return client.accountsReceivable.update({
+      where: { id },
+      data: { status },
+    });
+  }
+
+  // Kept for backwards compat with existing tests
   updateAmounts(
     id: string,
     paidAmount: number,

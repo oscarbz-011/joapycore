@@ -39,6 +39,15 @@ describe('ProductsService', () => {
     createMany: jest.Mock;
     findByProduct: jest.Mock;
   };
+  let productSuppliersRepository: {
+    findByProduct: jest.Mock;
+    findOne: jest.Mock;
+    supplierExistsForTenant: jest.Mock;
+    create: jest.Mock;
+    update: jest.Mock;
+    delete: jest.Mock;
+    clearPreferred: jest.Mock;
+  };
   let eventEmitter: { emit: jest.Mock };
 
   beforeEach(() => {
@@ -55,11 +64,21 @@ describe('ProductsService', () => {
       createMany: jest.fn(),
       findByProduct: jest.fn(),
     };
+    productSuppliersRepository = {
+      findByProduct: jest.fn(),
+      findOne: jest.fn(),
+      supplierExistsForTenant: jest.fn(),
+      create: jest.fn(),
+      update: jest.fn(),
+      delete: jest.fn(),
+      clearPreferred: jest.fn(),
+    };
     eventEmitter = { emit: jest.fn() };
 
     service = new ProductsService(
       productsRepository as any,
       productUnitsRepository as any,
+      productSuppliersRepository as any,
       eventEmitter as any,
     );
   });

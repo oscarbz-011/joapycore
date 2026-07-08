@@ -5,7 +5,6 @@ import {
 } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PrismaService } from '../../../prisma/prisma.service';
-import { ProductUnitsRepository } from '../../inventory/repositories/product-units.repository';
 import { ProductsRepository } from '../../inventory/repositories/products.repository';
 import { CreateSaleOrderDto } from '../dto/create-sale-order.dto';
 import { SaleOrdersRepository } from '../repositories/sale-orders.repository';
@@ -17,12 +16,68 @@ export class SaleOrdersService {
     private readonly prisma: PrismaService,
     private readonly saleOrdersRepository: SaleOrdersRepository,
     private readonly productsRepository: ProductsRepository,
-    private readonly productUnitsRepository: ProductUnitsRepository,
     private readonly eventEmitter: EventEmitter2,
   ) {}
 
-  findAll(tenantId: string) {
-    return this.saleOrdersRepository.findAll(tenantId);
+  findAll(tenantId: string, sellerId?: string) {
+    return this.saleOrdersRepository.findAll(tenantId, sellerId);
+  }
+
+  findPendingApprovals(tenantId: string) {
+    return this.saleOrdersRepository.findPendingApprovals(tenantId);
+  }
+
+  async approveCredit(tenantId: string, id: string, userId?: string) {
+    // Atomic transition: only succeeds if current status is PENDING_CREDIT_APPROVAL.
+    // Eliminates TOCTOU race between two concurrent approve calls.
+    const result = await this.prisma.saleOrder.updateMany({
+      where: { id, tenantId, status: 'PENDING_CREDIT_APPROVAL' },
+      data: { status: 'CREDIT_APPROVED', approvedById: userId ?? null, approvedAt: new Date() },
+    });
+    if (result.count === 0) {
+      throw new UnprocessableEntityException(
+        'Solo los pedidos en espera de aprobación de crédito pueden aprobarse',
+      );
+    }
+    this.eventEmitter.emit('audit.log', {
+      tenantId,
+      userId,
+      module: 'sales',
+      action: 'sale.credit.approved',
+      resourceId: id,
+    } satisfies AuditLogEvent);
+    return this.saleOrdersRepository.findById(tenantId, id);
+  }
+
+  async rejectCredit(
+    tenantId: string,
+    id: string,
+    reason: string,
+    userId?: string,
+  ) {
+    // Atomic transition: only succeeds if current status is PENDING_CREDIT_APPROVAL.
+    const result = await this.prisma.saleOrder.updateMany({
+      where: { id, tenantId, status: 'PENDING_CREDIT_APPROVAL' },
+      data: {
+        status: 'CREDIT_REJECTED',
+        rejectedById: userId ?? null,
+        rejectedAt: new Date(),
+        rejectionReason: reason,
+      },
+    });
+    if (result.count === 0) {
+      throw new UnprocessableEntityException(
+        'Solo los pedidos en espera de aprobación de crédito pueden rechazarse',
+      );
+    }
+    this.eventEmitter.emit('audit.log', {
+      tenantId,
+      userId,
+      module: 'sales',
+      action: 'sale.credit.rejected',
+      resourceId: id,
+    } satisfies AuditLogEvent);
+    return this.saleOrdersRepository.findById(tenantId, id);
   }
 
   async findOne(tenantId: string, id: string) {
@@ -31,25 +86,38 @@ export class SaleOrdersService {
     return order;
   }
 
-  async create(tenantId: string, dto: CreateSaleOrderDto, userId?: string) {
+  async create(
+    tenantId: string,
+    dto: CreateSaleOrderDto,
+    userId?: string,
+    canManage = false,
+  ) {
+    const effectiveSellerId = canManage && dto.sellerId ? dto.sellerId : (userId ?? null);
+    const isCreditSale = dto.saleType === 'CREDIT';
+
+    // Batch-fetch all products in a single query — avoids N+1 inside the loop.
+    const productIds = dto.items.map((i) => i.productId);
+    const products = await this.productsRepository.findManyByIds(tenantId, productIds);
+    const productMap = new Map(products.map((p) => [p.id, p]));
+
     return this.prisma.$transaction(async (tx) => {
       const order = await tx.saleOrder.create({
         data: {
           tenantId,
           customerId: dto.customerId,
+          createdById: userId ?? null,
+          sellerId: effectiveSellerId,
+          saleType: dto.saleType ?? 'CASH',
+          installments: isCreditSale ? (dto.installments ?? null) : null,
           orderDate: new Date(),
           notes: dto.notes,
-          status: 'PENDING',
+          status: isCreditSale ? 'PENDING_CREDIT_APPROVAL' : 'PENDING',
         },
       });
 
       for (const item of dto.items) {
-        const product = await this.productsRepository.findById(
-          tenantId,
-          item.productId,
-        );
-        if (!product)
-          throw new NotFoundException(`Product ${item.productId} not found`);
+        const product = productMap.get(item.productId);
+        if (!product) throw new NotFoundException(`Product ${item.productId} not found`);
 
         if (product.isSerialized) {
           const serials = item.serialNumbers ?? [];
@@ -72,17 +140,9 @@ export class SaleOrdersService {
         if (product.isSerialized && (item.serialNumbers?.length ?? 0) > 0) {
           for (const serial of item.serialNumbers!) {
             const unit = await tx.productUnit.findFirst({
-              where: {
-                tenantId,
-                productId: item.productId,
-                serialNumber: serial,
-              },
+              where: { tenantId, productId: item.productId, serialNumber: serial },
             });
-            if (!unit) {
-              throw new NotFoundException(
-                `Serial number "${serial}" not found`,
-              );
-            }
+            if (!unit) throw new NotFoundException(`Serial number "${serial}" not found`);
             if (unit.status !== 'IN_STOCK') {
               throw new UnprocessableEntityException(
                 `Serial "${serial}" is not available (status: ${unit.status})`,
@@ -113,21 +173,28 @@ export class SaleOrdersService {
   }
 
   async confirm(tenantId: string, id: string, userId?: string) {
-    const order = await this.findOne(tenantId, id);
-    if (order.status !== 'PENDING') {
+    // Atomic status transition — prevents TOCTOU race between two concurrent confirm calls.
+    // If the order is not in an approvable state, updateMany returns count=0.
+    const transitioned = await this.prisma.saleOrder.updateMany({
+      where: { id, tenantId, status: { in: ['PENDING', 'CREDIT_APPROVED'] } },
+      data: { status: 'CONFIRMED' },
+    });
+    if (transitioned.count === 0) {
       throw new UnprocessableEntityException(
-        'Only PENDING orders can be confirmed',
+        'Only PENDING or CREDIT_APPROVED orders can be confirmed',
       );
     }
 
+    // Batch-fetch all products in a single query — avoids N+1 inside the loop.
+    const order = await this.findOne(tenantId, id);
+    const productIds = order.items.map((i) => i.productId);
+    const products = await this.productsRepository.findManyByIds(tenantId, productIds);
+    const productMap = new Map(products.map((p) => [p.id, p]));
+
     await this.prisma.$transaction(async (tx) => {
       for (const item of order.items) {
-        const product = await this.productsRepository.findById(
-          tenantId,
-          item.productId,
-        );
-        if (!product)
-          throw new NotFoundException(`Product ${item.productId} not found`);
+        const product = productMap.get(item.productId);
+        if (!product) throw new NotFoundException(`Product ${item.productId} not found`);
 
         if (product.isSerialized) {
           const units = await tx.productUnit.findMany({
@@ -151,13 +218,7 @@ export class SaleOrdersService {
               data: { status: 'SOLD' },
             });
             await tx.stockMovement.create({
-              data: {
-                tenantId,
-                productId: item.productId,
-                type: 'OUT',
-                quantity: 1,
-                referenceId: item.id,
-              },
+              data: { tenantId, productId: item.productId, type: 'OUT', quantity: -1, referenceId: item.id },
             });
           }
         } else {
@@ -166,25 +227,16 @@ export class SaleOrdersService {
               tenantId,
               productId: item.productId,
               type: 'OUT',
-              quantity: item.quantity,
+              quantity: -item.quantity,
               referenceId: item.id,
             },
           });
         }
       }
-
-      await tx.saleOrder.update({
-        where: { id },
-        data: { status: 'CONFIRMED' },
-      });
     });
 
     const confirmed = await this.saleOrdersRepository.findById(tenantId, id);
-    this.eventEmitter.emit('sale.order.completed', {
-      tenantId,
-      saleOrderId: id,
-      order: confirmed,
-    });
+    this.eventEmitter.emit('sale.order.completed', { tenantId, saleOrderId: id, order: confirmed });
     this.eventEmitter.emit('audit.log', {
       tenantId,
       userId,

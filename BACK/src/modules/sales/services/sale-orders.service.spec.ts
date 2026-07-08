@@ -51,22 +51,24 @@ describe('SaleOrdersService', () => {
   let saleOrdersRepository: {
     findAll: jest.Mock;
     findById: jest.Mock;
+    findPendingApprovals: jest.Mock;
   };
-  let productsRepository: { findById: jest.Mock };
-  let productUnitsRepository: jest.Mock;
+  let productsRepository: { findManyByIds: jest.Mock };
   let eventEmitter: { emit: jest.Mock };
-  let prisma: { $transaction: jest.Mock; saleOrder: { update: jest.Mock } };
+  let prisma: {
+    $transaction: jest.Mock;
+    saleOrder: { update: jest.Mock; updateMany: jest.Mock };
+  };
 
   beforeEach(() => {
     saleOrdersRepository = {
       findAll: jest.fn(),
       findById: jest.fn(),
+      findPendingApprovals: jest.fn(),
     };
-    productsRepository = { findById: jest.fn() };
-    productUnitsRepository = jest.fn();
+    productsRepository = { findManyByIds: jest.fn() };
     eventEmitter = { emit: jest.fn() };
 
-    // Minimal $transaction mock — runs the callback with a tx proxy
     const tx = {
       saleOrder: {
         create: jest.fn().mockResolvedValue({ id: 'order-1' }),
@@ -83,14 +85,16 @@ describe('SaleOrdersService', () => {
     };
     prisma = {
       $transaction: jest.fn().mockImplementation((cb) => cb(tx)),
-      saleOrder: { update: jest.fn().mockResolvedValue(makeOrder({ status: 'CANCELLED' })) },
+      saleOrder: {
+        update: jest.fn().mockResolvedValue(makeOrder({ status: 'CANCELLED' })),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
     };
 
     service = new SaleOrdersService(
       prisma as any,
       saleOrdersRepository as any,
       productsRepository as any,
-      productUnitsRepository as any,
       eventEmitter as any,
     );
   });
@@ -98,10 +102,16 @@ describe('SaleOrdersService', () => {
   // ── findAll ────────────────────────────────────────────────────────────────
 
   describe('findAll', () => {
-    it('delegates to repository', () => {
+    it('delegates to repository without seller filter for managers', () => {
       saleOrdersRepository.findAll.mockResolvedValue([makeOrder()]);
       service.findAll('tenant-1');
-      expect(saleOrdersRepository.findAll).toHaveBeenCalledWith('tenant-1');
+      expect(saleOrdersRepository.findAll).toHaveBeenCalledWith('tenant-1', undefined);
+    });
+
+    it('passes sellerId filter for non-managers', () => {
+      saleOrdersRepository.findAll.mockResolvedValue([makeOrder()]);
+      service.findAll('tenant-1', 'user-42');
+      expect(saleOrdersRepository.findAll).toHaveBeenCalledWith('tenant-1', 'user-42');
     });
   });
 
@@ -129,7 +139,7 @@ describe('SaleOrdersService', () => {
     };
 
     it('creates a PENDING order with non-serialized product', async () => {
-      productsRepository.findById.mockResolvedValue(makeProduct({ isSerialized: false }));
+      productsRepository.findManyByIds.mockResolvedValue([makeProduct({ isSerialized: false })]);
 
       const result = await service.create('tenant-1', baseDto);
 
@@ -138,13 +148,13 @@ describe('SaleOrdersService', () => {
     });
 
     it('throws NotFoundException when product does not exist', async () => {
-      productsRepository.findById.mockResolvedValue(null);
+      productsRepository.findManyByIds.mockResolvedValue([]);
 
       await expect(service.create('tenant-1', baseDto)).rejects.toBeInstanceOf(NotFoundException);
     });
 
     it('throws UnprocessableEntityException when serialized product has wrong serial count', async () => {
-      productsRepository.findById.mockResolvedValue(makeProduct({ isSerialized: true }));
+      productsRepository.findManyByIds.mockResolvedValue([makeProduct({ isSerialized: true })]);
 
       const dto = {
         customerId: 'cust-1',
@@ -167,8 +177,8 @@ describe('SaleOrdersService', () => {
   // ── confirm ────────────────────────────────────────────────────────────────
 
   describe('confirm', () => {
-    it('throws UnprocessableEntityException when order is not PENDING', async () => {
-      saleOrdersRepository.findById.mockResolvedValue(makeOrder({ status: 'CONFIRMED' }));
+    it('throws UnprocessableEntityException when order is not in a confirmable status', async () => {
+      prisma.saleOrder.updateMany.mockResolvedValue({ count: 0 });
 
       await expect(service.confirm('tenant-1', 'order-1')).rejects.toBeInstanceOf(
         UnprocessableEntityException,
@@ -178,13 +188,13 @@ describe('SaleOrdersService', () => {
     it('confirms a PENDING order with non-serialized products and emits event', async () => {
       const order = makeOrder({
         status: 'PENDING',
-        items: [makeOrderItem({ isSerialized: false })],
+        items: [makeOrderItem()],
       });
       saleOrdersRepository.findById
-        .mockResolvedValueOnce(order)  // findOne check
-        .mockResolvedValueOnce(makeOrder({ status: 'CONFIRMED' })); // post-confirm fetch
+        .mockResolvedValueOnce(order)                                // findOne inside confirm
+        .mockResolvedValueOnce(makeOrder({ status: 'CONFIRMED' })); // final fetch
 
-      productsRepository.findById.mockResolvedValue(makeProduct({ isSerialized: false }));
+      productsRepository.findManyByIds.mockResolvedValue([makeProduct({ isSerialized: false })]);
 
       await service.confirm('tenant-1', 'order-1');
 
@@ -215,6 +225,69 @@ describe('SaleOrdersService', () => {
         expect.objectContaining({ data: { status: 'CANCELLED' } }),
       );
       expect(result).toBeDefined();
+    });
+  });
+
+  // ── approveCredit ─────────────────────────────────────────────────────────
+
+  describe('approveCredit', () => {
+    it('throws UnprocessableEntityException when order is not pending approval', async () => {
+      prisma.saleOrder.updateMany.mockResolvedValue({ count: 0 });
+
+      await expect(service.approveCredit('tenant-1', 'order-1')).rejects.toBeInstanceOf(
+        UnprocessableEntityException,
+      );
+    });
+
+    it('approves a PENDING_CREDIT_APPROVAL order', async () => {
+      prisma.saleOrder.updateMany.mockResolvedValue({ count: 1 });
+      saleOrdersRepository.findById.mockResolvedValue(
+        makeOrder({ status: 'CREDIT_APPROVED' }),
+      );
+
+      const result = await service.approveCredit('tenant-1', 'order-1', 'user-1');
+
+      expect(prisma.saleOrder.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ status: 'PENDING_CREDIT_APPROVAL' }),
+          data: expect.objectContaining({ status: 'CREDIT_APPROVED' }),
+        }),
+      );
+      expect(result?.status).toBe('CREDIT_APPROVED');
+    });
+  });
+
+  // ── rejectCredit ─────────────────────────────────────────────────────────
+
+  describe('rejectCredit', () => {
+    it('throws UnprocessableEntityException when order is not pending approval', async () => {
+      prisma.saleOrder.updateMany.mockResolvedValue({ count: 0 });
+
+      await expect(
+        service.rejectCredit('tenant-1', 'order-1', 'motivo insuficiente fondos'),
+      ).rejects.toBeInstanceOf(UnprocessableEntityException);
+    });
+
+    it('rejects a PENDING_CREDIT_APPROVAL order', async () => {
+      prisma.saleOrder.updateMany.mockResolvedValue({ count: 1 });
+      saleOrdersRepository.findById.mockResolvedValue(
+        makeOrder({ status: 'CREDIT_REJECTED' }),
+      );
+
+      const result = await service.rejectCredit(
+        'tenant-1',
+        'order-1',
+        'Saldo insuficiente',
+        'user-1',
+      );
+
+      expect(prisma.saleOrder.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ status: 'PENDING_CREDIT_APPROVAL' }),
+          data: expect.objectContaining({ status: 'CREDIT_REJECTED' }),
+        }),
+      );
+      expect(result?.status).toBe('CREDIT_REJECTED');
     });
   });
 });

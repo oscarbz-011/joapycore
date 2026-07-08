@@ -2,11 +2,13 @@ import { Module } from '@nestjs/common';
 import { BrandsController } from './controllers/brands.controller';
 import { CategoriesController } from './controllers/categories.controller';
 import { ProductsController } from './controllers/products.controller';
+import { InventoryOnInvoiceListener } from './events/inventory-on-invoice.listener';
 import { InventoryOnTenantListener } from './events/inventory-on-tenant.listener';
 import { BrandsRepository } from './repositories/brands.repository';
 import { CategoriesRepository } from './repositories/categories.repository';
 import { ProductUnitsRepository } from './repositories/product-units.repository';
 import { ProductsRepository } from './repositories/products.repository';
+import { ProductSuppliersRepository } from './repositories/product-suppliers.repository';
 import { BrandsService } from './services/brands.service';
 import { CategoriesService } from './services/categories.service';
 import { ProductsService } from './services/products.service';
@@ -21,7 +23,9 @@ import { ProductsService } from './services/products.service';
     CategoriesRepository,
     ProductsRepository,
     ProductUnitsRepository,
+    ProductSuppliersRepository,
     InventoryOnTenantListener,
+    InventoryOnInvoiceListener,
   ],
   exports: [ProductsRepository, ProductUnitsRepository, CategoriesRepository],
 })

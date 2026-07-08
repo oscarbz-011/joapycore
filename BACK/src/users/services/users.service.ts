@@ -45,13 +45,18 @@ export class UsersService {
     const existing = await this.usersRepository.findByEmail(dto.email);
     if (existing) throw new ConflictException('Email already in use');
 
+    const username = await this.usersRepository.generateUniqueUsername(
+      dto.firstName,
+      dto.lastName,
+    );
+
     const passwordHash = await bcrypt.hash(dto.password, SALT_ROUNDS);
     const user = await this.usersRepository.create(tenantId, {
       email: dto.email,
       passwordHash,
       firstName: dto.firstName,
       lastName: dto.lastName,
-      username: dto.username,
+      username,
     });
     this.eventEmitter.emit('audit.log', {
       tenantId,
