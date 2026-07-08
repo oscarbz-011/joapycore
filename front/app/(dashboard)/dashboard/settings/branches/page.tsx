@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -51,16 +51,16 @@ function BranchForm({ initial, onClose }: { initial?: Branch; onClose: () => voi
   });
 
   const inputCls =
-    'w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500';
-  const labelCls = 'block text-xs font-medium text-slate-600 mb-1';
+    'w-full rounded-lg border border-border-strong bg-surface text-ink px-3 py-2 text-sm focus:border-border-strong focus:outline-none focus:ring-1 focus:ring-border-strong';
+  const labelCls = 'block text-xs font-medium text-muted mb-1';
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
-        <h2 className="text-sm font-semibold text-slate-900">
+      <div className="flex items-center justify-between border-b border-border px-5 py-4">
+        <h2 className="text-sm font-semibold text-ink">
           {initial ? initial.name : 'Nueva sucursal'}
         </h2>
-        <button onClick={onClose} className="rounded-md p-1 text-slate-400 hover:bg-slate-100">
+        <button onClick={onClose} className="rounded-md p-1 text-faint hover:bg-surface-2">
           <X size={18} />
         </button>
       </div>
@@ -105,9 +105,9 @@ function BranchForm({ initial, onClose }: { initial?: Branch; onClose: () => voi
             type="checkbox"
             checked={form.isMain as boolean}
             onChange={(e) => set('isMain', e.target.checked)}
-            className="h-4 w-4 rounded border-slate-300 accent-slate-900"
+            className="h-4 w-4 rounded border-border-strong accent-accent"
           />
-          <span className="text-sm font-medium text-slate-700">Sucursal principal</span>
+          <span className="text-sm font-medium text-muted">Sucursal principal</span>
         </label>
 
         {error && (
@@ -116,11 +116,11 @@ function BranchForm({ initial, onClose }: { initial?: Branch; onClose: () => voi
           </div>
         )}
 
-        <div className="flex gap-2 pt-2 border-t border-slate-100">
+        <div className="flex gap-2 pt-2 border-t border-border">
           <button
             type="submit"
             disabled={saveMutation.isPending}
-            className="flex-1 rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-50"
+            className="flex-1 rounded-lg bg-ink px-4 py-2 text-sm font-medium text-canvas hover:opacity-80 disabled:opacity-50"
           >
             {saveMutation.isPending ? 'Guardando...' : initial ? 'Guardar cambios' : 'Crear sucursal'}
           </button>
@@ -133,7 +133,7 @@ function BranchForm({ initial, onClose }: { initial?: Branch; onClose: () => voi
             disabled={toggleActiveMutation.isPending}
             className={`w-full rounded-lg border px-4 py-2 text-sm font-medium disabled:opacity-50 ${
               initial.isActive
-                ? 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                ? 'border-border text-muted hover:bg-surface-2'
                 : 'border-emerald-200 text-emerald-600 hover:bg-emerald-50'
             }`}
           >
@@ -160,12 +160,12 @@ export default function BranchesSettingsPage() {
     <div>
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-slate-900">Sucursales</h1>
-          <p className="mt-1 text-sm text-slate-500">Gestioná las sucursales de tu empresa</p>
+          <h1 className="text-2xl font-semibold text-ink">Sucursales</h1>
+          <p className="mt-1 text-sm text-muted">Gestioná las sucursales de tu empresa</p>
         </div>
         <button
           onClick={() => { setSelectedBranch(null); setShowCreate(true); }}
-          className="flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700"
+          className="flex items-center gap-2 rounded-lg bg-ink px-4 py-2 text-sm font-medium text-canvas hover:opacity-80"
         >
           <Plus size={16} />
           Nueva sucursal
@@ -176,26 +176,26 @@ export default function BranchesSettingsPage() {
         {/* List */}
         <div className={`flex-1 min-w-0 ${panelOpen ? 'hidden sm:block' : ''}`}>
           {isLoading ? (
-            <div className="py-16 text-center text-sm text-slate-400">Cargando sucursales...</div>
+            <div className="py-16 text-center text-sm text-faint">Cargando sucursales...</div>
           ) : branches.length === 0 ? (
             <div className="py-16 text-center">
-              <p className="text-sm text-slate-400">No hay sucursales registradas.</p>
+              <p className="text-sm text-faint">No hay sucursales registradas.</p>
               <button
                 onClick={() => setShowCreate(true)}
-                className="mt-3 text-sm font-medium text-slate-900 underline underline-offset-2"
+                className="mt-3 text-sm font-medium text-ink underline underline-offset-2"
               >
                 Crear la primera
               </button>
             </div>
           ) : (
-            <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-              <ul className="divide-y divide-slate-100">
+            <div className="overflow-hidden rounded-xl border border-border bg-surface">
+              <ul className="divide-y divide-border">
                 {branches.map((branch) => (
                   <li
                     key={branch.id}
                     onClick={() => { setShowCreate(false); setSelectedBranch(branch); }}
-                    className={`flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-slate-50 transition-colors ${
-                      selectedBranch?.id === branch.id ? 'bg-slate-50' : ''
+                    className={`flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-surface-2 transition-colors ${
+                      selectedBranch?.id === branch.id ? 'bg-surface-2' : ''
                     }`}
                   >
                     <div className="flex items-center gap-2 flex-1 min-w-0">
@@ -203,14 +203,14 @@ export default function BranchesSettingsPage() {
                         <Star size={13} className="shrink-0 text-amber-500 fill-amber-500" />
                       )}
                       <div className="min-w-0">
-                        <p className="font-medium text-slate-900 truncate">{branch.name}</p>
-                        <p className="text-xs text-slate-400 truncate">
+                        <p className="font-medium text-ink truncate">{branch.name}</p>
+                        <p className="text-xs text-faint truncate">
                           {[branch.address, branch.phone].filter(Boolean).join(' · ')}
                         </p>
                       </div>
                     </div>
                     {!branch.isActive && (
-                      <span className="ml-3 shrink-0 inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-500">
+                      <span className="ml-3 shrink-0 inline-flex rounded-full bg-surface-2 px-2 py-0.5 text-xs text-muted">
                         Inactiva
                       </span>
                     )}
@@ -223,7 +223,7 @@ export default function BranchesSettingsPage() {
 
         {/* Side panel */}
         {panelOpen && (
-          <div className="w-80 shrink-0 rounded-xl border border-slate-200 bg-white overflow-hidden">
+          <div className="w-80 shrink-0 rounded-xl border border-border bg-surface overflow-hidden">
             {showCreate ? (
               <BranchForm onClose={() => setShowCreate(false)} />
             ) : selectedBranch ? (

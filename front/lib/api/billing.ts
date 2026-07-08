@@ -1,6 +1,7 @@
 import { apiClient } from './client';
 
 export type InvoiceStatus = 'PENDING' | 'ISSUED' | 'PAID' | 'CANCELLED';
+export type CreditNoteStatus = 'ISSUED' | 'APPLIED';
 
 export interface InvoiceItem {
   id: string;
@@ -20,11 +21,47 @@ export interface Invoice {
   total: number;
   notes: string | null;
   createdAt: string;
+  // Numbering
+  invoiceNumber: string | null;
+  invoicePrefix: string | null;
+  // PDF
+  pdfUrl: string | null;
+  // SIFEN
+  cdc: string | null;
+  qrUrl: string | null;
+  electronicAt: string | null;
   saleOrder: {
     id: string;
-    customer: { id: string; firstName: string; lastName: string; email: string | null };
+    saleType: 'CASH' | 'CREDIT';
+    installments: number | null;
+    customer: {
+      id: string;
+      firstName: string;
+      lastName: string;
+      email: string | null;
+      documentType: string | null;
+      documentNumber: string | null;
+    };
   };
   items: InvoiceItem[];
+}
+
+export interface CreditNote {
+  id: string;
+  invoiceId: string;
+  number: string | null;
+  reason: string;
+  total: number;
+  status: CreditNoteStatus;
+  issuedAt: string;
+  createdAt: string;
+  invoice: {
+    id: string;
+    total: number;
+    saleOrder: {
+      customer: { id: string; firstName: string; lastName: string; email: string | null };
+    };
+  };
 }
 
 export const billingApi = {
@@ -34,6 +71,9 @@ export const billingApi = {
   getInvoice: (id: string): Promise<Invoice> =>
     apiClient.get(`/billing/invoices/${id}`).then((r) => r.data),
 
-  cancelInvoice: (id: string): Promise<Invoice> =>
-    apiClient.post(`/billing/invoices/${id}/cancel`).then((r) => r.data),
+  cancelInvoice: (id: string, reason: string): Promise<Invoice> =>
+    apiClient.post(`/billing/invoices/${id}/cancel`, { reason }).then((r) => r.data),
+
+  listCreditNotes: (): Promise<CreditNote[]> =>
+    apiClient.get('/billing/credit-notes').then((r) => r.data),
 };

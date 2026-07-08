@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Bell, CreditCard, Package } from 'lucide-react';
@@ -71,18 +71,18 @@ function AlertCard({ type, config }: { type: AlertType; config?: AlertConfig }) 
     }
   }
 
-  const inputCls = 'rounded-lg border border-slate-200 px-3 py-1.5 text-sm focus:border-slate-400 focus:outline-none w-28';
+  const inputCls = 'rounded-lg border border-border bg-surface text-ink px-3 py-1.5 text-sm focus:border-border-strong focus:outline-none w-28';
 
   return (
-    <div className={`rounded-xl border bg-white p-5 transition-opacity ${!isActive ? 'opacity-60' : ''}`}>
+    <div className={`rounded-xl border bg-surface p-5 transition-opacity ${!isActive ? 'opacity-60' : ''}`}>
       <div className="flex items-start justify-between gap-4">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-slate-100">
-            <Icon size={18} className="text-slate-600" />
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-surface-2">
+            <Icon size={18} className="text-muted" />
           </div>
           <div>
-            <p className="font-medium text-slate-900">{meta.label}</p>
-            <p className="text-sm text-slate-500 mt-0.5 max-w-sm">{meta.description}</p>
+            <p className="font-medium text-ink">{meta.label}</p>
+            <p className="text-sm text-muted mt-0.5 max-w-sm">{meta.description}</p>
           </div>
         </div>
 
@@ -91,11 +91,11 @@ function AlertCard({ type, config }: { type: AlertType; config?: AlertConfig }) 
           onClick={toggle}
           disabled={mutation.isPending}
           className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none disabled:opacity-50 ${
-            isActive ? 'bg-slate-900' : 'bg-slate-200'
+            isActive ? 'bg-ink' : 'bg-border-strong'
           }`}
         >
           <span
-            className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition duration-200 ${
+            className={`inline-block h-5 w-5 transform rounded-full bg-surface shadow transition duration-200 ${
               isActive ? 'translate-x-5' : 'translate-x-0'
             }`}
           />
@@ -103,10 +103,10 @@ function AlertCard({ type, config }: { type: AlertType; config?: AlertConfig }) 
       </div>
 
       {isActive && (
-        <div className="mt-4 flex flex-wrap gap-4 border-t border-slate-100 pt-4">
+        <div className="mt-4 flex flex-wrap gap-4 border-t border-border pt-4">
           {meta.thresholdLabel && (
             <div>
-              <p className="mb-1 text-xs font-medium text-slate-500">{meta.thresholdLabel}</p>
+              <p className="mb-1 text-xs font-medium text-muted">{meta.thresholdLabel}</p>
               <div className="flex items-center gap-2">
                 <input
                   type="number"
@@ -115,13 +115,13 @@ function AlertCard({ type, config }: { type: AlertType; config?: AlertConfig }) 
                   defaultValue={config?.threshold ?? 5}
                   onBlur={(e) => setThreshold(e.target.value)}
                 />
-                <span className="text-sm text-slate-400">{meta.thresholdUnit}</span>
+                <span className="text-sm text-faint">{meta.thresholdUnit}</span>
               </div>
             </div>
           )}
 
           <div>
-            <p className="mb-1 text-xs font-medium text-slate-500">Canal</p>
+            <p className="mb-1 text-xs font-medium text-muted">Canal</p>
             <select
               className={inputCls}
               value={config?.channel ?? 'SYSTEM'}
@@ -148,14 +148,14 @@ export default function AlertsPage() {
   return (
     <div>
       <div className="mb-6">
-        <h1 className="text-2xl font-semibold text-slate-900">Alertas</h1>
-        <p className="mt-1 text-sm text-slate-500">
+        <h1 className="text-2xl font-semibold text-ink">Alertas</h1>
+        <p className="mt-1 text-sm text-muted">
           Configurá qué eventos generan notificaciones en tu empresa
         </p>
       </div>
 
       {isLoading ? (
-        <div className="py-16 text-center text-sm text-slate-400">Cargando configuración…</div>
+        <div className="py-16 text-center text-sm text-faint">Cargando configuración…</div>
       ) : (
         <div className="space-y-4 max-w-2xl">
           {ALL_TYPES.map((type) => (

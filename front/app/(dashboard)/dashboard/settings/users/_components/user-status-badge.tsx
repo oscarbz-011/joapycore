@@ -1,4 +1,4 @@
-interface Props {
+﻿interface Props {
   status: 'ACTIVE' | 'INACTIVE';
 }
 
@@ -8,7 +8,7 @@ export function UserStatusBadge({ status }: Props) {
       className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
         status === 'ACTIVE'
           ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-600/20'
-          : 'bg-slate-100 text-slate-500 ring-1 ring-slate-200'
+          : 'bg-surface-2 text-muted ring-1 ring-slate-200'
       }`}
     >
       {status === 'ACTIVE' ? 'Activo' : 'Inactivo'}

@@ -42,17 +42,17 @@ function orderTotal(order: PurchaseOrder) {
 
 function ProcurementNav() {
   return (
-    <div className="flex gap-1 border-b border-slate-200 mb-6">
+    <div className="flex gap-1 border-b border-border mb-6">
       <Link
         href="/dashboard/procurement"
-        className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 border-slate-900 text-slate-900 -mb-px"
+        className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 border-ink text-ink -mb-px"
       >
         <Truck size={15} />
         Órdenes de compra
       </Link>
       <Link
         href="/dashboard/procurement/suppliers"
-        className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 border-transparent text-slate-500 hover:text-slate-700 -mb-px"
+        className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 border-transparent text-muted hover:text-ink -mb-px"
       >
         <Users size={15} />
         Proveedores
@@ -64,7 +64,7 @@ function ProcurementNav() {
 // ── Status badge ───────────────────────────────────────────────────────────────
 
 const STATUS_MAP: Record<PurchaseOrderStatus, { label: string; className: string }> = {
-  PENDING:              { label: 'Borrador',            className: 'bg-slate-100 text-slate-600' },
+  PENDING:              { label: 'Borrador',            className: 'bg-surface-2 text-muted' },
   CONFIRMED:          { label: 'Confirmada',           className: 'bg-blue-50 text-blue-700' },
   PARTIALLY_RECEIVED: { label: 'Recepción parcial',   className: 'bg-amber-50 text-amber-700' },
   RECEIVED:           { label: 'Recibida',             className: 'bg-emerald-50 text-emerald-700' },
@@ -86,7 +86,7 @@ function TypeBadge({ type }: { type: PurchaseType }) {
       Importación
     </span>
   ) : (
-    <span className="inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
+    <span className="inline-flex rounded-full bg-surface-2 px-2 py-0.5 text-xs font-medium text-muted">
       Local
     </span>
   );
@@ -169,16 +169,16 @@ function CreateOrderModal({
   });
 
   const inputCls =
-    'w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500';
-  const labelCls = 'block text-xs font-medium text-slate-600 mb-1';
+    'w-full rounded-lg border border-border-strong bg-surface px-3 py-2 text-sm text-ink focus:border-border-strong focus:outline-none focus:ring-1 focus:ring-border-strong';
+  const labelCls = 'block text-xs font-medium text-muted mb-1';
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-      <div className="relative z-10 w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl bg-white shadow-2xl">
-        <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
-          <h2 className="text-base font-semibold text-slate-900">Nueva orden de compra</h2>
-          <button onClick={onClose} className="rounded-md p-1 text-slate-400 hover:bg-slate-100">
+      <div className="relative z-10 w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl bg-surface shadow-2xl">
+        <div className="flex items-center justify-between border-b border-border px-6 py-4">
+          <h2 className="text-base font-semibold text-ink">Nueva orden de compra</h2>
+          <button onClick={onClose} className="rounded-md p-1 text-faint hover:bg-surface-2">
             <X size={18} />
           </button>
         </div>
@@ -291,12 +291,12 @@ function CreateOrderModal({
 
           {/* Productos */}
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">
+            <p className="text-xs font-semibold uppercase tracking-wider text-faint mb-2">
               Productos
             </p>
             <div className="space-y-2">
               {items.map((item, idx) => (
-                <div key={idx} className="rounded-lg border border-slate-200 p-3">
+                <div key={idx} className="rounded-lg border border-border p-3">
                   <div className="flex gap-2 items-center">
                     <div className="flex-1">
                       <select
@@ -347,13 +347,13 @@ function CreateOrderModal({
                         required
                       />
                     </div>
-                    <div className="w-28 text-right text-sm font-medium text-slate-700">
+                    <div className="w-28 text-right text-sm font-medium text-muted">
                       {formatPrice(Number(item.quantity) * Number(item.unitCost))}
                     </div>
                     <button
                       type="button"
                       onClick={() => setItems((prev) => prev.filter((_, i) => i !== idx))}
-                      className="text-slate-400 hover:text-red-500"
+                      className="text-faint hover:text-red-500"
                     >
                       <Trash2 size={15} />
                     </button>
@@ -366,7 +366,7 @@ function CreateOrderModal({
               onClick={() =>
                 setItems((prev) => [...prev, { productId: '', product: null, quantity: 1, unitCost: 0 }])
               }
-              className="mt-2 flex items-center gap-1.5 text-sm text-slate-600 hover:text-slate-900"
+              className="mt-2 flex items-center gap-1.5 text-sm text-muted hover:text-ink"
             >
               <Plus size={14} />
               Agregar producto
@@ -374,9 +374,9 @@ function CreateOrderModal({
           </div>
 
           {items.length > 0 && (
-            <div className="flex justify-end border-t border-slate-100 pt-3">
-              <span className="text-sm text-slate-500 mr-3">Total estimado</span>
-              <span className="text-sm font-bold text-slate-900">{formatPrice(total)}</span>
+            <div className="flex justify-end border-t border-border pt-3">
+              <span className="text-sm text-muted mr-3">Total estimado</span>
+              <span className="text-sm font-bold text-ink">{formatPrice(total)}</span>
             </div>
           )}
 
@@ -398,18 +398,18 @@ function CreateOrderModal({
             </div>
           )}
 
-          <div className="flex justify-end gap-3 pt-2 border-t border-slate-100">
+          <div className="flex justify-end gap-3 pt-2 border-t border-border">
             <button
               type="button"
               onClick={onClose}
-              className="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
+              className="rounded-lg border border-border-strong px-4 py-2 text-sm text-muted hover:bg-surface-2"
             >
               Cancelar
             </button>
             <button
               type="submit"
               disabled={mutation.isPending}
-              className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-50"
+              className="rounded-lg bg-ink px-4 py-2 text-sm font-medium text-canvas hover:opacity-80 disabled:opacity-50"
             >
               {mutation.isPending ? 'Creando...' : 'Crear orden'}
             </button>
@@ -461,41 +461,41 @@ function ReceiveModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-      <div className="relative z-10 w-full max-w-lg max-h-[85vh] overflow-y-auto rounded-2xl bg-white shadow-2xl">
-        <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
-          <h2 className="text-base font-semibold text-slate-900">Registrar recepción</h2>
-          <button onClick={onClose} className="rounded-md p-1 text-slate-400 hover:bg-slate-100">
+      <div className="relative z-10 w-full max-w-lg max-h-[85vh] overflow-y-auto rounded-2xl bg-surface shadow-2xl">
+        <div className="flex items-center justify-between border-b border-border px-6 py-4">
+          <h2 className="text-base font-semibold text-ink">Registrar recepción</h2>
+          <button onClick={onClose} className="rounded-md p-1 text-faint hover:bg-surface-2">
             <X size={18} />
           </button>
         </div>
 
         <div className="px-6 py-5 space-y-4">
-          <p className="text-sm text-slate-500">
+          <p className="text-sm text-muted">
             Ítems pendientes de recepción para la orden de <strong>{order.supplier.name}</strong>:
           </p>
 
           {pendingItems.map((item) => {
             const pending = item.quantity - item.receivedQty;
             return (
-              <div key={item.id} className="rounded-lg border border-slate-200 p-4">
+              <div key={item.id} className="rounded-lg border border-border p-4">
                 <div className="flex justify-between items-start mb-2">
                   <div>
-                    <p className="text-sm font-medium text-slate-900">{item.product.name}</p>
+                    <p className="text-sm font-medium text-ink">{item.product.name}</p>
                     {item.product.model && (
-                      <p className="text-xs text-slate-400">{item.product.model}</p>
+                      <p className="text-xs text-faint">{item.product.model}</p>
                     )}
                   </div>
-                  <span className="text-xs text-slate-500">
+                  <span className="text-xs text-muted">
                     Pendiente: <strong>{pending}</strong> {item.product.unit}
                   </span>
                 </div>
                 {item.product.isSerialized ? (
                   <div>
-                    <label className="block text-xs text-slate-500 mb-1">
+                    <label className="block text-xs text-muted mb-1">
                       Números de serie (uno por línea — {pending} requerido{pending !== 1 ? 's' : ''})
                     </label>
                     <textarea
-                      className="w-full rounded-lg border border-slate-300 px-3 py-2 text-xs font-mono focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500 resize-none"
+                      className="w-full rounded-lg border border-border-strong bg-surface px-3 py-2 text-xs font-mono text-ink focus:border-border-strong focus:outline-none focus:ring-1 focus:ring-border-strong resize-none"
                       rows={Math.min(pending, 5)}
                       placeholder={'SN001\nSN002'}
                       value={serialInputs[item.id] ?? ''}
@@ -505,7 +505,7 @@ function ReceiveModal({
                     />
                   </div>
                 ) : (
-                  <p className="text-xs text-slate-400">
+                  <p className="text-xs text-faint">
                     Se registrará la recepción de {pending} unidad{pending !== 1 ? 'es' : ''} al confirmar.
                   </p>
                 )}
@@ -519,18 +519,18 @@ function ReceiveModal({
             </div>
           )}
 
-          <div className="flex justify-end gap-3 pt-2 border-t border-slate-100">
+          <div className="flex justify-end gap-3 pt-2 border-t border-border">
             <button
               type="button"
               onClick={onClose}
-              className="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
+              className="rounded-lg border border-border-strong px-4 py-2 text-sm text-muted hover:bg-surface-2"
             >
               Cancelar
             </button>
             <button
               onClick={() => { setError(''); mutation.mutate(); }}
               disabled={mutation.isPending}
-              className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-50"
+              className="rounded-lg bg-ink px-4 py-2 text-sm font-medium text-canvas hover:opacity-80 disabled:opacity-50"
             >
               {mutation.isPending ? 'Registrando...' : 'Confirmar recepción'}
             </button>
@@ -570,23 +570,23 @@ function OrderDetailPanel({
     <>
       <div className="fixed inset-0 z-40 flex justify-end">
         <div className="absolute inset-0 bg-black/30" onClick={onClose} />
-        <aside className="relative z-50 flex h-full w-full max-w-sm flex-col bg-white shadow-2xl overflow-y-auto">
+        <aside className="relative z-50 flex h-full w-full max-w-sm flex-col bg-surface shadow-2xl overflow-y-auto">
           {/* Header */}
-          <div className="flex items-start justify-between border-b border-slate-100 px-5 py-4">
+          <div className="flex items-start justify-between border-b border-border px-5 py-4">
             <div>
               <div className="flex items-center gap-2 flex-wrap">
-                <p className="font-semibold text-slate-900">{order.supplier.name}</p>
+                <p className="font-semibold text-ink">{order.supplier.name}</p>
                 <StatusBadge status={order.status} />
                 <TypeBadge type={order.purchaseType} />
               </div>
-              <p className="text-xs text-slate-400 mt-0.5">
+              <p className="text-xs text-faint mt-0.5">
                 Orden: {formatDate(order.orderDate)}
                 {order.expectedDate ? ` · Entrega est.: ${formatDate(order.expectedDate)}` : ''}
               </p>
             </div>
             <button
               onClick={onClose}
-              className="ml-3 shrink-0 rounded-md p-1 text-slate-400 hover:bg-slate-100"
+              className="ml-3 shrink-0 rounded-md p-1 text-faint hover:bg-surface-2"
             >
               <X size={18} />
             </button>
@@ -594,25 +594,25 @@ function OrderDetailPanel({
 
           {/* Import fields */}
           {order.purchaseType === 'IMPORT' && (order.exchangeRate || order.customsDuty || order.customsRef) && (
-            <div className="border-b border-slate-100 px-5 py-3">
-              <p className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Importación</p>
+            <div className="border-b border-border px-5 py-3">
+              <p className="text-xs font-semibold uppercase tracking-wider text-faint mb-2">Importación</p>
               <div className="space-y-1 text-sm">
                 {order.exchangeRate && (
                   <div className="flex justify-between">
-                    <span className="text-slate-500">Tipo de cambio</span>
-                    <span className="text-slate-700">{Number(order.exchangeRate).toFixed(4)}</span>
+                    <span className="text-muted">Tipo de cambio</span>
+                    <span className="text-muted">{Number(order.exchangeRate).toFixed(4)}</span>
                   </div>
                 )}
                 {order.customsDuty && (
                   <div className="flex justify-between">
-                    <span className="text-slate-500">Arancel</span>
-                    <span className="text-slate-700">{Number(order.customsDuty)}%</span>
+                    <span className="text-muted">Arancel</span>
+                    <span className="text-muted">{Number(order.customsDuty)}%</span>
                   </div>
                 )}
                 {order.customsRef && (
                   <div className="flex justify-between">
-                    <span className="text-slate-500">Ref. aduanera</span>
-                    <span className="text-slate-700 font-mono text-xs">{order.customsRef}</span>
+                    <span className="text-muted">Ref. aduanera</span>
+                    <span className="text-muted font-mono text-xs">{order.customsRef}</span>
                   </div>
                 )}
               </div>
@@ -620,8 +620,8 @@ function OrderDetailPanel({
           )}
 
           {/* Items */}
-          <div className="border-b border-slate-100 px-5 py-4">
-            <p className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-3">Productos</p>
+          <div className="border-b border-border px-5 py-4">
+            <p className="text-xs font-semibold uppercase tracking-wider text-faint mb-3">Productos</p>
             <div className="space-y-3">
               {order.items.map((item) => {
                 const received = item.receivedQty;
@@ -631,18 +631,18 @@ function OrderDetailPanel({
                   <div key={item.id}>
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm text-slate-800 truncate">{item.product.name}</p>
+                        <p className="text-sm text-ink truncate">{item.product.name}</p>
                         {item.product.model && (
-                          <p className="text-xs text-slate-400">{item.product.model}</p>
+                          <p className="text-xs text-faint">{item.product.model}</p>
                         )}
                       </div>
                       <div className="text-right shrink-0">
-                        <p className="text-sm text-slate-500">{total} × {formatPrice(Number(item.unitCost))}</p>
-                        <p className="text-xs text-slate-400">Recibido: {received}/{total}</p>
+                        <p className="text-sm text-muted">{total} × {formatPrice(Number(item.unitCost))}</p>
+                        <p className="text-xs text-faint">Recibido: {received}/{total}</p>
                       </div>
                     </div>
                     {order.status !== 'PENDING' && (
-                      <div className="mt-1.5 h-1.5 w-full rounded-full bg-slate-100">
+                      <div className="mt-1.5 h-1.5 w-full rounded-full bg-surface-2">
                         <div
                           className="h-1.5 rounded-full bg-emerald-500 transition-all"
                           style={{ width: `${pct}%` }}
@@ -653,17 +653,17 @@ function OrderDetailPanel({
                 );
               })}
             </div>
-            <div className="flex justify-between items-center border-t border-slate-100 mt-3 pt-3">
-              <span className="text-sm font-semibold text-slate-700">Total estimado</span>
-              <span className="text-base font-bold text-slate-900">{formatPrice(orderTotal(order))}</span>
+            <div className="flex justify-between items-center border-t border-border mt-3 pt-3">
+              <span className="text-sm font-semibold text-muted">Total estimado</span>
+              <span className="text-base font-bold text-ink">{formatPrice(orderTotal(order))}</span>
             </div>
           </div>
 
           {/* Notes */}
           {order.notes && (
-            <div className="border-b border-slate-100 px-5 py-4">
-              <p className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Notas</p>
-              <p className="text-sm text-slate-600">{order.notes}</p>
+            <div className="border-b border-border px-5 py-4">
+              <p className="text-xs font-semibold uppercase tracking-wider text-faint mb-1">Notas</p>
+              <p className="text-sm text-muted">{order.notes}</p>
             </div>
           )}
 
@@ -672,25 +672,25 @@ function OrderDetailPanel({
             {canConfirm && confirmAction === null && (
               <button
                 onClick={() => setConfirmAction('confirm')}
-                className="w-full rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700"
+                className="w-full rounded-lg bg-ink px-4 py-2 text-sm font-medium text-canvas hover:opacity-80"
               >
                 Confirmar orden
               </button>
             )}
             {canConfirm && confirmAction === 'confirm' && (
-              <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
-                <p className="text-xs text-slate-700 mb-2">¿Confirmar esta orden de compra?</p>
+              <div className="rounded-lg border border-border bg-surface-2 px-4 py-3">
+                <p className="text-xs text-muted mb-2">¿Confirmar esta orden de compra?</p>
                 <div className="flex gap-2">
                   <button
                     onClick={() => confirmMutation.mutate()}
                     disabled={confirmMutation.isPending}
-                    className="flex-1 rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-slate-700 disabled:opacity-50"
+                    className="flex-1 rounded-lg bg-ink px-3 py-1.5 text-xs font-medium text-canvas hover:opacity-80 disabled:opacity-50"
                   >
                     {confirmMutation.isPending ? 'Confirmando...' : 'Sí, confirmar'}
                   </button>
                   <button
                     onClick={() => setConfirmAction(null)}
-                    className="flex-1 rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700"
+                    className="flex-1 rounded-lg border border-border-strong px-3 py-1.5 text-xs font-medium text-muted"
                   >
                     Volver
                   </button>
@@ -748,18 +748,18 @@ export default function ProcurementPage() {
   const filtered = statusFilter ? orders.filter((o) => o.status === statusFilter) : orders;
 
   const selectCls =
-    'rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-700 focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500 bg-white';
+    'rounded-lg border border-border-strong bg-surface px-3 py-2 text-sm text-ink focus:border-border-strong focus:outline-none focus:ring-1 focus:ring-border-strong';
 
   return (
     <div>
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-slate-900">Compras</h1>
-          <p className="mt-1 text-sm text-slate-500">Órdenes de compra y proveedores</p>
+          <h1 className="text-2xl font-semibold text-ink">Compras</h1>
+          <p className="mt-1 text-sm text-muted">Órdenes de compra y proveedores</p>
         </div>
         <button
           onClick={() => setShowCreate(true)}
-          className="flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700"
+          className="flex items-center gap-2 rounded-lg bg-ink px-4 py-2 text-sm font-medium text-canvas hover:opacity-80"
         >
           <Plus size={16} />
           Nueva orden
@@ -786,21 +786,21 @@ export default function ProcurementPage() {
 
       {/* Table */}
       {isLoading ? (
-        <div className="py-16 text-center text-sm text-slate-400">Cargando órdenes...</div>
+        <div className="py-16 text-center text-sm text-faint">Cargando órdenes...</div>
       ) : filtered.length === 0 ? (
         <div className="py-16 text-center">
-          <p className="text-sm text-slate-400">No se encontraron órdenes.</p>
+          <p className="text-sm text-faint">No se encontraron órdenes.</p>
           <button
             onClick={() => setShowCreate(true)}
-            className="mt-3 text-sm font-medium text-slate-900 underline underline-offset-2"
+            className="mt-3 text-sm font-medium text-ink underline underline-offset-2"
           >
             Crear la primera
           </button>
         </div>
       ) : (
-        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+        <div className="overflow-hidden rounded-xl border border-border bg-surface">
           <table className="w-full text-sm">
-            <thead className="border-b border-slate-100 bg-slate-50 text-xs font-semibold uppercase tracking-wider text-slate-500">
+            <thead className="border-b border-border bg-surface-2 text-xs font-semibold uppercase tracking-wider text-muted">
               <tr>
                 <th className="px-4 py-3 text-left">Proveedor</th>
                 <th className="px-4 py-3 text-left">Tipo</th>
@@ -810,28 +810,28 @@ export default function ProcurementPage() {
                 <th className="px-4 py-3 text-right">Total est.</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className="divide-y divide-border">
               {filtered.map((order) => (
                 <tr
                   key={order.id}
                   onClick={() => setSelectedOrder(order)}
-                  className="cursor-pointer hover:bg-slate-50 transition-colors"
+                  className="cursor-pointer hover:bg-surface-2 transition-colors"
                 >
                   <td className="px-4 py-3">
-                    <div className="font-medium text-slate-900">{order.supplier.name}</div>
+                    <div className="font-medium text-ink">{order.supplier.name}</div>
                     {order.supplier.email && (
-                      <div className="text-xs text-slate-400">{order.supplier.email}</div>
+                      <div className="text-xs text-faint">{order.supplier.email}</div>
                     )}
                   </td>
                   <td className="px-4 py-3">
                     <TypeBadge type={order.purchaseType} />
                   </td>
-                  <td className="px-4 py-3 text-slate-500">{formatDate(order.orderDate)}</td>
+                  <td className="px-4 py-3 text-muted">{formatDate(order.orderDate)}</td>
                   <td className="px-4 py-3">
                     <StatusBadge status={order.status} />
                   </td>
-                  <td className="px-4 py-3 text-center text-slate-500">{order.items.length}</td>
-                  <td className="px-4 py-3 text-right font-mono font-medium text-slate-800">
+                  <td className="px-4 py-3 text-center text-muted">{order.items.length}</td>
+                  <td className="px-4 py-3 text-right font-mono font-medium text-ink">
                     {formatPrice(orderTotal(order))}
                   </td>
                 </tr>

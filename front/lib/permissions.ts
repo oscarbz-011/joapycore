@@ -64,6 +64,7 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
       { key: 'sales:create', label: 'Crear órdenes de venta' },
       { key: 'sales:update', label: 'Confirmar ventas' },
       { key: 'sales:cancel', label: 'Cancelar ventas' },
+      { key: 'sales:manage', label: 'Gestionar metas y asignar vendedores' },
     ],
   },
   {

@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useQuery } from '@tanstack/react-query';
 import { AlertTriangle, ArrowDown, CheckCircle, Clock, TrendingUp } from 'lucide-react';
@@ -20,16 +20,16 @@ function fmtDate(s: string | null) {
 
 function KpiCard({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
-    <div className="rounded-xl border bg-white p-4">
-      <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">{label}</p>
-      <p className="mt-1 text-2xl font-semibold text-slate-900">{value}</p>
-      {sub && <p className="mt-0.5 text-xs text-slate-400">{sub}</p>}
+    <div className="rounded-xl border bg-surface p-4">
+      <p className="text-xs font-medium text-muted uppercase tracking-wide">{label}</p>
+      <p className="mt-1 text-2xl font-semibold text-ink">{value}</p>
+      {sub && <p className="mt-0.5 text-xs text-faint">{sub}</p>}
     </div>
   );
 }
 
 function EmptyState({ text }: { text: string }) {
-  return <p className="py-10 text-center text-sm text-slate-400">{text}</p>;
+  return <p className="py-10 text-center text-sm text-faint">{text}</p>;
 }
 
 // ── Ventas tab ────────────────────────────────────────────────────────────────
@@ -47,17 +47,17 @@ function SalesTab() {
     queryFn: () => reportsApi.getSales(dateFrom, dateTo),
   });
 
-  const inputCls = 'rounded-lg border border-slate-200 px-3 py-1.5 text-sm focus:border-slate-400 focus:outline-none';
+  const inputCls = 'rounded-lg border border-border bg-surface text-ink px-3 py-1.5 text-sm focus:border-border-strong focus:outline-none';
 
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex items-center gap-2">
-          <span className="text-sm text-slate-500">Desde</span>
+          <span className="text-sm text-muted">Desde</span>
           <input type="date" className={inputCls} value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-sm text-slate-500">Hasta</span>
+          <span className="text-sm text-muted">Hasta</span>
           <input type="date" className={inputCls} value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
         </div>
       </div>
@@ -76,24 +76,24 @@ function SalesTab() {
           </div>
 
           {data.byMonth.length > 0 && (
-            <div className="rounded-xl border bg-white overflow-hidden">
-              <div className="px-5 py-3 border-b border-slate-100">
-                <h3 className="text-sm font-medium text-slate-700">Ingresos por mes</h3>
+            <div className="rounded-xl border bg-surface overflow-hidden">
+              <div className="px-5 py-3 border-b border-border">
+                <h3 className="text-sm font-medium text-muted">Ingresos por mes</h3>
               </div>
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-slate-100 text-xs text-slate-500 uppercase tracking-wide">
+                  <tr className="border-b border-border text-xs text-muted uppercase tracking-wide">
                     <th className="px-5 py-3 text-left font-medium">Mes</th>
                     <th className="px-5 py-3 text-right font-medium">Ingresos</th>
                     <th className="px-5 py-3 text-right font-medium">Órdenes</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-50">
+                <tbody className="divide-y divide-border">
                   {data.byMonth.map((row) => (
-                    <tr key={row.month} className="hover:bg-slate-50">
-                      <td className="px-5 py-3 text-slate-700">{row.month}</td>
-                      <td className="px-5 py-3 text-right font-medium text-slate-900">{fmt(row.revenue)}</td>
-                      <td className="px-5 py-3 text-right text-slate-500">{row.orders}</td>
+                    <tr key={row.month} className="hover:bg-surface-2">
+                      <td className="px-5 py-3 text-muted">{row.month}</td>
+                      <td className="px-5 py-3 text-right font-medium text-ink">{fmt(row.revenue)}</td>
+                      <td className="px-5 py-3 text-right text-muted">{row.orders}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -102,26 +102,26 @@ function SalesTab() {
           )}
 
           {data.topProducts.length > 0 && (
-            <div className="rounded-xl border bg-white overflow-hidden">
-              <div className="px-5 py-3 border-b border-slate-100">
-                <h3 className="text-sm font-medium text-slate-700">Top 10 productos por ingresos</h3>
+            <div className="rounded-xl border bg-surface overflow-hidden">
+              <div className="px-5 py-3 border-b border-border">
+                <h3 className="text-sm font-medium text-muted">Top 10 productos por ingresos</h3>
               </div>
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-slate-100 text-xs text-slate-500 uppercase tracking-wide">
+                  <tr className="border-b border-border text-xs text-muted uppercase tracking-wide">
                     <th className="px-5 py-3 text-left font-medium">#</th>
                     <th className="px-5 py-3 text-left font-medium">Producto</th>
                     <th className="px-5 py-3 text-right font-medium">Cantidad</th>
                     <th className="px-5 py-3 text-right font-medium">Ingresos</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-50">
+                <tbody className="divide-y divide-border">
                   {data.topProducts.map((p, i) => (
-                    <tr key={p.name} className="hover:bg-slate-50">
-                      <td className="px-5 py-3 text-slate-400 tabular-nums">{i + 1}</td>
-                      <td className="px-5 py-3 text-slate-700">{p.name}</td>
-                      <td className="px-5 py-3 text-right text-slate-500">{p.quantity}</td>
-                      <td className="px-5 py-3 text-right font-medium text-slate-900">{fmt(p.revenue)}</td>
+                    <tr key={p.name} className="hover:bg-surface-2">
+                      <td className="px-5 py-3 text-faint tabular-nums">{i + 1}</td>
+                      <td className="px-5 py-3 text-muted">{p.name}</td>
+                      <td className="px-5 py-3 text-right text-muted">{p.quantity}</td>
+                      <td className="px-5 py-3 text-right font-medium text-ink">{fmt(p.revenue)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -157,9 +157,9 @@ function StockTab() {
             <KpiCard label="Sin stock" value={String(data.summary.outOfStock)} />
           </div>
 
-          <div className="rounded-xl border bg-white overflow-hidden">
-            <div className="px-5 py-3 border-b border-slate-100">
-              <h3 className="text-sm font-medium text-slate-700">Inventario actual</h3>
+          <div className="rounded-xl border bg-surface overflow-hidden">
+            <div className="px-5 py-3 border-b border-border">
+              <h3 className="text-sm font-medium text-muted">Inventario actual</h3>
             </div>
             {data.products.length === 0 ? (
               <EmptyState text="Sin productos" />
@@ -167,7 +167,7 @@ function StockTab() {
               <div className="overflow-x-auto">
                 <table className="w-full text-sm min-w-[700px]">
                   <thead>
-                    <tr className="border-b border-slate-100 text-xs text-slate-500 uppercase tracking-wide">
+                    <tr className="border-b border-border text-xs text-muted uppercase tracking-wide">
                       <th className="px-5 py-3 text-left font-medium">Producto</th>
                       <th className="px-5 py-3 text-left font-medium">Categoría</th>
                       <th className="px-5 py-3 text-right font-medium">Stock</th>
@@ -176,22 +176,22 @@ function StockTab() {
                       <th className="px-5 py-3 text-center font-medium">Estado</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-50">
+                  <tbody className="divide-y divide-border">
                     {data.products.map((p) => {
                       const isOut = p.stock <= 0;
                       const isLow = p.stock > 0 && p.stock <= 5;
                       return (
-                        <tr key={p.id} className="hover:bg-slate-50">
+                        <tr key={p.id} className="hover:bg-surface-2">
                           <td className="px-5 py-3">
-                            <p className="font-medium text-slate-900">{p.name}</p>
-                            {p.model && <p className="text-xs text-slate-400">{p.model}</p>}
+                            <p className="font-medium text-ink">{p.name}</p>
+                            {p.model && <p className="text-xs text-faint">{p.model}</p>}
                           </td>
-                          <td className="px-5 py-3 text-slate-500">{p.category}</td>
-                          <td className={`px-5 py-3 text-right font-semibold tabular-nums ${isOut ? 'text-red-600' : isLow ? 'text-amber-600' : 'text-slate-900'}`}>
+                          <td className="px-5 py-3 text-muted">{p.category}</td>
+                          <td className={`px-5 py-3 text-right font-semibold tabular-nums ${isOut ? 'text-red-600' : isLow ? 'text-amber-600' : 'text-ink'}`}>
                             {p.stock}
                           </td>
-                          <td className="px-5 py-3 text-right text-slate-500">{fmt(p.salePrice)}</td>
-                          <td className="px-5 py-3 text-right text-slate-700">{fmt(p.stockValue)}</td>
+                          <td className="px-5 py-3 text-right text-muted">{fmt(p.salePrice)}</td>
+                          <td className="px-5 py-3 text-right text-muted">{fmt(p.stockValue)}</td>
                           <td className="px-5 py-3 text-center">
                             {isOut ? (
                               <span className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2 py-0.5 text-xs font-medium text-red-700">
@@ -237,7 +237,7 @@ function ReceivablesTab() {
   };
 
   const statusCls: Record<string, string> = {
-    PENDING: 'bg-slate-100 text-slate-600',
+    PENDING: 'bg-surface-2 text-muted',
     PARTIALLY_PAID: 'bg-blue-50 text-blue-700',
     PAID: 'bg-emerald-50 text-emerald-700',
     OVERDUE: 'bg-red-50 text-red-700',
@@ -258,9 +258,9 @@ function ReceivablesTab() {
             <KpiCard label="Total cuentas" value={String(data.summary.totalItems)} />
           </div>
 
-          <div className="rounded-xl border bg-white overflow-hidden">
-            <div className="px-5 py-3 border-b border-slate-100">
-              <h3 className="text-sm font-medium text-slate-700">Cuentas por cobrar</h3>
+          <div className="rounded-xl border bg-surface overflow-hidden">
+            <div className="px-5 py-3 border-b border-border">
+              <h3 className="text-sm font-medium text-muted">Cuentas por cobrar</h3>
             </div>
             {data.items.length === 0 ? (
               <EmptyState text="Sin cuentas registradas" />
@@ -268,7 +268,7 @@ function ReceivablesTab() {
               <div className="overflow-x-auto">
                 <table className="w-full text-sm min-w-[680px]">
                   <thead>
-                    <tr className="border-b border-slate-100 text-xs text-slate-500 uppercase tracking-wide">
+                    <tr className="border-b border-border text-xs text-muted uppercase tracking-wide">
                       <th className="px-5 py-3 text-left font-medium">Cliente</th>
                       <th className="px-5 py-3 text-right font-medium">Total</th>
                       <th className="px-5 py-3 text-right font-medium">Cobrado</th>
@@ -277,23 +277,23 @@ function ReceivablesTab() {
                       <th className="px-5 py-3 text-center font-medium">Estado</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-50">
+                  <tbody className="divide-y divide-border">
                     {data.items.map((item) => (
-                      <tr key={item.id} className={`hover:bg-slate-50 ${item.isOverdue ? 'bg-red-50/30' : ''}`}>
-                        <td className="px-5 py-3 text-slate-700 font-medium">{item.customer}</td>
-                        <td className="px-5 py-3 text-right text-slate-700">{fmt(item.amount)}</td>
+                      <tr key={item.id} className={`hover:bg-surface-2 ${item.isOverdue ? 'bg-red-50/30' : ''}`}>
+                        <td className="px-5 py-3 text-muted font-medium">{item.customer}</td>
+                        <td className="px-5 py-3 text-right text-muted">{fmt(item.amount)}</td>
                         <td className="px-5 py-3 text-right text-emerald-700">{fmt(item.paidAmount)}</td>
-                        <td className="px-5 py-3 text-right font-semibold text-slate-900">{fmt(item.pending)}</td>
+                        <td className="px-5 py-3 text-right font-semibold text-ink">{fmt(item.pending)}</td>
                         <td className="px-5 py-3 text-center">
                           {item.dueDate ? (
-                            <span className={`flex items-center justify-center gap-1 text-xs ${item.isOverdue ? 'text-red-600 font-medium' : 'text-slate-500'}`}>
+                            <span className={`flex items-center justify-center gap-1 text-xs ${item.isOverdue ? 'text-red-600 font-medium' : 'text-muted'}`}>
                               {item.isOverdue && <Clock size={11} />}
                               {fmtDate(item.dueDate)}
                             </span>
                           ) : '—'}
                         </td>
                         <td className="px-5 py-3 text-center">
-                          <span className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-medium ${statusCls[item.status] ?? 'bg-slate-100 text-slate-600'}`}>
+                          <span className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-medium ${statusCls[item.status] ?? 'bg-surface-2 text-muted'}`}>
                             {statusLabel[item.status] ?? item.status}
                           </span>
                         </td>
@@ -326,19 +326,19 @@ export default function ReportsPage() {
   return (
     <div>
       <div className="mb-6">
-        <h1 className="text-2xl font-semibold text-slate-900">Reportes</h1>
-        <p className="mt-1 text-sm text-slate-500">Visualizá métricas clave de tu negocio</p>
+        <h1 className="text-2xl font-semibold text-ink">Reportes</h1>
+        <p className="mt-1 text-sm text-muted">Visualizá métricas clave de tu negocio</p>
       </div>
 
-      <div className="flex border-b border-slate-200 mb-6">
+      <div className="flex border-b border-border mb-6">
         {TABS.map(({ id, label, icon: Icon }) => (
           <button
             key={id}
             onClick={() => setActive(id)}
             className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${
               active === id
-                ? 'border-slate-900 text-slate-900'
-                : 'border-transparent text-slate-500 hover:text-slate-700'
+                ? 'border-ink text-ink'
+                : 'border-transparent text-muted hover:text-ink'
             }`}
           >
             <Icon size={14} />

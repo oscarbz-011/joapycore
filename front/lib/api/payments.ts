@@ -22,11 +22,22 @@ export interface AccountsReceivable {
   createdAt: string;
   invoice: {
     id: string;
+    status: 'PENDING' | 'ISSUED' | 'PAID' | 'CANCELLED';
     total: number;
     issuedAt: string | null;
+    invoiceNumber: string | null;
+    invoicePrefix: string | null;
     saleOrder: {
       id: string;
-      customer: { id: string; firstName: string; lastName: string; email: string | null };
+      saleType: 'CASH' | 'CREDIT';
+      customer: {
+        id: string;
+        firstName: string;
+        lastName: string;
+        email: string | null;
+        documentType: string | null;
+        documentNumber: string | null;
+      };
     };
   };
   paymentRecords: PaymentRecord[];

@@ -32,7 +32,17 @@ export interface ChangePasswordPayload {
   newPassword: string;
 }
 
+export interface Role {
+  id: string;
+  name: string;
+  isSystem: boolean;
+}
+
 export const usersApi = {
+  listRoles: (): Promise<Role[]> =>
+    apiClient.get('/roles').then((r) => r.data),
+
+
   getMe: (): Promise<UserResponse> =>
     apiClient.get('/users/me').then((r) => r.data),
 

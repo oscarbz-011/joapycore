@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useState } from 'react';
 import Link from 'next/link';
@@ -14,15 +14,15 @@ function HrNav({ active }: { active: 'employees' | 'areas' | 'payroll' }) {
   ] as const;
 
   return (
-    <div className="flex gap-1 border-b border-slate-200 mb-6">
+    <div className="flex gap-1 border-b border-border mb-6">
       {links.map(({ key, label, href, icon: Icon }) => (
         <Link
           key={key}
           href={href}
           className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px ${
             active === key
-              ? 'border-slate-900 text-slate-900'
-              : 'border-transparent text-slate-500 hover:text-slate-700'
+              ? 'border-ink text-ink'
+              : 'border-transparent text-muted hover:text-ink'
           }`}
         >
           <Icon size={15} />
@@ -40,14 +40,14 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 const STATUS_COLORS: Record<string, string> = {
-  PENDING: 'bg-slate-100 text-slate-600',
+  PENDING: 'bg-surface-2 text-muted',
   PROCESSED: 'bg-amber-50 text-amber-700',
   PAID: 'bg-emerald-50 text-emerald-700',
 };
 
 function StatusBadge({ status }: { status: string }) {
   return (
-    <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_COLORS[status] ?? 'bg-slate-100 text-slate-600'}`}>
+    <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_COLORS[status] ?? 'bg-surface-2 text-muted'}`}>
       {STATUS_LABELS[status] ?? status}
     </span>
   );
@@ -89,63 +89,63 @@ function ConfigPanel() {
   if (isLoading) return null;
 
   return (
-    <div className="mb-6 rounded-xl border border-slate-200 bg-white">
+    <div className="mb-6 rounded-xl border border-border bg-surface">
       <button
         onClick={handleOpen}
         className="flex w-full items-center justify-between px-5 py-4 text-left"
       >
-        <div className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+        <div className="flex items-center gap-2 text-sm font-semibold text-muted">
           <Settings size={16} />
           Parámetros de nómina
         </div>
-        {open ? <ChevronDown size={15} className="text-slate-400" /> : <ChevronRight size={15} className="text-slate-400" />}
+        {open ? <ChevronDown size={15} className="text-faint" /> : <ChevronRight size={15} className="text-faint" />}
       </button>
 
       {open && (
-        <div className="border-t border-slate-100 px-5 pb-5">
+        <div className="border-t border-border px-5 pb-5">
           <div className="mt-4 grid grid-cols-3 gap-4">
             <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">Salario mínimo (PYG)</label>
+              <label className="block text-xs font-medium text-muted mb-1">Salario mínimo (PYG)</label>
               <input
                 type="number"
                 min={0}
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500"
+                className="w-full rounded-lg border border-border-strong bg-surface text-ink px-3 py-2 text-sm focus:border-border-strong focus:outline-none focus:ring-1 focus:ring-border-strong"
                 value={form.minimumWage}
                 onChange={(e) => setForm((f) => ({ ...f, minimumWage: parseFloat(e.target.value) || 0 }))}
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">Aporte IPS empleado (%)</label>
+              <label className="block text-xs font-medium text-muted mb-1">Aporte IPS empleado (%)</label>
               <input
                 type="number"
                 min={0}
                 max={1}
                 step={0.001}
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500"
+                className="w-full rounded-lg border border-border-strong bg-surface text-ink px-3 py-2 text-sm focus:border-border-strong focus:outline-none focus:ring-1 focus:ring-border-strong"
                 value={form.ipsEmployeeRate}
                 onChange={(e) => setForm((f) => ({ ...f, ipsEmployeeRate: parseFloat(e.target.value) || 0 }))}
               />
-              <p className="mt-0.5 text-xs text-slate-400">Default: 0.09 (9%)</p>
+              <p className="mt-0.5 text-xs text-faint">Default: 0.09 (9%)</p>
             </div>
             <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">Aporte IPS empleador (%)</label>
+              <label className="block text-xs font-medium text-muted mb-1">Aporte IPS empleador (%)</label>
               <input
                 type="number"
                 min={0}
                 max={1}
                 step={0.001}
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500"
+                className="w-full rounded-lg border border-border-strong bg-surface text-ink px-3 py-2 text-sm focus:border-border-strong focus:outline-none focus:ring-1 focus:ring-border-strong"
                 value={form.ipsEmployerRate}
                 onChange={(e) => setForm((f) => ({ ...f, ipsEmployerRate: parseFloat(e.target.value) || 0 }))}
               />
-              <p className="mt-0.5 text-xs text-slate-400">Default: 0.165 (16.5%)</p>
+              <p className="mt-0.5 text-xs text-faint">Default: 0.165 (16.5%)</p>
             </div>
           </div>
           <div className="mt-4 flex items-center gap-3">
             <button
               onClick={() => saveMutation.mutate()}
               disabled={saveMutation.isPending}
-              className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-50"
+              className="rounded-lg bg-ink px-4 py-2 text-sm font-medium text-canvas hover:opacity-80 disabled:opacity-50"
             >
               {saveMutation.isPending ? 'Guardando...' : 'Guardar parámetros'}
             </button>
@@ -165,13 +165,13 @@ function RecordDetail({ record, onPay }: { record: PayrollRecord; onPay: (id: st
     queryFn: () => hrApi.getPayrollRecord(record.id),
   });
 
-  if (isLoading) return <div className="py-4 text-center text-xs text-slate-400">Cargando detalle...</div>;
-  if (!detail?.items?.length) return <div className="py-4 text-center text-xs text-slate-400">Sin items</div>;
+  if (isLoading) return <div className="py-4 text-center text-xs text-faint">Cargando detalle...</div>;
+  if (!detail?.items?.length) return <div className="py-4 text-center text-xs text-faint">Sin items</div>;
 
   return (
-    <div className="mt-3 overflow-hidden rounded-lg border border-slate-100">
+    <div className="mt-3 overflow-hidden rounded-lg border border-border">
       <table className="w-full text-xs">
-        <thead className="border-b border-slate-100 bg-slate-50 text-slate-500">
+        <thead className="border-b border-border bg-surface-2 text-muted">
           <tr>
             <th className="px-3 py-2 text-left">Empleado</th>
             <th className="px-3 py-2 text-right">Salario bruto</th>
@@ -180,22 +180,22 @@ function RecordDetail({ record, onPay }: { record: PayrollRecord; onPay: (id: st
             <th className="px-3 py-2 text-right">Neto</th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-slate-50">
+        <tbody className="divide-y divide-border">
           {detail.items.map((item: PayrollRecordItem) => (
             <tr key={item.id}>
-              <td className="px-3 py-2 text-slate-700">
+              <td className="px-3 py-2 text-muted">
                 #{String(item.employee.employeeNumber).padStart(4, '0')} {item.employee.firstName} {item.employee.lastName}
               </td>
-              <td className="px-3 py-2 text-right font-mono text-slate-600">{formatPYG(item.grossSalary)}</td>
+              <td className="px-3 py-2 text-right font-mono text-muted">{formatPYG(item.grossSalary)}</td>
               <td className="px-3 py-2 text-right font-mono text-red-600">-{formatPYG(item.ipsEmployee)}</td>
               <td className="px-3 py-2 text-right font-mono text-amber-600">{formatPYG(item.aguinaldo)}</td>
-              <td className="px-3 py-2 text-right font-mono font-semibold text-slate-800">{formatPYG(item.netSalary)}</td>
+              <td className="px-3 py-2 text-right font-mono font-semibold text-ink">{formatPYG(item.netSalary)}</td>
             </tr>
           ))}
         </tbody>
       </table>
       {record.status === 'PENDING' && (
-        <div className="border-t border-slate-100 px-3 py-2">
+        <div className="border-t border-border px-3 py-2">
           <button
             onClick={() => onPay(record.id)}
             className="flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-700"
@@ -248,8 +248,8 @@ export default function HrPayrollPage() {
   return (
     <div>
       <div className="mb-6">
-        <h1 className="text-2xl font-semibold text-slate-900">RRHH</h1>
-        <p className="mt-1 text-sm text-slate-500">Gestión de empleados, áreas y nómina</p>
+        <h1 className="text-2xl font-semibold text-ink">RRHH</h1>
+        <p className="mt-1 text-sm text-muted">Gestión de empleados, áreas y nómina</p>
       </div>
 
       <HrNav active="payroll" />
@@ -257,17 +257,17 @@ export default function HrPayrollPage() {
       <ConfigPanel />
 
       {/* Run payroll */}
-      <div className="mb-6 flex items-start gap-3 rounded-xl border border-slate-200 bg-white p-5">
+      <div className="mb-6 flex items-start gap-3 rounded-xl border border-border bg-surface p-5">
         <div className="flex-1">
-          <p className="text-sm font-semibold text-slate-900">Liquidar nómina</p>
-          <p className="mt-0.5 text-xs text-slate-500">
+          <p className="text-sm font-semibold text-ink">Liquidar nómina</p>
+          <p className="mt-0.5 text-xs text-muted">
             Calcula sueldos, IPS y aguinaldo (diciembre) para todos los empleados activos del período.
           </p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <input
             type="month"
-            className="rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500"
+            className="rounded-lg border border-border-strong bg-surface text-ink px-3 py-2 text-sm focus:border-border-strong focus:outline-none focus:ring-1 focus:ring-border-strong"
             value={period}
             onChange={(e) => setPeriod(e.target.value)}
           />
@@ -277,7 +277,7 @@ export default function HrPayrollPage() {
               runMutation.mutate();
             }}
             disabled={runMutation.isPending}
-            className="flex items-center gap-1.5 rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-50"
+            className="flex items-center gap-1.5 rounded-lg bg-ink px-4 py-2 text-sm font-medium text-canvas hover:opacity-80 disabled:opacity-50"
           >
             <Play size={14} />
             {runMutation.isPending ? 'Liquidando...' : 'Liquidar'}
@@ -292,38 +292,38 @@ export default function HrPayrollPage() {
 
       {/* Records list */}
       {isLoading ? (
-        <div className="py-10 text-center text-sm text-slate-400">Cargando historial...</div>
+        <div className="py-10 text-center text-sm text-faint">Cargando historial...</div>
       ) : records.length === 0 ? (
-        <div className="py-10 text-center text-sm text-slate-400">No hay liquidaciones generadas.</div>
+        <div className="py-10 text-center text-sm text-faint">No hay liquidaciones generadas.</div>
       ) : (
         <div className="space-y-3">
           {records.map((rec: PayrollRecord) => (
-            <div key={rec.id} className="rounded-xl border border-slate-200 bg-white">
+            <div key={rec.id} className="rounded-xl border border-border bg-surface">
               <button
                 onClick={() => setExpandedId(expandedId === rec.id ? null : rec.id)}
                 className="flex w-full items-center justify-between px-5 py-4"
               >
                 <div className="flex items-center gap-4">
-                  <span className="font-mono text-sm font-semibold text-slate-900">{rec.period}</span>
+                  <span className="font-mono text-sm font-semibold text-ink">{rec.period}</span>
                   <StatusBadge status={rec.status} />
                 </div>
                 <div className="flex items-center gap-6">
                   <div className="text-right">
-                    <p className="text-xs text-slate-400">Total neto</p>
-                    <p className="font-mono text-sm font-semibold text-slate-800">{formatPYG(rec.totalNet)}</p>
+                    <p className="text-xs text-faint">Total neto</p>
+                    <p className="font-mono text-sm font-semibold text-ink">{formatPYG(rec.totalNet)}</p>
                   </div>
                   <div className="text-right">
-                    <p className="text-xs text-slate-400">IPS empleador</p>
-                    <p className="font-mono text-sm text-slate-600">{formatPYG(rec.totalIpsEmployer)}</p>
+                    <p className="text-xs text-faint">IPS empleador</p>
+                    <p className="font-mono text-sm text-muted">{formatPYG(rec.totalIpsEmployer)}</p>
                   </div>
                   {expandedId === rec.id
-                    ? <ChevronDown size={15} className="text-slate-400" />
-                    : <ChevronRight size={15} className="text-slate-400" />}
+                    ? <ChevronDown size={15} className="text-faint" />
+                    : <ChevronRight size={15} className="text-faint" />}
                 </div>
               </button>
 
               {expandedId === rec.id && (
-                <div className="border-t border-slate-100 px-5 pb-4">
+                <div className="border-t border-border px-5 pb-4">
                   <RecordDetail record={rec} onPay={(id) => payMutation.mutate(id)} />
                 </div>
               )}

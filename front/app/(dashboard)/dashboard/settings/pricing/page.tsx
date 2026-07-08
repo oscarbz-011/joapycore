@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -53,12 +53,12 @@ export default function PricingSettingsPage() {
     <div className="mx-auto max-w-2xl space-y-8 p-8">
       {/* Header */}
       <div className="flex items-start gap-3">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-100">
-          <Tag size={20} className="text-slate-600" />
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-surface-2">
+          <Tag size={20} className="text-muted" />
         </div>
         <div>
-          <h1 className="text-xl font-semibold text-slate-900">Configuración de Precios</h1>
-          <p className="mt-0.5 text-sm text-slate-500">
+          <h1 className="text-xl font-semibold text-ink">Configuración de Precios</h1>
+          <p className="mt-0.5 text-sm text-muted">
             Define cómo se calcula el precio de venta sugerido a partir del costo de cada producto.
           </p>
         </div>
@@ -67,15 +67,15 @@ export default function PricingSettingsPage() {
       {isLoading ? (
         <div className="space-y-3">
           {[1, 2].map((i) => (
-            <div key={i} className="h-16 animate-pulse rounded-xl bg-slate-100" />
+            <div key={i} className="h-16 animate-pulse rounded-xl bg-surface-2" />
           ))}
         </div>
       ) : (
-        <div className="rounded-2xl border border-slate-200 bg-white divide-y divide-slate-100">
+        <div className="rounded-2xl border border-border bg-surface divide-y divide-border">
           {/* Método de margen */}
           <div className="p-6">
-            <p className="mb-1 text-sm font-medium text-slate-700">Método de margen</p>
-            <p className="mb-4 text-xs text-slate-400">
+            <p className="mb-1 text-sm font-medium text-muted">Método de margen</p>
+            <p className="mb-4 text-xs text-faint">
               Elige si el margen se aplica como porcentaje sobre el costo o como un valor fijo.
             </p>
             <div className="flex gap-3">
@@ -89,14 +89,14 @@ export default function PricingSettingsPage() {
                   onClick={() => setMethod(value)}
                   className={`flex-1 rounded-xl border-2 px-4 py-3 text-left transition-all ${
                     method === value
-                      ? 'border-slate-800 bg-slate-50'
-                      : 'border-slate-200 hover:border-slate-300'
+                      ? 'border-ink bg-surface-2'
+                      : 'border-border hover:border-border-strong'
                   }`}
                 >
-                  <p className={`text-sm font-semibold ${method === value ? 'text-slate-900' : 'text-slate-600'}`}>
+                  <p className={`text-sm font-semibold ${method === value ? 'text-ink' : 'text-muted'}`}>
                     {label}
                   </p>
-                  <p className="mt-0.5 font-mono text-xs text-slate-400">{example}</p>
+                  <p className="mt-0.5 font-mono text-xs text-faint">{example}</p>
                 </button>
               ))}
             </div>
@@ -104,10 +104,10 @@ export default function PricingSettingsPage() {
 
           {/* Margen por defecto */}
           <div className="p-6">
-            <label className="mb-1 block text-sm font-medium text-slate-700">
+            <label className="mb-1 block text-sm font-medium text-muted">
               Margen por defecto
             </label>
-            <p className="mb-3 text-xs text-slate-400">
+            <p className="mb-3 text-xs text-faint">
               Se pre-completará al crear o actualizar un producto. Puede ajustarse por producto.
             </p>
             <div className="relative w-48">
@@ -118,44 +118,44 @@ export default function PricingSettingsPage() {
                 value={markup}
                 onChange={(e) => setMarkup(e.target.value)}
                 placeholder={method === 'PERCENTAGE' ? '25' : '5000'}
-                className="w-full rounded-lg border border-slate-300 py-2 pl-3 pr-10 text-sm focus:border-slate-500 focus:outline-none focus:ring-2 focus:ring-slate-200"
+                className="w-full rounded-lg border border-border-strong py-2 pl-3 pr-10 text-sm focus:border-border-strong focus:outline-none focus:ring-2 focus:ring-border"
               />
-              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-slate-400">
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-faint">
                 {method === 'PERCENTAGE' ? '%' : 'Gs.'}
               </span>
             </div>
           </div>
 
           {/* Preview */}
-          <div className="p-6 bg-slate-50 rounded-b-2xl">
+          <div className="p-6 bg-surface-2 rounded-b-2xl">
             <div className="flex items-center gap-1.5 mb-3">
-              <Info size={13} className="text-slate-400" />
-              <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Vista previa</p>
+              <Info size={13} className="text-faint" />
+              <p className="text-xs font-medium text-muted uppercase tracking-wider">Vista previa</p>
             </div>
             <div className="flex items-center gap-3">
               <div>
-                <p className="text-xs text-slate-400 mb-1">Costo del producto</p>
+                <p className="text-xs text-faint mb-1">Costo del producto</p>
                 <div className="relative w-36">
                   <input
                     type="number"
                     min="1"
                     value={previewCost}
                     onChange={(e) => setPreviewCost(e.target.value)}
-                    className="w-full rounded-lg border border-slate-200 bg-white py-2 pl-3 pr-10 text-sm focus:border-slate-400 focus:outline-none"
+                    className="w-full rounded-lg border border-border bg-surface py-2 pl-3 pr-10 text-sm focus:border-border-strong focus:outline-none"
                   />
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400">Gs.</span>
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-faint">Gs.</span>
                 </div>
               </div>
 
-              <div className="pt-5 text-slate-300">→</div>
+              <div className="pt-5 text-faint">→</div>
 
               <div>
-                <p className="text-xs text-slate-400 mb-1">Precio de venta sugerido</p>
-                <div className="flex h-9 w-36 items-center rounded-lg border border-dashed border-slate-300 bg-white px-3">
+                <p className="text-xs text-faint mb-1">Precio de venta sugerido</p>
+                <div className="flex h-9 w-36 items-center rounded-lg border border-dashed border-border-strong bg-surface px-3">
                   {price !== null ? (
-                    <span className="text-sm font-semibold text-slate-800">Gs. {fmt(price)}</span>
+                    <span className="text-sm font-semibold text-ink">Gs. {fmt(price)}</span>
                   ) : (
-                    <span className="text-sm text-slate-400">—</span>
+                    <span className="text-sm text-faint">—</span>
                   )}
                 </div>
               </div>
@@ -170,7 +170,7 @@ export default function PricingSettingsPage() {
           type="button"
           disabled={!canSave}
           onClick={() => mutation.mutate()}
-          className="flex items-center gap-2 rounded-xl bg-slate-900 px-5 py-2.5 text-sm font-medium text-white transition-all hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed"
+          className="flex items-center gap-2 rounded-xl bg-ink px-5 py-2.5 text-sm font-medium text-canvas transition-all hover:opacity-80 disabled:opacity-40 disabled:cursor-not-allowed"
         >
           {flashSaved ? <Check size={15} /> : <Save size={15} />}
           {flashSaved ? 'Guardado' : mutation.isPending ? 'Guardando…' : 'Guardar cambios'}

@@ -1,10 +1,16 @@
-'use client';
+﻿'use client';
 
 import { useState } from 'react';
 import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus, Copy, Check, X, Users2, LayoutGrid, Receipt } from 'lucide-react';
-import { hrApi, type CreateEmployeePayload, type Employee } from '../../../../lib/api/hr';
+import { hrApi, type CreateEmployeePayload, type Employee, type Position } from '../../../../lib/api/hr';
+
+function buildUsernamePreview(firstName: string, lastName: string): string {
+  const norm = (s: string) =>
+    s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]/g, '');
+  return `${norm(firstName)}.${norm(lastName)}`;
+}
 
 // ── Label helpers ──────────────────────────────────────────────────────────────
 
@@ -31,15 +37,15 @@ function HrNav({ active }: { active: 'employees' | 'areas' | 'payroll' }) {
   ] as const;
 
   return (
-    <div className="flex gap-1 border-b border-slate-200 mb-6">
+    <div className="flex gap-1 border-b border-border mb-6">
       {links.map(({ key, label, href, icon: Icon }) => (
         <Link
           key={key}
           href={href}
           className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px ${
             active === key
-              ? 'border-slate-900 text-slate-900'
-              : 'border-transparent text-slate-500 hover:text-slate-700'
+              ? 'border-ink text-ink'
+              : 'border-transparent text-muted hover:text-ink'
           }`}
         >
           <Icon size={15} />
@@ -88,7 +94,7 @@ function CreateEmployeeModal({
   onCreated,
 }: {
   areas: Array<{ id: string; name: string }>;
-  positions: Array<{ id: string; name: string }>;
+  positions: Position[];
   onClose: () => void;
   onCreated: (tempPassword?: string) => void;
 }) {
@@ -122,16 +128,16 @@ function CreateEmployeeModal({
     mutation.mutate();
   }
 
-  const inputCls = 'w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500';
-  const labelCls = 'block text-xs font-medium text-slate-600 mb-1';
+  const inputCls = 'w-full rounded-lg border border-border-strong bg-surface text-ink px-3 py-2 text-sm focus:border-border-strong focus:outline-none focus:ring-1 focus:ring-border-strong';
+  const labelCls = 'block text-xs font-medium text-muted mb-1';
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-      <div className="relative z-10 w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl bg-white shadow-2xl">
-        <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
-          <h2 className="text-base font-semibold text-slate-900">Nuevo empleado</h2>
-          <button onClick={onClose} className="rounded-md p-1 text-slate-400 hover:bg-slate-100">
+      <div className="relative z-10 w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl bg-surface shadow-2xl">
+        <div className="flex items-center justify-between border-b border-border px-6 py-4">
+          <h2 className="text-base font-semibold text-ink">Nuevo empleado</h2>
+          <button onClick={onClose} className="rounded-md p-1 text-faint hover:bg-surface-2">
             <X size={18} />
           </button>
         </div>
@@ -139,7 +145,7 @@ function CreateEmployeeModal({
         <form onSubmit={handleSubmit} className="px-6 py-5 space-y-5">
           {/* Personal */}
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-3">Datos personales</p>
+            <p className="text-xs font-semibold uppercase tracking-wider text-faint mb-3">Datos personales</p>
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className={labelCls}>Nombre *</label>
@@ -187,7 +193,7 @@ function CreateEmployeeModal({
 
           {/* Laboral */}
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-3">Datos laborales</p>
+            <p className="text-xs font-semibold uppercase tracking-wider text-faint mb-3">Datos laborales</p>
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className={labelCls}>Fecha de ingreso *</label>
@@ -244,22 +250,51 @@ function CreateEmployeeModal({
                 type="checkbox"
                 checked={createAccount}
                 onChange={(e) => setCreateAccount(e.target.checked)}
-                className="h-4 w-4 rounded border-slate-300 accent-slate-900"
+                className="h-4 w-4 rounded border-border-strong accent-accent"
               />
-              <span className="text-sm font-medium text-slate-700">Crear cuenta de acceso al sistema</span>
+              <span className="text-sm font-medium text-muted">Crear cuenta de acceso al sistema</span>
             </label>
             {createAccount && (
-              <div className="mt-3">
-                <label className={labelCls}>Email</label>
-                <input
-                  type="email"
-                  className={inputCls}
-                  value={form.email ?? ''}
-                  onChange={(e) => set('email', e.target.value || undefined)}
-                  placeholder="empleado@empresa.com"
-                  required={createAccount}
-                />
-                <p className="mt-1 text-xs text-slate-500">
+              <div className="mt-3 space-y-3">
+                <div>
+                  <label className={labelCls}>Email *</label>
+                  <input
+                    type="email"
+                    className={inputCls}
+                    value={form.email ?? ''}
+                    onChange={(e) => set('email', e.target.value || undefined)}
+                    placeholder="empleado@empresa.com"
+                    required={createAccount}
+                  />
+                </div>
+
+                {/* Username preview */}
+                {(form.firstName || form.lastName) && (
+                  <div className="rounded-lg border border-border bg-surface-2 px-3 py-2">
+                    <p className="text-xs text-muted mb-1">Usuario generado automáticamente</p>
+                    <p className="font-mono text-sm font-medium text-ink">
+                      {buildUsernamePreview(form.firstName, form.lastName) || '—'}
+                    </p>
+                    <p className="mt-0.5 text-xs text-faint">
+                      Se agrega un sufijo numérico si el usuario ya existe (ej. jose.benitez2)
+                    </p>
+                  </div>
+                )}
+
+                {/* Auto-role from position */}
+                {(() => {
+                  const pos = positions.find((p) => p.id === form.positionId);
+                  if (!pos?.role) return null;
+                  return (
+                    <div className="flex items-center gap-2 rounded-lg border border-blue-100 bg-blue-50 px-3 py-2">
+                      <span className="text-xs text-blue-700">
+                        Se asignará automáticamente el rol <strong>{pos.role.name}</strong> según el cargo seleccionado.
+                      </span>
+                    </div>
+                  );
+                })()}
+
+                <p className="text-xs text-muted">
                   Se generará una contraseña temporal que el empleado deberá cambiar al iniciar sesión.
                 </p>
               </div>
@@ -272,14 +307,14 @@ function CreateEmployeeModal({
             </div>
           )}
 
-          <div className="flex justify-end gap-3 pt-2 border-t border-slate-100">
-            <button type="button" onClick={onClose} className="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50">
+          <div className="flex justify-end gap-3 pt-2 border-t border-border">
+            <button type="button" onClick={onClose} className="rounded-lg border border-border-strong bg-surface text-ink px-4 py-2 text-sm text-muted hover:bg-surface-2">
               Cancelar
             </button>
             <button
               type="submit"
               disabled={mutation.isPending}
-              className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-50"
+              className="rounded-lg bg-ink px-4 py-2 text-sm font-medium text-canvas hover:opacity-80 disabled:opacity-50"
             >
               {mutation.isPending ? 'Creando...' : 'Crear empleado'}
             </button>
@@ -353,12 +388,12 @@ export default function HrEmployeesPage() {
     <div>
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-slate-900">RRHH</h1>
-          <p className="mt-1 text-sm text-slate-500">Gestión de empleados, áreas y nómina</p>
+          <h1 className="text-2xl font-semibold text-ink">RRHH</h1>
+          <p className="mt-1 text-sm text-muted">Gestión de empleados, áreas y nómina</p>
         </div>
         <button
           onClick={() => setShowCreate(true)}
-          className="flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700"
+          className="flex items-center gap-2 rounded-lg bg-ink px-4 py-2 text-sm font-medium text-canvas hover:opacity-80"
         >
           <Plus size={16} />
           Nuevo empleado
@@ -372,21 +407,21 @@ export default function HrEmployeesPage() {
       )}
 
       {isLoading ? (
-        <div className="py-16 text-center text-sm text-slate-400">Cargando empleados...</div>
+        <div className="py-16 text-center text-sm text-faint">Cargando empleados...</div>
       ) : employees.length === 0 ? (
         <div className="py-16 text-center">
-          <p className="text-sm text-slate-400">No hay empleados registrados.</p>
+          <p className="text-sm text-faint">No hay empleados registrados.</p>
           <button
             onClick={() => setShowCreate(true)}
-            className="mt-3 text-sm font-medium text-slate-900 underline underline-offset-2"
+            className="mt-3 text-sm font-medium text-ink underline underline-offset-2"
           >
             Crear el primero
           </button>
         </div>
       ) : (
-        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+        <div className="overflow-hidden rounded-xl border border-border bg-surface">
           <table className="w-full text-sm">
-            <thead className="border-b border-slate-100 bg-slate-50 text-xs font-semibold uppercase tracking-wider text-slate-500">
+            <thead className="border-b border-border bg-surface-2 text-xs font-semibold uppercase tracking-wider text-muted">
               <tr>
                 <th className="px-4 py-3 text-left">Nro.</th>
                 <th className="px-4 py-3 text-left">Empleado</th>
@@ -398,30 +433,30 @@ export default function HrEmployeesPage() {
                 <th className="px-4 py-3 text-left">Estado</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className="divide-y divide-border">
               {employees.map((emp: Employee) => (
-                <tr key={emp.id} className="hover:bg-slate-50">
-                  <td className="px-4 py-3 font-mono text-xs text-slate-500">
+                <tr key={emp.id} className="hover:bg-surface-2">
+                  <td className="px-4 py-3 font-mono text-xs text-muted">
                     #{String(emp.employeeNumber).padStart(4, '0')}
                   </td>
                   <td className="px-4 py-3">
-                    <div className="font-medium text-slate-900">
+                    <div className="font-medium text-ink">
                       {emp.firstName} {emp.lastName}
                     </div>
                     {emp.user && (
-                      <div className="text-xs text-slate-400">{emp.user.email}</div>
+                      <div className="text-xs text-faint">{emp.user.email}</div>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-slate-600">
-                    <span className="text-xs text-slate-400">{DOC_LABELS[emp.documentType] ?? emp.documentType} </span>
+                  <td className="px-4 py-3 text-muted">
+                    <span className="text-xs text-faint">{DOC_LABELS[emp.documentType] ?? emp.documentType} </span>
                     {emp.documentNumber}
                   </td>
-                  <td className="px-4 py-3 text-slate-600">{emp.area?.name ?? '—'}</td>
-                  <td className="px-4 py-3 text-slate-600">{emp.position?.name ?? '—'}</td>
-                  <td className="px-4 py-3 text-right font-mono text-slate-700">
+                  <td className="px-4 py-3 text-muted">{emp.area?.name ?? '—'}</td>
+                  <td className="px-4 py-3 text-muted">{emp.position?.name ?? '—'}</td>
+                  <td className="px-4 py-3 text-right font-mono text-muted">
                     {formatSalary(emp.baseSalary)}
                   </td>
-                  <td className="px-4 py-3 text-slate-600">
+                  <td className="px-4 py-3 text-muted">
                     {CONTRACT_LABELS[emp.contractType] ?? emp.contractType}
                   </td>
                   <td className="px-4 py-3">

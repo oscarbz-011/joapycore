@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useState, useEffect } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -22,7 +22,7 @@ const CURRENCIES = [
 ];
 
 const inputClass =
-  'w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-slate-500 focus:ring-1 focus:ring-slate-500 disabled:bg-slate-50 disabled:text-slate-400 disabled:cursor-not-allowed';
+  'w-full rounded-lg border border-border-strong bg-surface text-ink px-3 py-2 text-sm text-ink outline-none transition focus:border-border-strong focus:ring-1 focus:ring-border-strong disabled:bg-surface-2 disabled:text-faint disabled:cursor-not-allowed';
 
 type FormState = {
   name: string;
@@ -116,14 +116,14 @@ export default function TenantPage() {
     setForm((f) => ({ ...f, [field]: e.target.value }));
 
   if (isLoading) {
-    return <div className="p-6 text-sm text-slate-500">Cargando...</div>;
+    return <div className="p-6 text-sm text-muted">Cargando...</div>;
   }
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
       <div>
-        <h1 className="text-xl font-semibold text-slate-900">Mi empresa</h1>
-        <p className="mt-1 text-sm text-slate-500">
+        <h1 className="text-xl font-semibold text-ink">Mi empresa</h1>
+        <p className="mt-1 text-sm text-muted">
           Información legal y de contacto de tu organización.
         </p>
       </div>
@@ -137,12 +137,12 @@ export default function TenantPage() {
         className="space-y-6"
       >
         {/* Datos de la empresa */}
-        <section className="rounded-xl border border-slate-200 bg-white p-6">
-          <h2 className="mb-4 text-sm font-semibold text-slate-900">Datos de la empresa</h2>
+        <section className="rounded-xl border border-border bg-surface p-6">
+          <h2 className="mb-4 text-sm font-semibold text-ink">Datos de la empresa</h2>
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
+                <label className="block text-sm font-medium text-muted mb-1">
                   Nombre comercial
                 </label>
                 <input
@@ -154,7 +154,7 @@ export default function TenantPage() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
+                <label className="block text-sm font-medium text-muted mb-1">
                   Razón social
                 </label>
                 <input
@@ -169,7 +169,7 @@ export default function TenantPage() {
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">RUC</label>
+                <label className="block text-sm font-medium text-muted mb-1">RUC</label>
                 <input
                   className={inputClass}
                   value={form.ruc}
@@ -179,7 +179,7 @@ export default function TenantPage() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
+                <label className="block text-sm font-medium text-muted mb-1">
                   Plan
                 </label>
                 <input
@@ -194,12 +194,12 @@ export default function TenantPage() {
         </section>
 
         {/* Contacto y ubicación */}
-        <section className="rounded-xl border border-slate-200 bg-white p-6">
-          <h2 className="mb-4 text-sm font-semibold text-slate-900">Contacto y ubicación</h2>
+        <section className="rounded-xl border border-border bg-surface p-6">
+          <h2 className="mb-4 text-sm font-semibold text-ink">Contacto y ubicación</h2>
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Email</label>
+                <label className="block text-sm font-medium text-muted mb-1">Email</label>
                 <input
                   type="email"
                   className={inputClass}
@@ -210,7 +210,7 @@ export default function TenantPage() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Teléfono</label>
+                <label className="block text-sm font-medium text-muted mb-1">Teléfono</label>
                 <input
                   className={inputClass}
                   value={form.phone}
@@ -222,7 +222,7 @@ export default function TenantPage() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Dirección</label>
+              <label className="block text-sm font-medium text-muted mb-1">Dirección</label>
               <input
                 className={inputClass}
                 value={form.address}
@@ -234,7 +234,7 @@ export default function TenantPage() {
 
             <div className="grid grid-cols-3 gap-4">
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Ciudad</label>
+                <label className="block text-sm font-medium text-muted mb-1">Ciudad</label>
                 <input
                   className={inputClass}
                   value={form.city}
@@ -244,7 +244,7 @@ export default function TenantPage() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Departamento</label>
+                <label className="block text-sm font-medium text-muted mb-1">Departamento</label>
                 <input
                   className={inputClass}
                   value={form.department}
@@ -254,7 +254,7 @@ export default function TenantPage() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Código postal</label>
+                <label className="block text-sm font-medium text-muted mb-1">Código postal</label>
                 <input
                   className={inputClass}
                   value={form.postalCode}
@@ -267,7 +267,7 @@ export default function TenantPage() {
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">País</label>
+                <label className="block text-sm font-medium text-muted mb-1">País</label>
                 <input
                   className={inputClass}
                   value={form.country}
@@ -280,11 +280,11 @@ export default function TenantPage() {
         </section>
 
         {/* Configuración operacional */}
-        <section className="rounded-xl border border-slate-200 bg-white p-6">
-          <h2 className="mb-4 text-sm font-semibold text-slate-900">Configuración</h2>
+        <section className="rounded-xl border border-border bg-surface p-6">
+          <h2 className="mb-4 text-sm font-semibold text-ink">Configuración</h2>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Tamaño</label>
+              <label className="block text-sm font-medium text-muted mb-1">Tamaño</label>
               <select
                 className={inputClass}
                 value={form.employeeCount}
@@ -297,7 +297,7 @@ export default function TenantPage() {
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Moneda base</label>
+              <label className="block text-sm font-medium text-muted mb-1">Moneda base</label>
               <select
                 className={inputClass}
                 value={form.currency}
@@ -317,7 +317,7 @@ export default function TenantPage() {
             <button
               type="submit"
               disabled={!isDirty || mutation.isPending}
-              className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-50 transition-colors"
+              className="rounded-lg bg-ink px-4 py-2 text-sm font-medium text-canvas hover:opacity-80 disabled:opacity-50 transition-colors"
             >
               {mutation.isPending ? 'Guardando...' : 'Guardar cambios'}
             </button>

@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useState } from 'react';
 import Link from 'next/link';
@@ -10,17 +10,17 @@ import { procurementApi, type CreateSupplierPayload, type Supplier } from '../..
 
 function ProcurementNav() {
   return (
-    <div className="flex gap-1 border-b border-slate-200 mb-6">
+    <div className="flex gap-1 border-b border-border mb-6">
       <Link
         href="/dashboard/procurement"
-        className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 border-transparent text-slate-500 hover:text-slate-700 -mb-px"
+        className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 border-transparent text-muted hover:text-ink -mb-px"
       >
         <Truck size={15} />
         Órdenes de compra
       </Link>
       <Link
         href="/dashboard/procurement/suppliers"
-        className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 border-slate-900 text-slate-900 -mb-px"
+        className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 border-ink text-ink -mb-px"
       >
         <Users size={15} />
         Proveedores
@@ -105,16 +105,16 @@ function SupplierForm({
   });
 
   const inputCls =
-    'w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500';
-  const labelCls = 'block text-xs font-medium text-slate-600 mb-1';
+    'w-full rounded-lg border border-border-strong bg-surface text-ink px-3 py-2 text-sm focus:border-border-strong focus:outline-none focus:ring-1 focus:ring-border-strong';
+  const labelCls = 'block text-xs font-medium text-muted mb-1';
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
-        <h2 className="text-sm font-semibold text-slate-900">
+      <div className="flex items-center justify-between border-b border-border px-5 py-4">
+        <h2 className="text-sm font-semibold text-ink">
           {initial ? initial.name : 'Nuevo proveedor'}
         </h2>
-        <button onClick={onClose} className="rounded-md p-1 text-slate-400 hover:bg-slate-100">
+        <button onClick={onClose} className="rounded-md p-1 text-faint hover:bg-surface-2">
           <X size={18} />
         </button>
       </div>
@@ -196,9 +196,9 @@ function SupplierForm({
             type="checkbox"
             checked={form.isImporter as boolean}
             onChange={(e) => set('isImporter', e.target.checked)}
-            className="h-4 w-4 rounded border-slate-300 accent-slate-900"
+            className="h-4 w-4 rounded border-border-strong accent-accent"
           />
-          <span className="text-sm font-medium text-slate-700">Es importador</span>
+          <span className="text-sm font-medium text-muted">Es importador</span>
         </label>
 
         {error && (
@@ -207,11 +207,11 @@ function SupplierForm({
           </div>
         )}
 
-        <div className="flex gap-2 pt-2 border-t border-slate-100">
+        <div className="flex gap-2 pt-2 border-t border-border">
           <button
             type="submit"
             disabled={saveMutation.isPending}
-            className="flex-1 rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-50"
+            className="flex-1 rounded-lg bg-ink px-4 py-2 text-sm font-medium text-canvas hover:opacity-80 disabled:opacity-50"
           >
             {saveMutation.isPending ? 'Guardando...' : initial ? 'Guardar cambios' : 'Crear proveedor'}
           </button>
@@ -242,7 +242,7 @@ function SupplierForm({
                   <button
                     type="button"
                     onClick={() => setConfirmDelete(false)}
-                    className="flex-1 rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700"
+                    className="flex-1 rounded-lg border border-border-strong bg-surface text-ink px-3 py-1.5 text-xs font-medium text-muted"
                   >
                     Cancelar
                   </button>
@@ -279,12 +279,12 @@ export default function SuppliersPage() {
     <div>
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-slate-900">Compras</h1>
-          <p className="mt-1 text-sm text-slate-500">Órdenes de compra y proveedores</p>
+          <h1 className="text-2xl font-semibold text-ink">Compras</h1>
+          <p className="mt-1 text-sm text-muted">Órdenes de compra y proveedores</p>
         </div>
         <button
           onClick={() => { setSelectedSupplier(null); setShowCreate(true); }}
-          className="flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700"
+          className="flex items-center gap-2 rounded-lg bg-ink px-4 py-2 text-sm font-medium text-canvas hover:opacity-80"
         >
           <Plus size={16} />
           Nuevo proveedor
@@ -297,9 +297,9 @@ export default function SuppliersPage() {
         {/* List */}
         <div className={`flex-1 min-w-0 ${panelOpen ? 'hidden sm:block' : ''}`}>
           <div className="relative mb-4">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-faint" />
             <input
-              className="w-full rounded-lg border border-slate-300 pl-8 pr-3 py-2 text-sm focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500"
+              className="w-full rounded-lg border border-border-strong pl-8 pr-3 py-2 text-sm focus:border-border-strong focus:outline-none focus:ring-1 focus:ring-border-strong"
               placeholder="Buscar por nombre, email o RUC..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -307,38 +307,38 @@ export default function SuppliersPage() {
           </div>
 
           {isLoading ? (
-            <div className="py-16 text-center text-sm text-slate-400">Cargando proveedores...</div>
+            <div className="py-16 text-center text-sm text-faint">Cargando proveedores...</div>
           ) : filtered.length === 0 ? (
             <div className="py-16 text-center">
-              <p className="text-sm text-slate-400">No se encontraron proveedores.</p>
+              <p className="text-sm text-faint">No se encontraron proveedores.</p>
               <button
                 onClick={() => setShowCreate(true)}
-                className="mt-3 text-sm font-medium text-slate-900 underline underline-offset-2"
+                className="mt-3 text-sm font-medium text-ink underline underline-offset-2"
               >
                 Crear el primero
               </button>
             </div>
           ) : (
-            <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-              <ul className="divide-y divide-slate-100">
+            <div className="overflow-hidden rounded-xl border border-border bg-surface">
+              <ul className="divide-y divide-border">
                 {filtered.map((supplier) => (
                   <li
                     key={supplier.id}
                     onClick={() => { setShowCreate(false); setSelectedSupplier(supplier); }}
-                    className={`flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-slate-50 transition-colors ${
-                      selectedSupplier?.id === supplier.id ? 'bg-slate-50' : ''
+                    className={`flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-surface-2 transition-colors ${
+                      selectedSupplier?.id === supplier.id ? 'bg-surface-2' : ''
                     }`}
                   >
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
-                        <p className="font-medium text-slate-900 truncate">{supplier.name}</p>
+                        <p className="font-medium text-ink truncate">{supplier.name}</p>
                         {supplier.isImporter && (
                           <span className="inline-flex shrink-0 rounded-full bg-violet-50 px-1.5 py-0.5 text-xs font-medium text-violet-700">
                             Importador
                           </span>
                         )}
                       </div>
-                      <p className="text-xs text-slate-400 truncate">
+                      <p className="text-xs text-faint truncate">
                         {[
                           supplier.contactName,
                           supplier.email,
@@ -349,7 +349,7 @@ export default function SuppliersPage() {
                       </p>
                     </div>
                     {!supplier.isActive && (
-                      <span className="ml-3 shrink-0 inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-500">
+                      <span className="ml-3 shrink-0 inline-flex rounded-full bg-surface-2 px-2 py-0.5 text-xs text-muted">
                         Inactivo
                       </span>
                     )}
@@ -362,7 +362,7 @@ export default function SuppliersPage() {
 
         {/* Side panel */}
         {panelOpen && (
-          <div className="w-80 shrink-0 rounded-xl border border-slate-200 bg-white overflow-hidden">
+          <div className="w-80 shrink-0 rounded-xl border border-border bg-surface overflow-hidden">
             {showCreate ? (
               <SupplierForm onClose={() => setShowCreate(false)} />
             ) : selectedSupplier ? (

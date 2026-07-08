@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -41,14 +41,14 @@ export default function ModulesPage() {
   });
 
   if (isLoading) {
-    return <div className="text-sm text-slate-500">Cargando módulos...</div>;
+    return <div className="text-sm text-muted">Cargando módulos...</div>;
   }
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
       <div>
-        <h1 className="text-xl font-semibold text-slate-900">Módulos</h1>
-        <p className="mt-1 text-sm text-slate-500">
+        <h1 className="text-xl font-semibold text-ink">Módulos</h1>
+        <p className="mt-1 text-sm text-muted">
           Activá o desactivá los módulos disponibles para tu empresa.
         </p>
       </div>
@@ -65,15 +65,15 @@ export default function ModulesPage() {
           return (
             <div
               key={mod.id}
-              className="flex items-center gap-4 rounded-xl border border-slate-200 bg-white px-5 py-4"
+              className="flex items-center gap-4 rounded-xl border border-border bg-surface px-5 py-4"
             >
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-slate-100">
-                <Icon size={18} className="text-slate-600" />
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-surface-2">
+                <Icon size={18} className="text-muted" />
               </div>
 
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-slate-900">{meta.label}</p>
-                <p className="text-xs text-slate-500 mt-0.5">{meta.description}</p>
+                <p className="text-sm font-medium text-ink">{meta.label}</p>
+                <p className="text-xs text-muted mt-0.5">{meta.description}</p>
               </div>
 
               <div className="flex items-center gap-3 shrink-0">
@@ -81,7 +81,7 @@ export default function ModulesPage() {
                   className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${
                     mod.active
                       ? 'bg-emerald-50 text-emerald-700'
-                      : 'bg-slate-100 text-slate-500'
+                      : 'bg-surface-2 text-muted'
                   }`}
                 >
                   {mod.active ? 'Activo' : 'Inactivo'}
@@ -94,14 +94,14 @@ export default function ModulesPage() {
                     }
                     disabled={isPending}
                     className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none disabled:opacity-50 ${
-                      mod.active ? 'bg-slate-900' : 'bg-slate-200'
+                      mod.active ? 'bg-ink' : 'bg-border-strong'
                     }`}
                     role="switch"
                     aria-checked={mod.active}
                     aria-label={`${mod.active ? 'Desactivar' : 'Activar'} ${meta.label}`}
                   >
                     <span
-                      className={`pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow transform transition-transform duration-200 ${
+                      className={`pointer-events-none inline-block h-4 w-4 rounded-full bg-surface shadow transform transition-transform duration-200 ${
                         mod.active ? 'translate-x-4' : 'translate-x-0'
                       }`}
                     />
@@ -114,7 +114,7 @@ export default function ModulesPage() {
       </div>
 
       {!canToggle && (
-        <p className="text-xs text-slate-400 text-center">
+        <p className="text-xs text-faint text-center">
           Necesitás el permiso <span className="font-mono">tenants:modules:manage</span> para modificar los módulos.
         </p>
       )}

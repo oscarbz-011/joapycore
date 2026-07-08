@@ -1,9 +1,9 @@
-'use client';
+﻿'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Plus, Search, ShoppingCart, Users, X, Trash2 } from 'lucide-react';
+import { Plus, Search, ShoppingCart, Users, X, Trash2, Target, UserCheck } from 'lucide-react';
 import {
   salesApi,
   type Customer,
@@ -13,6 +13,9 @@ import {
   type SaleType,
 } from '../../../../lib/api/sales';
 import { inventoryApi, type Product } from '../../../../lib/api/inventory';
+import { settingsApi, type CreditPlan } from '../../../../lib/api/settings';
+import { usersApi } from '../../../../lib/api/users';
+import { useAuth } from '../../../../lib/auth-context';
 import { SearchSelect } from '../components/search-select';
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -41,20 +44,27 @@ function orderTotal(order: SaleOrder) {
 
 function SalesNav() {
   return (
-    <div className="flex gap-1 border-b border-slate-200 mb-6">
+    <div className="flex gap-1 border-b border-border mb-6">
       <Link
         href="/dashboard/sales"
-        className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 border-slate-900 text-slate-900 -mb-px"
+        className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 border-ink text-ink -mb-px"
       >
         <ShoppingCart size={15} />
         Pedidos
       </Link>
       <Link
         href="/dashboard/sales/customers"
-        className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 border-transparent text-slate-500 hover:text-slate-700 -mb-px"
+        className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 border-transparent text-muted hover:text-ink -mb-px"
       >
         <Users size={15} />
         Clientes
+      </Link>
+      <Link
+        href="/dashboard/sales/targets"
+        className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 border-transparent text-muted hover:text-ink -mb-px"
+      >
+        <Target size={15} />
+        Metas
       </Link>
     </div>
   );
@@ -63,7 +73,7 @@ function SalesNav() {
 // ── Status badge ───────────────────────────────────────────────────────────────
 
 const STATUS_MAP: Record<SaleOrderStatus, { label: string; className: string }> = {
-  PENDING:                 { label: 'Pendiente',         className: 'bg-slate-100 text-slate-600' },
+  PENDING:                 { label: 'Pendiente',         className: 'bg-surface-2 text-muted' },
   PENDING_CREDIT_APPROVAL: { label: 'En evaluación',     className: 'bg-amber-50 text-amber-700' },
   CREDIT_APPROVED:         { label: 'Crédito aprobado',  className: 'bg-sky-50 text-sky-700' },
   CREDIT_REJECTED:         { label: 'Crédito rechazado', className: 'bg-red-50 text-red-700' },
@@ -103,12 +113,12 @@ function LineItemRow({
   onRemove: () => void;
 }) {
   const inputCls =
-    'w-full rounded-lg border border-slate-300 px-2.5 py-1.5 text-sm focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500';
+    'w-full rounded-lg border border-border-strong bg-surface text-ink px-2.5 py-1.5 text-sm focus:border-border-strong focus:outline-none focus:ring-1 focus:ring-border-strong';
 
   const subtotal = item.quantity * item.unitPrice;
 
   return (
-    <div className="rounded-lg border border-slate-200 p-3 space-y-2">
+    <div className="rounded-lg border border-border p-3 space-y-2">
       <div className="flex gap-2 items-start">
         <div className="flex-1">
           <SearchSelect<Product>
@@ -155,13 +165,13 @@ function LineItemRow({
             required
           />
         </div>
-        <div className="w-28 pt-1.5 text-right text-sm font-medium text-slate-700">
+        <div className="w-28 pt-1.5 text-right text-sm font-medium text-muted">
           {formatPrice(subtotal)}
         </div>
         <button
           type="button"
           onClick={onRemove}
-          className="pt-1.5 text-slate-400 hover:text-red-500"
+          className="pt-1.5 text-faint hover:text-red-500"
         >
           <Trash2 size={15} />
         </button>
@@ -169,7 +179,7 @@ function LineItemRow({
 
       {item.product?.isSerialized && (
         <div>
-          <label className="block text-xs text-slate-500 mb-1">
+          <label className="block text-xs text-muted mb-1">
             Números de serie (uno por línea, {item.quantity} requerido{item.quantity !== 1 ? 's' : ''})
           </label>
           <textarea
@@ -187,46 +197,48 @@ function LineItemRow({
 
 // ── Credit plan selector ───────────────────────────────────────────────────────
 
-const INSTALLMENT_OPTIONS = [3, 6, 12, 18, 24];
-
 function CreditOptions({
   total,
   installments,
   onInstallmentsChange,
+  plans,
 }: {
   total: number;
   installments: number;
   onInstallmentsChange: (n: number) => void;
+  plans: CreditPlan[];
 }) {
-  const monthly = installments > 0 ? total / installments : 0;
+  const selectedPlan = plans.find((p) => p.installments === installments);
+  const rate = selectedPlan ? Number(selectedPlan.interestRate) : 0;
+  const monthly = installments > 0 ? (total * (1 + rate / 100)) / installments : 0;
 
   return (
     <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 space-y-3">
       <p className="text-xs font-semibold text-amber-800 uppercase tracking-wide">Venta a crédito</p>
       <div>
-        <label className="block text-xs font-medium text-slate-600 mb-1">Cuotas</label>
+        <label className="block text-xs font-medium text-muted mb-1">Plan de cuotas</label>
         <div className="flex gap-2 flex-wrap">
-          {INSTALLMENT_OPTIONS.map((n) => (
+          {plans.map((plan) => (
             <button
-              key={n}
+              key={plan.installments}
               type="button"
-              onClick={() => onInstallmentsChange(n)}
+              onClick={() => onInstallmentsChange(plan.installments)}
               className={`rounded-lg px-3 py-1.5 text-sm font-medium border transition-colors ${
-                installments === n
-                  ? 'border-slate-900 bg-slate-900 text-white'
-                  : 'border-slate-300 text-slate-700 hover:border-slate-500'
+                installments === plan.installments
+                  ? 'border-ink bg-ink text-canvas'
+                  : 'border-border-strong text-muted hover:border-border-strong'
               }`}
             >
-              {n}x
+              {plan.installments}x
             </button>
           ))}
         </div>
       </div>
-      {installments > 0 && total > 0 && (
+      {installments > 0 && total > 0 && selectedPlan && (
         <p className="text-sm text-amber-800">
           Cuota estimada:{' '}
           <strong>{formatPrice(Math.ceil(monthly))}</strong> / mes
-          <span className="text-xs text-amber-600 ml-1">(sin recargo configurado)</span>
+          {rate > 0 && <span className="text-xs text-amber-600 ml-1">({rate}% interés total)</span>}
         </p>
       )}
       <p className="text-xs text-amber-700">
@@ -250,14 +262,41 @@ function CreateOrderModal({
   onSaved: () => void;
 }) {
   const queryClient = useQueryClient();
+  const { jwtPayload } = useAuth();
+  const canManage = jwtPayload?.permissions.includes('sales:manage') ?? false;
+
   const [customerId, setCustomerId] = useState('');
+  const [sellerId, setSellerId] = useState(canManage ? '' : (jwtPayload?.sub ?? ''));
   const [saleType, setSaleType] = useState<SaleType>('CASH');
-  const [installments, setInstallments] = useState(6);
+  const [installments, setInstallments] = useState(0);
   const [notes, setNotes] = useState('');
   const [items, setItems] = useState<LineItem[]>([
     { productId: '', product: null, quantity: 1, unitPrice: 0, serialInput: '' },
   ]);
   const [error, setError] = useState('');
+
+  const { data: allUsers = [] } = useQuery({
+    queryKey: ['users'],
+    queryFn: usersApi.list,
+    enabled: canManage,
+  });
+
+  const { data: creditConfig } = useQuery({
+    queryKey: ['credit-config'],
+    queryFn: settingsApi.getCredit,
+  });
+
+  const activePlans = creditConfig?.isEnabled
+    ? (creditConfig.plans ?? []).filter((p) => p.isActive)
+    : [];
+  const creditAvailable = activePlans.length > 0;
+
+  // Auto-select first plan; reset to CASH if credit becomes unavailable
+  useEffect(() => {
+    if (!creditAvailable && saleType === 'CREDIT') setSaleType('CASH');
+    if (creditAvailable && installments === 0) setInstallments(activePlans[0].installments);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [creditAvailable, activePlans.length]);
 
   const total = items.reduce((sum, i) => sum + i.quantity * i.unitPrice, 0);
 
@@ -265,6 +304,7 @@ function CreateOrderModal({
     mutationFn: () => {
       const dto: Parameters<typeof salesApi.createOrder>[0] = {
         customerId,
+        sellerId: sellerId || undefined,
         saleType,
         installments: saleType === 'CREDIT' ? installments : undefined,
         notes: notes.trim() || undefined,
@@ -289,17 +329,17 @@ function CreateOrderModal({
     },
   });
 
-  const labelCls = 'block text-xs font-medium text-slate-600 mb-1';
+  const labelCls = 'block text-xs font-medium text-muted mb-1';
   const inputCls =
-    'w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500';
+    'w-full rounded-lg border border-border-strong bg-surface text-ink px-3 py-2 text-sm focus:border-border-strong focus:outline-none focus:ring-1 focus:ring-border-strong';
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-      <div className="relative z-10 w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl bg-white shadow-2xl">
-        <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
-          <h2 className="text-base font-semibold text-slate-900">Nuevo pedido</h2>
-          <button onClick={onClose} className="rounded-md p-1 text-slate-400 hover:bg-slate-100">
+      <div className="relative z-10 w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl bg-surface shadow-2xl">
+        <div className="flex items-center justify-between border-b border-border px-6 py-4">
+          <h2 className="text-base font-semibold text-ink">Nuevo pedido</h2>
+          <button onClick={onClose} className="rounded-md p-1 text-faint hover:bg-surface-2">
             <X size={18} />
           </button>
         </div>
@@ -339,17 +379,43 @@ function CreateOrderModal({
             />
           </div>
 
+          {/* Vendedor */}
+          {canManage ? (
+            <div>
+              <label className={labelCls}>
+                <span className="flex items-center gap-1"><UserCheck size={12} />Vendedor</span>
+              </label>
+              <select
+                className={inputCls}
+                value={sellerId}
+                onChange={(e) => setSellerId(e.target.value)}
+              >
+                <option value="">— Sin asignar —</option>
+                {allUsers.filter((u) => u.status === 'ACTIVE').map((u) => (
+                  <option key={u.id} value={u.id}>{u.firstName} {u.lastName}</option>
+                ))}
+              </select>
+            </div>
+          ) : jwtPayload ? (
+            <p className="text-xs text-faint flex items-center gap-1">
+              <UserCheck size={12} />
+              Vendedor: <strong className="text-muted">
+                {allUsers.find((u) => u.id === jwtPayload.sub)?.firstName ?? 'tú'}
+              </strong>
+            </p>
+          ) : null}
+
           {/* Tipo de venta */}
           <div>
             <label className={labelCls}>Tipo de venta</label>
             <div className="flex gap-3">
-              {(['CASH', 'CREDIT'] as SaleType[]).map((type) => (
+              {(['CASH', ...(creditAvailable ? ['CREDIT'] : [])] as SaleType[]).map((type) => (
                 <label
                   key={type}
                   className={`flex-1 flex items-center justify-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-medium cursor-pointer transition-colors ${
                     saleType === type
-                      ? 'border-slate-900 bg-slate-900 text-white'
-                      : 'border-slate-300 text-slate-700 hover:border-slate-500'
+                      ? 'border-ink bg-ink text-canvas'
+                      : 'border-border-strong text-muted hover:border-border-strong'
                   }`}
                 >
                   <input
@@ -371,16 +437,17 @@ function CreateOrderModal({
               total={total}
               installments={installments}
               onInstallmentsChange={setInstallments}
+              plans={activePlans}
             />
           )}
 
           {/* Productos */}
           <div>
             <div className="flex items-center justify-between mb-2">
-              <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+              <p className="text-xs font-semibold uppercase tracking-wider text-faint">
                 Productos
               </p>
-              <div className="text-xs text-slate-500 hidden sm:flex gap-2 mr-8 pr-4">
+              <div className="text-xs text-muted hidden sm:flex gap-2 mr-8 pr-4">
                 <span className="w-20 text-right">Cant.</span>
                 <span className="w-32 text-right">P. Unitario</span>
                 <span className="w-28 text-right">Subtotal</span>
@@ -407,7 +474,7 @@ function CreateOrderModal({
                   { productId: '', product: null, quantity: 1, unitPrice: 0, serialInput: '' },
                 ])
               }
-              className="mt-2 flex items-center gap-1.5 text-sm text-slate-600 hover:text-slate-900"
+              className="mt-2 flex items-center gap-1.5 text-sm text-muted hover:text-ink"
             >
               <Plus size={14} />
               Agregar producto
@@ -416,9 +483,9 @@ function CreateOrderModal({
 
           {/* Total */}
           {items.length > 0 && (
-            <div className="flex justify-end border-t border-slate-100 pt-3">
-              <span className="text-sm text-slate-500 mr-3">Total estimado</span>
-              <span className="text-sm font-bold text-slate-900">{formatPrice(total)}</span>
+            <div className="flex justify-end border-t border-border pt-3">
+              <span className="text-sm text-muted mr-3">Total estimado</span>
+              <span className="text-sm font-bold text-ink">{formatPrice(total)}</span>
             </div>
           )}
 
@@ -440,18 +507,18 @@ function CreateOrderModal({
             </div>
           )}
 
-          <div className="flex justify-end gap-3 pt-2 border-t border-slate-100">
+          <div className="flex justify-end gap-3 pt-2 border-t border-border">
             <button
               type="button"
               onClick={onClose}
-              className="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
+              className="rounded-lg border border-border-strong bg-surface text-ink px-4 py-2 text-sm text-muted hover:bg-surface-2"
             >
               Cancelar
             </button>
             <button
               type="submit"
               disabled={mutation.isPending}
-              className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-50"
+              className="rounded-lg bg-ink px-4 py-2 text-sm font-medium text-canvas hover:opacity-80 disabled:opacity-50"
             >
               {mutation.isPending ? 'Creando...' : 'Crear pedido'}
             </button>
@@ -493,12 +560,12 @@ function OrderDetailPanel({ order, onClose }: { order: SaleOrder; onClose: () =>
   return (
     <div className="fixed inset-0 z-40 flex justify-end">
       <div className="absolute inset-0 bg-black/30" onClick={onClose} />
-      <aside className="relative z-50 flex h-full w-full max-w-sm flex-col bg-white shadow-2xl overflow-y-auto">
+      <aside className="relative z-50 flex h-full w-full max-w-sm flex-col bg-surface shadow-2xl overflow-y-auto">
         {/* Header */}
-        <div className="flex items-start justify-between border-b border-slate-100 px-5 py-4">
+        <div className="flex items-start justify-between border-b border-border px-5 py-4">
           <div>
             <div className="flex items-center gap-2 flex-wrap">
-              <p className="font-semibold text-slate-900">
+              <p className="font-semibold text-ink">
                 {order.customer.firstName} {order.customer.lastName}
               </p>
               <StatusBadge status={order.status} />
@@ -509,20 +576,20 @@ function OrderDetailPanel({ order, onClose }: { order: SaleOrder; onClose: () =>
               )}
             </div>
             {order.customer.documentNumber && (
-              <p className="text-xs text-slate-400 mt-0.5">
+              <p className="text-xs text-faint mt-0.5">
                 {order.customer.documentType}: {order.customer.documentNumber}
               </p>
             )}
-            <p className="text-xs text-slate-400 mt-0.5">{formatDate(order.orderDate)}</p>
+            <p className="text-xs text-faint mt-0.5">{formatDate(order.orderDate)}</p>
             {order.createdBy && (
-              <p className="text-xs text-slate-400 mt-0.5">
+              <p className="text-xs text-faint mt-0.5">
                 Vendedor: {order.createdBy.firstName} {order.createdBy.lastName}
               </p>
             )}
           </div>
           <button
             onClick={onClose}
-            className="ml-3 shrink-0 rounded-md p-1 text-slate-400 hover:bg-slate-100"
+            className="ml-3 shrink-0 rounded-md p-1 text-faint hover:bg-surface-2"
           >
             <X size={18} />
           </button>
@@ -530,7 +597,7 @@ function OrderDetailPanel({ order, onClose }: { order: SaleOrder; onClose: () =>
 
         {/* Credit decision */}
         {order.status === 'CREDIT_APPROVED' && order.approvedBy && (
-          <div className="border-b border-slate-100 px-5 py-3 bg-sky-50">
+          <div className="border-b border-border px-5 py-3 bg-sky-50">
             <p className="text-xs text-sky-700">
               Aprobado por <strong>{order.approvedBy.firstName} {order.approvedBy.lastName}</strong>
               {order.approvedAt ? ` el ${formatDate(order.approvedAt)}` : ''}
@@ -538,7 +605,7 @@ function OrderDetailPanel({ order, onClose }: { order: SaleOrder; onClose: () =>
           </div>
         )}
         {order.status === 'CREDIT_REJECTED' && order.rejectedBy && (
-          <div className="border-b border-slate-100 px-5 py-3 bg-red-50">
+          <div className="border-b border-border px-5 py-3 bg-red-50">
             <p className="text-xs text-red-700">
               Rechazado por <strong>{order.rejectedBy.firstName} {order.rejectedBy.lastName}</strong>
               {order.rejectedAt ? ` el ${formatDate(order.rejectedAt)}` : ''}
@@ -550,44 +617,44 @@ function OrderDetailPanel({ order, onClose }: { order: SaleOrder; onClose: () =>
         )}
 
         {/* Items */}
-        <div className="border-b border-slate-100 px-5 py-4">
-          <p className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-3">
+        <div className="border-b border-border px-5 py-4">
+          <p className="text-xs font-semibold uppercase tracking-wider text-faint mb-3">
             Productos
           </p>
           <div className="space-y-2">
             {order.items.map((item) => (
               <div key={item.id} className="flex items-start justify-between gap-2">
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm text-slate-800 truncate">{item.product.name}</p>
+                  <p className="text-sm text-ink truncate">{item.product.name}</p>
                   {item.product.model && (
-                    <p className="text-xs text-slate-400">{item.product.model}</p>
+                    <p className="text-xs text-faint">{item.product.model}</p>
                   )}
                   {item.productUnits.length > 0 && (
-                    <p className="text-xs text-slate-400 font-mono">
+                    <p className="text-xs text-faint font-mono">
                       S/N: {item.productUnits.map((u) => u.serialNumber).join(', ')}
                     </p>
                   )}
                   {item.batch && (
-                    <p className="text-xs text-slate-400">Lote: {item.batch.batchNumber}</p>
+                    <p className="text-xs text-faint">Lote: {item.batch.batchNumber}</p>
                   )}
                 </div>
                 <div className="text-right shrink-0">
-                  <p className="text-sm text-slate-500">
+                  <p className="text-sm text-muted">
                     {item.quantity} × {formatPrice(item.unitPrice)}
                   </p>
-                  <p className="text-sm font-medium text-slate-800">
+                  <p className="text-sm font-medium text-ink">
                     {formatPrice(item.quantity * item.unitPrice)}
                   </p>
                 </div>
               </div>
             ))}
           </div>
-          <div className="flex justify-between items-center border-t border-slate-100 mt-3 pt-3">
-            <span className="text-sm font-semibold text-slate-700">Total</span>
-            <span className="text-base font-bold text-slate-900">{formatPrice(total)}</span>
+          <div className="flex justify-between items-center border-t border-border mt-3 pt-3">
+            <span className="text-sm font-semibold text-muted">Total</span>
+            <span className="text-base font-bold text-ink">{formatPrice(total)}</span>
           </div>
           {order.saleType === 'CREDIT' && order.installments && (
-            <p className="text-xs text-slate-500 text-right mt-1">
+            <p className="text-xs text-muted text-right mt-1">
               {order.installments} cuotas de ≈ {formatPrice(Math.ceil(total / order.installments))}
             </p>
           )}
@@ -595,17 +662,17 @@ function OrderDetailPanel({ order, onClose }: { order: SaleOrder; onClose: () =>
 
         {/* Notes */}
         {order.notes && (
-          <div className="border-b border-slate-100 px-5 py-4">
-            <p className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Notas</p>
-            <p className="text-sm text-slate-600">{order.notes}</p>
+          <div className="border-b border-border px-5 py-4">
+            <p className="text-xs font-semibold uppercase tracking-wider text-faint mb-1">Notas</p>
+            <p className="text-sm text-muted">{order.notes}</p>
           </div>
         )}
 
         {/* Invoice info */}
         {order.invoice && (
-          <div className="border-b border-slate-100 px-5 py-4">
-            <p className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Factura</p>
-            <p className="text-sm text-slate-600">Estado: {order.invoice.status}</p>
+          <div className="border-b border-border px-5 py-4">
+            <p className="text-xs font-semibold uppercase tracking-wider text-faint mb-1">Factura</p>
+            <p className="text-sm text-muted">Estado: {order.invoice.status}</p>
           </div>
         )}
 
@@ -617,7 +684,7 @@ function OrderDetailPanel({ order, onClose }: { order: SaleOrder; onClose: () =>
                 {canConfirm && (
                   <button
                     onClick={() => setConfirmAction('confirm')}
-                    className="w-full rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700"
+                    className="w-full rounded-lg bg-ink px-4 py-2 text-sm font-medium text-canvas hover:opacity-80"
                   >
                     Confirmar pedido
                   </button>
@@ -634,21 +701,21 @@ function OrderDetailPanel({ order, onClose }: { order: SaleOrder; onClose: () =>
             )}
 
             {confirmAction === 'confirm' && (
-              <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
-                <p className="text-xs text-slate-700 mb-2">
+              <div className="rounded-lg border border-border bg-surface-2 px-4 py-3">
+                <p className="text-xs text-muted mb-2">
                   ¿Confirmar el pedido? Esto descontará el stock.
                 </p>
                 <div className="flex gap-2">
                   <button
                     onClick={() => confirmMutation.mutate()}
                     disabled={confirmMutation.isPending}
-                    className="flex-1 rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-slate-700 disabled:opacity-50"
+                    className="flex-1 rounded-lg bg-ink px-3 py-1.5 text-xs font-medium text-canvas hover:opacity-80 disabled:opacity-50"
                   >
                     {confirmMutation.isPending ? 'Confirmando...' : 'Sí, confirmar'}
                   </button>
                   <button
                     onClick={() => setConfirmAction(null)}
-                    className="flex-1 rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                    className="flex-1 rounded-lg border border-border-strong bg-surface text-ink px-3 py-1.5 text-xs font-medium text-muted hover:bg-surface-2"
                   >
                     Volver
                   </button>
@@ -674,7 +741,7 @@ function OrderDetailPanel({ order, onClose }: { order: SaleOrder; onClose: () =>
                   </button>
                   <button
                     onClick={() => setConfirmAction(null)}
-                    className="flex-1 rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                    className="flex-1 rounded-lg border border-border-strong bg-surface text-ink px-3 py-1.5 text-xs font-medium text-muted hover:bg-surface-2"
                   >
                     Volver
                   </button>
@@ -719,18 +786,18 @@ export default function SalesPage() {
   });
 
   const selectCls =
-    'rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-700 focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500 bg-white';
+    'rounded-lg border border-border-strong bg-surface text-ink px-3 py-2 text-sm text-muted focus:border-border-strong focus:outline-none focus:ring-1 focus:ring-border-strong bg-surface';
 
   return (
     <div>
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-slate-900">Ventas</h1>
-          <p className="mt-1 text-sm text-slate-500">Pedidos y clientes</p>
+          <h1 className="text-2xl font-semibold text-ink">Ventas</h1>
+          <p className="mt-1 text-sm text-muted">Pedidos y clientes</p>
         </div>
         <button
           onClick={() => setShowCreate(true)}
-          className="flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700"
+          className="flex items-center gap-2 rounded-lg bg-ink px-4 py-2 text-sm font-medium text-canvas hover:opacity-80"
         >
           <Plus size={16} />
           Nuevo pedido
@@ -742,9 +809,9 @@ export default function SalesPage() {
       {/* Filters */}
       <div className="mb-4 flex items-center gap-3">
         <div className="relative flex-1 min-w-48">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-faint" />
           <input
-            className="w-full rounded-lg border border-slate-300 pl-8 pr-3 py-2 text-sm focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500"
+            className="w-full rounded-lg border border-border-strong pl-8 pr-3 py-2 text-sm focus:border-border-strong focus:outline-none focus:ring-1 focus:ring-border-strong"
             placeholder="Buscar por cliente..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -768,60 +835,67 @@ export default function SalesPage() {
 
       {/* Table */}
       {isLoading ? (
-        <div className="py-16 text-center text-sm text-slate-400">Cargando pedidos...</div>
+        <div className="py-16 text-center text-sm text-faint">Cargando pedidos...</div>
       ) : filtered.length === 0 ? (
         <div className="py-16 text-center">
-          <p className="text-sm text-slate-400">No se encontraron pedidos.</p>
+          <p className="text-sm text-faint">No se encontraron pedidos.</p>
           <button
             onClick={() => setShowCreate(true)}
-            className="mt-3 text-sm font-medium text-slate-900 underline underline-offset-2"
+            className="mt-3 text-sm font-medium text-ink underline underline-offset-2"
           >
             Crear el primero
           </button>
         </div>
       ) : (
-        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+        <div className="overflow-hidden rounded-xl border border-border bg-surface">
           <table className="w-full text-sm">
-            <thead className="border-b border-slate-100 bg-slate-50 text-xs font-semibold uppercase tracking-wider text-slate-500">
+            <thead className="border-b border-border bg-surface-2 text-xs font-semibold uppercase tracking-wider text-muted">
               <tr>
                 <th className="px-4 py-3 text-left">Cliente</th>
                 <th className="px-4 py-3 text-left">Fecha</th>
                 <th className="px-4 py-3 text-left">Estado</th>
-                <th className="px-4 py-3 text-left hidden md:table-cell">Tipo</th>
+                <th className="px-4 py-3 text-left hidden lg:table-cell">Tipo</th>
+                <th className="px-4 py-3 text-left hidden lg:table-cell">Vendedor</th>
                 <th className="px-4 py-3 text-center">Prods.</th>
                 <th className="px-4 py-3 text-right">Total</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className="divide-y divide-border">
               {filtered.map((order) => (
                 <tr
                   key={order.id}
                   onClick={() => setSelectedOrder(order)}
-                  className="cursor-pointer hover:bg-slate-50 transition-colors"
+                  className="cursor-pointer hover:bg-surface-2 transition-colors"
                 >
                   <td className="px-4 py-3">
-                    <div className="font-medium text-slate-900">
+                    <div className="font-medium text-ink">
                       {order.customer.firstName} {order.customer.lastName}
                     </div>
                     {order.customer.documentNumber && (
-                      <div className="text-xs text-slate-400">{order.customer.documentNumber}</div>
+                      <div className="text-xs text-faint">{order.customer.documentNumber}</div>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-slate-500">{formatDate(order.orderDate)}</td>
+                  <td className="px-4 py-3 text-muted">{formatDate(order.orderDate)}</td>
                   <td className="px-4 py-3">
                     <StatusBadge status={order.status} />
                   </td>
-                  <td className="px-4 py-3 hidden md:table-cell">
+                  <td className="px-4 py-3 hidden lg:table-cell">
                     {order.saleType === 'CREDIT' ? (
                       <span className="text-xs font-medium text-amber-700">
                         Crédito {order.installments ? `${order.installments}x` : ''}
                       </span>
                     ) : (
-                      <span className="text-xs text-slate-500">Contado</span>
+                      <span className="text-xs text-muted">Contado</span>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-center text-slate-500">{order.items.length}</td>
-                  <td className="px-4 py-3 text-right font-mono font-medium text-slate-800">
+                  <td className="px-4 py-3 hidden lg:table-cell text-xs text-muted">
+                    {(() => {
+                      const s = order.seller ?? order.createdBy;
+                      return s ? `${s.firstName} ${s.lastName}` : '—';
+                    })()}
+                  </td>
+                  <td className="px-4 py-3 text-center text-muted">{order.items.length}</td>
+                  <td className="px-4 py-3 text-right font-mono font-medium text-ink">
                     {formatPrice(orderTotal(order))}
                   </td>
                 </tr>

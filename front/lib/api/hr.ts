@@ -76,6 +76,8 @@ export interface Position {
   id: string;
   name: string;
   isActive: boolean;
+  area?: { id: string; name: string } | null;
+  role?: { id: string; name: string } | null;
 }
 
 export interface PayrollConfig {
@@ -152,10 +154,10 @@ export const hrApi = {
   listPositions: (): Promise<Position[]> =>
     apiClient.get('/hr/positions').then((r) => r.data),
 
-  createPosition: (dto: { name: string }): Promise<Position> =>
+  createPosition: (dto: { name: string; areaId?: string; roleId?: string }): Promise<Position> =>
     apiClient.post('/hr/positions', dto).then((r) => r.data),
 
-  updatePosition: (id: string, dto: Partial<{ name: string; isActive: boolean }>): Promise<Position> =>
+  updatePosition: (id: string, dto: Partial<{ name: string; isActive: boolean; areaId: string | null; roleId: string | null }>): Promise<Position> =>
     apiClient.patch(`/hr/positions/${id}`, dto).then((r) => r.data),
 
   // Payroll config

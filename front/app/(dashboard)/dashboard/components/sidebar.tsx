@@ -23,8 +23,11 @@ import {
   UserCog,
   Tag,
   Percent,
+  CheckSquare,
 } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../../../../lib/auth-context';
+import { alertsApi } from '../../../../lib/api/alerts';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -33,6 +36,7 @@ interface NavItem {
   href: string;
   icon: React.ElementType;
   module?: string;
+  alertDot?: string; // hex color — shown as a small dot when an alert is active for this module
 }
 
 interface SettingsItem {
@@ -40,12 +44,12 @@ interface SettingsItem {
   href: string;
   icon: React.ElementType;
   requiredPermission?: string;
+  badge?: number;
 }
 
 interface SettingsSection {
   label: string;
   items: SettingsItem[];
-  /** At least one of these permissions is required to show the section */
   requiredAnyPermission?: string[];
 }
 
@@ -54,23 +58,19 @@ interface SettingsSection {
 const MODULE_PERM_MAP: Record<string, string[]> = {
   sales:       ['sales:read', 'sales:create', 'sales:update', 'sales:cancel', 'customers:read', 'customers:create', 'customers:update'],
   inventory:   ['inventory:read', 'inventory:create', 'inventory:update', 'inventory:delete'],
-  billing:     ['billing:read', 'billing:issue', 'billing:cancel'],
+  billing:     ['billing:read', 'billing:issue', 'billing:cancel', 'billing:manage'],
   procurement: ['procurement:read', 'procurement:create', 'procurement:update', 'procurement:receive', 'suppliers:read', 'suppliers:create', 'suppliers:update'],
   payments:    ['payments:read', 'payments:register'],
   hr:          ['hr:read', 'hr:employees:create', 'hr:employees:update', 'hr:employees:terminate', 'hr:payroll:run', 'hr:payroll:pay', 'hr:config:manage'],
 };
 
-function isAdmin(permissions: string[]) {
-  return permissions.includes('roles:manage');
-}
-
 function hasModulePermission(module: string, permissions: string[]): boolean {
-  if (isAdmin(permissions)) return true;
+  if (permissions.includes('roles:manage')) return true;
   const relevant = MODULE_PERM_MAP[module] ?? [];
   return relevant.length > 0 && relevant.some((p) => permissions.includes(p));
 }
 
-// ── Nav items (business modules) ──────────────────────────────────────────────
+// ── Nav definitions ────────────────────────────────────────────────────────────
 
 const NAV_ITEMS: NavItem[] = [
   { label: 'Dashboard',   href: '/dashboard',             icon: LayoutDashboard },
@@ -78,35 +78,47 @@ const NAV_ITEMS: NavItem[] = [
   { label: 'Inventario',  href: '/dashboard/inventory',   icon: Package,      module: 'inventory' },
   { label: 'Facturación', href: '/dashboard/billing',     icon: FileText,     module: 'billing' },
   { label: 'Compras',     href: '/dashboard/procurement', icon: Truck,        module: 'procurement' },
-  { label: 'Pagos',       href: '/dashboard/payments',    icon: CreditCard,   module: 'payments' },
+  { label: 'Cuentas',     href: '/dashboard/payments',    icon: CreditCard,   module: 'payments' },
   { label: 'RRHH',        href: '/dashboard/hr',          icon: Users,        module: 'hr' },
 ];
 
-// ── Settings sections (collapsible) ───────────────────────────────────────────
+// Maps each alert type to the nav item it should annotate
+const ALERT_DOT_MAP: Record<string, { href: string; color: string }> = {
+  STOCK_LOW:       { href: '/dashboard/inventory', color: '#fbbf24' },
+  PAYMENT_DUE:     { href: '/dashboard/payments',  color: '#60a5fa' },
+  INVOICE_OVERDUE: { href: '/dashboard/billing',   color: '#f87171' },
+};
 
 const SETTINGS_SECTIONS: SettingsSection[] = [
   {
-    label: 'Usuarios',
+    label: 'FACTURACIÓN',
+    requiredAnyPermission: ['sales:manage'],
+    items: [
+      { label: 'Aprobaciones de crédito', href: '/dashboard/billing/approvals', icon: CheckSquare, requiredPermission: 'sales:manage' },
+    ],
+  },
+  {
+    label: 'USUARIOS',
     requiredAnyPermission: ['users:read', 'roles:manage'],
     items: [
-      { label: 'Gestión de usuarios', href: '/dashboard/settings/users',  icon: User,   requiredPermission: 'users:read' },
-      { label: 'Roles y permisos',    href: '/dashboard/settings/roles',  icon: Shield, requiredPermission: 'roles:manage' },
+      { label: 'Gestión de usuarios', href: '/dashboard/settings/users', icon: User,   requiredPermission: 'users:read' },
+      { label: 'Roles y permisos',    href: '/dashboard/settings/roles', icon: Shield, requiredPermission: 'roles:manage' },
     ],
   },
   {
-    label: 'Configuración',
+    label: 'CONFIGURACIÓN',
     requiredAnyPermission: ['tenants:read', 'tenants:update', 'tenants:modules:manage', 'roles:manage', 'alerts:manage'],
     items: [
-      { label: 'Mi empresa',  href: '/dashboard/settings/tenant',    icon: Building2,  requiredPermission: 'tenants:read' },
-      { label: 'Sucursales',  href: '/dashboard/settings/branches',  icon: LayoutGrid, requiredPermission: 'branches:read' },
-      { label: 'Módulos',     href: '/dashboard/settings/modules',   icon: LayoutGrid, requiredPermission: 'tenants:modules:manage' },
-      { label: 'Precios',     href: '/dashboard/settings/pricing',   icon: Tag,        requiredPermission: 'tenants:update' },
-      { label: 'Crédito',     href: '/dashboard/settings/credit',    icon: Percent,    requiredPermission: 'tenants:update' },
-      { label: 'Alertas',     href: '/dashboard/settings/alerts',    icon: Bell,       requiredPermission: 'alerts:manage' },
+      { label: 'Mi empresa',  href: '/dashboard/settings/tenant',   icon: Building2,  requiredPermission: 'tenants:read' },
+      { label: 'Sucursales',  href: '/dashboard/settings/branches', icon: LayoutGrid, requiredPermission: 'branches:read' },
+      { label: 'Módulos',     href: '/dashboard/settings/modules',  icon: LayoutGrid, requiredPermission: 'tenants:modules:manage' },
+      { label: 'Precios',     href: '/dashboard/settings/pricing',  icon: Tag,        requiredPermission: 'tenants:update' },
+      { label: 'Crédito',     href: '/dashboard/settings/credit',   icon: Percent,    requiredPermission: 'tenants:update' },
+      { label: 'Alertas',     href: '/dashboard/settings/alerts',   icon: Bell,       requiredPermission: 'alerts:manage' },
     ],
   },
   {
-    label: 'Herramientas',
+    label: 'HERRAMIENTAS',
     requiredAnyPermission: ['audit:read', 'reports:read'],
     items: [
       { label: 'Auditoría', href: '/dashboard/settings/audit',   icon: ClipboardList, requiredPermission: 'audit:read' },
@@ -115,7 +127,7 @@ const SETTINGS_SECTIONS: SettingsSection[] = [
   },
 ];
 
-// ── Sub-components ─────────────────────────────────────────────────────────────
+// ── NavLink ────────────────────────────────────────────────────────────────────
 
 function NavLink({ item }: { item: NavItem }) {
   const pathname = usePathname();
@@ -127,16 +139,40 @@ function NavLink({ item }: { item: NavItem }) {
   return (
     <Link
       href={item.href}
-      className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors select-none ${
-        isActive ? 'bg-slate-800 text-white' : 'text-slate-300 hover:bg-slate-800 hover:text-white'
-      }`}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: '9px',
+        padding: '8px 11px',
+        borderRadius: '9px',
+        textDecoration: 'none',
+        fontSize: '13.5px',
+        fontWeight: 500,
+        transition: 'background 0.12s',
+        color: isActive ? 'var(--sidebar-active-text)' : 'var(--sidebar-text)',
+        background: isActive ? 'var(--sidebar-active)' : 'transparent',
+      }}
+      onMouseEnter={(e) => {
+        if (!isActive) (e.currentTarget as HTMLElement).style.background = 'var(--sidebar-hover)';
+      }}
+      onMouseLeave={(e) => {
+        if (!isActive) (e.currentTarget as HTMLElement).style.background = 'transparent';
+      }}
     >
-      <Icon size={16} />
-      <span className="flex-1">{item.label}</span>
+      <Icon size={16} style={{ opacity: 0.9, flexShrink: 0 }} />
+      <span style={{ flex: 1 }}>{item.label}</span>
+      {item.alertDot && (
+        <span style={{
+          width: '7px', height: '7px', borderRadius: '50%', flexShrink: 0,
+          background: item.alertDot,
+          boxShadow: `0 0 5px ${item.alertDot}88`,
+        }} />
+      )}
     </Link>
   );
 }
 
+// ── SettingsLink ──────────────────────────────────────────────────────────────
 
 function SettingsLink({ item }: { item: SettingsItem }) {
   const pathname = usePathname();
@@ -146,30 +182,53 @@ function SettingsLink({ item }: { item: SettingsItem }) {
   return (
     <Link
       href={item.href}
-      className={`flex items-center gap-2.5 rounded-md px-2 py-1.5 text-sm transition-colors ${
-        isActive ? 'bg-slate-800 text-white' : 'text-slate-400 hover:bg-slate-800 hover:text-white'
-      }`}
+      style={{
+        display: 'flex', alignItems: 'center', gap: '9px',
+        padding: '7px 11px', borderRadius: '9px',
+        textDecoration: 'none', fontSize: '13px', fontWeight: 500,
+        transition: 'background 0.12s',
+        color: isActive ? 'var(--sidebar-active-text)' : 'var(--sidebar-text)',
+        background: isActive ? 'var(--sidebar-active)' : 'transparent',
+      }}
+      onMouseEnter={(e) => {
+        if (!isActive) (e.currentTarget as HTMLElement).style.background = 'var(--sidebar-hover)';
+      }}
+      onMouseLeave={(e) => {
+        if (!isActive) (e.currentTarget as HTMLElement).style.background = 'transparent';
+      }}
     >
-      <Icon size={14} />
-      {item.label}
+      <Icon size={15} style={{ opacity: 0.85, flexShrink: 0 }} />
+      <span style={{ flex: 1 }}>{item.label}</span>
+      {!!item.badge && (
+        <span style={{
+          fontSize: '11px', fontWeight: 700, lineHeight: 1,
+          padding: '2px 6px', borderRadius: '20px',
+          background: 'rgba(220,38,38,0.2)', color: '#f87171',
+        }}>
+          {item.badge}
+        </span>
+      )}
     </Link>
   );
 }
 
-function CollapsibleSection({
+// ── SettingsSection (collapsible) ─────────────────────────────────────────────
+
+function SettingsSection({
   section,
   permissions,
-  defaultOpen,
 }: {
   section: SettingsSection;
   permissions: string[];
-  defaultOpen: boolean;
 }) {
-  const [open, setOpen] = useState(defaultOpen);
+  const pathname = usePathname();
 
   const visibleItems = section.items.filter(
     (item) => !item.requiredPermission || permissions.includes(item.requiredPermission),
   );
+
+  const hasActive = visibleItems.some((item) => pathname.startsWith(item.href));
+  const [open, setOpen] = useState(hasActive);
 
   if (visibleItems.length === 0) return null;
 
@@ -177,17 +236,30 @@ function CollapsibleSection({
     <div>
       <button
         onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center justify-between rounded-md px-2 py-1.5 text-xs font-semibold uppercase tracking-wider text-slate-500 hover:text-slate-300 transition-colors"
+        style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          width: '100%', padding: '16px 11px 6px',
+          border: 'none', background: 'none', cursor: 'pointer',
+        }}
       >
-        {section.label}
+        <span style={{
+          fontSize: '10.5px', fontWeight: 700,
+          letterSpacing: '0.09em', color: 'var(--sidebar-muted)',
+        }}>
+          {section.label}
+        </span>
         <ChevronDown
-          size={13}
-          className={`transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
+          size={11}
+          style={{
+            color: 'var(--sidebar-muted)',
+            transform: open ? 'rotate(180deg)' : 'none',
+            transition: 'transform 0.18s',
+            flexShrink: 0,
+          }}
         />
       </button>
-
       {open && (
-        <div className="mt-1 space-y-0.5 pl-1">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1px' }}>
           {visibleItems.map((item) => (
             <SettingsLink key={item.href} item={item} />
           ))}
@@ -197,33 +269,51 @@ function CollapsibleSection({
   );
 }
 
+// ── UserMenu ──────────────────────────────────────────────────────────────────
+
 function UserMenu({ onClose }: { onClose: () => void }) {
   const { logout } = useAuth();
   const router = useRouter();
 
-  const handleProfile = () => {
-    router.push('/dashboard/settings/profile');
-    onClose();
-  };
-
-  const handleLogout = async () => {
-    onClose();
-    await logout();
-  };
-
   return (
-    <div className="absolute bottom-full left-3 right-3 mb-2 rounded-xl border border-slate-700 bg-slate-800 py-1 shadow-xl">
+    <div style={{
+      position: 'absolute',
+      bottom: '100%',
+      left: '12px',
+      right: '12px',
+      marginBottom: '8px',
+      background: '#1c2738',
+      border: '1px solid rgba(255,255,255,0.08)',
+      borderRadius: '12px',
+      padding: '6px',
+      boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
+      zIndex: 50,
+    }}>
       <button
-        onClick={handleProfile}
-        className="flex w-full items-center gap-2.5 px-3 py-2 text-sm text-slate-300 hover:bg-slate-700 hover:text-white transition-colors rounded-md"
+        onClick={() => { router.push('/dashboard/settings/profile'); onClose(); }}
+        style={{
+          display: 'flex', alignItems: 'center', gap: '10px',
+          width: '100%', padding: '8px 10px', borderRadius: '8px',
+          border: 'none', background: 'none', cursor: 'pointer',
+          fontSize: '13.5px', color: 'var(--sidebar-text)', textAlign: 'left',
+        }}
+        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.06)'; }}
+        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'none'; }}
       >
         <UserCog size={15} />
         Mi perfil
       </button>
-      <div className="my-1 border-t border-slate-700" />
+      <div style={{ height: '1px', background: 'rgba(255,255,255,0.07)', margin: '4px 0' }} />
       <button
-        onClick={() => void handleLogout()}
-        className="flex w-full items-center gap-2.5 px-3 py-2 text-sm text-red-400 hover:bg-slate-700 hover:text-red-300 transition-colors rounded-md"
+        onClick={() => { onClose(); void logout(); }}
+        style={{
+          display: 'flex', alignItems: 'center', gap: '10px',
+          width: '100%', padding: '8px 10px', borderRadius: '8px',
+          border: 'none', background: 'none', cursor: 'pointer',
+          fontSize: '13.5px', color: '#f87171', textAlign: 'left',
+        }}
+        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.06)'; }}
+        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'none'; }}
       >
         <LogOut size={15} />
         Cerrar sesión
@@ -236,14 +326,23 @@ function UserMenu({ onClose }: { onClose: () => void }) {
 
 export function Sidebar() {
   const { user, jwtPayload } = useAuth();
-  const pathname = usePathname();
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
 
   const activeModules = jwtPayload?.activeModules ?? [];
   const permissions   = jwtPayload?.permissions   ?? [];
+  const tenantName    = jwtPayload?.tenantName ?? '';
 
-  // Close user menu on outside click
+  const { data: alertConfigs = [] } = useQuery({
+    queryKey: ['alert-configs'],
+    queryFn: alertsApi.getConfigs,
+    enabled: permissions.includes('alerts:read') || permissions.includes('alerts:manage'),
+  });
+  const alertBadge = alertConfigs.filter((c) => c.isActive).length || undefined;
+
+  const initials = [user?.firstName?.[0], user?.lastName?.[0]].filter(Boolean).join('');
+  const brandInitial = (tenantName?.[0] ?? 'J').toUpperCase();
+
   useEffect(() => {
     function handleClick(e: MouseEvent) {
       if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) {
@@ -254,80 +353,136 @@ export function Sidebar() {
     return () => document.removeEventListener('mousedown', handleClick);
   }, [userMenuOpen]);
 
-  // Auto-open the section that contains the active route
-  function isSectionActive(section: SettingsSection) {
-    return section.items.some((i) => pathname.startsWith(i.href));
+  // Build a map href → dot color from active alert configs
+  const alertDotMap = new Map<string, string>();
+  for (const cfg of alertConfigs.filter((c) => c.isActive)) {
+    const mapping = ALERT_DOT_MAP[cfg.type];
+    if (mapping) alertDotMap.set(mapping.href, mapping.color);
   }
 
-  const visibleNavItems = NAV_ITEMS.filter((item) => {
-    if (!item.module) return true;
-    if (!activeModules.includes(item.module)) return false;
-    return hasModulePermission(item.module, permissions);
-  });
+  const visibleNavItems = NAV_ITEMS
+    .filter((item) => {
+      if (!item.module) return true;
+      if (!activeModules.includes(item.module)) return false;
+      return hasModulePermission(item.module, permissions);
+    })
+    .map((item) => ({
+      ...item,
+      alertDot: alertDotMap.get(item.href),
+    }));
 
-  const visibleSections = SETTINGS_SECTIONS.filter((section) => {
-    if (!section.requiredAnyPermission) return true;
-    return section.requiredAnyPermission.some((p) => permissions.includes(p));
-  });
+  const visibleSections = SETTINGS_SECTIONS
+    .filter((section) => {
+      if (!section.requiredAnyPermission) return true;
+      return section.requiredAnyPermission.some((p) => permissions.includes(p));
+    })
+    .map((section) => ({
+      ...section,
+      items: section.items.map((item) =>
+        item.href === '/dashboard/settings/alerts'
+          ? { ...item, badge: alertBadge }
+          : item,
+      ),
+    }));
 
   return (
-    <aside className="fixed inset-y-0 left-0 flex w-64 flex-col bg-slate-900">
+    <aside style={{
+      position: 'fixed', inset: '0 auto 0 0',
+      width: '250px',
+      display: 'flex', flexDirection: 'column',
+      background: 'var(--sidebar-bg)',
+      color: 'var(--sidebar-text)',
+      borderRight: '1px solid var(--sidebar-border)',
+    }}>
       {/* Brand */}
-      <div className="flex h-16 shrink-0 items-center gap-3 border-b border-slate-800 px-4">
-        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white">
-          <span className="text-slate-900 font-bold text-sm">J</span>
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: '11px',
+        padding: '18px 18px 16px',
+      }}>
+        <div style={{
+          width: '38px', height: '38px', borderRadius: '10px', flexShrink: 0,
+          background: 'linear-gradient(145deg, var(--accent), var(--accent-strong))',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          color: '#fff', fontWeight: 800, fontSize: '18px',
+          boxShadow: '0 4px 12px rgba(16,185,129,0.35)',
+        }}>
+          {brandInitial}
         </div>
-        <div className="min-w-0">
-          <p className="truncate text-sm font-semibold text-white">JoapyCore</p>
-          {jwtPayload?.tenantName && (
-            <p className="truncate text-xs text-slate-400">{jwtPayload.tenantName}</p>
+        <div style={{ lineHeight: 1.15, minWidth: 0 }}>
+          <div style={{ color: '#fff', fontWeight: 700, fontSize: '15px' }}>JoapyCore</div>
+          {tenantName && (
+            <div style={{ fontSize: '12px', color: 'var(--sidebar-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {tenantName}
+            </div>
           )}
         </div>
       </div>
 
       {/* Scrollable nav */}
-      <nav className="flex-1 overflow-y-auto px-3 py-3 space-y-0.5">
-        {/* Business modules */}
-        {visibleNavItems.map((item) => (
-          <NavLink key={item.href} item={item} />
-        ))}
+      <nav style={{ flex: 1, overflowY: 'auto', padding: '6px 12px 12px' }}>
+        {/* Main nav */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1px' }}>
+          {visibleNavItems.map((item) => (
+            <NavLink key={item.href} item={item} />
+          ))}
+        </div>
 
         {/* Settings sections */}
-        {visibleSections.length > 0 && (
-          <div className="pt-4 space-y-3">
-            {visibleSections.map((section) => (
-              <CollapsibleSection
-                key={section.label}
-                section={section}
-                permissions={permissions}
-                defaultOpen={isSectionActive(section)}
-              />
-            ))}
-          </div>
-        )}
+        {visibleSections.map((section) => (
+          <SettingsSection
+            key={section.label}
+            section={section}
+            permissions={permissions}
+          />
+        ))}
       </nav>
 
       {/* User footer */}
-      <div className="relative border-t border-slate-800 p-3" ref={userMenuRef}>
+      <div
+        ref={userMenuRef}
+        style={{
+          padding: '12px',
+          borderTop: '1px solid rgba(255,255,255,0.06)',
+          position: 'relative',
+        }}
+      >
         {userMenuOpen && <UserMenu onClose={() => setUserMenuOpen(false)} />}
 
         <button
           onClick={() => setUserMenuOpen((v) => !v)}
-          className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left hover:bg-slate-800 transition-colors"
+          style={{
+            display: 'flex', alignItems: 'center', gap: '10px',
+            width: '100%', padding: '8px 9px', borderRadius: '10px',
+            border: 'none', background: 'none', cursor: 'pointer',
+            textAlign: 'left', transition: 'background 0.12s',
+          }}
+          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'var(--sidebar-hover)'; }}
+          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'none'; }}
         >
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-700 text-xs font-semibold text-white">
-            {user?.firstName?.[0]}
-            {user?.lastName?.[0]}
+          <div style={{
+            width: '34px', height: '34px', borderRadius: '50%', flexShrink: 0,
+            background: '#1c2738', color: '#fff',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontWeight: 700, fontSize: '14px',
+          }}>
+            {initials || '?'}
           </div>
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-medium text-white">
+          <div style={{ flex: 1, lineHeight: 1.2, minWidth: 0 }}>
+            <div style={{ color: '#fff', fontWeight: 600, fontSize: '13px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {user?.firstName} {user?.lastName}
-            </p>
-            <p className="truncate text-xs text-slate-400">{user?.email}</p>
+            </div>
+            <div style={{ fontSize: '11.5px', color: 'var(--sidebar-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {user?.email}
+            </div>
           </div>
           <ChevronDown
             size={14}
-            className={`shrink-0 text-slate-400 transition-transform duration-200 ${userMenuOpen ? 'rotate-180' : ''}`}
+            style={{
+              flexShrink: 0,
+              color: 'var(--sidebar-muted)',
+              transform: userMenuOpen ? 'rotate(180deg)' : 'none',
+              transition: 'transform 0.2s',
+            }}
           />
         </button>
       </div>

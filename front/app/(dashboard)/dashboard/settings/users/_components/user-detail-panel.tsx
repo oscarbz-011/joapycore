@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -52,28 +52,28 @@ function PermissionsAccordion({
         const isOpen = openGroups.has(group.module);
         const groupExtras = group.permissions.filter((p) => selected.has(p.key));
         return (
-          <div key={group.module} className="rounded-lg border border-slate-100">
+          <div key={group.module} className="rounded-lg border border-border">
             <button
               type="button"
               onClick={() => toggleGroup(group.module)}
               className="flex w-full items-center justify-between px-3 py-2 text-left"
             >
-              <span className="text-sm font-medium text-slate-700">{group.label}</span>
+              <span className="text-sm font-medium text-muted">{group.label}</span>
               <div className="flex items-center gap-2">
                 {groupExtras.length > 0 && (
-                  <span className="rounded-full bg-slate-900 px-1.5 py-0.5 text-xs font-medium text-white">
+                  <span className="rounded-full bg-ink px-1.5 py-0.5 text-xs font-medium text-canvas">
                     +{groupExtras.length}
                   </span>
                 )}
                 {isOpen ? (
-                  <ChevronDown size={14} className="text-slate-400" />
+                  <ChevronDown size={14} className="text-faint" />
                 ) : (
-                  <ChevronRight size={14} className="text-slate-400" />
+                  <ChevronRight size={14} className="text-faint" />
                 )}
               </div>
             </button>
             {isOpen && (
-              <div className="border-t border-slate-100 px-3 py-2 space-y-1.5">
+              <div className="border-t border-border px-3 py-2 space-y-1.5">
                 {group.permissions.map((perm) => {
                   const fromRole = rolePermissions.includes(perm.key);
                   const isExtra = selected.has(perm.key);
@@ -87,11 +87,11 @@ function PermissionsAccordion({
                         checked={fromRole || isExtra}
                         disabled={fromRole}
                         onChange={() => !fromRole && toggle(perm.key)}
-                        className="h-4 w-4 rounded border-slate-300 accent-slate-900"
+                        className="h-4 w-4 rounded border-border-strong accent-accent"
                       />
-                      <span className="flex-1 text-sm text-slate-700">{perm.label}</span>
+                      <span className="flex-1 text-sm text-muted">{perm.label}</span>
                       {fromRole && (
-                        <span className="text-xs text-slate-400">via rol</span>
+                        <span className="text-xs text-faint">via rol</span>
                       )}
                       {!fromRole && isExtra && (
                         <span className="text-xs text-emerald-600">extra</span>
@@ -108,7 +108,7 @@ function PermissionsAccordion({
         <button
           onClick={() => onSave([...selected])}
           disabled={saving}
-          className="mt-2 w-full rounded-lg bg-slate-900 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-50"
+          className="mt-2 w-full rounded-lg bg-ink py-2 text-sm font-medium text-canvas hover:opacity-80 disabled:opacity-50"
         >
           {saving ? 'Guardando...' : 'Guardar permisos extra'}
         </button>
@@ -201,27 +201,27 @@ export function UserDetailPanel({ user, currentUserId, onClose }: Props) {
   return (
     <div className="fixed inset-0 z-40 flex justify-end">
       <div className="absolute inset-0 bg-black/30" onClick={onClose} />
-      <aside className="relative z-50 flex h-full w-full max-w-md flex-col bg-white shadow-2xl">
+      <aside className="relative z-50 flex h-full w-full max-w-md flex-col bg-surface shadow-2xl">
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
+        <div className="flex items-center justify-between border-b border-border px-6 py-4">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-sm font-semibold text-slate-700">
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-surface-2 text-sm font-semibold text-muted">
               {user.firstName[0]}
               {user.lastName[0]}
             </div>
             <div>
-              <p className="font-semibold text-slate-900">
+              <p className="font-semibold text-ink">
                 {user.firstName} {user.lastName}
               </p>
-              <p className="text-xs text-slate-500">{user.email}</p>
+              <p className="text-xs text-muted">{user.email}</p>
               {user.username && (
-                <p className="text-xs text-slate-400">@{user.username}</p>
+                <p className="text-xs text-faint">@{user.username}</p>
               )}
             </div>
           </div>
           <button
             onClick={onClose}
-            className="rounded-md p-1 text-slate-400 hover:bg-slate-100"
+            className="rounded-md p-1 text-faint hover:bg-surface-2"
           >
             <X size={18} />
           </button>
@@ -229,10 +229,10 @@ export function UserDetailPanel({ user, currentUserId, onClose }: Props) {
 
         <div className="flex-1 overflow-y-auto">
           {/* Estado */}
-          <div className="border-b border-slate-100 px-6 py-4">
+          <div className="border-b border-border px-6 py-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-slate-700">Estado</p>
+                <p className="text-sm font-medium text-muted">Estado</p>
                 <div className="mt-1">
                   <UserStatusBadge status={user.status} />
                 </div>
@@ -263,9 +263,9 @@ export function UserDetailPanel({ user, currentUserId, onClose }: Props) {
 
           {/* Reset contraseña */}
           {!isSelf && (
-            <div className="border-b border-slate-100 px-6 py-4">
-              <p className="text-sm font-medium text-slate-700">Contraseña</p>
-              <p className="mt-1 text-xs text-slate-500">
+            <div className="border-b border-border px-6 py-4">
+              <p className="text-sm font-medium text-muted">Contraseña</p>
+              <p className="mt-1 text-xs text-muted">
                 Genera una contraseña temporal que el usuario deberá cambiar al ingresar.
               </p>
               <button
@@ -274,7 +274,7 @@ export function UserDetailPanel({ user, currentUserId, onClose }: Props) {
                   resetPasswordMutation.mutate();
                 }}
                 disabled={resetPasswordMutation.isPending}
-                className="mt-2 rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                className="mt-2 rounded-lg border border-border-strong bg-surface text-ink px-3 py-1.5 text-sm text-muted hover:bg-surface-2 disabled:opacity-50"
               >
                 {resetPasswordMutation.isPending ? 'Generando...' : 'Resetear contraseña'}
               </button>
@@ -283,10 +283,10 @@ export function UserDetailPanel({ user, currentUserId, onClose }: Props) {
           )}
 
           {/* Roles */}
-          <div className="border-b border-slate-100 px-6 py-4">
-            <p className="mb-3 text-sm font-semibold text-slate-900">Roles</p>
+          <div className="border-b border-border px-6 py-4">
+            <p className="mb-3 text-sm font-semibold text-ink">Roles</p>
             {assignableRoles.length === 0 ? (
-              <p className="text-sm text-slate-400">No hay roles creados aún</p>
+              <p className="text-sm text-faint">No hay roles creados aún</p>
             ) : (
               <div className="space-y-1.5">
                 {assignableRoles.map((role) => (
@@ -295,9 +295,9 @@ export function UserDetailPanel({ user, currentUserId, onClose }: Props) {
                       type="checkbox"
                       checked={selectedRoleIds.has(role.id)}
                       onChange={() => toggleRole(role.id)}
-                      className="h-4 w-4 rounded border-slate-300 accent-slate-900"
+                      className="h-4 w-4 rounded border-border-strong accent-accent"
                     />
-                    <span className="text-sm text-slate-700">{role.name}</span>
+                    <span className="text-sm text-muted">{role.name}</span>
                   </label>
                 ))}
               </div>
@@ -306,7 +306,7 @@ export function UserDetailPanel({ user, currentUserId, onClose }: Props) {
               <button
                 onClick={() => assignRolesMutation.mutate([...selectedRoleIds])}
                 disabled={assignRolesMutation.isPending}
-                className="mt-3 w-full rounded-lg bg-slate-900 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-50"
+                className="mt-3 w-full rounded-lg bg-ink py-2 text-sm font-medium text-canvas hover:opacity-80 disabled:opacity-50"
               >
                 {assignRolesMutation.isPending ? 'Guardando...' : 'Guardar roles'}
               </button>
@@ -315,8 +315,8 @@ export function UserDetailPanel({ user, currentUserId, onClose }: Props) {
 
           {/* Permisos adicionales */}
           <div className="px-6 py-4">
-            <p className="mb-1 text-sm font-semibold text-slate-900">Permisos adicionales</p>
-            <p className="mb-3 text-xs text-slate-500">
+            <p className="mb-1 text-sm font-semibold text-ink">Permisos adicionales</p>
+            <p className="mb-3 text-xs text-muted">
               Permisos extra sobre los que otorga su rol. Los permisos de rol no se pueden quitar desde aquí.
             </p>
             <PermissionsAccordion

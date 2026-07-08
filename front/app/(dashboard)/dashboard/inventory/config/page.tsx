@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useState } from 'react';
 import Link from 'next/link';
@@ -10,17 +10,17 @@ import { inventoryApi, type Brand, type Category } from '../../../../../lib/api/
 
 function InventoryNav() {
   return (
-    <div className="flex gap-1 border-b border-slate-200 mb-6">
+    <div className="flex gap-1 border-b border-border mb-6">
       <Link
         href="/dashboard/inventory"
-        className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 border-transparent text-slate-500 hover:text-slate-700 -mb-px"
+        className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 border-transparent text-muted hover:text-ink -mb-px"
       >
         <Package size={15} />
         Productos
       </Link>
       <Link
         href="/dashboard/inventory/config"
-        className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 border-slate-900 text-slate-900 -mb-px"
+        className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 border-ink text-ink -mb-px"
       >
         <Settings size={15} />
         Configuración
@@ -37,7 +37,7 @@ function ActiveBadge({ isActive }: { isActive: boolean }) {
       Activa
     </span>
   ) : (
-    <span className="inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-500">
+    <span className="inline-flex rounded-full bg-surface-2 px-2 py-0.5 text-xs font-medium text-muted">
       Inactiva
     </span>
   );
@@ -74,8 +74,8 @@ function CategoriesPanel() {
   });
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-5">
-      <h2 className="mb-4 text-sm font-semibold text-slate-900">Categorías</h2>
+    <div className="rounded-xl border border-border bg-surface p-5">
+      <h2 className="mb-4 text-sm font-semibold text-ink">Categorías</h2>
 
       <form
         onSubmit={(e) => {
@@ -86,7 +86,7 @@ function CategoriesPanel() {
         className="mb-4 flex gap-2"
       >
         <input
-          className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500"
+          className="flex-1 rounded-lg border border-border-strong bg-surface text-ink px-3 py-2 text-sm focus:border-border-strong focus:outline-none focus:ring-1 focus:ring-border-strong"
           placeholder="Nombre de la categoría..."
           value={name}
           onChange={(e) => setName(e.target.value)}
@@ -95,7 +95,7 @@ function CategoriesPanel() {
         <button
           type="submit"
           disabled={createMutation.isPending}
-          className="flex items-center gap-1.5 rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-50"
+          className="flex items-center gap-1.5 rounded-lg bg-ink px-3 py-2 text-sm font-medium text-canvas hover:opacity-80 disabled:opacity-50"
         >
           <Plus size={14} />
           Agregar
@@ -104,21 +104,21 @@ function CategoriesPanel() {
       {error && <p className="mb-3 text-xs text-red-600">{error}</p>}
 
       {categories.length === 0 ? (
-        <p className="py-4 text-center text-sm text-slate-400">No hay categorías registradas.</p>
+        <p className="py-4 text-center text-sm text-faint">No hay categorías registradas.</p>
       ) : (
         <ul className="space-y-1.5">
           {categories.map((cat: Category) => (
             <li
               key={cat.id}
-              className="flex items-center justify-between rounded-lg border border-slate-100 px-3 py-2"
+              className="flex items-center justify-between rounded-lg border border-border bg-surface text-ink px-3 py-2"
             >
-              <span className="text-sm text-slate-800">{cat.name}</span>
+              <span className="text-sm text-ink">{cat.name}</span>
               <div className="flex items-center gap-2">
                 <ActiveBadge isActive={cat.isActive} />
                 <button
                   onClick={() => toggleMutation.mutate(cat)}
                   disabled={toggleMutation.isPending}
-                  className="text-xs text-slate-400 hover:text-slate-700 disabled:opacity-50"
+                  className="text-xs text-faint hover:text-ink disabled:opacity-50"
                 >
                   {cat.isActive ? 'Desactivar' : 'Activar'}
                 </button>
@@ -162,8 +162,8 @@ function BrandsPanel() {
   });
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-5">
-      <h2 className="mb-4 text-sm font-semibold text-slate-900">Marcas</h2>
+    <div className="rounded-xl border border-border bg-surface p-5">
+      <h2 className="mb-4 text-sm font-semibold text-ink">Marcas</h2>
 
       <form
         onSubmit={(e) => {
@@ -174,7 +174,7 @@ function BrandsPanel() {
         className="mb-4 flex gap-2"
       >
         <input
-          className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500"
+          className="flex-1 rounded-lg border border-border-strong bg-surface text-ink px-3 py-2 text-sm focus:border-border-strong focus:outline-none focus:ring-1 focus:ring-border-strong"
           placeholder="Nombre de la marca..."
           value={name}
           onChange={(e) => setName(e.target.value)}
@@ -183,7 +183,7 @@ function BrandsPanel() {
         <button
           type="submit"
           disabled={createMutation.isPending}
-          className="flex items-center gap-1.5 rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-50"
+          className="flex items-center gap-1.5 rounded-lg bg-ink px-3 py-2 text-sm font-medium text-canvas hover:opacity-80 disabled:opacity-50"
         >
           <Plus size={14} />
           Agregar
@@ -192,21 +192,21 @@ function BrandsPanel() {
       {error && <p className="mb-3 text-xs text-red-600">{error}</p>}
 
       {brands.length === 0 ? (
-        <p className="py-4 text-center text-sm text-slate-400">No hay marcas registradas.</p>
+        <p className="py-4 text-center text-sm text-faint">No hay marcas registradas.</p>
       ) : (
         <ul className="space-y-1.5">
           {brands.map((brand: Brand) => (
             <li
               key={brand.id}
-              className="flex items-center justify-between rounded-lg border border-slate-100 px-3 py-2"
+              className="flex items-center justify-between rounded-lg border border-border bg-surface text-ink px-3 py-2"
             >
-              <span className="text-sm text-slate-800">{brand.name}</span>
+              <span className="text-sm text-ink">{brand.name}</span>
               <div className="flex items-center gap-2">
                 <ActiveBadge isActive={brand.isActive} />
                 <button
                   onClick={() => toggleMutation.mutate(brand)}
                   disabled={toggleMutation.isPending}
-                  className="text-xs text-slate-400 hover:text-slate-700 disabled:opacity-50"
+                  className="text-xs text-faint hover:text-ink disabled:opacity-50"
                 >
                   {brand.isActive ? 'Desactivar' : 'Activar'}
                 </button>
@@ -225,8 +225,8 @@ export default function InventoryConfigPage() {
   return (
     <div>
       <div className="mb-6">
-        <h1 className="text-2xl font-semibold text-slate-900">Inventario</h1>
-        <p className="mt-1 text-sm text-slate-500">Gestión de productos y stock</p>
+        <h1 className="text-2xl font-semibold text-ink">Inventario</h1>
+        <p className="mt-1 text-sm text-muted">Gestión de productos y stock</p>
       </div>
 
       <InventoryNav />

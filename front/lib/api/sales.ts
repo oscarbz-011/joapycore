@@ -15,7 +15,9 @@ export interface Customer {
   id: string;
   customerCode: string | null;
   firstName: string;
+  secondFirstName: string | null;
   lastName: string;
+  secondLastName: string | null;
   documentType: DocumentType | null;
   documentNumber: string | null;
   email: string | null;
@@ -26,6 +28,13 @@ export interface Customer {
   monthlyIncome: number | null;
   notes: string | null;
   isActive: boolean;
+  // Structured delivery address
+  homeStreet: string | null;
+  homeNeighborhood: string | null;
+  homeReference: string | null;
+  aptBuilding: string | null;
+  aptFloor: string | null;
+  aptNumber: string | null;
 }
 
 export interface SaleOrderItem {
@@ -64,6 +73,7 @@ export interface SaleOrder {
     documentType: DocumentType | null;
   };
   createdBy: { id: string; firstName: string; lastName: string } | null;
+  seller:    { id: string; firstName: string; lastName: string } | null;
   approvedBy: { id: string; firstName: string; lastName: string } | null;
   rejectedBy: { id: string; firstName: string; lastName: string } | null;
   approvedAt: string | null;
@@ -83,6 +93,7 @@ export interface CreateSaleOrderItem {
 
 export interface CreateSaleOrderPayload {
   customerId: string;
+  sellerId?: string;
   saleType?: SaleType;
   installments?: number;
   notes?: string;
@@ -91,8 +102,9 @@ export interface CreateSaleOrderPayload {
 
 export interface CreateCustomerPayload {
   firstName: string;
+  secondFirstName?: string;
   lastName: string;
-  customerCode?: string;
+  secondLastName?: string;
   documentType?: DocumentType;
   documentNumber?: string;
   email?: string;
@@ -102,9 +114,41 @@ export interface CreateCustomerPayload {
   profession?: string;
   monthlyIncome?: number;
   notes?: string;
+  // Structured delivery address
+  homeStreet?: string;
+  homeNeighborhood?: string;
+  homeReference?: string;
+  aptBuilding?: string;
+  aptFloor?: string;
+  aptNumber?: string;
 }
 
 export type UpdateCustomerPayload = Partial<CreateCustomerPayload>;
+
+// ── Sales targets / performance ────────────────────────────────────────────────
+
+export interface SellerStat {
+  seller: { id: string; firstName: string; lastName: string };
+  actual: number;
+  target: number | null;
+  cashAmount: number;
+  creditAmount: number;
+  cashCount: number;
+  creditCount: number;
+}
+
+export interface SalesPerformance {
+  period: string;
+  companyActual: number;
+  companyTarget: number | null;
+  sellers: SellerStat[];
+  canManage: boolean;
+}
+
+export interface UpsertTargetPayload {
+  period: string;
+  targetAmount: number;
+}
 
 export const salesApi = {
   // Orders
@@ -123,6 +167,16 @@ export const salesApi = {
   cancelOrder: (id: string): Promise<SaleOrder> =>
     apiClient.post(`/sales/orders/${id}/cancel`).then((r) => r.data),
 
+  // Credit approval
+  listPendingApprovals: (): Promise<SaleOrder[]> =>
+    apiClient.get('/sales/orders/pending-approvals').then((r) => r.data),
+
+  approveCredit: (id: string): Promise<SaleOrder> =>
+    apiClient.post(`/sales/orders/${id}/approve`).then((r) => r.data),
+
+  rejectCredit: (id: string, reason: string): Promise<SaleOrder> =>
+    apiClient.post(`/sales/orders/${id}/reject`, { reason }).then((r) => r.data),
+
   // Customers
   listCustomers: (): Promise<Customer[]> =>
     apiClient.get('/sales/customers').then((r) => r.data),
@@ -138,4 +192,20 @@ export const salesApi = {
 
   deleteCustomer: (id: string): Promise<void> =>
     apiClient.delete(`/sales/customers/${id}`).then((r) => r.data),
+
+  // Performance & targets
+  getPerformance: (period: string): Promise<SalesPerformance> =>
+    apiClient.get('/sales/performance', { params: { period } }).then((r) => r.data),
+
+  setCompanyTarget: (dto: UpsertTargetPayload): Promise<void> =>
+    apiClient.put('/sales/targets/company', dto).then(() => undefined),
+
+  removeCompanyTarget: (period: string): Promise<void> =>
+    apiClient.delete('/sales/targets/company', { params: { period } }).then(() => undefined),
+
+  setSellerTarget: (userId: string, dto: UpsertTargetPayload): Promise<void> =>
+    apiClient.put(`/sales/targets/sellers/${userId}`, dto).then(() => undefined),
+
+  removeSellerTarget: (userId: string, period: string): Promise<void> =>
+    apiClient.delete(`/sales/targets/sellers/${userId}`, { params: { period } }).then(() => undefined),
 };
