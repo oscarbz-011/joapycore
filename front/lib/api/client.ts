@@ -8,6 +8,7 @@ const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000';
 export const apiClient = axios.create({
   baseURL: API_BASE,
   headers: { 'Content-Type': 'application/json' },
+  timeout: 12000,
 });
 
 apiClient.interceptors.request.use((config) => {
@@ -31,7 +32,12 @@ apiClient.interceptors.response.use(
     const status = error.response?.status ?? 0;
 
     // ── Token refresh on 401 ────────────────────────────────────────────────
-    if (status === 401 && !original?._retry && original) {
+    // Only attempt refresh when the request was authenticated (had a Bearer token).
+    // Unauthenticated endpoints (/auth/login, /auth/register, /auth/refresh) never
+    // carry an Authorization header, so we skip the retry to avoid loops and
+    // deadlocks when isRefreshing is already true.
+    const hadAuthHeader = !!(original?.headers?.Authorization);
+    if (status === 401 && !original?._retry && original && hadAuthHeader) {
       original._retry = true;
 
       const refreshToken = tokenStore.getRefreshToken();

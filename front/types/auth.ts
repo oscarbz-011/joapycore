@@ -30,7 +30,7 @@ export interface JwtPayload {
 
 export interface RegisterDto {
   tenantName: string;
-  industry: string;
+  industry?: string;
   firstName: string;
   lastName: string;
   email: string;

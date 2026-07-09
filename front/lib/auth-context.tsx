@@ -49,6 +49,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setState((s) => ({ ...s, isLoading: false }));
       return;
     }
+
     authApi
       .refresh(storedRefresh)
       .then((data) => {
@@ -57,17 +58,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const mustChangePassword =
           typeof window !== 'undefined' &&
           sessionStorage.getItem(MCP_KEY) === '1';
-        setState({
-          user: data.user,
-          jwtPayload: decodeJwt(data.accessToken),
-          isLoading: false,
-          isAuthenticated: true,
-          mustChangePassword,
+        setState((current) => {
+          // Don't override state already set by an explicit login/register call
+          if (current.isAuthenticated && !current.isLoading) return current;
+          return {
+            user: data.user,
+            jwtPayload: decodeJwt(data.accessToken),
+            isLoading: false,
+            isAuthenticated: true,
+            mustChangePassword,
+          };
         });
       })
       .catch(() => {
-        tokenStore.clear();
-        setState({ user: null, jwtPayload: null, isLoading: false, isAuthenticated: false, mustChangePassword: false });
+        setState((current) => {
+          // Don't clear tokens if the user already logged in manually in the meantime
+          if (current.isAuthenticated) return { ...current, isLoading: false };
+          tokenStore.clear();
+          return { user: null, jwtPayload: null, isLoading: false, isAuthenticated: false, mustChangePassword: false };
+        });
       });
   }, []);
 

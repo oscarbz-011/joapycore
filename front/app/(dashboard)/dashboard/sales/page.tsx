@@ -1,9 +1,8 @@
 ﻿'use client';
 
 import { useEffect, useState } from 'react';
-import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Plus, Search, ShoppingCart, Users, X, Trash2, Target, UserCheck } from 'lucide-react';
+import { Plus, Search, X, Trash2, UserCheck } from 'lucide-react';
 import {
   salesApi,
   type Customer,
@@ -38,36 +37,6 @@ function formatDate(iso: string) {
 
 function orderTotal(order: SaleOrder) {
   return order.items.reduce((sum, i) => sum + i.quantity * i.unitPrice, 0);
-}
-
-// ── Sub-nav ────────────────────────────────────────────────────────────────────
-
-function SalesNav() {
-  return (
-    <div className="flex gap-1 border-b border-border mb-6">
-      <Link
-        href="/dashboard/sales"
-        className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 border-ink text-ink -mb-px"
-      >
-        <ShoppingCart size={15} />
-        Pedidos
-      </Link>
-      <Link
-        href="/dashboard/sales/customers"
-        className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 border-transparent text-muted hover:text-ink -mb-px"
-      >
-        <Users size={15} />
-        Clientes
-      </Link>
-      <Link
-        href="/dashboard/sales/targets"
-        className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 border-transparent text-muted hover:text-ink -mb-px"
-      >
-        <Target size={15} />
-        Metas
-      </Link>
-    </div>
-  );
 }
 
 // ── Status badge ───────────────────────────────────────────────────────────────
@@ -793,7 +762,7 @@ export default function SalesPage() {
       <div className="mb-6 flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold text-ink">Ventas</h1>
-          <p className="mt-1 text-sm text-muted">Pedidos y clientes</p>
+          <p className="mt-1 text-sm text-muted">Pedidos</p>
         </div>
         <button
           onClick={() => setShowCreate(true)}
@@ -803,8 +772,6 @@ export default function SalesPage() {
           Nuevo pedido
         </button>
       </div>
-
-      <SalesNav />
 
       {/* Filters */}
       <div className="mb-4 flex items-center gap-3">

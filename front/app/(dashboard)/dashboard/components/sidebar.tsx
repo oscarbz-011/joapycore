@@ -15,6 +15,7 @@ import {
   Shield,
   Building2,
   LayoutGrid,
+  Warehouse,
   LogOut,
   ChevronDown,
   Bell,
@@ -24,6 +25,7 @@ import {
   Tag,
   Percent,
   CheckSquare,
+  Target,
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../../../../lib/auth-context';
@@ -91,6 +93,14 @@ const ALERT_DOT_MAP: Record<string, { href: string; color: string }> = {
 
 const SETTINGS_SECTIONS: SettingsSection[] = [
   {
+    label: 'VENTAS',
+    requiredAnyPermission: ['sales:read', 'customers:read'],
+    items: [
+      { label: 'Clientes', href: '/dashboard/sales/customers', icon: Users,  requiredPermission: 'customers:read' },
+      { label: 'Metas',    href: '/dashboard/sales/targets',   icon: Target, requiredPermission: 'sales:read' },
+    ],
+  },
+  {
     label: 'FACTURACIÓN',
     requiredAnyPermission: ['sales:manage'],
     items: [
@@ -107,11 +117,12 @@ const SETTINGS_SECTIONS: SettingsSection[] = [
   },
   {
     label: 'CONFIGURACIÓN',
-    requiredAnyPermission: ['tenants:read', 'tenants:update', 'tenants:modules:manage', 'roles:manage', 'alerts:manage'],
+    requiredAnyPermission: ['tenants:read', 'tenants:update', 'tenants:modules:manage', 'roles:manage', 'alerts:manage', 'branches:read', 'warehouses:read'],
     items: [
-      { label: 'Mi empresa',  href: '/dashboard/settings/tenant',   icon: Building2,  requiredPermission: 'tenants:read' },
-      { label: 'Sucursales',  href: '/dashboard/settings/branches', icon: LayoutGrid, requiredPermission: 'branches:read' },
-      { label: 'Módulos',     href: '/dashboard/settings/modules',  icon: LayoutGrid, requiredPermission: 'tenants:modules:manage' },
+      { label: 'Mi empresa',  href: '/dashboard/settings/tenant',     icon: Building2,  requiredPermission: 'tenants:read' },
+      { label: 'Sucursales',  href: '/dashboard/settings/branches',   icon: LayoutGrid, requiredPermission: 'branches:read' },
+      { label: 'Depósitos',   href: '/dashboard/settings/warehouses', icon: Warehouse,  requiredPermission: 'warehouses:read' },
+      { label: 'Módulos',     href: '/dashboard/settings/modules',    icon: LayoutGrid, requiredPermission: 'tenants:modules:manage' },
       { label: 'Precios',     href: '/dashboard/settings/pricing',  icon: Tag,        requiredPermission: 'tenants:update' },
       { label: 'Crédito',     href: '/dashboard/settings/credit',   icon: Percent,    requiredPermission: 'tenants:update' },
       { label: 'Alertas',     href: '/dashboard/settings/alerts',   icon: Bell,       requiredPermission: 'alerts:manage' },

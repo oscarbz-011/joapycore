@@ -3,7 +3,7 @@ import { apiClient } from './client';
 export interface TenantResponse {
   id: string;
   name: string;
-  industry: string;
+  industry: string | null;
   plan: string;
   status: string;
   razonSocial: string | null;
@@ -27,6 +27,7 @@ export interface TenantModuleResponse {
   tenantId: string;
   moduleName: string;
   active: boolean;
+  activatedAt: string | null;
 }
 
 export interface UpdateTenantPayload {

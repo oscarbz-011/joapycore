@@ -1,11 +1,8 @@
 ﻿'use client';
 
 import { useState } from 'react';
-import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  ShoppingCart,
-  Users,
   Target,
   ChevronLeft,
   ChevronRight,
@@ -55,36 +52,6 @@ function addMonths(period: string, delta: number) {
 function currentPeriod() {
   const now = new Date();
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-}
-
-// ── Sub-nav ────────────────────────────────────────────────────────────────────
-
-function SalesNav() {
-  return (
-    <div className="flex gap-1 border-b border-border mb-6">
-      <Link
-        href="/dashboard/sales"
-        className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 border-transparent text-muted hover:text-ink -mb-px"
-      >
-        <ShoppingCart size={15} />
-        Pedidos
-      </Link>
-      <Link
-        href="/dashboard/sales/customers"
-        className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 border-transparent text-muted hover:text-ink -mb-px"
-      >
-        <Users size={15} />
-        Clientes
-      </Link>
-      <Link
-        href="/dashboard/sales/targets"
-        className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 border-ink text-ink -mb-px"
-      >
-        <Target size={15} />
-        Metas
-      </Link>
-    </div>
-  );
 }
 
 // ── Progress bar ───────────────────────────────────────────────────────────────
@@ -358,11 +325,9 @@ export default function SalesTargetsPage() {
     <div>
       {/* Page header */}
       <div className="mb-6">
-        <h1 className="text-2xl font-semibold text-ink">Ventas</h1>
-        <p className="mt-1 text-sm text-muted">Metas y rendimiento por vendedor</p>
+        <h1 className="text-2xl font-semibold text-ink">Metas</h1>
+        <p className="mt-1 text-sm text-muted">Rendimiento y metas por vendedor</p>
       </div>
-
-      <SalesNav />
 
       {/* Period navigator */}
       <div className="flex items-center justify-between mb-6">

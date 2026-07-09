@@ -7,7 +7,7 @@ import Link from 'next/link';
 import { useState } from 'react';
 import { Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '../../../lib/auth-context';
-import axios from 'axios';
+import { isApiError } from '../../../lib/api/api-error';
 
 const schema = z.object({
   emailOrUsername: z.string().min(1, 'El email o usuario es requerido'),
@@ -32,9 +32,8 @@ export default function LoginPage() {
     try {
       await login(values.emailOrUsername, values.password);
     } catch (err) {
-      if (axios.isAxiosError(err)) {
-        const msg = err.response?.data?.message ?? 'Credenciales inválidas';
-        setServerError(Array.isArray(msg) ? msg[0] : msg);
+      if (isApiError(err)) {
+        setServerError(err.message);
       } else {
         setServerError('Ocurrió un error inesperado');
       }

@@ -1,45 +1,14 @@
 ﻿'use client';
 
 import { useState } from 'react';
-import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Plus, Search, ShoppingCart, Users, X, Target } from 'lucide-react';
+import { Plus, Search, X } from 'lucide-react';
 import {
   salesApi,
   type Customer,
   type CreateCustomerPayload,
   type DocumentType,
 } from '../../../../../lib/api/sales';
-
-// ── Sub-nav ────────────────────────────────────────────────────────────────────
-
-function SalesNav() {
-  return (
-    <div className="flex gap-1 border-b border-border mb-6">
-      <Link
-        href="/dashboard/sales"
-        className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 border-transparent text-muted hover:text-ink -mb-px"
-      >
-        <ShoppingCart size={15} />
-        Pedidos
-      </Link>
-      <Link
-        href="/dashboard/sales/customers"
-        className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 border-ink text-ink -mb-px"
-      >
-        <Users size={15} />
-        Clientes
-      </Link>
-      <Link
-        href="/dashboard/sales/targets"
-        className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 border-transparent text-muted hover:text-ink -mb-px"
-      >
-        <Target size={15} />
-        Metas
-      </Link>
-    </div>
-  );
-}
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -488,8 +457,8 @@ export default function CustomersPage() {
     <div>
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-ink">Ventas</h1>
-          <p className="mt-1 text-sm text-muted">Pedidos y clientes</p>
+          <h1 className="text-2xl font-semibold text-ink">Clientes</h1>
+          <p className="mt-1 text-sm text-muted">Gestión de clientes</p>
         </div>
         <button
           onClick={() => { setSelectedCustomer(null); setShowCreate(true); }}
@@ -499,8 +468,6 @@ export default function CustomersPage() {
           Nuevo cliente
         </button>
       </div>
-
-      <SalesNav />
 
       <div className="flex gap-6">
         {/* List */}
