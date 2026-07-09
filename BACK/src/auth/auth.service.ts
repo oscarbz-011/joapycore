@@ -84,6 +84,17 @@ export class AuthService {
         dto.industry,
         tx,
       );
+      const casaMatriz = await tx.branch.create({
+        data: { tenantId: tenant.id, name: 'Casa Matriz', isMain: true },
+      });
+      await tx.warehouse.create({
+        data: {
+          tenantId: tenant.id,
+          branchId: casaMatriz.id,
+          name: 'Depósito Principal',
+          isDefault: true,
+        },
+      });
       return createdUser;
     });
 

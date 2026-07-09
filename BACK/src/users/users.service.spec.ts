@@ -45,6 +45,7 @@ describe('UsersService', () => {
     update: jest.Mock;
     setRoles: jest.Mock;
     setPermissions: jest.Mock;
+    generateUniqueUsername: jest.Mock;
   };
   let rolesRepository: {
     findManyByIds: jest.Mock;

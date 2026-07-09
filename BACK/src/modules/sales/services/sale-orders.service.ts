@@ -134,6 +134,7 @@ export class SaleOrdersService {
             productId: item.productId,
             quantity: item.quantity,
             unitPrice: item.unitPrice,
+            warehouseId: item.warehouseId ?? null,
           },
         });
 
@@ -218,7 +219,14 @@ export class SaleOrdersService {
               data: { status: 'SOLD' },
             });
             await tx.stockMovement.create({
-              data: { tenantId, productId: item.productId, type: 'OUT', quantity: -1, referenceId: item.id },
+              data: {
+                tenantId,
+                productId: item.productId,
+                warehouseId: item.warehouseId ?? null,
+                type: 'OUT',
+                quantity: -1,
+                referenceId: item.id,
+              },
             });
           }
         } else {
@@ -226,6 +234,7 @@ export class SaleOrdersService {
             data: {
               tenantId,
               productId: item.productId,
+              warehouseId: item.warehouseId ?? null,
               type: 'OUT',
               quantity: -item.quantity,
               referenceId: item.id,

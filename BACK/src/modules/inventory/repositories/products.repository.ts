@@ -127,10 +127,22 @@ export class ProductsRepository {
   createStockMovement(
     tenantId: string,
     productId: string,
-    data: { type: StockMovementType; quantity: number; notes?: string },
+    data: { type: StockMovementType; quantity: number; warehouseId?: string; notes?: string },
   ) {
     return this.prisma.stockMovement.create({
       data: { tenantId, productId, ...data },
     });
+  }
+
+  async getStockByWarehouse(
+    tenantId: string,
+    productId: string,
+    warehouseId: string,
+  ): Promise<number> {
+    const result = await this.prisma.stockMovement.aggregate({
+      where: { tenantId, productId, warehouseId },
+      _sum: { quantity: true },
+    });
+    return result._sum.quantity ?? 0;
   }
 }

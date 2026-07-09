@@ -29,6 +29,11 @@ export class SaleOrderItemDto {
   @IsPositive()
   unitPrice: number;
 
+  @ApiPropertyOptional({ description: 'Depósito desde el que se despacha este ítem' })
+  @IsOptional()
+  @IsUUID()
+  warehouseId?: string;
+
   @ApiPropertyOptional({
     type: [String],
     description: 'Números de serie para productos serializados',

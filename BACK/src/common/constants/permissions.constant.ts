@@ -43,6 +43,9 @@ export const PERMISSIONS = [
   // Branches
   'branches:read',
   'branches:manage',
+  // Warehouses
+  'warehouses:read',
+  'warehouses:manage',
   // Audit
   'audit:read',
   // Alerts

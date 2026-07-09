@@ -1,9 +1,8 @@
 import { Injectable } from '@nestjs/common';
-import { Industry } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { PrismaClientOrTx } from '../../../prisma/types';
 
-const DEFAULT_CATEGORIES: Record<Industry, string[]> = {
+const DEFAULT_CATEGORIES: Record<string, string[]> = {
   electrodomesticos: [
     'Heladeras y Freezers',
     'Lavarropas y Secarropas',
@@ -14,6 +13,26 @@ const DEFAULT_CATEGORIES: Record<Industry, string[]> = {
     'Pequeños Electrodomésticos',
     'Accesorios y Cables',
   ],
+  ferreteria: [
+    'Herramientas Manuales',
+    'Herramientas Eléctricas',
+    'Materiales de Construcción',
+    'Pinturas y Revestimientos',
+    'Plomería',
+    'Electricidad',
+    'Fijaciones y Tornillería',
+    'Seguridad',
+  ],
+  supermercado: [
+    'Almacén',
+    'Bebidas',
+    'Lácteos y Huevos',
+    'Carnes y Fiambres',
+    'Frutas y Verduras',
+    'Limpieza y Hogar',
+    'Cuidado Personal',
+    'Congelados',
+  ],
 };
 
 @Injectable()
@@ -22,10 +41,11 @@ export class CategoriesRepository {
 
   seedDefaults(
     tenantId: string,
-    industry: Industry,
+    industry: string | null | undefined,
     client: PrismaClientOrTx = this.prisma,
   ) {
-    const names = DEFAULT_CATEGORIES[industry] ?? [];
+    const names = (industry ? DEFAULT_CATEGORIES[industry] : null) ?? [];
+    if (names.length === 0) return Promise.resolve();
     return client.category.createMany({
       data: names.map((name) => ({ tenantId, name })),
       skipDuplicates: true,

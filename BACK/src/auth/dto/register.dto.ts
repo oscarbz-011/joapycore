@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { EmployeeCount, Industry } from '@prisma/client';
+import { EmployeeCount } from '@prisma/client';
 import { IsEmail, IsEnum, IsOptional, IsString, Matches, MinLength } from 'class-validator';
 
 export class RegisterDto {
@@ -8,9 +8,13 @@ export class RegisterDto {
   @MinLength(2)
   tenantName: string;
 
-  @ApiProperty({ enum: Industry })
-  @IsEnum(Industry)
-  industry: Industry;
+  @ApiPropertyOptional({
+    description: 'Rubro de la empresa (texto libre). Ej: electrodomesticos, ferreteria, supermercado',
+    example: 'electrodomesticos',
+  })
+  @IsOptional()
+  @IsString()
+  industry?: string;
 
   @ApiProperty()
   @IsString()

@@ -26,6 +26,7 @@ export class InventoryOnInvoiceListener {
                 id: true,
                 productId: true,
                 quantity: true,
+                warehouseId: true,
                 product: { select: { isSerialized: true } },
               },
             },
@@ -56,6 +57,7 @@ export class InventoryOnInvoiceListener {
             data: {
               tenantId,
               productId: item.productId,
+              warehouseId: item.warehouseId ?? undefined,
               type: 'IN',
               quantity: item.quantity,
               referenceId: invoiceId,
