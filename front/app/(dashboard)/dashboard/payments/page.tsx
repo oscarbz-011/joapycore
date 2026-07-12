@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { NumericInput } from '../../../../components/numeric-input';
 import { X, Printer, FileText } from 'lucide-react';
 import {
   paymentsApi,
@@ -349,7 +350,7 @@ function RegisterPaymentModal({
   const queryClient = useQueryClient();
   const remaining = Number(ar.amount) - Number(ar.paidAmount);
 
-  const [amount, setAmount] = useState(String(Math.round(remaining)));
+  const [amount, setAmount] = useState<number>(Math.round(remaining));
   const [method, setMethod] = useState<PaymentMethod>('CASH');
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [reference, setReference] = useState('');
@@ -359,7 +360,7 @@ function RegisterPaymentModal({
   const mutation = useMutation({
     mutationFn: () => {
       const dto: RegisterPaymentPayload = {
-        amount: Number(amount),
+        amount: amount,
         paymentMethod: method,
         paymentDate: date,
         reference: reference.trim() || undefined,
@@ -405,13 +406,10 @@ function RegisterPaymentModal({
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className={labelCls}>Monto (PYG) *</label>
-              <input
-                type="number"
-                min={1}
-                max={remaining}
-                className={inputCls}
+              <NumericInput
                 value={amount}
-                onChange={(e) => setAmount(e.target.value)}
+                onChange={setAmount}
+                className={inputCls}
                 required
               />
             </div>

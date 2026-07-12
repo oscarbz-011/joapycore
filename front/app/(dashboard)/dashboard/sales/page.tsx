@@ -3,10 +3,12 @@
 import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus, Search, X, Trash2, UserCheck } from 'lucide-react';
+import { NumericInput } from '../../../../components/numeric-input';
 import {
   salesApi,
   type Customer,
   type CreateSaleOrderItem,
+  type OrderType,
   type SaleOrder,
   type SaleOrderStatus,
   type SaleType,
@@ -35,18 +37,32 @@ function formatDate(iso: string) {
   });
 }
 
-function orderTotal(order: SaleOrder) {
+function orderSubtotal(order: SaleOrder) {
   return order.items.reduce((sum, i) => sum + i.quantity * i.unitPrice, 0);
+}
+
+function orderSurchargeAmount(order: SaleOrder, subtotal: number): number {
+  if (!order.surchargeType || !order.surchargeAmount) return 0;
+  return order.surchargeType === 'PERCENTAGE'
+    ? subtotal * (order.surchargeAmount / 100)
+    : order.surchargeAmount;
+}
+
+function orderTotal(order: SaleOrder) {
+  const sub = orderSubtotal(order);
+  return sub + orderSurchargeAmount(order, sub);
 }
 
 // ── Status badge ───────────────────────────────────────────────────────────────
 
 const STATUS_MAP: Record<SaleOrderStatus, { label: string; className: string }> = {
+  QUOTED:                  { label: 'Presupuesto',       className: 'bg-violet-50 text-violet-700' },
   PENDING:                 { label: 'Pendiente',         className: 'bg-surface-2 text-muted' },
   PENDING_CREDIT_APPROVAL: { label: 'En evaluación',     className: 'bg-amber-50 text-amber-700' },
   CREDIT_APPROVED:         { label: 'Crédito aprobado',  className: 'bg-sky-50 text-sky-700' },
   CREDIT_REJECTED:         { label: 'Crédito rechazado', className: 'bg-red-50 text-red-700' },
   CONFIRMED:               { label: 'Confirmado',        className: 'bg-blue-50 text-blue-700' },
+  DELIVERED:               { label: 'Entregado',         className: 'bg-teal-50 text-teal-700' },
   INVOICED:                { label: 'Facturado',         className: 'bg-emerald-50 text-emerald-700' },
   CANCELLED:               { label: 'Cancelado',         className: 'bg-red-50 text-red-600' },
 };
@@ -113,24 +129,20 @@ function LineItemRow({
           />
         </div>
         <div className="w-20">
-          <input
-            type="number"
-            min={1}
+          <NumericInput
+            value={item.quantity}
+            onChange={(v) => onChange({ ...item, quantity: Math.max(1, Math.round(v)) })}
             placeholder="Cant."
             className={inputCls}
-            value={item.quantity || ''}
-            onChange={(e) => onChange({ ...item, quantity: parseInt(e.target.value) || 1 })}
             required
           />
         </div>
         <div className="w-32">
-          <input
-            type="number"
-            min={0}
+          <NumericInput
+            value={item.unitPrice}
+            onChange={(v) => onChange({ ...item, unitPrice: v })}
             placeholder="Precio"
             className={inputCls}
-            value={item.unitPrice || ''}
-            onChange={(e) => onChange({ ...item, unitPrice: parseFloat(e.target.value) || 0 })}
             required
           />
         </div>
@@ -236,6 +248,7 @@ function CreateOrderModal({
 
   const [customerId, setCustomerId] = useState('');
   const [sellerId, setSellerId] = useState(canManage ? '' : (jwtPayload?.sub ?? ''));
+  const [orderType, setOrderType] = useState<OrderType>('STANDARD');
   const [saleType, setSaleType] = useState<SaleType>('CASH');
   const [installments, setInstallments] = useState(0);
   const [notes, setNotes] = useState('');
@@ -243,6 +256,12 @@ function CreateOrderModal({
     { productId: '', product: null, quantity: 1, unitPrice: 0, serialInput: '' },
   ]);
   const [error, setError] = useState('');
+
+  // Delivery / zone surcharge
+  const [showSurcharge, setShowSurcharge] = useState(false);
+  const [surchargeType, setSurchargeType] = useState<'PERCENTAGE' | 'FIXED'>('PERCENTAGE');
+  const [surchargeAmount, setSurchargeAmount] = useState(0);
+  const [surchargeReason, setSurchargeReason] = useState('');
 
   const { data: allUsers = [] } = useQuery({
     queryKey: ['users'],
@@ -267,7 +286,11 @@ function CreateOrderModal({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [creditAvailable, activePlans.length]);
 
-  const total = items.reduce((sum, i) => sum + i.quantity * i.unitPrice, 0);
+  const subtotal = items.reduce((sum, i) => sum + i.quantity * i.unitPrice, 0);
+  const surchargeValue = showSurcharge && surchargeAmount > 0
+    ? (surchargeType === 'PERCENTAGE' ? subtotal * (surchargeAmount / 100) : surchargeAmount)
+    : 0;
+  const total = subtotal + surchargeValue;
 
   const mutation = useMutation({
     mutationFn: () => {
@@ -285,6 +308,10 @@ function CreateOrderModal({
             ? it.serialInput.split('\n').map((s) => s.trim()).filter(Boolean)
             : undefined,
         })),
+        orderType,
+        surchargeType: showSurcharge && surchargeAmount > 0 ? surchargeType : undefined,
+        surchargeAmount: showSurcharge && surchargeAmount > 0 ? surchargeAmount : undefined,
+        surchargeReason: showSurcharge && surchargeReason.trim() ? surchargeReason.trim() : undefined,
       };
       return salesApi.createOrder(dto);
     },
@@ -374,6 +401,37 @@ function CreateOrderModal({
             </p>
           ) : null}
 
+          {/* Tipo de pedido */}
+          <div>
+            <label className={labelCls}>Tipo de pedido</label>
+            <div className="flex gap-3">
+              {([['STANDARD', 'Pedido'], ['QUOTE', 'Presupuesto']] as [OrderType, string][]).map(([type, label]) => (
+                <label
+                  key={type}
+                  className={`flex-1 flex items-center justify-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-medium cursor-pointer transition-colors ${
+                    orderType === type
+                      ? 'border-ink bg-ink text-canvas'
+                      : 'border-border-strong text-muted hover:border-border-strong'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    className="sr-only"
+                    value={type}
+                    checked={orderType === type}
+                    onChange={() => setOrderType(type)}
+                  />
+                  {label}
+                </label>
+              ))}
+            </div>
+            {orderType === 'QUOTE' && (
+              <p className="mt-1.5 text-xs text-violet-600">
+                El presupuesto no compromete stock. Se convierte en pedido cuando el cliente confirme.
+              </p>
+            )}
+          </div>
+
           {/* Tipo de venta */}
           <div>
             <label className={labelCls}>Tipo de venta</label>
@@ -450,11 +508,108 @@ function CreateOrderModal({
             </button>
           </div>
 
+          {/* Recargo de entrega / zona */}
+          <div>
+            <button
+              type="button"
+              onClick={() => setShowSurcharge((v) => !v)}
+              className={`flex items-center gap-2 text-xs font-medium transition-colors ${showSurcharge ? 'text-ink' : 'text-muted hover:text-ink'}`}
+            >
+              <span className={`flex h-4 w-4 items-center justify-center rounded border text-[10px] transition-colors ${showSurcharge ? 'border-ink bg-ink text-canvas' : 'border-border-strong text-muted'}`}>
+                {showSurcharge ? '−' : '+'}
+              </span>
+              Recargo de entrega / zona
+              {surchargeValue > 0 && (
+                <span className="ml-1 text-amber-600 font-semibold">+{formatPrice(surchargeValue)}</span>
+              )}
+            </button>
+
+            {showSurcharge && (
+              <div className="mt-3 rounded-lg border border-border bg-surface-2 px-4 py-3 space-y-3">
+                {/* Tipo */}
+                <div className="flex gap-2">
+                  {([['PERCENTAGE', '% Porcentaje'], ['FIXED', '+ Valor fijo']] as ['PERCENTAGE' | 'FIXED', string][]).map(([t, label]) => (
+                    <label
+                      key={t}
+                      className={`flex-1 flex items-center justify-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-medium cursor-pointer transition-colors ${
+                        surchargeType === t
+                          ? 'border-ink bg-ink text-canvas'
+                          : 'border-border-strong text-muted hover:border-border-strong'
+                      }`}
+                    >
+                      <input type="radio" className="sr-only" checked={surchargeType === t} onChange={() => setSurchargeType(t)} />
+                      {label}
+                    </label>
+                  ))}
+                </div>
+
+                {/* Valor + Motivo */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs text-muted mb-1">
+                      {surchargeType === 'PERCENTAGE' ? 'Porcentaje' : 'Monto fijo'}
+                    </label>
+                    <div className="relative">
+                      <NumericInput
+                        value={surchargeAmount}
+                        onChange={setSurchargeAmount}
+                        decimals={surchargeType === 'PERCENTAGE' ? 2 : 0}
+                        placeholder="0"
+                        className={inputCls}
+                      />
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-faint">
+                        {surchargeType === 'PERCENTAGE' ? '%' : 'Gs.'}
+                      </span>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs text-muted mb-1">Motivo</label>
+                    <select
+                      className={inputCls}
+                      value={surchargeReason}
+                      onChange={(e) => setSurchargeReason(e.target.value)}
+                    >
+                      <option value="">— Seleccionar —</option>
+                      <option value="Flete">Flete</option>
+                      <option value="Zona lejana">Zona lejana</option>
+                      <option value="Entrega urgente">Entrega urgente</option>
+                      <option value="Otro">Otro</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Preview del cálculo */}
+                {surchargeValue > 0 && (
+                  <div className="rounded-lg border border-amber-100 bg-amber-50 px-3 py-2 space-y-1">
+                    <div className="flex justify-between text-xs text-muted">
+                      <span>Subtotal productos</span>
+                      <span className="font-mono tabular-nums">{formatPrice(subtotal)}</span>
+                    </div>
+                    <div className="flex justify-between text-xs text-amber-700">
+                      <span>
+                        Recargo{surchargeReason ? ` (${surchargeReason})` : ''}&nbsp;
+                        {surchargeType === 'PERCENTAGE' ? `${surchargeAmount}%` : ''}
+                      </span>
+                      <span className="font-mono tabular-nums">+{formatPrice(surchargeValue)}</span>
+                    </div>
+                    <div className="flex justify-between text-xs font-semibold text-ink border-t border-amber-200 pt-1">
+                      <span>Total con recargo</span>
+                      <span className="font-mono tabular-nums">{formatPrice(total)}</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
           {/* Total */}
           {items.length > 0 && (
-            <div className="flex justify-end border-t border-border pt-3">
-              <span className="text-sm text-muted mr-3">Total estimado</span>
-              <span className="text-sm font-bold text-ink">{formatPrice(total)}</span>
+            <div className="flex justify-end items-baseline gap-3 border-t border-border pt-3">
+              {surchargeValue > 0 && (
+                <span className="text-xs text-faint line-through tabular-nums">{formatPrice(subtotal)}</span>
+              )}
+              <span className="text-sm text-muted mr-1">Total estimado</span>
+              <span className="text-sm font-bold text-ink tabular-nums">{formatPrice(total)}</span>
             </div>
           )}
 
@@ -502,29 +657,24 @@ function CreateOrderModal({
 
 function OrderDetailPanel({ order, onClose }: { order: SaleOrder; onClose: () => void }) {
   const queryClient = useQueryClient();
-  const [confirmAction, setConfirmAction] = useState<'confirm' | 'cancel' | null>(null);
+  const [confirmAction, setConfirmAction] = useState<'confirm' | 'cancel' | 'convert' | 'deliver' | null>(null);
 
-  const confirmMutation = useMutation({
-    mutationFn: () => salesApi.confirmOrder(order.id),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['sale-orders'] });
-      setConfirmAction(null);
-      onClose();
-    },
-  });
+  const invalidate = () => {
+    void queryClient.invalidateQueries({ queryKey: ['sale-orders'] });
+    setConfirmAction(null);
+    onClose();
+  };
 
-  const cancelMutation = useMutation({
-    mutationFn: () => salesApi.cancelOrder(order.id),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['sale-orders'] });
-      setConfirmAction(null);
-      onClose();
-    },
-  });
+  const confirmMutation  = useMutation({ mutationFn: () => salesApi.confirmOrder(order.id),  onSuccess: invalidate });
+  const cancelMutation   = useMutation({ mutationFn: () => salesApi.cancelOrder(order.id),   onSuccess: invalidate });
+  const convertMutation  = useMutation({ mutationFn: () => salesApi.convertQuote(order.id),  onSuccess: invalidate });
+  const deliverMutation  = useMutation({ mutationFn: () => salesApi.deliverOrder(order.id),  onSuccess: invalidate });
 
   const total = orderTotal(order);
-  const canConfirm = order.status === 'PENDING' || order.status === 'CREDIT_APPROVED';
-  const canCancel = ['PENDING', 'PENDING_CREDIT_APPROVAL', 'CREDIT_APPROVED', 'CREDIT_REJECTED'].includes(order.status);
+  const canConfirm  = order.status === 'PENDING' || order.status === 'CREDIT_APPROVED';
+  const canConvert  = order.status === 'QUOTED';
+  const canDeliver  = order.status === 'CONFIRMED';
+  const canCancel   = ['QUOTED', 'PENDING', 'PENDING_CREDIT_APPROVAL', 'CREDIT_APPROVED', 'CREDIT_REJECTED'].includes(order.status);
 
   return (
     <div className="fixed inset-0 z-40 flex justify-end">
@@ -618,6 +768,21 @@ function OrderDetailPanel({ order, onClose }: { order: SaleOrder; onClose: () =>
               </div>
             ))}
           </div>
+          {order.surchargeAmount && order.surchargeType && (
+            <div className="mt-2 space-y-1">
+              <div className="flex justify-between text-xs text-muted">
+                <span>Subtotal</span>
+                <span className="font-mono tabular-nums">{formatPrice(orderSubtotal(order))}</span>
+              </div>
+              <div className="flex justify-between text-xs text-amber-700">
+                <span>
+                  Recargo{order.surchargeReason ? ` — ${order.surchargeReason}` : ''}
+                  {order.surchargeType === 'PERCENTAGE' ? ` (${order.surchargeAmount}%)` : ''}
+                </span>
+                <span className="font-mono tabular-nums">+{formatPrice(orderSurchargeAmount(order, orderSubtotal(order)))}</span>
+              </div>
+            </div>
+          )}
           <div className="flex justify-between items-center border-t border-border mt-3 pt-3">
             <span className="text-sm font-semibold text-muted">Total</span>
             <span className="text-base font-bold text-ink">{formatPrice(total)}</span>
@@ -646,16 +811,32 @@ function OrderDetailPanel({ order, onClose }: { order: SaleOrder; onClose: () =>
         )}
 
         {/* Actions */}
-        {(canConfirm || canCancel) && (
+        {(canConfirm || canConvert || canDeliver || canCancel) && (
           <div className="px-5 py-4 space-y-2">
             {confirmAction === null && (
               <>
+                {canConvert && (
+                  <button
+                    onClick={() => setConfirmAction('convert')}
+                    className="w-full rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-700"
+                  >
+                    Convertir a pedido
+                  </button>
+                )}
                 {canConfirm && (
                   <button
                     onClick={() => setConfirmAction('confirm')}
                     className="w-full rounded-lg bg-ink px-4 py-2 text-sm font-medium text-canvas hover:opacity-80"
                   >
                     Confirmar pedido
+                  </button>
+                )}
+                {canDeliver && (
+                  <button
+                    onClick={() => setConfirmAction('deliver')}
+                    className="w-full rounded-lg bg-teal-600 px-4 py-2 text-sm font-medium text-white hover:bg-teal-700"
+                  >
+                    Marcar como entregado
                   </button>
                 )}
                 {canCancel && (
@@ -667,6 +848,34 @@ function OrderDetailPanel({ order, onClose }: { order: SaleOrder; onClose: () =>
                   </button>
                 )}
               </>
+            )}
+
+            {confirmAction === 'convert' && (
+              <div className="rounded-lg border border-violet-200 bg-violet-50 px-4 py-3">
+                <p className="text-xs text-violet-700 mb-2">
+                  ¿Convertir el presupuesto en un pedido real?
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => convertMutation.mutate()}
+                    disabled={convertMutation.isPending}
+                    className="flex-1 rounded-lg bg-violet-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-violet-700 disabled:opacity-50"
+                  >
+                    {convertMutation.isPending ? 'Convirtiendo...' : 'Sí, convertir'}
+                  </button>
+                  <button
+                    onClick={() => setConfirmAction(null)}
+                    className="flex-1 rounded-lg border border-border-strong bg-surface text-ink px-3 py-1.5 text-xs font-medium text-muted hover:bg-surface-2"
+                  >
+                    Volver
+                  </button>
+                </div>
+                {convertMutation.isError && (
+                  <p className="mt-2 text-xs text-red-600">
+                    {(convertMutation.error as Error & { response?: { data?: { message?: string } } })?.response?.data?.message ?? 'Error al convertir'}
+                  </p>
+                )}
+              </div>
             )}
 
             {confirmAction === 'confirm' && (
@@ -692,6 +901,34 @@ function OrderDetailPanel({ order, onClose }: { order: SaleOrder; onClose: () =>
                 {confirmMutation.isError && (
                   <p className="mt-2 text-xs text-red-600">
                     {(confirmMutation.error as Error & { response?: { data?: { message?: string } } })?.response?.data?.message ?? 'Error al confirmar'}
+                  </p>
+                )}
+              </div>
+            )}
+
+            {confirmAction === 'deliver' && (
+              <div className="rounded-lg border border-teal-200 bg-teal-50 px-4 py-3">
+                <p className="text-xs text-teal-700 mb-2">
+                  ¿Marcar este pedido como entregado al cliente?
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => deliverMutation.mutate()}
+                    disabled={deliverMutation.isPending}
+                    className="flex-1 rounded-lg bg-teal-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-teal-700 disabled:opacity-50"
+                  >
+                    {deliverMutation.isPending ? 'Registrando...' : 'Sí, entregado'}
+                  </button>
+                  <button
+                    onClick={() => setConfirmAction(null)}
+                    className="flex-1 rounded-lg border border-border-strong bg-surface text-ink px-3 py-1.5 text-xs font-medium text-muted hover:bg-surface-2"
+                  >
+                    Volver
+                  </button>
+                </div>
+                {deliverMutation.isError && (
+                  <p className="mt-2 text-xs text-red-600">
+                    {(deliverMutation.error as Error & { response?: { data?: { message?: string } } })?.response?.data?.message ?? 'Error al registrar entrega'}
                   </p>
                 )}
               </div>
@@ -790,11 +1027,13 @@ export default function SalesPage() {
           onChange={(e) => setStatusFilter(e.target.value as '' | SaleOrderStatus)}
         >
           <option value="">Todos los estados</option>
+          <option value="QUOTED">Presupuesto</option>
           <option value="PENDING">Pendiente</option>
           <option value="PENDING_CREDIT_APPROVAL">En evaluación</option>
           <option value="CREDIT_APPROVED">Crédito aprobado</option>
           <option value="CREDIT_REJECTED">Crédito rechazado</option>
           <option value="CONFIRMED">Confirmado</option>
+          <option value="DELIVERED">Entregado</option>
           <option value="INVOICED">Facturado</option>
           <option value="CANCELLED">Cancelado</option>
         </select>

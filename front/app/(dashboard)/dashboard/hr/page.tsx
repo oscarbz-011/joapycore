@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus, Copy, Check, X, Users2, LayoutGrid, Receipt } from 'lucide-react';
 import { hrApi, type CreateEmployeePayload, type Employee, type Position } from '../../../../lib/api/hr';
+import { NumericInput } from '../../../../components/numeric-input';
 
 function buildUsernamePreview(firstName: string, lastName: string): string {
   const norm = (s: string) =>
@@ -224,12 +225,10 @@ function CreateEmployeeModal({
               </div>
               <div>
                 <label className={labelCls}>Salario base (PYG) *</label>
-                <input
-                  type="number"
-                  min={0}
+                <NumericInput
+                  value={form.baseSalary}
+                  onChange={(v) => set('baseSalary', Math.round(v))}
                   className={inputCls}
-                  value={form.baseSalary || ''}
-                  onChange={(e) => set('baseSalary', parseInt(e.target.value) || 0)}
                   required
                 />
               </div>

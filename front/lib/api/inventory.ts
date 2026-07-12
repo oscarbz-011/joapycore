@@ -12,6 +12,8 @@ export interface Brand {
   isActive: boolean;
 }
 
+export type MarkupType = 'PERCENTAGE' | 'FIXED';
+
 export interface Product {
   id: string;
   name: string;
@@ -25,6 +27,8 @@ export interface Product {
   depthCm: number | null;
   costPrice: number;
   salePrice: number;
+  additionalMarkup: number | null;
+  additionalMarkupType: MarkupType | null;
   isActive: boolean;
   deletedAt: string | null;
   category: { id: string; name: string } | null;
@@ -59,21 +63,62 @@ export interface CreateProductPayload {
   unit?: string;
   costPrice: number;
   salePrice: number;
+  additionalMarkup?: number;
+  additionalMarkupType?: MarkupType;
 }
 
-export type UpdateProductPayload = Partial<CreateProductPayload> & {
-  weightKg?: number | null;
-  heightCm?: number | null;
-  widthCm?: number | null;
-  depthCm?: number | null;
-};
+export type UpdateProductPayload =
+  Omit<Partial<CreateProductPayload>, 'additionalMarkup' | 'additionalMarkupType'> & {
+    weightKg?: number | null;
+    heightCm?: number | null;
+    widthCm?: number | null;
+    depthCm?: number | null;
+    additionalMarkup?: number | null;
+    additionalMarkupType?: MarkupType | null;
+  };
 
-export type StockMovementType = 'IN' | 'OUT' | 'ADJUSTMENT';
+export type MovementReason =
+  | 'PURCHASE'
+  | 'CUSTOMER_RETURN'
+  | 'ADJUSTMENT'
+  | 'TRANSFER'
+  | 'INITIAL'
+  | 'SALE_OUT'
+  | 'SALE_REVERSAL';
+
+export interface StockMovement {
+  id: string;
+  productId: string;
+  product: { id: string; name: string; model: string | null };
+  warehouseId: string | null;
+  warehouse: { id: string; name: string } | null;
+  type: 'IN' | 'OUT' | 'ADJUSTMENT' | 'TRANSFER';
+  reason: MovementReason | null;
+  quantity: number;
+  referenceId: string | null;
+  notes: string | null;
+  createdAt: string;
+}
 
 export interface CreateStockMovementPayload {
-  type: StockMovementType;
+  reason: MovementReason;
   quantity: number;
+  direction?: 'IN' | 'OUT';
+  warehouseId?: string;
+  toWarehouseId?: string;
   notes?: string;
+}
+
+export interface CreateGlobalMovementPayload extends CreateStockMovementPayload {
+  productId: string;
+}
+
+export interface MovementFilters {
+  productId?: string;
+  warehouseId?: string;
+  reason?: MovementReason;
+  take?: number;
+  skip?: number;
 }
 
 export interface ProductSupplier {
@@ -104,8 +149,14 @@ export const inventoryApi = {
   listProductsWithStock: (filters?: ProductFilters): Promise<ProductWithStock[]> =>
     apiClient.get('/inventory/products/with-stock', { params: filters }).then((r) => r.data),
 
-  addStockMovement: (id: string, dto: CreateStockMovementPayload): Promise<void> =>
+  addStockMovement: (id: string, dto: CreateStockMovementPayload): Promise<StockMovement | StockMovement[]> =>
     apiClient.post(`/inventory/products/${id}/stock-movements`, dto).then((r) => r.data),
+
+  listMovements: (filters?: MovementFilters): Promise<StockMovement[]> =>
+    apiClient.get('/inventory/movements', { params: filters }).then((r) => r.data),
+
+  createMovement: (dto: CreateGlobalMovementPayload): Promise<StockMovement | StockMovement[]> =>
+    apiClient.post('/inventory/movements', dto).then((r) => r.data),
 
   getProduct: (id: string): Promise<ProductWithStock> =>
     apiClient.get(`/inventory/products/${id}`).then((r) => r.data),

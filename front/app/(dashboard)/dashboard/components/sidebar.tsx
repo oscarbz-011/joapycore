@@ -26,6 +26,7 @@ import {
   Percent,
   CheckSquare,
   Target,
+  Landmark,
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../../../../lib/auth-context';
@@ -63,6 +64,7 @@ const MODULE_PERM_MAP: Record<string, string[]> = {
   billing:     ['billing:read', 'billing:issue', 'billing:cancel', 'billing:manage'],
   procurement: ['procurement:read', 'procurement:create', 'procurement:update', 'procurement:receive', 'suppliers:read', 'suppliers:create', 'suppliers:update'],
   payments:    ['payments:read', 'payments:register'],
+  finance:     ['finance:read', 'finance:manage'],
   hr:          ['hr:read', 'hr:employees:create', 'hr:employees:update', 'hr:employees:terminate', 'hr:payroll:run', 'hr:payroll:pay', 'hr:config:manage'],
 };
 
@@ -81,6 +83,7 @@ const NAV_ITEMS: NavItem[] = [
   { label: 'Facturación', href: '/dashboard/billing',     icon: FileText,     module: 'billing' },
   { label: 'Compras',     href: '/dashboard/procurement', icon: Truck,        module: 'procurement' },
   { label: 'Cuentas',     href: '/dashboard/payments',    icon: CreditCard,   module: 'payments' },
+  { label: 'Financiación',href: '/dashboard/finance',     icon: Landmark,     module: 'finance' },
   { label: 'RRHH',        href: '/dashboard/hr',          icon: Users,        module: 'hr' },
 ];
 

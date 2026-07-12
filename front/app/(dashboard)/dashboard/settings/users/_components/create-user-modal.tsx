@@ -8,6 +8,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { X, Copy, Check } from 'lucide-react';
 import { usersApi, type CreateUserPayload } from '../../../../../../lib/api/users';
 import { hrApi, type CreateEmployeePayload } from '../../../../../../lib/api/hr';
+import { NumericInput } from '../../../../../../components/numeric-input';
 
 // ── Username preview ──────────────────────────────────────────────────────────
 
@@ -345,13 +346,11 @@ export function CreateUserModal({ onClose }: Props) {
                   </div>
                   <div>
                     <label className={labelClass}>Salario base (PYG) *</label>
-                    <input
-                      type="number"
-                      min={0}
-                      value={employment.baseSalary || ''}
-                      onChange={(e) => setEmp('baseSalary', parseInt(e.target.value) || 0)}
+                    <NumericInput
+                      value={employment.baseSalary}
+                      onChange={(v) => setEmp('baseSalary', Math.round(v))}
                       className={inputClass}
-                      placeholder="2800000"
+                      placeholder="2.800.000"
                     />
                   </div>
                   <div>

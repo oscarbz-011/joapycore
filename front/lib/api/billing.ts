@@ -64,12 +64,23 @@ export interface CreditNote {
   };
 }
 
+export interface IssueInvoicePayload {
+  paymentCondition: 'CASH' | 'CREDIT';
+  dueDate?: string;
+  invoiceNumber?: string;
+  invoicePrefix?: string;
+  notes?: string;
+}
+
 export const billingApi = {
   listInvoices: (): Promise<Invoice[]> =>
     apiClient.get('/billing/invoices').then((r) => r.data),
 
   getInvoice: (id: string): Promise<Invoice> =>
     apiClient.get(`/billing/invoices/${id}`).then((r) => r.data),
+
+  issueInvoice: (id: string, dto: IssueInvoicePayload): Promise<Invoice> =>
+    apiClient.post(`/billing/invoices/${id}/issue`, dto).then((r) => r.data),
 
   cancelInvoice: (id: string, reason: string): Promise<Invoice> =>
     apiClient.post(`/billing/invoices/${id}/cancel`, { reason }).then((r) => r.data),

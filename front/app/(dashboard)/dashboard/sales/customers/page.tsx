@@ -9,6 +9,7 @@ import {
   type CreateCustomerPayload,
   type DocumentType,
 } from '../../../../../lib/api/sales';
+import { NumericInput } from '../../../../../components/numeric-input';
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -239,14 +240,10 @@ function CustomerForm({ initial, onClose }: { initial?: Customer; onClose: () =>
           </div>
           <div>
             <label className={labelCls}>Ingresos mensuales (Gs.)</label>
-            <input
-              type="number"
-              min={0}
+            <NumericInput
+              value={form.monthlyIncome ?? 0}
+              onChange={(v) => set('monthlyIncome', v || undefined)}
               className={inputCls}
-              value={form.monthlyIncome ?? ''}
-              onChange={(e) =>
-                set('monthlyIncome', e.target.value ? parseFloat(e.target.value) : undefined)
-              }
               placeholder="0"
             />
           </div>

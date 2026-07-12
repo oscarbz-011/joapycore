@@ -2,12 +2,16 @@ import { apiClient } from './client';
 
 export type DocumentType = 'CI' | 'RUC' | 'PASSPORT';
 export type SaleType = 'CASH' | 'CREDIT';
+export type OrderType = 'STANDARD' | 'QUOTE' | 'WHOLESALE';
+export type MarkupType = 'PERCENTAGE' | 'FIXED';
 export type SaleOrderStatus =
+  | 'QUOTED'
   | 'PENDING'
   | 'PENDING_CREDIT_APPROVAL'
   | 'CREDIT_APPROVED'
   | 'CREDIT_REJECTED'
   | 'CONFIRMED'
+  | 'DELIVERED'
   | 'INVOICED'
   | 'CANCELLED';
 
@@ -59,6 +63,7 @@ export interface SaleOrderItem {
 export interface SaleOrder {
   id: string;
   status: SaleOrderStatus;
+  orderType: OrderType;
   saleType: SaleType;
   installments: number | null;
   interestRate: number | null;
@@ -79,6 +84,9 @@ export interface SaleOrder {
   approvedAt: string | null;
   rejectedAt: string | null;
   rejectionReason: string | null;
+  surchargeType: MarkupType | null;
+  surchargeAmount: number | null;
+  surchargeReason: string | null;
   items: SaleOrderItem[];
   invoice: { id: string; status: string } | null;
 }
@@ -94,10 +102,14 @@ export interface CreateSaleOrderItem {
 export interface CreateSaleOrderPayload {
   customerId: string;
   sellerId?: string;
+  orderType?: OrderType;
   saleType?: SaleType;
   installments?: number;
   notes?: string;
   items: CreateSaleOrderItem[];
+  surchargeType?: MarkupType;
+  surchargeAmount?: number;
+  surchargeReason?: string;
 }
 
 export interface CreateCustomerPayload {
@@ -176,6 +188,12 @@ export const salesApi = {
 
   rejectCredit: (id: string, reason: string): Promise<SaleOrder> =>
     apiClient.post(`/sales/orders/${id}/reject`, { reason }).then((r) => r.data),
+
+  convertQuote: (id: string): Promise<SaleOrder> =>
+    apiClient.post(`/sales/orders/${id}/convert`).then((r) => r.data),
+
+  deliverOrder: (id: string): Promise<SaleOrder> =>
+    apiClient.post(`/sales/orders/${id}/deliver`).then((r) => r.data),
 
   // Customers
   listCustomers: (): Promise<Customer[]> =>

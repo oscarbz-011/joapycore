@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Check, Info, Save, Tag } from 'lucide-react';
 import { settingsApi, type MarkupMethod } from '../../../../../lib/api/settings';
+import { NumericInput } from '../../../../../components/numeric-input';
 
 function fmt(n: number) {
   return n.toLocaleString('es-PY', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
@@ -18,20 +19,20 @@ export default function PricingSettingsPage() {
   });
 
   const [method, setMethod] = useState<MarkupMethod>('PERCENTAGE');
-  const [markup, setMarkup] = useState('');
-  const [previewCost, setPreviewCost] = useState('1000');
+  const [markup, setMarkup] = useState<number>(0);
+  const [previewCost, setPreviewCost] = useState<number>(1000);
   const [flashSaved, setFlashSaved] = useState(false);
 
   useEffect(() => {
     if (config) {
       setMethod(config.markupMethod);
-      setMarkup(String(config.defaultMarkup));
+      setMarkup(config.defaultMarkup);
     }
   }, [config]);
 
   const mutation = useMutation({
     mutationFn: () =>
-      settingsApi.upsertPricing({ markupMethod: method, defaultMarkup: Number(markup) }),
+      settingsApi.upsertPricing({ markupMethod: method, defaultMarkup: markup }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['pricing-config'] });
       setFlashSaved(true);
@@ -40,14 +41,12 @@ export default function PricingSettingsPage() {
   });
 
   function computedPrice(): number | null {
-    const cost = Number(previewCost);
-    const m = Number(markup);
-    if (!cost || isNaN(m) || m <= 0) return null;
-    return method === 'PERCENTAGE' ? cost * (1 + m / 100) : cost + m;
+    if (!previewCost || markup <= 0) return null;
+    return method === 'PERCENTAGE' ? previewCost * (1 + markup / 100) : previewCost + markup;
   }
 
   const price = computedPrice();
-  const canSave = markup !== '' && Number(markup) > 0 && !mutation.isPending;
+  const canSave = markup > 0 && !mutation.isPending;
 
   return (
     <div className="mx-auto max-w-2xl space-y-8 p-8">
@@ -111,12 +110,10 @@ export default function PricingSettingsPage() {
               Se pre-completará al crear o actualizar un producto. Puede ajustarse por producto.
             </p>
             <div className="relative w-48">
-              <input
-                type="number"
-                min="0.01"
-                step="0.01"
+              <NumericInput
                 value={markup}
-                onChange={(e) => setMarkup(e.target.value)}
+                onChange={setMarkup}
+                decimals={method === 'PERCENTAGE' ? 2 : 0}
                 placeholder={method === 'PERCENTAGE' ? '25' : '5000'}
                 className="w-full rounded-lg border border-border-strong py-2 pl-3 pr-10 text-sm focus:border-border-strong focus:outline-none focus:ring-2 focus:ring-border"
               />
@@ -136,11 +133,9 @@ export default function PricingSettingsPage() {
               <div>
                 <p className="text-xs text-faint mb-1">Costo del producto</p>
                 <div className="relative w-36">
-                  <input
-                    type="number"
-                    min="1"
+                  <NumericInput
                     value={previewCost}
-                    onChange={(e) => setPreviewCost(e.target.value)}
+                    onChange={setPreviewCost}
                     className="w-full rounded-lg border border-border bg-surface py-2 pl-3 pr-10 text-sm focus:border-border-strong focus:outline-none"
                   />
                   <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-faint">Gs.</span>

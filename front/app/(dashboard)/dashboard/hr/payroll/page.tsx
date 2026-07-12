@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Play, CheckCircle, ChevronDown, ChevronRight, Settings, Users2, LayoutGrid, Receipt } from 'lucide-react';
 import { hrApi, type PayrollRecord, type PayrollRecordItem } from '../../../../../lib/api/hr';
+import { NumericInput } from '../../../../../components/numeric-input';
 
 function HrNav({ active }: { active: 'employees' | 'areas' | 'payroll' }) {
   const links = [
@@ -106,12 +107,10 @@ function ConfigPanel() {
           <div className="mt-4 grid grid-cols-3 gap-4">
             <div>
               <label className="block text-xs font-medium text-muted mb-1">Salario mínimo (PYG)</label>
-              <input
-                type="number"
-                min={0}
-                className="w-full rounded-lg border border-border-strong bg-surface text-ink px-3 py-2 text-sm focus:border-border-strong focus:outline-none focus:ring-1 focus:ring-border-strong"
+              <NumericInput
                 value={form.minimumWage}
-                onChange={(e) => setForm((f) => ({ ...f, minimumWage: parseFloat(e.target.value) || 0 }))}
+                onChange={(v) => setForm((f) => ({ ...f, minimumWage: Math.round(v) }))}
+                className="w-full rounded-lg border border-border-strong bg-surface text-ink px-3 py-2 text-sm focus:border-border-strong focus:outline-none focus:ring-1 focus:ring-border-strong"
               />
             </div>
             <div>

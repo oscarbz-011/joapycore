@@ -19,6 +19,7 @@ import {
   salesApi,
   type SellerStat,
 } from '../../../../../lib/api/sales';
+import { NumericInput } from '../../../../../components/numeric-input';
 import { usersApi } from '../../../../../lib/api/users';
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -77,11 +78,10 @@ function TargetInput({
   onSave: (amount: number) => void;
 }) {
   const [editing, setEditing] = useState(false);
-  const [value, setValue] = useState(current != null ? String(current / 1_000_000) : '');
+  const [value, setValue] = useState<number>(current != null ? current / 1_000_000 : 0);
 
   function commit() {
-    const n = Number(value);
-    if (n > 0) onSave(n * 1_000_000);
+    if (value > 0) onSave(value * 1_000_000);
     setEditing(false);
   }
 
@@ -89,13 +89,11 @@ function TargetInput({
     return (
       <div className="flex items-center gap-1.5 mt-1">
         <div className="relative">
-          <input
+          <NumericInput
             autoFocus
-            type="number"
-            min={0}
-            step={0.1}
             value={value}
-            onChange={(e) => setValue(e.target.value)}
+            onChange={setValue}
+            decimals={1}
             onKeyDown={(e) => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') setEditing(false); }}
             className="w-28 rounded-md border border-border-strong py-1 pl-2 pr-8 text-xs focus:border-border-strong focus:outline-none"
           />
@@ -109,7 +107,7 @@ function TargetInput({
 
   return (
     <button
-      onClick={() => { setValue(current != null ? String(current / 1_000_000) : ''); setEditing(true); }}
+      onClick={() => { setValue(current != null ? current / 1_000_000 : 0); setEditing(true); }}
       className="flex items-center gap-1 text-xs text-faint hover:text-muted mt-1 transition-colors"
     >
       <span>{current != null ? `Meta: ${fmtGs(current)}` : 'Sin meta establecida'}</span>
@@ -230,7 +228,7 @@ function AddSellerForm({
   onCancel: () => void;
 }) {
   const [userId, setUserId] = useState('');
-  const [amount, setAmount] = useState('');
+  const [amount, setAmount] = useState<number>(0);
 
   const { data: users = [] } = useQuery({
     queryKey: ['users'],
@@ -254,13 +252,11 @@ function AddSellerForm({
           ))}
         </select>
         <div className="relative w-36">
-          <input
-            type="number"
-            min={0}
-            step={0.1}
-            placeholder="Meta en M"
+          <NumericInput
             value={amount}
-            onChange={(e) => setAmount(e.target.value)}
+            onChange={setAmount}
+            decimals={1}
+            placeholder="Meta en M"
             className="w-full rounded-lg border border-border py-2 pl-3 pr-8 text-sm focus:border-border-strong focus:outline-none"
           />
           <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-faint">M Gs.</span>
@@ -270,7 +266,7 @@ function AddSellerForm({
         <button
           type="button"
           disabled={!userId || !amount}
-          onClick={() => onAdd(userId, Number(amount) * 1_000_000)}
+          onClick={() => onAdd(userId, amount * 1_000_000)}
           className="flex items-center gap-1.5 rounded-lg bg-border-strong px-3.5 py-1.5 text-sm font-medium text-ink hover:opacity-80 disabled:opacity-40"
         >
           <Check size={13} />
