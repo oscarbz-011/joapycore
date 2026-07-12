@@ -6,6 +6,7 @@ import { Permissions } from '../../../common/decorators/permissions.decorator';
 import { RequiredModule } from '../../../common/decorators/required-module.decorator';
 import type { JwtPayload } from '../../../common/types/jwt-payload.interface';
 import { CancelInvoiceDto } from '../dto/cancel-invoice.dto';
+import { IssueInvoiceDto } from '../dto/issue-invoice.dto';
 import { InvoicesService } from '../services/invoices.service';
 
 @ApiTags('Billing')
@@ -27,6 +28,18 @@ export class InvoicesController {
   @ApiOperation({ summary: 'Obtener factura por ID' })
   findOne(@CurrentTenant() tenantId: string, @Param('id') id: string) {
     return this.invoicesService.findOne(tenantId, id);
+  }
+
+  @Post('invoices/:id/issue')
+  @Permissions('billing:issue')
+  @ApiOperation({ summary: 'Emitir factura borrador (PENDING → ISSUED)' })
+  issue(
+    @CurrentTenant() tenantId: string,
+    @CurrentUser() user: JwtPayload,
+    @Param('id') id: string,
+    @Body() dto: IssueInvoiceDto,
+  ) {
+    return this.invoicesService.issue(tenantId, id, dto, user.sub);
   }
 
   @Post('invoices/:id/cancel')

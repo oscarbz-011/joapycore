@@ -6,6 +6,7 @@ import {
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
+import { MovementReason, StockMovementType } from '@prisma/client';
 import {
   ProductsRepository,
   ProductFilters,
@@ -15,7 +16,8 @@ import { ProductSuppliersRepository } from '../repositories/product-suppliers.re
 import { CreateProductDto } from '../dto/create-product.dto';
 import { UpdateProductDto } from '../dto/update-product.dto';
 import { AddProductUnitsDto } from '../dto/add-product-units.dto';
-import { CreateStockMovementDto } from '../dto/create-stock-movement.dto';
+import { CreateStockMovementDto, CreateGlobalStockMovementDto } from '../dto/create-stock-movement.dto';
+import { FilterStockMovementDto } from '../dto/filter-stock-movement.dto';
 import { CreateProductSupplierDto } from '../dto/create-product-supplier.dto';
 import { UpdateProductSupplierDto } from '../dto/update-product-supplier.dto';
 
@@ -98,6 +100,10 @@ export class ProductsService {
     return this.productUnitsRepository.findByProduct(tenantId, productId);
   }
 
+  listMovements(tenantId: string, filters: FilterStockMovementDto) {
+    return this.productsRepository.findMovements(tenantId, filters);
+  }
+
   async addStockMovement(
     tenantId: string,
     productId: string,
@@ -109,22 +115,51 @@ export class ProductsService {
         'Los productos serializados gestionan el stock a través de unidades con número de serie',
       );
     }
-    // OUT movements reduce stock — store as negative quantity
-    const effectiveQty =
-      dto.type === 'OUT' ? -Math.abs(dto.quantity) : dto.quantity;
 
-    const movement = await this.productsRepository.createStockMovement(
-      tenantId,
-      productId,
-      { type: dto.type, quantity: effectiveQty, notes: dto.notes },
-    );
-    this.eventEmitter.emit('stock.movement.created', {
-      tenantId,
-      productId,
-      type: dto.type,
-      quantity: dto.quantity,
+    if (dto.reason === MovementReason.TRANSFER) {
+      if (!dto.toWarehouseId) {
+        throw new BadRequestException('Se requiere el depósito de destino para transferencias');
+      }
+      const movements = await this.productsRepository.createTransferMovements(tenantId, productId, {
+        quantity: dto.quantity,
+        fromWarehouseId: dto.warehouseId,
+        toWarehouseId: dto.toWarehouseId,
+        notes: dto.notes,
+      });
+      this.eventEmitter.emit('stock.movement.created', { tenantId, productId, type: 'TRANSFER', quantity: dto.quantity });
+      return movements;
+    }
+
+    if (dto.reason === MovementReason.ADJUSTMENT && !dto.direction) {
+      throw new BadRequestException('Se requiere la dirección (IN/OUT) para ajustes de inventario');
+    }
+
+    let movementType: StockMovementType;
+    let effectiveQty: number;
+
+    if (dto.reason === MovementReason.ADJUSTMENT) {
+      movementType = StockMovementType.ADJUSTMENT;
+      effectiveQty = dto.direction === 'OUT' ? -Math.abs(dto.quantity) : Math.abs(dto.quantity);
+    } else {
+      const isOut = dto.reason === MovementReason.SALE_OUT;
+      movementType = isOut ? StockMovementType.OUT : StockMovementType.IN;
+      effectiveQty = isOut ? -Math.abs(dto.quantity) : Math.abs(dto.quantity);
+    }
+
+    const movement = await this.productsRepository.createStockMovement(tenantId, productId, {
+      type: movementType,
+      reason: dto.reason,
+      quantity: effectiveQty,
+      warehouseId: dto.warehouseId,
+      notes: dto.notes,
     });
+    this.eventEmitter.emit('stock.movement.created', { tenantId, productId, type: movementType, quantity: dto.quantity });
     return movement;
+  }
+
+  async createGlobalMovement(tenantId: string, dto: CreateGlobalStockMovementDto) {
+    const { productId, ...movementDto } = dto;
+    return this.addStockMovement(tenantId, productId, movementDto);
   }
 
   // ── Suppliers ────────────────────────────────────────────────────────────────

@@ -54,6 +54,9 @@ export const PERMISSIONS = [
   // Files
   'files:upload',
   'files:read',
+  // Finance
+  'finance:read',
+  'finance:manage',
   // Reports
   'reports:read',
   // HR

@@ -98,4 +98,28 @@ export class SaleOrdersController {
   ) {
     return this.saleOrdersService.rejectCredit(tenantId, id, dto.reason, user.sub);
   }
+
+  @Post(':id/convert')
+  @HttpCode(HttpStatus.OK)
+  @Permissions('sales:update')
+  @ApiOperation({ summary: 'Convertir presupuesto (QUOTE) en pedido real' })
+  convertQuote(
+    @CurrentTenant() tenantId: string,
+    @CurrentUser() user: JwtPayload,
+    @Param('id') id: string,
+  ) {
+    return this.saleOrdersService.convertQuoteToOrder(tenantId, id, user.sub);
+  }
+
+  @Post(':id/deliver')
+  @HttpCode(HttpStatus.OK)
+  @Permissions('sales:update')
+  @ApiOperation({ summary: 'Marcar pedido como entregado (CONFIRMED → DELIVERED)' })
+  deliver(
+    @CurrentTenant() tenantId: string,
+    @CurrentUser() user: JwtPayload,
+    @Param('id') id: string,
+  ) {
+    return this.saleOrdersService.deliver(tenantId, id, user.sub);
+  }
 }

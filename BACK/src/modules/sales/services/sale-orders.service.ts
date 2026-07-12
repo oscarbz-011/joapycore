@@ -39,6 +39,8 @@ export class SaleOrdersService {
         'Solo los pedidos en espera de aprobación de crédito pueden aprobarse',
       );
     }
+    // Triggers Loan + Installment creation in FinanceModule via event
+    this.eventEmitter.emit('sale.credit.approved', { tenantId, saleOrderId: id });
     this.eventEmitter.emit('audit.log', {
       tenantId,
       userId,
@@ -93,12 +95,23 @@ export class SaleOrdersService {
     canManage = false,
   ) {
     const effectiveSellerId = canManage && dto.sellerId ? dto.sellerId : (userId ?? null);
+    const isQuote = dto.orderType === 'QUOTE';
     const isCreditSale = dto.saleType === 'CREDIT';
 
     // Batch-fetch all products in a single query — avoids N+1 inside the loop.
     const productIds = dto.items.map((i) => i.productId);
     const products = await this.productsRepository.findManyByIds(tenantId, productIds);
     const productMap = new Map(products.map((p) => [p.id, p]));
+
+    // Quotes never block stock and don't need credit approval yet
+    let initialStatus: 'QUOTED' | 'PENDING' | 'PENDING_CREDIT_APPROVAL';
+    if (isQuote) {
+      initialStatus = 'QUOTED';
+    } else if (isCreditSale) {
+      initialStatus = 'PENDING_CREDIT_APPROVAL';
+    } else {
+      initialStatus = 'PENDING';
+    }
 
     return this.prisma.$transaction(async (tx) => {
       const order = await tx.saleOrder.create({
@@ -107,11 +120,15 @@ export class SaleOrdersService {
           customerId: dto.customerId,
           createdById: userId ?? null,
           sellerId: effectiveSellerId,
+          orderType: dto.orderType ?? 'STANDARD',
           saleType: dto.saleType ?? 'CASH',
           installments: isCreditSale ? (dto.installments ?? null) : null,
           orderDate: new Date(),
           notes: dto.notes,
-          status: isCreditSale ? 'PENDING_CREDIT_APPROVAL' : 'PENDING',
+          status: initialStatus,
+          surchargeType: dto.surchargeType ?? null,
+          surchargeAmount: dto.surchargeAmount ?? null,
+          surchargeReason: dto.surchargeReason ?? null,
         },
       });
 
@@ -171,6 +188,31 @@ export class SaleOrdersService {
       } satisfies AuditLogEvent);
       return created;
     });
+  }
+
+  async convertQuoteToOrder(tenantId: string, id: string, userId?: string) {
+    // Quotes become real orders: QUOTED → PENDING (cash) or PENDING_CREDIT_APPROVAL (credit)
+    const order = await this.findOne(tenantId, id);
+    if (order.status !== 'QUOTED') {
+      throw new UnprocessableEntityException(
+        'Solo los presupuestos en estado QUOTED pueden convertirse en pedido',
+      );
+    }
+    const isCreditSale = order.saleType === 'CREDIT';
+    const nextStatus = isCreditSale ? 'PENDING_CREDIT_APPROVAL' : 'PENDING';
+
+    const updated = await this.prisma.saleOrder.update({
+      where: { id },
+      data: { status: nextStatus, orderType: 'STANDARD' },
+    });
+    this.eventEmitter.emit('audit.log', {
+      tenantId,
+      userId,
+      module: 'sales',
+      action: 'sale.quote.converted',
+      resourceId: id,
+    } satisfies AuditLogEvent);
+    return updated;
   }
 
   async confirm(tenantId: string, id: string, userId?: string) {
@@ -256,11 +298,32 @@ export class SaleOrdersService {
     return confirmed;
   }
 
+  async deliver(tenantId: string, id: string, userId?: string) {
+    // Atomic transition: CONFIRMED → DELIVERED
+    const result = await this.prisma.saleOrder.updateMany({
+      where: { id, tenantId, status: 'CONFIRMED' },
+      data: { status: 'DELIVERED' },
+    });
+    if (result.count === 0) {
+      throw new UnprocessableEntityException(
+        'Solo los pedidos CONFIRMED pueden marcarse como entregados',
+      );
+    }
+    this.eventEmitter.emit('audit.log', {
+      tenantId,
+      userId,
+      module: 'sales',
+      action: 'sale.order.delivered',
+      resourceId: id,
+    } satisfies AuditLogEvent);
+    return this.saleOrdersRepository.findById(tenantId, id);
+  }
+
   async cancel(tenantId: string, id: string, userId?: string) {
     const order = await this.findOne(tenantId, id);
-    if (order.status === 'CONFIRMED') {
+    if (order.status === 'CONFIRMED' || order.status === 'DELIVERED') {
       throw new UnprocessableEntityException(
-        'Confirmed orders cannot be cancelled. Use a credit note instead.',
+        'Confirmed or delivered orders cannot be cancelled. Use a credit note instead.',
       );
     }
     const cancelled = await this.prisma.saleOrder.update({

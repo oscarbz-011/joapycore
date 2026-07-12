@@ -10,6 +10,7 @@ import { TenantModuleGuard } from './common/guards/tenant-module.guard';
 import { AlertsModule } from './modules/alerts/alerts.module';
 import { BillingModule } from './modules/billing/billing.module';
 import { BranchesModule } from './modules/branches/branches.module';
+import { FinanceModule } from './modules/finance/finance.module';
 import { WarehousesModule } from './modules/warehouses/warehouses.module';
 import { HrModule } from './modules/hr/hr.module';
 import { InventoryModule } from './modules/inventory/inventory.module';
@@ -35,6 +36,7 @@ import { UsersModule } from './users/users.module';
     ProcurementModule,
     SalesModule,
     BillingModule,
+    FinanceModule,
     PaymentsModule,
     BranchesModule,
     WarehousesModule,

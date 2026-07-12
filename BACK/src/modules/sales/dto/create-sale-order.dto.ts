@@ -12,7 +12,7 @@ import {
   Min,
   ValidateNested,
 } from 'class-validator';
-import { SaleType } from '@prisma/client';
+import { MarkupType, OrderType, SaleType } from '@prisma/client';
 
 export class SaleOrderItemDto {
   @ApiProperty()
@@ -54,6 +54,11 @@ export class CreateSaleOrderDto {
   @IsUUID()
   sellerId?: string;
 
+  @ApiPropertyOptional({ enum: OrderType, description: 'Tipo de pedido (STANDARD, QUOTE, WHOLESALE)' })
+  @IsOptional()
+  @IsEnum(OrderType)
+  orderType?: OrderType;
+
   @ApiPropertyOptional({ enum: SaleType })
   @IsOptional()
   @IsEnum(SaleType)
@@ -75,4 +80,20 @@ export class CreateSaleOrderDto {
   @ValidateNested({ each: true })
   @Type(() => SaleOrderItemDto)
   items: SaleOrderItemDto[];
+
+  @ApiPropertyOptional({ enum: MarkupType, description: 'Tipo de recargo de entrega/zona' })
+  @IsOptional()
+  @IsEnum(MarkupType)
+  surchargeType?: MarkupType;
+
+  @ApiPropertyOptional({ description: 'Valor del recargo (% o monto fijo)' })
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  surchargeAmount?: number;
+
+  @ApiPropertyOptional({ description: 'Motivo del recargo (Flete, Zona lejana, etc.)' })
+  @IsOptional()
+  @IsString()
+  surchargeReason?: string;
 }

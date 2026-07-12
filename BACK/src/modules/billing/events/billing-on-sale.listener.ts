@@ -42,7 +42,7 @@ export class BillingOnSaleListener {
 
     const invoice = await this.prisma.$transaction(async (tx) => {
       const inv = await this.invoicesRepository.create(
-        { tenantId, saleOrderId, status: 'ISSUED', issuedAt: new Date(), total },
+        { tenantId, saleOrderId, status: 'PENDING', total },
         tx,
       );
 
@@ -64,11 +64,10 @@ export class BillingOnSaleListener {
       return inv;
     });
 
-    this.eventEmitter.emit('invoice.issued', { tenantId, invoiceId: invoice.id, saleOrderId });
     this.eventEmitter.emit('audit.log', {
       tenantId,
       module: 'billing',
-      action: 'invoice.issued',
+      action: 'invoice.created',
       resourceId: invoice.id,
     });
   }

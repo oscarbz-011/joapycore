@@ -1,6 +1,7 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import {
   IsBoolean,
+  IsEnum,
   IsNumber,
   IsOptional,
   IsPositive,
@@ -8,6 +9,7 @@ import {
   IsUUID,
   Min,
 } from 'class-validator';
+import { MarkupType } from '@prisma/client';
 
 export class UpdateProductDto {
   @ApiPropertyOptional()
@@ -80,4 +82,15 @@ export class UpdateProductDto {
   @IsNumber({ maxDecimalPlaces: 1 })
   @Min(0)
   depthCm?: number | null;
+
+  @ApiPropertyOptional({ description: 'Margen adicional sobre el margen global', minimum: 0 })
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  additionalMarkup?: number | null;
+
+  @ApiPropertyOptional({ enum: MarkupType })
+  @IsOptional()
+  @IsEnum(MarkupType)
+  additionalMarkupType?: MarkupType | null;
 }

@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
-import { Prisma, StockMovementType } from '@prisma/client';
+import { MovementReason, Prisma, StockMovementType } from '@prisma/client';
+import { randomUUID } from 'crypto';
 import { PrismaService } from '../../../prisma/prisma.service';
 
 export interface ProductFilters {
@@ -127,10 +128,79 @@ export class ProductsRepository {
   createStockMovement(
     tenantId: string,
     productId: string,
-    data: { type: StockMovementType; quantity: number; warehouseId?: string; notes?: string },
+    data: {
+      type: StockMovementType;
+      reason?: MovementReason;
+      quantity: number;
+      warehouseId?: string;
+      referenceId?: string;
+      notes?: string;
+    },
   ) {
     return this.prisma.stockMovement.create({
       data: { tenantId, productId, ...data },
+    });
+  }
+
+  findMovements(
+    tenantId: string,
+    filters: {
+      productId?: string;
+      warehouseId?: string;
+      reason?: MovementReason;
+      take?: number;
+      skip?: number;
+    } = {},
+  ) {
+    return this.prisma.stockMovement.findMany({
+      where: {
+        tenantId,
+        ...(filters.productId && { productId: filters.productId }),
+        ...(filters.warehouseId && { warehouseId: filters.warehouseId }),
+        ...(filters.reason && { reason: filters.reason }),
+      },
+      include: {
+        product: { select: { id: true, name: true, model: true } },
+        warehouse: { select: { id: true, name: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: filters.take ?? 50,
+      skip: filters.skip ?? 0,
+    });
+  }
+
+  createTransferMovements(
+    tenantId: string,
+    productId: string,
+    data: { quantity: number; fromWarehouseId?: string; toWarehouseId: string; notes?: string },
+  ) {
+    const referenceId = randomUUID();
+    return this.prisma.$transaction(async (tx) => {
+      const out = await tx.stockMovement.create({
+        data: {
+          tenantId,
+          productId,
+          type: 'OUT',
+          reason: 'TRANSFER',
+          quantity: -data.quantity,
+          warehouseId: data.fromWarehouseId,
+          referenceId,
+          notes: data.notes,
+        },
+      });
+      const inMovement = await tx.stockMovement.create({
+        data: {
+          tenantId,
+          productId,
+          type: 'IN',
+          reason: 'TRANSFER',
+          quantity: data.quantity,
+          warehouseId: data.toWarehouseId,
+          referenceId,
+          notes: data.notes,
+        },
+      });
+      return [out, inMovement];
     });
   }
 
