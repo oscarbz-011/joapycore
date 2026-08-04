@@ -2,13 +2,11 @@ import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post } from '@nestj
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CurrentTenant } from '../../../common/decorators/current-tenant.decorator';
 import { Permissions } from '../../../common/decorators/permissions.decorator';
-import { RequiredModule } from '../../../common/decorators/required-module.decorator';
 import { PayInstallmentDto } from '../dto/pay-installment.dto';
 import { LoansService } from '../services/loans.service';
 
 @ApiTags('Finance')
 @ApiBearerAuth()
-@RequiredModule('finance')
 @Controller('finance/loans')
 export class LoansController {
   constructor(private readonly loansService: LoansService) {}
@@ -27,13 +25,6 @@ export class LoansController {
     return this.loansService.findOverdueInstallments(tenantId);
   }
 
-  @Get(':id')
-  @Permissions('finance:read')
-  @ApiOperation({ summary: 'Obtener préstamo por ID' })
-  findOne(@CurrentTenant() tenantId: string, @Param('id') id: string) {
-    return this.loansService.findOne(tenantId, id);
-  }
-
   @Get('by-order/:saleOrderId')
   @Permissions('finance:read')
   @ApiOperation({ summary: 'Obtener préstamo de un pedido específico' })
@@ -42,6 +33,13 @@ export class LoansController {
     @Param('saleOrderId') saleOrderId: string,
   ) {
     return this.loansService.findByOrder(tenantId, saleOrderId);
+  }
+
+  @Get(':id')
+  @Permissions('finance:read')
+  @ApiOperation({ summary: 'Obtener préstamo por ID' })
+  findOne(@CurrentTenant() tenantId: string, @Param('id') id: string) {
+    return this.loansService.findOne(tenantId, id);
   }
 
   @Post('installments/:installmentId/pay')

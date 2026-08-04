@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { InstallmentStatus } from '@prisma/client';
+import { InstallmentStatus, PaymentMethod } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
 
 @Injectable()
@@ -16,6 +16,7 @@ export class InstallmentsRepository {
   findById(tenantId: string, id: string) {
     return this.prisma.installment.findFirst({
       where: { id, tenantId },
+      include: { loan: { select: { id: true, saleOrderId: true } } },
     });
   }
 
@@ -31,9 +32,27 @@ export class InstallmentsRepository {
     });
   }
 
+  markAllOverdue() {
+    return this.prisma.installment.updateMany({
+      where: {
+        status: { in: ['PENDING', 'PARTIAL'] },
+        dueDate: { lt: new Date() },
+      },
+      data: { status: 'OVERDUE' },
+    });
+  }
+
   update(
     id: string,
-    data: { paidAmount: number; paidAt?: Date; status: InstallmentStatus; notes?: string },
+    data: {
+      paidAmount: number;
+      paidAt?: Date;
+      paymentMethod?: PaymentMethod;
+      paymentReference?: string;
+      paymentDate?: Date;
+      status: InstallmentStatus;
+      notes?: string;
+    },
   ) {
     return this.prisma.installment.update({ where: { id }, data });
   }

@@ -34,6 +34,9 @@ export interface Loan {
 
 export interface PayInstallmentPayload {
   amount: number;
+  paymentMethod: string;
+  paymentDate?: string;
+  paymentReference?: string;
   notes?: string;
 }
 
