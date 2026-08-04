@@ -2,7 +2,7 @@ import { apiClient } from './client';
 
 // ── Enums ──────────────────────────────────────────────────────────────────────
 export type DocumentType = 'CI' | 'RUC' | 'PASSPORT';
-export type Gender = 'MALE' | 'FEMALE' | 'OTHER';
+export type Gender = 'MASCULINO' | 'FEMENINO';
 export type MaritalStatus = 'SINGLE' | 'MARRIED' | 'DIVORCED' | 'WIDOWED' | 'OTHER';
 export type ContractType = 'PERMANENT' | 'TEMPORARY' | 'PART_TIME' | 'CONTRACTOR';
 export type PaymentMethod = 'BANK_TRANSFER' | 'CASH';
@@ -12,6 +12,7 @@ export type PayrollStatus = 'PENDING' | 'PROCESSED' | 'PAID';
 export interface Employee {
   id: string;
   employeeNumber: number;
+  employeeCode?: string | null;
   firstName: string;
   lastName: string;
   documentType: DocumentType;
