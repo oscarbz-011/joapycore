@@ -1,7 +1,13 @@
 import { apiClient } from './client';
 
 export type ARStatus = 'PENDING' | 'PARTIAL' | 'PAID' | 'CANCELLED';
-export type PaymentMethod = 'BANK_TRANSFER' | 'CASH';
+export type PaymentMethod =
+  | 'BANK_TRANSFER'
+  | 'CASH'
+  | 'PAGO_EXPRESS'
+  | 'AQUI_PAGO'
+  | 'DEPOSITO'
+  | 'CHEQUE';
 
 export interface PaymentRecord {
   id: string;
@@ -30,6 +36,7 @@ export interface AccountsReceivable {
     saleOrder: {
       id: string;
       saleType: 'CASH' | 'CREDIT';
+      installments: number | null;
       customer: {
         id: string;
         firstName: string;
@@ -38,9 +45,21 @@ export interface AccountsReceivable {
         documentType: string | null;
         documentNumber: string | null;
       };
+      loan: {
+        totalAmount: number;
+        installments: { paidAmount: number }[];
+      } | null;
     };
   };
   paymentRecords: PaymentRecord[];
+}
+
+export interface CollectionsSummary {
+  month: string;
+  total: number;
+  cash:   { total: number; byMethod: Record<string, number> };
+  credit: { total: number; byMethod: Record<string, number> };
+  byMethod: Record<string, number>;
 }
 
 export interface RegisterPaymentPayload {
@@ -52,8 +71,12 @@ export interface RegisterPaymentPayload {
 }
 
 export const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
-  BANK_TRANSFER: 'Transferencia bancaria',
   CASH: 'Efectivo',
+  BANK_TRANSFER: 'Transferencia bancaria',
+  PAGO_EXPRESS: 'Pago Express',
+  AQUI_PAGO: 'AquíPago',
+  DEPOSITO: 'Depósito bancario',
+  CHEQUE: 'Cheque',
 };
 
 export const paymentsApi = {
@@ -65,4 +88,7 @@ export const paymentsApi = {
 
   registerPayment: (id: string, dto: RegisterPaymentPayload): Promise<AccountsReceivable> =>
     apiClient.post(`/payments/accounts-receivable/${id}/payments`, dto).then((r) => r.data),
+
+  getCollections: (month?: string): Promise<CollectionsSummary> =>
+    apiClient.get('/payments/collections', { params: month ? { month } : undefined }).then((r) => r.data),
 };
