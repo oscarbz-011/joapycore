@@ -14,7 +14,15 @@ export class AccountsReceivableRepository {
         invoice: {
           include: {
             saleOrder: {
-              include: { customer: true },
+              include: {
+                customer: true,
+                loan: {
+                  select: {
+                    totalAmount: true,
+                    installments: { select: { paidAmount: true } },
+                  },
+                },
+              },
             },
           },
         },

@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CurrentTenant } from '../../../common/decorators/current-tenant.decorator';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
@@ -14,6 +14,16 @@ import { PaymentsService } from '../services/payments.service';
 @Controller('payments')
 export class PaymentsController {
   constructor(private readonly paymentsService: PaymentsService) {}
+
+  @Get('collections')
+  @Permissions('payments:read')
+  @ApiOperation({ summary: 'Resumen de recaudaciones del mes por tipo y método de pago' })
+  getCollections(
+    @CurrentTenant() tenantId: string,
+    @Query('month') month?: string,
+  ) {
+    return this.paymentsService.getCollections(tenantId, month);
+  }
 
   @Get('accounts-receivable')
   @Permissions('payments:read')

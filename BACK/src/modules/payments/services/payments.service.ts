@@ -23,6 +23,61 @@ export class PaymentsService {
     return this.arRepository.findAll(tenantId);
   }
 
+  async getCollections(tenantId: string, month?: string) {
+    const now = new Date();
+    const year   = month ? parseInt(month.split('-')[0]) : now.getFullYear();
+    const monthN = month ? parseInt(month.split('-')[1]) - 1 : now.getMonth();
+
+    const start = new Date(year, monthN, 1);
+    const end   = new Date(year, monthN + 1, 1);
+
+    const [cashRecords, creditInstallments] = await Promise.all([
+      this.prisma.paymentRecord.findMany({
+        where: { tenantId, paymentDate: { gte: start, lt: end } },
+        select: { amount: true, paymentMethod: true },
+      }),
+      this.prisma.installment.findMany({
+        where: { tenantId, paidAt: { gte: start, lt: end } },
+        select: { paidAmount: true, paymentMethod: true },
+      }),
+    ]);
+
+    const toNum = (v: unknown): number =>
+      typeof v === 'object' && v !== null && 'toNumber' in v
+        ? (v as { toNumber(): number }).toNumber()
+        : Number(v ?? 0);
+
+    const aggCash: Record<string, number> = {};
+    let cashTotal = 0;
+    for (const r of cashRecords) {
+      const a = toNum(r.amount);
+      cashTotal += a;
+      aggCash[r.paymentMethod] = (aggCash[r.paymentMethod] ?? 0) + a;
+    }
+
+    const aggCredit: Record<string, number> = {};
+    let creditTotal = 0;
+    for (const i of creditInstallments) {
+      const a = toNum(i.paidAmount);
+      creditTotal += a;
+      const m = i.paymentMethod ?? 'UNKNOWN';
+      aggCredit[m] = (aggCredit[m] ?? 0) + a;
+    }
+
+    const byMethod: Record<string, number> = { ...aggCash };
+    for (const [m, v] of Object.entries(aggCredit)) {
+      byMethod[m] = (byMethod[m] ?? 0) + v;
+    }
+
+    return {
+      month: `${year}-${String(monthN + 1).padStart(2, '0')}`,
+      total: cashTotal + creditTotal,
+      cash:   { total: cashTotal,   byMethod: aggCash },
+      credit: { total: creditTotal, byMethod: aggCredit },
+      byMethod,
+    };
+  }
+
   async findOne(tenantId: string, id: string) {
     const ar = await this.arRepository.findById(tenantId, id);
     if (!ar) throw new NotFoundException('Cuenta por cobrar no encontrada');

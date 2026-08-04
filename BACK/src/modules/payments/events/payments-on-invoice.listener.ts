@@ -32,14 +32,28 @@ export class PaymentsOnInvoiceListener {
 
     const invoice = await this.prisma.invoice.findUnique({
       where: { id: event.invoiceId },
-      select: { total: true, dueDate: true },
+      select: {
+        total: true,
+        dueDate: true,
+        saleOrder: {
+          select: {
+            saleType: true,
+            loan: { select: { totalAmount: true } },
+          },
+        },
+      },
     });
     if (!invoice) return;
+
+    const arAmount =
+      invoice.saleOrder?.saleType === 'CREDIT' && invoice.saleOrder.loan
+        ? invoice.saleOrder.loan.totalAmount
+        : invoice.total;
 
     await this.arRepository.create({
       tenantId: event.tenantId,
       invoiceId: event.invoiceId,
-      amount: invoice.total,
+      amount: arAmount,
       dueDate: invoice.dueDate ?? undefined,
     });
   }

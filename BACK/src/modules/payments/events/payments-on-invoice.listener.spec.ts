@@ -35,14 +35,48 @@ describe('PaymentsOnInvoiceListener', () => {
   // ── invoice.issued → create AR ─────────────────────────────────────────────
 
   describe('handle (invoice.issued)', () => {
-    it('creates an AR when invoice is issued', async () => {
+    it('creates an AR using invoice.total for cash sales', async () => {
       arRepository.findByInvoice.mockResolvedValue(null);
-      prisma.invoice.findUnique.mockResolvedValue({ total: 2_500_000, dueDate: null });
+      prisma.invoice.findUnique.mockResolvedValue({
+        total: 2_500_000,
+        dueDate: null,
+        saleOrder: { saleType: 'CASH', loan: null },
+      });
 
       await listener.handle({ tenantId: 'tenant-1', invoiceId: 'inv-1', saleOrderId: 'order-1' });
 
       expect(arRepository.create).toHaveBeenCalledWith(
-        expect.objectContaining({ tenantId: 'tenant-1', invoiceId: 'inv-1' }),
+        expect.objectContaining({ tenantId: 'tenant-1', invoiceId: 'inv-1', amount: 2_500_000 }),
+      );
+    });
+
+    it('creates an AR using loan.totalAmount for credit sales', async () => {
+      arRepository.findByInvoice.mockResolvedValue(null);
+      prisma.invoice.findUnique.mockResolvedValue({
+        total: 2_500_000,
+        dueDate: null,
+        saleOrder: { saleType: 'CREDIT', loan: { totalAmount: 2_875_000 } },
+      });
+
+      await listener.handle({ tenantId: 'tenant-1', invoiceId: 'inv-1', saleOrderId: 'order-1' });
+
+      expect(arRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({ amount: 2_875_000 }),
+      );
+    });
+
+    it('falls back to invoice.total for credit sales when the loan has not been created yet', async () => {
+      arRepository.findByInvoice.mockResolvedValue(null);
+      prisma.invoice.findUnique.mockResolvedValue({
+        total: 2_500_000,
+        dueDate: null,
+        saleOrder: { saleType: 'CREDIT', loan: null },
+      });
+
+      await listener.handle({ tenantId: 'tenant-1', invoiceId: 'inv-1', saleOrderId: 'order-1' });
+
+      expect(arRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({ amount: 2_500_000 }),
       );
     });
 
