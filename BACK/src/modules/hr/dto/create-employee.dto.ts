@@ -74,6 +74,12 @@ export class CreateEmployeeDto {
   @ApiPropertyOptional() @IsOptional() @IsString() bankName?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() bankAccount?: string;
 
+  // Workplace
+  @ApiPropertyOptional({ description: 'ID de la sucursal asignada' })
+  @IsOptional()
+  @IsString()
+  branchId?: string;
+
   // User account
   @ApiPropertyOptional({
     description:

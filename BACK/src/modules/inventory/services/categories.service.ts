@@ -6,6 +6,7 @@ import {
 import { CategoriesRepository } from '../repositories/categories.repository';
 import { CreateCategoryDto } from '../dto/create-category.dto';
 import { UpdateCategoryDto } from '../dto/update-category.dto';
+import { toUpperNorm } from '../../../common/utils/normalize.util';
 
 @Injectable()
 export class CategoriesService {
@@ -22,14 +23,15 @@ export class CategoriesService {
   }
 
   async create(tenantId: string, dto: CreateCategoryDto) {
-    const existing = await this.prismaCheck(tenantId, dto.name);
+    const name = toUpperNorm(dto.name);
+    const existing = await this.prismaCheck(tenantId, name);
     if (existing) throw new ConflictException('Category already exists');
-    return this.categoriesRepository.create(tenantId, dto.name);
+    return this.categoriesRepository.create(tenantId, name);
   }
 
   async update(tenantId: string, id: string, dto: UpdateCategoryDto) {
     await this.findOne(tenantId, id);
-    await this.categoriesRepository.update(tenantId, id, dto);
+    await this.categoriesRepository.update(tenantId, id, dto.name ? { ...dto, name: toUpperNorm(dto.name) } : dto);
     return this.categoriesRepository.findById(tenantId, id);
   }
 
@@ -37,7 +39,7 @@ export class CategoriesService {
     return this.categoriesRepository
       .findAll(tenantId)
       .then((cats) =>
-        cats.find((c) => c.name.toLowerCase() === name.toLowerCase()),
+        cats.find((c) => c.name.toUpperCase() === name.toUpperCase()),
       );
   }
 }

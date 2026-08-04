@@ -4,6 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { AreasRepository } from '../repositories/areas.repository';
+import { toUpperNorm } from '../../../common/utils/normalize.util';
 
 @Injectable()
 export class AreasService {
@@ -14,7 +15,7 @@ export class AreasService {
   }
 
   async create(tenantId: string, data: { name: string; parentId?: string }) {
-    return this.areasRepository.create(tenantId, data).catch(() => {
+    return this.areasRepository.create(tenantId, { ...data, name: toUpperNorm(data.name) }).catch(() => {
       throw new ConflictException('Ya existe un área con ese nombre');
     });
   }
@@ -26,7 +27,7 @@ export class AreasService {
   ) {
     const area = await this.areasRepository.findById(tenantId, id);
     if (!area) throw new NotFoundException('Área no encontrada');
-    await this.areasRepository.update(tenantId, id, data);
+    await this.areasRepository.update(tenantId, id, data.name ? { ...data, name: toUpperNorm(data.name) } : data);
     return this.areasRepository.findById(tenantId, id);
   }
 }

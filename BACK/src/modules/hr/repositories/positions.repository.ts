@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../prisma/prisma.service';
+import { toUpperNorm } from '../../../common/utils/normalize.util';
 
 const WITH_RELATIONS = {
   include: {
@@ -31,9 +32,10 @@ export class PositionsRepository {
     tenantId: string,
     data: { name: string; areaId?: string; roleId?: string },
   ) {
+    const name = toUpperNorm(data.name);
     return this.prisma.position.upsert({
-      where: { tenantId_name: { tenantId, name: data.name } },
-      create: { tenantId, ...data },
+      where: { tenantId_name: { tenantId, name } },
+      create: { tenantId, ...data, name },
       update: {
         isActive: true,
         areaId: data.areaId ?? null,
@@ -53,7 +55,8 @@ export class PositionsRepository {
       roleId?: string | null;
     },
   ) {
-    await this.prisma.position.updateMany({ where: { id, tenantId }, data });
+    const normalized = data.name ? { ...data, name: toUpperNorm(data.name) } : data;
+    await this.prisma.position.updateMany({ where: { id, tenantId }, data: normalized });
     return this.findById(tenantId, id);
   }
 }

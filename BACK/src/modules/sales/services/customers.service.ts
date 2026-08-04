@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { CustomersRepository } from '../repositories/customers.repository';
 import { CreateCustomerDto } from '../dto/create-customer.dto';
+import { toTitleCase } from '../../../common/utils/normalize.util';
 
 @Injectable()
 export class CustomersService {
@@ -18,12 +19,21 @@ export class CustomersService {
 
   async create(tenantId: string, dto: CreateCustomerDto) {
     const customerCode = await this.generateCustomerCode(tenantId);
-    return this.customersRepository.create(tenantId, { ...dto, customerCode });
+    return this.customersRepository.create(tenantId, {
+      ...dto,
+      firstName: toTitleCase(dto.firstName),
+      lastName: toTitleCase(dto.lastName),
+      customerCode,
+    });
   }
 
   async update(tenantId: string, id: string, dto: Partial<CreateCustomerDto>) {
     await this.findOne(tenantId, id);
-    return this.customersRepository.update(tenantId, id, dto);
+    return this.customersRepository.update(tenantId, id, {
+      ...dto,
+      ...(dto.firstName ? { firstName: toTitleCase(dto.firstName) } : {}),
+      ...(dto.lastName ? { lastName: toTitleCase(dto.lastName) } : {}),
+    });
   }
 
   async delete(tenantId: string, id: string) {
@@ -32,11 +42,12 @@ export class CustomersService {
   }
 
   private async generateCustomerCode(tenantId: string): Promise<string> {
+    const year = String(new Date().getFullYear()).slice(-2);
     const last = await this.customersRepository.findLastCode(tenantId);
-    if (!last?.customerCode) return 'CLI-001';
-    const match = last.customerCode.match(/^CLI-(\d+)$/);
-    if (!match) return 'CLI-001';
+    if (!last?.customerCode) return `CLI-${year}-000001`;
+    const match = last.customerCode.match(/^CLI-\d{2}-(\d+)$/);
+    if (!match) return `CLI-${year}-000001`;
     const next = parseInt(match[1], 10) + 1;
-    return `CLI-${String(next).padStart(3, '0')}`;
+    return `CLI-${year}-${String(next).padStart(6, '0')}`;
   }
 }

@@ -12,6 +12,7 @@ import { CreateEmployeeDto } from '../dto/create-employee.dto';
 import { UpdateEmployeeDto } from '../dto/update-employee.dto';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { buildUsernameBase, resolveUsername } from '../../../common/utils/username.util';
+import { toTitleCase } from '../../../common/utils/normalize.util';
 
 const SALT_ROUNDS = 10;
 
@@ -41,6 +42,10 @@ export class EmployeesService {
   async create(tenantId: string, dto: CreateEmployeeDto) {
     const employeeNumber =
       await this.employeesRepository.nextEmployeeNumber(tenantId);
+    const employeeCode = await this.generateEmployeeCode(tenantId, dto.branchId, employeeNumber);
+
+    const firstName = toTitleCase(dto.firstName);
+    const lastName = toTitleCase(dto.lastName);
 
     return this.prisma.$transaction(async (tx) => {
       let userId: string | undefined;
@@ -53,7 +58,7 @@ export class EmployeesService {
         if (existing) throw new ConflictException('El email ya está en uso');
 
         // Auto-generate unique username: jose.benitez → jose.benitez2 …
-        const usernameBase = buildUsernameBase(dto.firstName, dto.lastName);
+        const usernameBase = buildUsernameBase(firstName, lastName);
         const takenMatches = await tx.user.findMany({
           where: { username: { startsWith: usernameBase } },
           select: { username: true },
@@ -72,8 +77,8 @@ export class EmployeesService {
             email: dto.email,
             username,
             passwordHash,
-            firstName: dto.firstName,
-            lastName: dto.lastName,
+            firstName,
+            lastName,
             mustChangePassword: true,
           },
         });
@@ -97,9 +102,10 @@ export class EmployeesService {
         data: {
           tenantId,
           employeeNumber,
+          employeeCode,
           userId,
-          firstName: dto.firstName,
-          lastName: dto.lastName,
+          firstName,
+          lastName,
           documentType: dto.documentType,
           documentNumber: dto.documentNumber,
           ci: dto.ci,
@@ -157,6 +163,8 @@ export class EmployeesService {
     await this.getById(tenantId, id);
     return this.employeesRepository.update(tenantId, id, {
       ...dto,
+      ...(dto.firstName ? { firstName: toTitleCase(dto.firstName) } : {}),
+      ...(dto.lastName ? { lastName: toTitleCase(dto.lastName) } : {}),
       ...(dto.birthDate ? { birthDate: new Date(dto.birthDate) } : {}),
     });
   }
@@ -236,5 +244,23 @@ export class EmployeesService {
 
     await this.employeesRepository.linkUser(tenantId, id, existing.id);
     return this.getById(tenantId, id);
+  }
+
+  private async generateEmployeeCode(
+    tenantId: string,
+    branchId: string | undefined | null,
+    employeeNumber: number,
+  ): Promise<string> {
+    let branchNum = '00';
+    if (branchId) {
+      const branches = await this.prisma.branch.findMany({
+        where: { tenantId },
+        orderBy: { createdAt: 'asc' },
+        select: { id: true },
+      });
+      const idx = branches.findIndex((b) => b.id === branchId);
+      if (idx >= 0) branchNum = String(idx + 1).padStart(2, '0');
+    }
+    return `EMP-${branchNum}-${String(employeeNumber).padStart(6, '0')}`;
   }
 }
