@@ -1,0 +1,15 @@
+export const WS_EVENT_MAP: Record<string, string[][]> = {
+  'sale.order.completed':    [['sale-orders']],
+  'sale.order.cancelled':    [['sale-orders']],
+  'sale.credit.approved':    [['sale-orders'], ['billing-approvals']],
+  'sale.credit.rejected':    [['sale-orders'], ['billing-approvals']],
+  'invoice.issued':          [['invoices'], ['billing-approvals']],
+  'invoice.cancelled':       [['invoices']],
+  'payment.registered':      [['accounts-receivable']],
+  'payment.ar.completed':    [['accounts-receivable'], ['invoices']],
+  'stock.movement.created':  [['products'], ['stock-movements']],
+  'installment.paid':        [['loans']],
+  'employee.created':        [['hr-employees']],
+  'employee.terminated':     [['hr-employees']],
+  'purchase.order.received': [['purchase-orders'], ['products']],
+};
