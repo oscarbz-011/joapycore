@@ -48,11 +48,6 @@ const MES_CORTO = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','
 function fmtGs(n: number) {
   return 'Gs. ' + new Intl.NumberFormat('es-PY').format(Math.round(n));
 }
-function fmtGsShort(n: number) {
-  if (n >= 1_000_000) return `Gs. ${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `Gs. ${Math.round(n / 1_000)}k`;
-  return `Gs. ${Math.round(n)}`;
-}
 
 const ACTIVE_STATUSES: SaleOrder['status'][] = ['CONFIRMED', 'CREDIT_APPROVED', 'INVOICED'];
 const OPEN_STATUSES: SaleOrder['status'][]   = ['PENDING', 'PENDING_CREDIT_APPROVAL', 'CREDIT_APPROVED', 'CONFIRMED'];
@@ -189,7 +184,7 @@ function RevenueChart({ months }: { months: { label: string; total: number; isCu
           <p className="text-[12.5px] text-muted">Últimos 12 meses</p>
         </div>
         <div className="text-right">
-          <p className="text-[21px] font-extrabold tabular-nums text-ink">{fmtGsShort(cur?.total ?? 0)}</p>
+          <p className="text-[21px] font-extrabold tabular-nums text-ink">{fmtGs(cur?.total ?? 0)}</p>
           {delta != null && (
             <p className={`text-[12.5px] font-semibold ${delta >= 0 ? 'text-accent-on' : 'text-danger'}`}>
               {delta >= 0 ? '▲' : '▼'} {Math.abs(delta).toFixed(1)}% vs. mes anterior
@@ -251,7 +246,7 @@ function ArDonut({ paid, pending, overdue }: { paid: number; pending: number; ov
           <div key={row.label} className="flex items-center gap-[9px] text-[13px]">
             <span className="h-[9px] w-[9px] rounded-[3px]" style={{ background: row.color }} />
             <span className="flex-1 text-muted">{row.label}</span>
-            <span className="font-bold tabular-nums text-ink">{fmtGsShort(row.value)}</span>
+            <span className="font-bold tabular-nums text-ink">{fmtGs(row.value)}</span>
           </div>
         ))}
       </div>
@@ -520,11 +515,11 @@ export default function DashboardPage() {
         <>
           <div className="mb-5 grid grid-cols-3 gap-4">
             <CompactKpi label="Órdenes hoy"       value={String(kpis.ordersHoy)}          />
-            <CompactKpi label="Facturación del mes" value={fmtGsShort(kpis.ventas)}        delta={kpis.ventasDelta} />
-            <CompactKpi label="Ticket promedio"    value={fmtGsShort(kpis.ticketPromedio)} delta={kpis.ticketDelta} />
+            <CompactKpi label="Facturación del mes" value={fmtGs(kpis.ventas)}        delta={kpis.ventasDelta} />
+            <CompactKpi label="Ticket promedio"    value={fmtGs(kpis.ticketPromedio)} delta={kpis.ticketDelta} />
             <CompactKpi label="Stock crítico"      value={String(kpis.criticos.length)}    danger={kpis.criticos.length > 0} />
-            <CompactKpi label="Por cobrar"         value={fmtGsShort(kpis.porCobrar)}      />
-            <CompactKpi label="Cobrado"            value={fmtGsShort(kpis.cobrado)}        />
+            <CompactKpi label="Por cobrar"         value={fmtGs(kpis.porCobrar)}      />
+            <CompactKpi label="Cobrado"            value={fmtGs(kpis.cobrado)}        />
           </div>
 
           {/* Compact: recent orders table */}
@@ -556,8 +551,8 @@ export default function DashboardPage() {
                           {o.status}
                         </span>
                       </td>
-                      <td className="px-4 py-2.5 text-right font-mono font-semibold text-ink">{fmtGsShort(orderTotal(o))}</td>
-                      <td className="px-4 py-2.5 text-right text-muted">{new Date(o.orderDate).toLocaleDateString('es-PY')}</td>
+                      <td className="px-4 py-2.5 text-right font-mono font-semibold text-ink">{fmtGs(orderTotal(o))}</td>
+                      <td className="px-4 py-2.5 text-right text-muted">{new Date(o.orderDate).toLocaleDateString('es-PY', { day: '2-digit', month: '2-digit', year: 'numeric' })}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -575,16 +570,16 @@ export default function DashboardPage() {
             {view === 'operativo' ? (
               <>
                 <KpiCard icon={FileText}    label="Órdenes hoy"        value={String(kpis.ordersHoy)}          spark={spark}       loading={ordersLoading} />
-                <KpiCard icon={ShoppingCart} label="Facturación del mes" value={fmtGsShort(kpis.ventas)}        delta={kpis.ventasDelta} spark={spark} loading={ordersLoading} />
-                <KpiCard icon={CreditCard}  label="Ticket promedio"    value={fmtGsShort(kpis.ticketPromedio)} delta={kpis.ticketDelta} spark={spark} loading={ordersLoading} />
+                <KpiCard icon={ShoppingCart} label="Facturación del mes" value={fmtGs(kpis.ventas)}        delta={kpis.ventasDelta} spark={spark} loading={ordersLoading} />
+                <KpiCard icon={CreditCard}  label="Ticket promedio"    value={fmtGs(kpis.ticketPromedio)} delta={kpis.ticketDelta} spark={spark} loading={ordersLoading} />
                 <KpiCard icon={Package}     label="Stock crítico"      value={String(kpis.criticos.length)}    danger={kpis.criticos.length > 0} loading={prodLoading} />
               </>
             ) : (
               <>
-                <KpiCard icon={ShoppingCart} label="Facturación del mes" value={fmtGsShort(kpis.ventas)}       delta={kpis.ventasDelta} spark={spark} loading={ordersLoading} />
-                <KpiCard icon={CreditCard}  label="Por cobrar"          value={fmtGsShort(kpis.porCobrar)}    loading={arLoading} />
-                <KpiCard icon={CreditCard}  label="Cobrado este mes"    value={fmtGsShort(kpis.cobradoMes)}   loading={arLoading} />
-                <KpiCard icon={FileText}    label="Ticket promedio"     value={fmtGsShort(kpis.ticketPromedio)} delta={kpis.ticketDelta} loading={ordersLoading} />
+                <KpiCard icon={ShoppingCart} label="Facturación del mes" value={fmtGs(kpis.ventas)}       delta={kpis.ventasDelta} spark={spark} loading={ordersLoading} />
+                <KpiCard icon={CreditCard}  label="Por cobrar"          value={fmtGs(kpis.porCobrar)}    loading={arLoading} />
+                <KpiCard icon={CreditCard}  label="Cobrado este mes"    value={fmtGs(kpis.cobradoMes)}   loading={arLoading} />
+                <KpiCard icon={FileText}    label="Ticket promedio"     value={fmtGs(kpis.ticketPromedio)} delta={kpis.ticketDelta} loading={ordersLoading} />
               </>
             )}
           </div>
@@ -693,7 +688,7 @@ export default function DashboardPage() {
                           </span>
                           <span className="flex-1 truncate text-[13.5px] font-semibold text-ink">{p.name}</span>
                           <span className="font-mono text-[12px] text-muted">{p.qty} u.</span>
-                          <span className="font-mono text-[12.5px] font-bold text-ink">{fmtGsShort(p.total)}</span>
+                          <span className="font-mono text-[12.5px] font-bold text-ink">{fmtGs(p.total)}</span>
                         </div>
                         <div className="h-[5px] overflow-hidden rounded-full bg-surface-2">
                           <div

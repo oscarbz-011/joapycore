@@ -126,9 +126,9 @@ export default function UsersPage() {
                     )}
                   </td>
                   <td className="px-4 py-3 text-xs text-muted">
-                    {new Date(user.createdAt).toLocaleDateString("es-AR", {
+                    {new Date(user.createdAt).toLocaleDateString("es-PY", {
                       day: "2-digit",
-                      month: "short",
+                      month: "2-digit",
                       year: "numeric",
                     })}
                   </td>
