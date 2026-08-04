@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard,
   ShoppingCart,
@@ -16,12 +16,10 @@ import {
   Building2,
   LayoutGrid,
   Warehouse,
-  LogOut,
   ChevronDown,
   Bell,
   Wrench,
   ClipboardList,
-  UserCog,
   Tag,
   Percent,
   CheckSquare,
@@ -283,65 +281,10 @@ function SettingsSection({
   );
 }
 
-// ── UserMenu ──────────────────────────────────────────────────────────────────
-
-function UserMenu({ onClose }: { onClose: () => void }) {
-  const { logout } = useAuth();
-  const router = useRouter();
-
-  return (
-    <div style={{
-      position: 'absolute',
-      bottom: '100%',
-      left: '12px',
-      right: '12px',
-      marginBottom: '8px',
-      background: '#1c2738',
-      border: '1px solid rgba(255,255,255,0.08)',
-      borderRadius: '12px',
-      padding: '6px',
-      boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
-      zIndex: 50,
-    }}>
-      <button
-        onClick={() => { router.push('/dashboard/settings/profile'); onClose(); }}
-        style={{
-          display: 'flex', alignItems: 'center', gap: '10px',
-          width: '100%', padding: '8px 10px', borderRadius: '8px',
-          border: 'none', background: 'none', cursor: 'pointer',
-          fontSize: '13.5px', color: 'var(--sidebar-text)', textAlign: 'left',
-        }}
-        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.06)'; }}
-        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'none'; }}
-      >
-        <UserCog size={15} />
-        Mi perfil
-      </button>
-      <div style={{ height: '1px', background: 'rgba(255,255,255,0.07)', margin: '4px 0' }} />
-      <button
-        onClick={() => { onClose(); void logout(); }}
-        style={{
-          display: 'flex', alignItems: 'center', gap: '10px',
-          width: '100%', padding: '8px 10px', borderRadius: '8px',
-          border: 'none', background: 'none', cursor: 'pointer',
-          fontSize: '13.5px', color: '#f87171', textAlign: 'left',
-        }}
-        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.06)'; }}
-        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'none'; }}
-      >
-        <LogOut size={15} />
-        Cerrar sesión
-      </button>
-    </div>
-  );
-}
-
 // ── Sidebar ────────────────────────────────────────────────────────────────────
 
 export function Sidebar() {
-  const { user, jwtPayload } = useAuth();
-  const [userMenuOpen, setUserMenuOpen] = useState(false);
-  const userMenuRef = useRef<HTMLDivElement>(null);
+  const { jwtPayload } = useAuth();
 
   const activeModules = jwtPayload?.activeModules ?? [];
   const permissions   = jwtPayload?.permissions   ?? [];
@@ -354,18 +297,7 @@ export function Sidebar() {
   });
   const alertBadge = alertConfigs.filter((c) => c.isActive).length || undefined;
 
-  const initials = [user?.firstName?.[0], user?.lastName?.[0]].filter(Boolean).join('');
   const brandInitial = (tenantName?.[0] ?? 'J').toUpperCase();
-
-  useEffect(() => {
-    function handleClick(e: MouseEvent) {
-      if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) {
-        setUserMenuOpen(false);
-      }
-    }
-    if (userMenuOpen) document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
-  }, [userMenuOpen]);
 
   // Build a map href → dot color from active alert configs
   const alertDotMap = new Map<string, string>();
@@ -451,55 +383,6 @@ export function Sidebar() {
         ))}
       </nav>
 
-      {/* User footer */}
-      <div
-        ref={userMenuRef}
-        style={{
-          padding: '12px',
-          borderTop: '1px solid rgba(255,255,255,0.06)',
-          position: 'relative',
-        }}
-      >
-        {userMenuOpen && <UserMenu onClose={() => setUserMenuOpen(false)} />}
-
-        <button
-          onClick={() => setUserMenuOpen((v) => !v)}
-          style={{
-            display: 'flex', alignItems: 'center', gap: '10px',
-            width: '100%', padding: '8px 9px', borderRadius: '10px',
-            border: 'none', background: 'none', cursor: 'pointer',
-            textAlign: 'left', transition: 'background 0.12s',
-          }}
-          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'var(--sidebar-hover)'; }}
-          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'none'; }}
-        >
-          <div style={{
-            width: '34px', height: '34px', borderRadius: '50%', flexShrink: 0,
-            background: '#1c2738', color: '#fff',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontWeight: 700, fontSize: '14px',
-          }}>
-            {initials || '?'}
-          </div>
-          <div style={{ flex: 1, lineHeight: 1.2, minWidth: 0 }}>
-            <div style={{ color: '#fff', fontWeight: 600, fontSize: '13px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {user?.firstName} {user?.lastName}
-            </div>
-            <div style={{ fontSize: '11.5px', color: 'var(--sidebar-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {user?.email}
-            </div>
-          </div>
-          <ChevronDown
-            size={14}
-            style={{
-              flexShrink: 0,
-              color: 'var(--sidebar-muted)',
-              transform: userMenuOpen ? 'rotate(180deg)' : 'none',
-              transition: 'transform 0.2s',
-            }}
-          />
-        </button>
-      </div>
     </aside>
   );
 }
