@@ -17,12 +17,14 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const current = (document.documentElement.getAttribute('data-theme') as Theme) ?? 'light';
     setTheme(current);
+    document.documentElement.classList.toggle('dark', current === 'dark');
   }, []);
 
   const toggle = () => {
     setTheme((prev) => {
       const next: Theme = prev === 'light' ? 'dark' : 'light';
       document.documentElement.setAttribute('data-theme', next);
+      document.documentElement.classList.toggle('dark', next === 'dark');
       localStorage.setItem('joappy-theme', next);
       return next;
     });

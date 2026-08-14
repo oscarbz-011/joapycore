@@ -1,10 +1,15 @@
-﻿'use client';
+'use client';
 
 import { useState } from 'react';
 import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus, Search, Truck, Users, X } from 'lucide-react';
 import { procurementApi, type CreateSupplierPayload, type Supplier } from '../../../../../lib/api/procurement';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { cn } from '@/lib/utils';
 
 // ── Sub-nav ────────────────────────────────────────────────────────────────────
 
@@ -13,14 +18,14 @@ function ProcurementNav() {
     <div className="flex gap-1 border-b border-border mb-6">
       <Link
         href="/dashboard/procurement"
-        className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 border-transparent text-muted hover:text-ink -mb-px"
+        className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 border-transparent text-muted-foreground hover:text-foreground -mb-px"
       >
         <Truck size={15} />
         Órdenes de compra
       </Link>
       <Link
         href="/dashboard/procurement/suppliers"
-        className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 border-ink text-ink -mb-px"
+        className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 border-primary text-foreground -mb-px"
       >
         <Users size={15} />
         Proveedores
@@ -104,19 +109,15 @@ function SupplierForm({
     },
   });
 
-  const inputCls =
-    'w-full rounded-lg border border-border-strong bg-surface text-ink px-3 py-2 text-sm focus:border-border-strong focus:outline-none focus:ring-1 focus:ring-border-strong';
-  const labelCls = 'block text-xs font-medium text-muted mb-1';
-
   return (
     <div className="flex h-full flex-col">
       <div className="flex items-center justify-between border-b border-border px-5 py-4">
-        <h2 className="text-sm font-semibold text-ink">
+        <h2 className="text-sm font-semibold text-foreground">
           {initial ? initial.name : 'Nuevo proveedor'}
         </h2>
-        <button onClick={onClose} className="rounded-md p-1 text-faint hover:bg-surface-2">
+        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onClose}>
           <X size={18} />
-        </button>
+        </Button>
       </div>
 
       <form
@@ -125,12 +126,11 @@ function SupplierForm({
           setError('');
           saveMutation.mutate();
         }}
-        className="flex-1 overflow-y-auto px-5 py-4 space-y-4"
+        className="flex-1 overflow-y-auto px-5 py-4 space-y-3"
       >
-        <div>
-          <label className={labelCls}>Nombre / Razón social *</label>
-          <input
-            className={inputCls}
+        <div className="space-y-1.5">
+          <Label>Nombre / Razón social *</Label>
+          <Input
             value={form.name}
             onChange={(e) => set('name', e.target.value)}
             required
@@ -138,10 +138,9 @@ function SupplierForm({
           />
         </div>
 
-        <div>
-          <label className={labelCls}>Contacto</label>
-          <input
-            className={inputCls}
+        <div className="space-y-1.5">
+          <Label>Contacto</Label>
+          <Input
             value={form.contactName as string}
             onChange={(e) => set('contactName', e.target.value)}
             placeholder="Juan Pérez"
@@ -149,20 +148,18 @@ function SupplierForm({
         </div>
 
         <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className={labelCls}>Email</label>
-            <input
+          <div className="space-y-1.5">
+            <Label>Email</Label>
+            <Input
               type="email"
-              className={inputCls}
               value={form.email as string}
               onChange={(e) => set('email', e.target.value)}
               placeholder="ventas@proveedor.com"
             />
           </div>
-          <div>
-            <label className={labelCls}>Teléfono</label>
-            <input
-              className={inputCls}
+          <div className="space-y-1.5">
+            <Label>Teléfono</Label>
+            <Input
               value={form.phone as string}
               onChange={(e) => set('phone', e.target.value)}
               placeholder="021 000 000"
@@ -171,19 +168,17 @@ function SupplierForm({
         </div>
 
         <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className={labelCls}>RUC</label>
-            <input
-              className={inputCls}
+          <div className="space-y-1.5">
+            <Label>RUC</Label>
+            <Input
               value={form.taxId as string}
               onChange={(e) => set('taxId', e.target.value)}
               placeholder="80012345-6"
             />
           </div>
-          <div>
-            <label className={labelCls}>Dirección</label>
-            <input
-              className={inputCls}
+          <div className="space-y-1.5">
+            <Label>Dirección</Label>
+            <Input
               value={form.address as string}
               onChange={(e) => set('address', e.target.value)}
               placeholder="Asunción"
@@ -196,56 +191,57 @@ function SupplierForm({
             type="checkbox"
             checked={form.isImporter as boolean}
             onChange={(e) => set('isImporter', e.target.checked)}
-            className="h-4 w-4 rounded border-border-strong accent-accent"
+            className="h-4 w-4 rounded border-border accent-primary"
           />
-          <span className="text-sm font-medium text-muted">Es importador</span>
+          <span className="text-sm font-medium text-muted-foreground">Es importador</span>
         </label>
 
         {error && (
-          <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
             {error}
           </div>
         )}
 
         <div className="flex gap-2 pt-2 border-t border-border">
-          <button
-            type="submit"
-            disabled={saveMutation.isPending}
-            className="flex-1 rounded-lg bg-ink px-4 py-2 text-sm font-medium text-canvas hover:opacity-80 disabled:opacity-50"
-          >
+          <Button type="submit" className="flex-1" disabled={saveMutation.isPending}>
             {saveMutation.isPending ? 'Guardando...' : initial ? 'Guardar cambios' : 'Crear proveedor'}
-          </button>
+          </Button>
         </div>
 
         {initial && (
           <div>
             {!confirmDelete ? (
-              <button
+              <Button
                 type="button"
+                variant="outline"
+                className="w-full border-destructive/30 text-destructive hover:bg-destructive/10"
                 onClick={() => setConfirmDelete(true)}
-                className="w-full rounded-lg border border-red-200 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50"
               >
                 Eliminar proveedor
-              </button>
+              </Button>
             ) : (
-              <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3">
-                <p className="text-xs text-red-700 mb-2">¿Confirmar eliminación?</p>
+              <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3">
+                <p className="text-xs text-destructive mb-2">¿Confirmar eliminación?</p>
                 <div className="flex gap-2">
-                  <button
+                  <Button
                     type="button"
+                    variant="destructive"
+                    size="sm"
+                    className="flex-1"
                     onClick={() => deleteMutation.mutate()}
                     disabled={deleteMutation.isPending}
-                    className="flex-1 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-700 disabled:opacity-50"
                   >
                     {deleteMutation.isPending ? 'Eliminando...' : 'Sí, eliminar'}
-                  </button>
-                  <button
+                  </Button>
+                  <Button
                     type="button"
+                    variant="outline"
+                    size="sm"
+                    className="flex-1"
                     onClick={() => setConfirmDelete(false)}
-                    className="flex-1 rounded-lg border border-border-strong bg-surface text-ink px-3 py-1.5 text-xs font-medium text-muted"
                   >
                     Cancelar
-                  </button>
+                  </Button>
                 </div>
               </div>
             )}
@@ -279,27 +275,24 @@ export default function SuppliersPage() {
     <div>
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-ink">Compras</h1>
-          <p className="mt-1 text-sm text-muted">Órdenes de compra y proveedores</p>
+          <h1 className="text-2xl font-semibold text-foreground">Compras</h1>
+          <p className="mt-1 text-sm text-muted-foreground">Órdenes de compra y proveedores</p>
         </div>
-        <button
-          onClick={() => { setSelectedSupplier(null); setShowCreate(true); }}
-          className="flex items-center gap-2 rounded-lg bg-ink px-4 py-2 text-sm font-medium text-canvas hover:opacity-80"
-        >
+        <Button onClick={() => { setSelectedSupplier(null); setShowCreate(true); }}>
           <Plus size={16} />
           Nuevo proveedor
-        </button>
+        </Button>
       </div>
 
       <ProcurementNav />
 
       <div className="flex gap-6">
         {/* List */}
-        <div className={`flex-1 min-w-0 ${panelOpen ? 'hidden sm:block' : ''}`}>
+        <div className={cn('flex-1 min-w-0', panelOpen ? 'hidden sm:block' : '')}>
           <div className="relative mb-4">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-faint" />
-            <input
-              className="w-full rounded-lg border border-border-strong pl-8 pr-3 py-2 text-sm focus:border-border-strong focus:outline-none focus:ring-1 focus:ring-border-strong"
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground/50" />
+            <Input
+              className="pl-8"
               placeholder="Buscar por nombre, email o RUC..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -307,38 +300,39 @@ export default function SuppliersPage() {
           </div>
 
           {isLoading ? (
-            <div className="py-16 text-center text-sm text-faint">Cargando proveedores...</div>
+            <div className="py-16 text-center text-sm text-muted-foreground/60">Cargando proveedores...</div>
           ) : filtered.length === 0 ? (
             <div className="py-16 text-center">
-              <p className="text-sm text-faint">No se encontraron proveedores.</p>
+              <p className="text-sm text-muted-foreground/60">No se encontraron proveedores.</p>
               <button
                 onClick={() => setShowCreate(true)}
-                className="mt-3 text-sm font-medium text-ink underline underline-offset-2"
+                className="mt-3 text-sm font-medium text-foreground underline underline-offset-2"
               >
                 Crear el primero
               </button>
             </div>
           ) : (
-            <div className="overflow-hidden rounded-xl border border-border bg-surface">
+            <div className="overflow-hidden rounded-xl border border-border bg-card">
               <ul className="divide-y divide-border">
                 {filtered.map((supplier) => (
                   <li
                     key={supplier.id}
                     onClick={() => { setShowCreate(false); setSelectedSupplier(supplier); }}
-                    className={`flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-surface-2 transition-colors ${
-                      selectedSupplier?.id === supplier.id ? 'bg-surface-2' : ''
-                    }`}
+                    className={cn(
+                      'flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-muted/20 transition-colors',
+                      selectedSupplier?.id === supplier.id ? 'bg-muted/20' : '',
+                    )}
                   >
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
-                        <p className="font-medium text-ink truncate">{supplier.name}</p>
+                        <p className="font-medium text-foreground truncate">{supplier.name}</p>
                         {supplier.isImporter && (
-                          <span className="inline-flex shrink-0 rounded-full bg-violet-50 px-1.5 py-0.5 text-xs font-medium text-violet-700">
+                          <span className="inline-flex shrink-0 rounded-full bg-violet-50 px-1.5 py-0.5 text-xs font-medium text-violet-700 dark:bg-violet-950 dark:text-violet-300">
                             Importador
                           </span>
                         )}
                       </div>
-                      <p className="text-xs text-faint truncate">
+                      <p className="text-xs text-muted-foreground/60 truncate">
                         {[
                           supplier.contactName,
                           supplier.email,
@@ -349,9 +343,9 @@ export default function SuppliersPage() {
                       </p>
                     </div>
                     {!supplier.isActive && (
-                      <span className="ml-3 shrink-0 inline-flex rounded-full bg-surface-2 px-2 py-0.5 text-xs text-muted">
+                      <Badge variant="outline" className="ml-3 shrink-0 bg-muted/30 text-muted-foreground border-border">
                         Inactivo
-                      </span>
+                      </Badge>
                     )}
                   </li>
                 ))}
@@ -362,7 +356,7 @@ export default function SuppliersPage() {
 
         {/* Side panel */}
         {panelOpen && (
-          <div className="w-80 shrink-0 rounded-xl border border-border bg-surface overflow-hidden">
+          <div className="w-80 shrink-0 rounded-xl border border-border bg-card overflow-hidden">
             {showCreate ? (
               <SupplierForm onClose={() => setShowCreate(false)} />
             ) : selectedSupplier ? (

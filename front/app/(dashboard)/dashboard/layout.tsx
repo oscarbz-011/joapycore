@@ -1,24 +1,23 @@
-﻿'use client';
+'use client';
 
 import { useEffect, useState } from 'react';
-import { usePathname, useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { Search, Moon, Sun, Mail } from 'lucide-react';
 import { useAuth } from '../../../lib/auth-context';
 import { useTheme } from '../../../lib/theme-context';
 import { useWsConnection } from '../../../lib/use-ws-connection';
+import { Button } from '@/components/ui/button';
 import { Sidebar } from './components/sidebar';
 import { AlertsDropdown } from './components/alerts-dropdown';
 import { SearchModal } from './components/search-modal';
 import { UserMenu } from './components/user-menu';
-
-const PROFILE_PATH = '/dashboard/settings/profile';
+import { ForcePasswordModal } from './components/force-password-modal';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isLoading, mustChangePassword } = useAuth();
   const { theme, toggle: toggleTheme } = useTheme();
   useWsConnection();
   const router = useRouter();
-  const pathname = usePathname();
   const [searchOpen, setSearchOpen] = useState(false);
 
   useEffect(() => {
@@ -35,13 +34,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   useEffect(() => {
     if (isLoading) return;
     if (!isAuthenticated) { router.push('/login'); return; }
-    if (mustChangePassword && pathname !== PROFILE_PATH) { router.push(PROFILE_PATH); }
-  }, [isLoading, isAuthenticated, mustChangePassword, pathname, router]);
+  }, [isLoading, isAuthenticated, router]);
 
   if (isLoading) {
     return (
-      <div style={{ display: 'flex', minHeight: '100vh', alignItems: 'center', justifyContent: 'center', background: 'var(--bg)' }}>
-        <div className="h-6 w-6 animate-spin rounded-full border-2 border-border-strong border-t-border-strong" />
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <div className="size-6 animate-spin rounded-full border-2 border-border border-t-transparent" />
       </div>
     );
   }
@@ -49,90 +47,58 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   if (!isAuthenticated) return null;
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh', background: 'var(--bg)' }}>
+    <div className="flex min-h-screen bg-background">
       <Sidebar />
 
-      {/* Main column */}
-      <div style={{ marginLeft: '250px', flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-
+      <div className="ml-[250px] flex flex-1 flex-col min-w-0">
         {/* ── Header ─────────────────────────────────────────────────────────── */}
-        <header style={{
-          height: '58px', flexShrink: 0,
-          display: 'flex', alignItems: 'center', gap: '14px',
-          padding: '0 24px',
-          borderBottom: '1px solid var(--border)',
-          background: 'var(--panel)',
-          position: 'sticky', top: 0, zIndex: 30,
-        }}>
-          <div style={{ flex: 1 }} />
+        <header className="h-[58px] shrink-0 flex items-center gap-1.5 px-6 border-b border-border bg-card sticky top-0 z-30">
+          <div className="flex-1" />
 
-          {/* Search icon */}
-          <button
+          <Button
+            variant="outline"
+            size="icon-sm"
             onClick={() => setSearchOpen(true)}
             title="Buscar (⌘K)"
-            style={{
-              width: '36px', height: '36px',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              border: '1px solid var(--border)', borderRadius: '9px',
-              background: 'var(--panel-2)', color: 'var(--muted)',
-              cursor: 'pointer', transition: 'color 0.12s',
-            }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--ink)'; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--muted)'; }}
+            className="text-muted-foreground"
           >
-            <Search size={16} />
-          </button>
+            <Search size={15} />
+          </Button>
 
-          {/* Theme toggle */}
-          <button
+          <Button
+            variant="outline"
+            size="icon-sm"
             onClick={toggleTheme}
             title={theme === 'dark' ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
-            style={{
-              width: '36px', height: '36px',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              border: '1px solid var(--border)', borderRadius: '9px',
-              background: 'var(--panel-2)', color: 'var(--muted)',
-              cursor: 'pointer', transition: 'color 0.12s',
-            }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--ink)'; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--muted)'; }}
+            className="text-muted-foreground"
           >
-            {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
-          </button>
+            {theme === 'dark' ? <Sun size={15} /> : <Moon size={15} />}
+          </Button>
 
-          {/* Mail */}
-          <button
+          <Button
+            variant="outline"
+            size="icon-sm"
             onClick={() => router.push('/dashboard/billing')}
             title="Facturación"
-            style={{
-              width: '36px', height: '36px',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              border: '1px solid var(--border)', borderRadius: '9px',
-              background: 'var(--panel-2)', color: 'var(--muted)',
-              cursor: 'pointer', transition: 'color 0.12s',
-            }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--ink)'; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--muted)'; }}
+            className="text-muted-foreground"
           >
-            <Mail size={16} />
-          </button>
+            <Mail size={15} />
+          </Button>
 
-          {/* Alerts dropdown */}
           <AlertsDropdown />
-
-          {/* User menu */}
           <UserMenu />
         </header>
 
-        {/* ── Content ─────────────────────────────────────────────────────────── */}
-        <main style={{ flex: 1, overflowY: 'auto' }}>
-          <div style={{ padding: '26px 30px 40px' }}>
+        {/* ── Content ─────────────────────────────────────────────────────── */}
+        <main className="flex-1 overflow-y-auto">
+          <div className="px-8 pt-7 pb-12">
             {children}
           </div>
         </main>
       </div>
 
       {searchOpen && <SearchModal onClose={() => setSearchOpen(false)} />}
+      {mustChangePassword && <ForcePasswordModal />}
     </div>
   );
 }

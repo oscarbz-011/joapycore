@@ -1,7 +1,10 @@
 import type { Metadata } from 'next';
-import { Hanken_Grotesk, JetBrains_Mono } from 'next/font/google';
+import { Hanken_Grotesk, JetBrains_Mono, Figtree } from 'next/font/google';
 import './globals.css';
 import { Providers } from './providers';
+import { cn } from "@/lib/utils";
+
+const figtree = Figtree({subsets:['latin'],variable:'--font-sans'});
 
 const hanken = Hanken_Grotesk({
   subsets: ['latin'],
@@ -24,7 +27,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="es" className={`${hanken.variable} ${jetbrains.variable} h-full`} suppressHydrationWarning>
+    <html lang="es" className={cn("h-full", hanken.variable, jetbrains.variable, "font-sans", figtree.variable)} suppressHydrationWarning>
       <head>
         {/* Runs before hydration — sets data-theme from localStorage to avoid flash */}
         <script dangerouslySetInnerHTML={{ __html: `(function(){var t=localStorage.getItem('joappy-theme');var d=t||(window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');document.documentElement.setAttribute('data-theme',d);})()` }} />

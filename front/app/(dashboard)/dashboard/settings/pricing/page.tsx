@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -52,12 +52,12 @@ export default function PricingSettingsPage() {
     <div className="mx-auto max-w-2xl space-y-8 p-8">
       {/* Header */}
       <div className="flex items-start gap-3">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-surface-2">
-          <Tag size={20} className="text-muted" />
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-muted/30">
+          <Tag size={20} className="text-muted-foreground" />
         </div>
         <div>
-          <h1 className="text-xl font-semibold text-ink">Configuración de Precios</h1>
-          <p className="mt-0.5 text-sm text-muted">
+          <h1 className="text-xl font-semibold text-foreground">Configuración de Precios</h1>
+          <p className="mt-0.5 text-sm text-muted-foreground">
             Define cómo se calcula el precio de venta sugerido a partir del costo de cada producto.
           </p>
         </div>
@@ -66,15 +66,15 @@ export default function PricingSettingsPage() {
       {isLoading ? (
         <div className="space-y-3">
           {[1, 2].map((i) => (
-            <div key={i} className="h-16 animate-pulse rounded-xl bg-surface-2" />
+            <div key={i} className="h-16 animate-pulse rounded-xl bg-muted/30" />
           ))}
         </div>
       ) : (
-        <div className="rounded-2xl border border-border bg-surface divide-y divide-border">
+        <div className="rounded-2xl border border-border bg-card divide-y divide-border">
           {/* Método de margen */}
           <div className="p-6">
-            <p className="mb-1 text-sm font-medium text-muted">Método de margen</p>
-            <p className="mb-4 text-xs text-faint">
+            <p className="mb-1 text-sm font-medium text-muted-foreground">Método de margen</p>
+            <p className="mb-4 text-xs text-muted-foreground/60">
               Elige si el margen se aplica como porcentaje sobre el costo o como un valor fijo.
             </p>
             <div className="flex gap-3">
@@ -88,14 +88,14 @@ export default function PricingSettingsPage() {
                   onClick={() => setMethod(value)}
                   className={`flex-1 rounded-xl border-2 px-4 py-3 text-left transition-all ${
                     method === value
-                      ? 'border-ink bg-surface-2'
-                      : 'border-border hover:border-border-strong'
+                      ? 'border-primary bg-muted/30'
+                      : 'border-border hover:border-ring/50'
                   }`}
                 >
-                  <p className={`text-sm font-semibold ${method === value ? 'text-ink' : 'text-muted'}`}>
+                  <p className={`text-sm font-semibold ${method === value ? 'text-foreground' : 'text-muted-foreground'}`}>
                     {label}
                   </p>
-                  <p className="mt-0.5 font-mono text-xs text-faint">{example}</p>
+                  <p className="mt-0.5 font-mono text-xs text-muted-foreground/60">{example}</p>
                 </button>
               ))}
             </div>
@@ -103,10 +103,10 @@ export default function PricingSettingsPage() {
 
           {/* Margen por defecto */}
           <div className="p-6">
-            <label className="mb-1 block text-sm font-medium text-muted">
+            <label className="mb-1 block text-sm font-medium text-muted-foreground">
               Margen por defecto
             </label>
-            <p className="mb-3 text-xs text-faint">
+            <p className="mb-3 text-xs text-muted-foreground/60">
               Se pre-completará al crear o actualizar un producto. Puede ajustarse por producto.
             </p>
             <div className="relative w-48">
@@ -115,42 +115,42 @@ export default function PricingSettingsPage() {
                 onChange={setMarkup}
                 decimals={method === 'PERCENTAGE' ? 2 : 0}
                 placeholder={method === 'PERCENTAGE' ? '25' : '5000'}
-                className="w-full rounded-lg border border-border-strong py-2 pl-3 pr-10 text-sm focus:border-border-strong focus:outline-none focus:ring-2 focus:ring-border"
+                className="w-full rounded-lg border border-border py-2 pl-3 pr-10 text-sm focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/30"
               />
-              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-faint">
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground/60">
                 {method === 'PERCENTAGE' ? '%' : 'Gs.'}
               </span>
             </div>
           </div>
 
           {/* Preview */}
-          <div className="p-6 bg-surface-2 rounded-b-2xl">
+          <div className="p-6 bg-muted/30 rounded-b-2xl">
             <div className="flex items-center gap-1.5 mb-3">
-              <Info size={13} className="text-faint" />
-              <p className="text-xs font-medium text-muted uppercase tracking-wider">Vista previa</p>
+              <Info size={13} className="text-muted-foreground/60" />
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Vista previa</p>
             </div>
             <div className="flex items-center gap-3">
               <div>
-                <p className="text-xs text-faint mb-1">Costo del producto</p>
+                <p className="text-xs text-muted-foreground/60 mb-1">Costo del producto</p>
                 <div className="relative w-36">
                   <NumericInput
                     value={previewCost}
                     onChange={setPreviewCost}
-                    className="w-full rounded-lg border border-border bg-surface py-2 pl-3 pr-10 text-sm focus:border-border-strong focus:outline-none"
+                    className="w-full rounded-lg border border-border bg-card py-2 pl-3 pr-10 text-sm focus:border-ring focus:outline-none"
                   />
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-faint">Gs.</span>
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground/60">Gs.</span>
                 </div>
               </div>
 
-              <div className="pt-5 text-faint">→</div>
+              <div className="pt-5 text-muted-foreground/60">→</div>
 
               <div>
-                <p className="text-xs text-faint mb-1">Precio de venta sugerido</p>
-                <div className="flex h-9 w-36 items-center rounded-lg border border-dashed border-border-strong bg-surface px-3">
+                <p className="text-xs text-muted-foreground/60 mb-1">Precio de venta sugerido</p>
+                <div className="flex h-9 w-36 items-center rounded-lg border border-dashed border-border bg-card px-3">
                   {price !== null ? (
-                    <span className="text-sm font-semibold text-ink">Gs. {fmt(price)}</span>
+                    <span className="text-sm font-semibold text-foreground">Gs. {fmt(price)}</span>
                   ) : (
-                    <span className="text-sm text-faint">—</span>
+                    <span className="text-sm text-muted-foreground/60">—</span>
                   )}
                 </div>
               </div>
@@ -165,14 +165,14 @@ export default function PricingSettingsPage() {
           type="button"
           disabled={!canSave}
           onClick={() => mutation.mutate()}
-          className="flex items-center gap-2 rounded-xl bg-ink px-5 py-2.5 text-sm font-medium text-canvas transition-all hover:opacity-80 disabled:opacity-40 disabled:cursor-not-allowed"
+          className="flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground transition-all hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed"
         >
           {flashSaved ? <Check size={15} /> : <Save size={15} />}
           {flashSaved ? 'Guardado' : mutation.isPending ? 'Guardando…' : 'Guardar cambios'}
         </button>
 
         {mutation.isError && (
-          <p className="text-sm text-red-500">Error al guardar. Intentá de nuevo.</p>
+          <p className="text-sm text-destructive">Error al guardar. Intentá de nuevo.</p>
         )}
       </div>
     </div>

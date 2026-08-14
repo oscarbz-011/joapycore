@@ -5,7 +5,9 @@ import { CurrentUser } from '../../../common/decorators/current-user.decorator';
 import { Permissions } from '../../../common/decorators/permissions.decorator';
 import { RequiredModule } from '../../../common/decorators/required-module.decorator';
 import type { JwtPayload } from '../../../common/types/jwt-payload.interface';
+import { CollectPaymentDto } from '../dto/collect-payment.dto';
 import { CreateSaleOrderDto } from '../dto/create-sale-order.dto';
+import { RegisterDownPaymentDto } from '../dto/register-down-payment.dto';
 import { RejectCreditDto } from '../dto/reject-credit.dto';
 import { SaleOrdersService } from '../services/sale-orders.service';
 
@@ -121,5 +123,31 @@ export class SaleOrdersController {
     @Param('id') id: string,
   ) {
     return this.saleOrdersService.deliver(tenantId, id, user.sub);
+  }
+
+  @Post(':id/collect-payment')
+  @HttpCode(HttpStatus.OK)
+  @Permissions('sales:update')
+  @ApiOperation({ summary: 'Registrar cobro de una venta al contado (PENDING → PAYMENT_RECEIVED)' })
+  collectPayment(
+    @CurrentTenant() tenantId: string,
+    @CurrentUser() user: JwtPayload,
+    @Param('id') id: string,
+    @Body() dto: CollectPaymentDto,
+  ) {
+    return this.saleOrdersService.collectPayment(tenantId, id, dto, user.sub);
+  }
+
+  @Post(':id/down-payment')
+  @HttpCode(HttpStatus.CREATED)
+  @Permissions('sales:update')
+  @ApiOperation({ summary: 'Registrar entrega inicial (pie) de una venta a crédito aprobada' })
+  registerDownPayment(
+    @CurrentTenant() tenantId: string,
+    @CurrentUser() user: JwtPayload,
+    @Param('id') id: string,
+    @Body() dto: RegisterDownPaymentDto,
+  ) {
+    return this.saleOrdersService.registerDownPayment(tenantId, id, dto, user.sub);
   }
 }

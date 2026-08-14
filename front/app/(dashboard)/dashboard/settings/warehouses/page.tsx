@@ -2,27 +2,23 @@
 
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Plus, X, Star } from 'lucide-react';
-import { warehousesApi, type Warehouse, type CreateWarehousePayload } from '../../../../../lib/api/warehouses';
+import { Plus, X, Star, Warehouse, MapPin, LayoutGrid, List } from 'lucide-react';
+import { warehousesApi, type Warehouse as WarehouseType, type CreateWarehousePayload } from '../../../../../lib/api/warehouses';
 import { branchesApi, type Branch } from '../../../../../lib/api/branches';
+import { Button } from '@/components/ui/button';
+import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
 
-const EMPTY_FORM: CreateWarehousePayload = { name: '', address: '', branchId: undefined, isDefault: false };
-
-function fromWarehouse(w: Warehouse): CreateWarehousePayload {
-  return { name: w.name, address: w.address ?? '', branchId: w.branchId ?? undefined, isDefault: w.isDefault };
-}
+// ── Warehouse form (side panel) ───────────────────────────────────────────────
 
 function WarehouseForm({
-  initial,
-  branches,
-  onClose,
-}: {
-  initial?: Warehouse;
-  branches: Branch[];
-  onClose: () => void;
-}) {
+  initial, branches, onClose,
+}: { initial?: WarehouseType; branches: Branch[]; onClose: () => void }) {
   const queryClient = useQueryClient();
-  const [form, setForm] = useState<CreateWarehousePayload>(initial ? fromWarehouse(initial) : EMPTY_FORM);
+  const [form, setForm] = useState<CreateWarehousePayload>(
+    initial
+      ? { name: initial.name, address: initial.address ?? '', branchId: initial.branchId ?? undefined, isDefault: initial.isDefault }
+      : { name: '', address: '', branchId: undefined, isDefault: false },
+  );
   const [error, setError] = useState('');
 
   function set<K extends keyof CreateWarehousePayload>(k: K, v: CreateWarehousePayload[K]) {
@@ -37,14 +33,9 @@ function WarehouseForm({
         branchId: form.branchId || undefined,
         isDefault: form.isDefault,
       };
-      return initial
-        ? warehousesApi.updateWarehouse(initial.id, payload)
-        : warehousesApi.createWarehouse(payload);
+      return initial ? warehousesApi.updateWarehouse(initial.id, payload) : warehousesApi.createWarehouse(payload);
     },
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['warehouses'] });
-      onClose();
-    },
+    onSuccess: () => { void queryClient.invalidateQueries({ queryKey: ['warehouses'] }); onClose(); },
     onError: (err: Error & { response?: { data?: { message?: string | string[] } } }) => {
       const msg = err?.response?.data?.message;
       setError(Array.isArray(msg) ? msg[0] : (msg ?? 'Error al guardar'));
@@ -53,25 +44,17 @@ function WarehouseForm({
 
   const toggleActiveMutation = useMutation({
     mutationFn: () => warehousesApi.updateWarehouse(initial!.id, { isActive: !initial!.isActive }),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['warehouses'] });
-      onClose();
-    },
+    onSuccess: () => { void queryClient.invalidateQueries({ queryKey: ['warehouses'] }); onClose(); },
   });
 
-  const inputCls =
-    'w-full rounded-lg border border-border-strong bg-surface text-ink px-3 py-2 text-sm focus:border-border-strong focus:outline-none focus:ring-1 focus:ring-border-strong';
-  const labelCls = 'block text-xs font-medium text-muted mb-1';
+  const inp = 'w-full rounded-lg border border-border bg-card text-foreground px-3 py-2 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring/30';
+  const lbl = 'block text-xs font-medium text-muted-foreground mb-1';
 
   return (
     <div className="flex h-full flex-col">
       <div className="flex items-center justify-between border-b border-border px-5 py-4">
-        <h2 className="text-sm font-semibold text-ink">
-          {initial ? initial.name : 'Nuevo depósito'}
-        </h2>
-        <button onClick={onClose} className="rounded-md p-1 text-faint hover:bg-surface-2">
-          <X size={18} />
-        </button>
+        <h2 className="text-sm font-semibold text-foreground">{initial ? initial.name : 'Nuevo depósito'}</h2>
+        <button type="button" onClick={onClose} className="rounded-md p-1 text-muted-foreground/60 hover:bg-muted/20"><X size={16} /></button>
       </div>
 
       <form
@@ -79,88 +62,150 @@ function WarehouseForm({
         className="flex-1 overflow-y-auto px-5 py-4 space-y-4"
       >
         <div>
-          <label className={labelCls}>Nombre *</label>
-          <input
-            className={inputCls}
-            value={form.name}
-            onChange={(e) => set('name', e.target.value)}
-            required
-            placeholder="Depósito Principal"
-          />
+          <label className={lbl}>Nombre *</label>
+          <input className={inp} value={form.name} onChange={(e) => set('name', e.target.value)} required placeholder="Depósito Principal" />
         </div>
 
         <div>
-          <label className={labelCls}>Sucursal</label>
-          <select
-            className={inputCls}
-            value={form.branchId ?? ''}
-            onChange={(e) => set('branchId', e.target.value || undefined)}
-          >
-            <option value="">Sin sucursal asignada</option>
-            {branches.map((b) => (
-              <option key={b.id} value={b.id}>{b.name}</option>
-            ))}
-          </select>
+          <label className={lbl}>Sucursal</label>
+          <Select value={form.branchId || 'none'} onValueChange={(v) => set('branchId', v && v !== 'none' ? v : undefined)}>
+            <SelectTrigger className="w-full">
+              <span className="flex-1 text-left text-sm truncate">{branches.find((b) => b.id === form.branchId)?.name ?? 'Sin sucursal asignada'}</span>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">Sin sucursal asignada</SelectItem>
+              {branches.map((b) => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
+            </SelectContent>
+          </Select>
         </div>
 
         <div>
-          <label className={labelCls}>Dirección</label>
-          <input
-            className={inputCls}
-            value={form.address as string}
-            onChange={(e) => set('address', e.target.value)}
-            placeholder="Av. Industrial 4321"
-          />
+          <label className={lbl}>Dirección</label>
+          <input className={inp} value={form.address as string} onChange={(e) => set('address', e.target.value)} placeholder="Av. Industrial 4321" />
         </div>
 
         <label className="flex items-center gap-2.5 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={form.isDefault as boolean}
-            onChange={(e) => set('isDefault', e.target.checked)}
-            className="h-4 w-4 rounded border-border-strong accent-accent"
-          />
-          <span className="text-sm font-medium text-muted">Depósito por defecto</span>
+          <input type="checkbox" checked={form.isDefault as boolean} onChange={(e) => set('isDefault', e.target.checked)} className="h-4 w-4 rounded border-border accent-primary" />
+          <span className="text-sm font-medium text-muted-foreground">Depósito por defecto</span>
         </label>
 
         {error && (
-          <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-            {error}
-          </div>
+          <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">{error}</div>
         )}
 
-        <div className="flex gap-2 pt-2 border-t border-border">
+        <div className="pt-2 border-t border-border space-y-2">
           <button
             type="submit"
             disabled={saveMutation.isPending}
-            className="flex-1 rounded-lg bg-ink px-4 py-2 text-sm font-medium text-canvas hover:opacity-80 disabled:opacity-50"
+            className="w-full rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
           >
             {saveMutation.isPending ? 'Guardando...' : initial ? 'Guardar cambios' : 'Crear depósito'}
           </button>
+          {initial && (
+            <button
+              type="button"
+              onClick={() => toggleActiveMutation.mutate()}
+              disabled={toggleActiveMutation.isPending}
+              className={`w-full rounded-lg border px-4 py-2 text-sm font-medium disabled:opacity-50 ${
+                initial.isActive ? 'border-border text-muted-foreground hover:bg-muted/20' : 'border-primary/30 text-primary hover:bg-primary/5'
+              }`}
+            >
+              {initial.isActive ? 'Desactivar depósito' : 'Activar depósito'}
+            </button>
+          )}
         </div>
-
-        {initial && (
-          <button
-            type="button"
-            onClick={() => toggleActiveMutation.mutate()}
-            disabled={toggleActiveMutation.isPending}
-            className={`w-full rounded-lg border px-4 py-2 text-sm font-medium disabled:opacity-50 ${
-              initial.isActive
-                ? 'border-border text-muted hover:bg-surface-2'
-                : 'border-emerald-200 text-emerald-600 hover:bg-emerald-50'
-            }`}
-          >
-            {initial.isActive ? 'Desactivar depósito' : 'Activar depósito'}
-          </button>
-        )}
       </form>
     </div>
   );
 }
 
+// ── Grid card ─────────────────────────────────────────────────────────────────
+
+function WarehouseCard({ wh, selected, onClick }: { wh: WarehouseType; selected: boolean; onClick: () => void }) {
+  return (
+    <div
+      onClick={onClick}
+      className={`flex flex-col rounded-[14px] border bg-card p-5 cursor-pointer transition-colors hover:border-primary/40 ${
+        selected ? 'border-primary/50 bg-primary/5' : 'border-border'
+      }`}
+    >
+      <div className="flex items-start justify-between gap-2 mb-3">
+        <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px] ${
+          wh.isActive ? 'bg-primary/10' : 'bg-muted/30'
+        }`}>
+          <Warehouse size={18} className={wh.isActive ? 'text-primary' : 'text-muted-foreground/60'} />
+        </div>
+        <div className="flex flex-wrap gap-1 justify-end">
+          {wh.isDefault && (
+            <span className="flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-600 dark:bg-amber-950/40 dark:text-amber-400">
+              <Star size={9} className="fill-amber-500" /> Por defecto
+            </span>
+          )}
+          {!wh.isActive && (
+            <span className="rounded-full bg-muted/30 px-2 py-0.5 text-[11px] font-medium text-muted-foreground">Inactivo</span>
+          )}
+        </div>
+      </div>
+
+      <p className="text-[13.5px] font-semibold text-foreground mb-1">{wh.name}</p>
+
+      <div className="space-y-0.5 mt-1">
+        {wh.branch && (
+          <p className="text-[12px] text-muted-foreground truncate">{wh.branch.name}</p>
+        )}
+        {wh.address && (
+          <p className="flex items-center gap-1.5 text-[12px] text-muted-foreground">
+            <MapPin size={11} className="shrink-0 text-muted-foreground/60" />
+            <span className="truncate">{wh.address}</span>
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── List row ──────────────────────────────────────────────────────────────────
+
+function WarehouseRow({ wh, selected, onClick }: { wh: WarehouseType; selected: boolean; onClick: () => void }) {
+  return (
+    <div
+      onClick={onClick}
+      className={`flex items-center gap-4 rounded-xl border bg-card px-5 py-4 cursor-pointer transition-colors hover:border-primary/40 ${
+        selected ? 'border-primary/50 bg-primary/5' : 'border-border'
+      }`}
+    >
+      <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px] ${
+        wh.isActive ? 'bg-primary/10' : 'bg-muted/30'
+      }`}>
+        <Warehouse size={18} className={wh.isActive ? 'text-primary' : 'text-muted-foreground/60'} />
+      </div>
+
+      <div className="flex-1 min-w-0">
+        <div className="flex flex-wrap items-center gap-2">
+          <p className="text-[13.5px] font-semibold text-foreground">{wh.name}</p>
+          {wh.isDefault && (
+            <span className="flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-600 dark:bg-amber-950/40 dark:text-amber-400">
+              <Star size={9} className="fill-amber-500" /> Por defecto
+            </span>
+          )}
+          {!wh.isActive && (
+            <span className="rounded-full bg-muted/30 px-2 py-0.5 text-[11px] font-medium text-muted-foreground">Inactivo</span>
+          )}
+        </div>
+        <p className="text-[12.5px] text-muted-foreground mt-0.5">
+          {[wh.branch?.name, wh.address].filter(Boolean).join(' · ')}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// ── Main page ─────────────────────────────────────────────────────────────────
+
 export default function WarehousesSettingsPage() {
   const [showCreate, setShowCreate] = useState(false);
-  const [selectedWarehouse, setSelectedWarehouse] = useState<Warehouse | null>(null);
+  const [selectedWarehouse, setSelectedWarehouse] = useState<WarehouseType | null>(null);
+  const [view, setView] = useState<'grid' | 'list'>('grid');
 
   const { data: warehouses = [], isLoading } = useQuery({
     queryKey: ['warehouses'],
@@ -174,84 +219,90 @@ export default function WarehousesSettingsPage() {
 
   const panelOpen = showCreate || selectedWarehouse !== null;
 
+  function openWarehouse(w: WarehouseType) { setShowCreate(false); setSelectedWarehouse(w); }
+  function openCreate() { setSelectedWarehouse(null); setShowCreate(true); }
+
   return (
-    <div>
-      <div className="mb-6 flex items-center justify-between">
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold text-ink">Depósitos</h1>
-          <p className="mt-1 text-sm text-muted">Gestioná los depósitos y almacenes de tu empresa</p>
+          <h1 className="text-xl font-semibold text-foreground">Depósitos</h1>
+          <p className="mt-1 text-sm text-muted-foreground">Gestioná los depósitos y almacenes de tu empresa</p>
         </div>
-        <button
-          onClick={() => { setSelectedWarehouse(null); setShowCreate(true); }}
-          className="flex items-center gap-2 rounded-lg bg-ink px-4 py-2 text-sm font-medium text-canvas hover:opacity-80"
-        >
-          <Plus size={16} />
-          Nuevo depósito
-        </button>
+        <div className="flex shrink-0 items-center gap-2">
+          {/* View toggle */}
+          <div className="flex items-center gap-1 rounded-[10px] border border-border bg-card p-1">
+            <button
+              type="button"
+              onClick={() => setView('grid')}
+              className={`flex items-center gap-1.5 rounded-[7px] px-3 py-1.5 text-[12.5px] font-medium transition-colors ${
+                view === 'grid' ? 'bg-muted/20 text-foreground' : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <LayoutGrid size={13} /><span>Grilla</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setView('list')}
+              className={`flex items-center gap-1.5 rounded-[7px] px-3 py-1.5 text-[12.5px] font-medium transition-colors ${
+                view === 'list' ? 'bg-muted/20 text-foreground' : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <List size={13} /><span>Lista</span>
+            </button>
+          </div>
+          {/* New button */}
+          <Button onClick={openCreate}>
+            <Plus size={15} /> Nuevo depósito
+          </Button>
+        </div>
       </div>
 
-      <div className="flex gap-6">
-        {/* List */}
-        <div className={`flex-1 min-w-0 ${panelOpen ? 'hidden sm:block' : ''}`}>
+      {/* Content */}
+      <div className="flex gap-5">
+        {/* Cards / rows */}
+        <div className={`min-w-0 flex-1 ${panelOpen ? 'hidden sm:block' : ''}`}>
           {isLoading ? (
-            <div className="py-16 text-center text-sm text-faint">Cargando depósitos...</div>
+            <div className={view === 'grid'
+              ? 'grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4'
+              : 'space-y-2'
+            }>
+              {[1, 2, 3, 4].map((i) => (
+                <div key={i} className={`animate-pulse rounded-[14px] bg-muted/30 ${view === 'grid' ? 'h-36' : 'h-16'}`} />
+              ))}
+            </div>
           ) : warehouses.length === 0 ? (
-            <div className="py-16 text-center">
-              <p className="text-sm text-faint">No hay depósitos registrados.</p>
-              <button
-                onClick={() => setShowCreate(true)}
-                className="mt-3 text-sm font-medium text-ink underline underline-offset-2"
-              >
+            <div className="flex flex-col items-center justify-center py-20 text-center">
+              <Warehouse size={32} className="text-muted-foreground/60 mb-3" />
+              <p className="text-sm text-muted-foreground/60">No hay depósitos registrados.</p>
+              <button type="button" onClick={openCreate} className="mt-3 text-sm font-medium text-primary hover:underline">
                 Crear el primero
               </button>
             </div>
+          ) : view === 'grid' ? (
+            <div className={`grid gap-3 ${panelOpen ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-4'}`}>
+              {warehouses.map((w) => (
+                <WarehouseCard key={w.id} wh={w} selected={selectedWarehouse?.id === w.id} onClick={() => openWarehouse(w)} />
+              ))}
+            </div>
           ) : (
-            <div className="overflow-hidden rounded-xl border border-border bg-surface">
-              <ul className="divide-y divide-border">
-                {warehouses.map((wh) => (
-                  <li
-                    key={wh.id}
-                    onClick={() => { setShowCreate(false); setSelectedWarehouse(wh); }}
-                    className={`flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-surface-2 transition-colors ${
-                      selectedWarehouse?.id === wh.id ? 'bg-surface-2' : ''
-                    }`}
-                  >
-                    <div className="flex items-center gap-2 flex-1 min-w-0">
-                      {wh.isDefault && (
-                        <Star size={13} className="shrink-0 text-amber-500 fill-amber-500" />
-                      )}
-                      <div className="min-w-0">
-                        <p className="font-medium text-ink truncate">{wh.name}</p>
-                        <p className="text-xs text-faint truncate">
-                          {[wh.branch?.name, wh.address].filter(Boolean).join(' · ')}
-                        </p>
-                      </div>
-                    </div>
-                    {!wh.isActive && (
-                      <span className="ml-3 shrink-0 inline-flex rounded-full bg-surface-2 px-2 py-0.5 text-xs text-muted">
-                        Inactivo
-                      </span>
-                    )}
-                  </li>
-                ))}
-              </ul>
+            <div className="space-y-2">
+              {warehouses.map((w) => (
+                <WarehouseRow key={w.id} wh={w} selected={selectedWarehouse?.id === w.id} onClick={() => openWarehouse(w)} />
+              ))}
             </div>
           )}
         </div>
 
         {/* Side panel */}
         {panelOpen && (
-          <div className="w-80 shrink-0 rounded-xl border border-border bg-surface overflow-hidden">
-            {showCreate ? (
-              <WarehouseForm branches={branches} onClose={() => setShowCreate(false)} />
-            ) : selectedWarehouse ? (
-              <WarehouseForm
-                key={selectedWarehouse.id}
-                initial={selectedWarehouse}
-                branches={branches}
-                onClose={() => setSelectedWarehouse(null)}
-              />
-            ) : null}
+          <div className="w-80 shrink-0 overflow-hidden rounded-[14px] border border-border bg-card">
+            {showCreate
+              ? <WarehouseForm branches={branches} onClose={() => setShowCreate(false)} />
+              : selectedWarehouse
+                ? <WarehouseForm key={selectedWarehouse.id} initial={selectedWarehouse} branches={branches} onClose={() => setSelectedWarehouse(null)} />
+                : null}
           </div>
         )}
       </div>

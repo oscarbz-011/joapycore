@@ -14,6 +14,7 @@ import { decodeJwt, tokenStore } from './token-store';
 import type { JwtPayload, RegisterDto, User } from '../types/auth';
 
 const MCP_KEY = 'mcp'; // mustChangePassword sessionStorage key
+const TMP_PW_KEY = 'tmp_pw'; // temporary password sessionStorage key
 
 interface AuthState {
   user: User | null;
@@ -86,8 +87,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       tokenStore.setAccessToken(data.accessToken);
       tokenStore.setRefreshToken(data.refreshToken);
       const mustChangePassword = !!data.mustChangePassword;
-      if (mustChangePassword) sessionStorage.setItem(MCP_KEY, '1');
-      else sessionStorage.removeItem(MCP_KEY);
+      if (mustChangePassword) {
+        sessionStorage.setItem(MCP_KEY, '1');
+        sessionStorage.setItem(TMP_PW_KEY, password);
+      } else {
+        sessionStorage.removeItem(MCP_KEY);
+        sessionStorage.removeItem(TMP_PW_KEY);
+      }
       setState({
         user: data.user,
         jwtPayload: decodeJwt(data.accessToken),
@@ -129,12 +135,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     tokenStore.clear();
     sessionStorage.removeItem(MCP_KEY);
+    sessionStorage.removeItem(TMP_PW_KEY);
     setState({ user: null, jwtPayload: null, isLoading: false, isAuthenticated: false, mustChangePassword: false });
     router.push('/login');
   }, [router]);
 
   const clearMustChangePassword = useCallback(() => {
     sessionStorage.removeItem(MCP_KEY);
+    sessionStorage.removeItem(TMP_PW_KEY);
     setState((s) => ({ ...s, mustChangePassword: false }));
   }, []);
 

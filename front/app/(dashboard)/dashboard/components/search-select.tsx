@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { ChevronDown, Plus, Search, X } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 interface SearchSelectProps<T> {
   items: T[];
@@ -69,13 +70,6 @@ export function SearchSelect<T>({
     setQuery('');
   }
 
-  const baseCls =
-    'flex items-center gap-2 w-full rounded-lg border px-3 py-2 text-sm transition-colors';
-  const activeCls = open
-    ? 'border-slate-500 ring-1 ring-slate-500'
-    : 'border-slate-300 hover:border-slate-400';
-  const disabledCls = disabled ? 'bg-slate-50 cursor-not-allowed opacity-60' : 'cursor-pointer';
-
   return (
     <div ref={containerRef} className="relative">
       {/* Trigger */}
@@ -83,20 +77,25 @@ export function SearchSelect<T>({
         role="combobox"
         aria-expanded={open}
         onClick={() => !disabled && setOpen(true)}
-        className={`${baseCls} ${activeCls} ${disabledCls}`}
+        className={cn(
+          'flex items-center gap-2 w-full rounded-lg border px-3 py-2 text-sm transition-colors',
+          open
+            ? 'border-border bg-card ring-1 ring-ring/30'
+            : 'border-border bg-card hover:border-ring/50',
+          disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer',
+        )}
       >
         {open ? (
           <>
-            <Search size={14} className="shrink-0 text-slate-400" />
+            <Search size={14} className="shrink-0 text-muted-foreground/60" />
             <input
               ref={inputRef}
-              className="flex-1 outline-none bg-transparent text-slate-900 placeholder:text-slate-400"
+              className="flex-1 outline-none bg-transparent text-foreground placeholder:text-muted-foreground/60"
               placeholder={placeholder}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               onClick={(e) => e.stopPropagation()}
             />
-            {/* hidden native input for required validation */}
             {required && (
               <input
                 tabIndex={-1}
@@ -110,12 +109,12 @@ export function SearchSelect<T>({
           </>
         ) : selected ? (
           <>
-            <span className="flex-1 truncate text-slate-900">{getLabel(selected)}</span>
+            <span className="flex-1 truncate text-foreground">{getLabel(selected)}</span>
             {!disabled && (
               <button
                 type="button"
                 onClick={handleClear}
-                className="shrink-0 text-slate-400 hover:text-slate-600"
+                className="shrink-0 text-muted-foreground/60 hover:text-muted-foreground"
               >
                 <X size={14} />
               </button>
@@ -123,8 +122,8 @@ export function SearchSelect<T>({
           </>
         ) : (
           <>
-            <span className="flex-1 text-slate-400">{placeholder}</span>
-            <ChevronDown size={14} className="shrink-0 text-slate-400" />
+            <span className="flex-1 text-muted-foreground/60">{placeholder}</span>
+            <ChevronDown size={14} className="shrink-0 text-muted-foreground/60" />
             {required && (
               <input
                 tabIndex={-1}
@@ -141,22 +140,23 @@ export function SearchSelect<T>({
 
       {/* Dropdown */}
       {open && (
-        <div className="absolute z-50 mt-1 w-full rounded-lg border border-slate-200 bg-white shadow-lg overflow-hidden">
+        <div className="absolute z-50 mt-1 w-full rounded-lg border border-border bg-card shadow-xl overflow-hidden">
           <ul className="max-h-56 overflow-y-auto py-1">
             {filtered.length === 0 ? (
-              <li className="px-3 py-2.5 text-sm text-slate-400">{emptyMessage}</li>
+              <li className="px-3 py-2.5 text-sm text-muted-foreground/60">{emptyMessage}</li>
             ) : (
               filtered.slice(0, 60).map((item) => (
                 <li
                   key={getKey(item)}
                   onMouseDown={() => handleSelect(item)}
-                  className={`px-3 py-2 cursor-pointer hover:bg-slate-50 ${
-                    getKey(item) === value ? 'bg-slate-50 font-medium' : ''
-                  }`}
+                  className={cn(
+                    'px-3 py-2 cursor-pointer hover:bg-muted/20',
+                    getKey(item) === value ? 'bg-muted/30 font-medium' : '',
+                  )}
                 >
-                  <p className="text-sm text-slate-900 truncate">{getLabel(item)}</p>
+                  <p className="text-sm text-foreground truncate">{getLabel(item)}</p>
                   {getDescription && getDescription(item) && (
-                    <p className="text-xs text-slate-400 truncate">{getDescription(item)}</p>
+                    <p className="text-xs text-muted-foreground/60 truncate">{getDescription(item)}</p>
                   )}
                 </li>
               ))
@@ -164,11 +164,11 @@ export function SearchSelect<T>({
           </ul>
 
           {onCreate && (
-            <div className="border-t border-slate-100">
+            <div className="border-t border-border">
               <button
                 type="button"
                 onMouseDown={onCreate}
-                className="flex items-center gap-1.5 w-full px-3 py-2 text-sm text-slate-600 hover:bg-slate-50"
+                className="flex items-center gap-1.5 w-full px-3 py-2 text-sm text-muted-foreground hover:bg-muted/20 hover:text-foreground"
               >
                 <Plus size={14} />
                 {createLabel}

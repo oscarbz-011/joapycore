@@ -1,9 +1,10 @@
-﻿'use client';
+'use client';
 
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { ChevronLeft, ChevronRight, X, Search } from 'lucide-react';
 import { auditApi, type AuditLog, type AuditFilters } from '../../../../../lib/api/audit';
+import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -37,7 +38,7 @@ function JsonBlock({ label, value }: { label: string; value: unknown }) {
   if (value === null || value === undefined) return null;
   return (
     <div>
-      <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted">{label}</p>
+      <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>
       <pre className="overflow-x-auto rounded-lg bg-slate-950 p-3 text-xs text-emerald-400 leading-relaxed">
         {JSON.stringify(value, null, 2)}
       </pre>
@@ -49,8 +50,8 @@ function DetailPanel({ log, onClose }: { log: AuditLog; onClose: () => void }) {
   const field = (label: string, value: string | null | undefined) =>
     value ? (
       <div>
-        <p className="text-xs text-muted">{label}</p>
-        <p className="text-sm text-ink">{value}</p>
+        <p className="text-xs text-muted-foreground">{label}</p>
+        <p className="text-sm text-foreground">{value}</p>
       </div>
     ) : null;
 
@@ -58,10 +59,10 @@ function DetailPanel({ log, onClose }: { log: AuditLog; onClose: () => void }) {
     <div className="flex h-full flex-col">
       <div className="flex shrink-0 items-center justify-between border-b border-border px-5 py-4">
         <div>
-          <p className="text-sm font-semibold text-ink">{actionLabel(log.action)}</p>
-          <p className="text-xs text-faint">{formatDate(log.createdAt)}</p>
+          <p className="text-sm font-semibold text-foreground">{actionLabel(log.action)}</p>
+          <p className="text-xs text-muted-foreground/60">{formatDate(log.createdAt)}</p>
         </div>
-        <button onClick={onClose} className="rounded-md p-1 text-faint hover:bg-surface-2">
+        <button onClick={onClose} className="rounded-md p-1 text-muted-foreground/60 hover:bg-muted/20">
           <X size={18} />
         </button>
       </div>
@@ -95,12 +96,12 @@ function FiltersBar({
   onChange: (f: AuditFilters) => void;
 }) {
   const inputCls =
-    'rounded-lg border border-border bg-surface px-3 py-1.5 text-sm focus:border-border-strong focus:outline-none';
+    'rounded-lg border border-border bg-card text-foreground px-3 py-1.5 text-sm focus:border-ring focus:outline-none';
 
   return (
     <div className="flex flex-wrap gap-2">
       <div className="relative">
-        <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-faint" />
+        <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground/60" />
         <input
           className={`${inputCls} pl-8 w-44`}
           placeholder="Buscar acción…"
@@ -109,16 +110,17 @@ function FiltersBar({
         />
       </div>
 
-      <select
-        className={inputCls}
-        value={filters.module ?? ''}
-        onChange={(e) => onChange({ ...filters, module: e.target.value || undefined, page: 1 })}
-      >
-        <option value="">Todos los módulos</option>
-        {MODULE_OPTIONS.map((m) => (
-          <option key={m} value={m}>{MODULE_LABELS[m] ?? m}</option>
-        ))}
-      </select>
+      <Select value={filters.module || 'all'} onValueChange={(v) => onChange({ ...filters, module: v && v !== 'all' ? v : undefined, page: 1 })}>
+        <SelectTrigger>
+          <span className="min-w-0 flex-1 truncate text-left text-sm">{filters.module ? (MODULE_LABELS[filters.module] ?? filters.module) : 'Todos los módulos'}</span>
+        </SelectTrigger>
+        <SelectContent className="w-auto min-w-[9rem]">
+          <SelectItem value="all">Todos los módulos</SelectItem>
+          {MODULE_OPTIONS.map((m) => (
+            <SelectItem key={m} value={m}>{MODULE_LABELS[m] ?? m}</SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
 
       <input
         type="date"
@@ -136,7 +138,7 @@ function FiltersBar({
       {(filters.module || filters.action || filters.dateFrom || filters.dateTo) && (
         <button
           onClick={() => onChange({ page: 1, limit: filters.limit })}
-          className="rounded-lg border border-border bg-surface text-ink px-3 py-1.5 text-sm text-muted hover:bg-surface-2"
+          className="rounded-lg border border-border bg-card text-muted-foreground px-3 py-1.5 text-sm hover:bg-muted/20"
         >
           Limpiar
         </button>
@@ -170,10 +172,10 @@ export default function AuditPage() {
   return (
     <div>
       <div className="mb-6">
-        <h1 className="text-2xl font-semibold text-ink">Auditoría</h1>
-        <p className="mt-1 text-sm text-muted">
+        <h1 className="text-2xl font-semibold text-foreground">Auditoría</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
           Registro de todas las acciones realizadas en el sistema
-          {data && <span className="ml-1 text-faint">— {data.total} eventos</span>}
+          {data && <span className="ml-1 text-muted-foreground/60">— {data.total} eventos</span>}
         </p>
       </div>
 
@@ -182,14 +184,14 @@ export default function AuditPage() {
       <div className="mt-4 flex gap-6">
         {/* Table */}
         <div className={`flex-1 min-w-0 ${panelOpen ? 'hidden lg:block' : ''}`}>
-          <div className="overflow-hidden rounded-xl border border-border bg-surface">
+          <div className="overflow-hidden rounded-xl border border-border bg-card">
             {isLoading ? (
-              <div className="py-16 text-center text-sm text-faint">Cargando registros…</div>
+              <div className="py-16 text-center text-sm text-muted-foreground/60">Cargando registros…</div>
             ) : logs.length === 0 ? (
-              <div className="py-16 text-center text-sm text-faint">No hay registros con los filtros aplicados</div>
+              <div className="py-16 text-center text-sm text-muted-foreground/60">No hay registros con los filtros aplicados</div>
             ) : (
               <table className="w-full text-sm">
-                <thead className="border-b border-border bg-surface-2 text-xs font-medium text-muted uppercase tracking-wide">
+                <thead className="border-b border-border bg-muted/30 text-xs font-medium text-muted-foreground uppercase tracking-wide">
                   <tr>
                     <th className="px-4 py-3 text-left w-36">Fecha</th>
                     <th className="px-4 py-3 text-left w-28">Módulo</th>
@@ -203,27 +205,27 @@ export default function AuditPage() {
                     <tr
                       key={log.id}
                       onClick={() => handleSelect(log)}
-                      className={`cursor-pointer transition-colors hover:bg-surface-2 ${
-                        selected?.id === log.id ? 'bg-surface-2' : ''
+                      className={`cursor-pointer transition-colors hover:bg-muted/20 ${
+                        selected?.id === log.id ? 'bg-muted/20' : ''
                       }`}
                     >
-                      <td className="px-4 py-2.5 text-xs text-muted whitespace-nowrap">
+                      <td className="px-4 py-2.5 text-xs text-muted-foreground whitespace-nowrap">
                         {formatDate(log.createdAt)}
                       </td>
                       <td className="px-4 py-2.5">
-                        <span className="inline-flex rounded-full bg-surface-2 px-2 py-0.5 text-xs font-medium text-muted">
+                        <span className="inline-flex rounded-full bg-muted/30 px-2 py-0.5 text-xs font-medium text-muted-foreground">
                           {MODULE_LABELS[log.module] ?? log.module}
                         </span>
                       </td>
-                      <td className="px-4 py-2.5 font-mono text-xs text-muted">
+                      <td className="px-4 py-2.5 font-mono text-xs text-muted-foreground">
                         {log.action}
                       </td>
-                      <td className="px-4 py-2.5 text-muted">
+                      <td className="px-4 py-2.5 text-muted-foreground">
                         {log.user
                           ? `${log.user.firstName} ${log.user.lastName}`
-                          : <span className="text-faint italic">sistema</span>}
+                          : <span className="text-muted-foreground/60 italic">sistema</span>}
                       </td>
-                      <td className="px-4 py-2.5 font-mono text-xs text-faint truncate max-w-[100px]">
+                      <td className="px-4 py-2.5 font-mono text-xs text-muted-foreground/60 truncate max-w-[100px]">
                         {log.resourceId ?? '—'}
                       </td>
                     </tr>
@@ -235,20 +237,20 @@ export default function AuditPage() {
 
           {/* Pagination */}
           {totalPages > 1 && (
-            <div className="mt-3 flex items-center justify-between text-sm text-muted">
+            <div className="mt-3 flex items-center justify-between text-sm text-muted-foreground">
               <span>Página {page} de {totalPages}</span>
               <div className="flex gap-1">
                 <button
                   onClick={() => setFilters((f) => ({ ...f, page: page - 1 }))}
                   disabled={page <= 1}
-                  className="rounded-lg border border-border p-1.5 hover:bg-surface-2 disabled:opacity-40"
+                  className="rounded-lg border border-border p-1.5 hover:bg-muted/20 disabled:opacity-40"
                 >
                   <ChevronLeft size={16} />
                 </button>
                 <button
                   onClick={() => setFilters((f) => ({ ...f, page: page + 1 }))}
                   disabled={page >= totalPages}
-                  className="rounded-lg border border-border p-1.5 hover:bg-surface-2 disabled:opacity-40"
+                  className="rounded-lg border border-border p-1.5 hover:bg-muted/20 disabled:opacity-40"
                 >
                   <ChevronRight size={16} />
                 </button>
@@ -259,7 +261,7 @@ export default function AuditPage() {
 
         {/* Detail panel */}
         {panelOpen && (
-          <div className="w-96 shrink-0 rounded-xl border border-border bg-surface overflow-hidden self-start sticky top-4">
+          <div className="w-96 shrink-0 rounded-xl border border-border bg-card overflow-hidden self-start sticky top-4">
             <DetailPanel log={selected} onClose={() => setSelected(null)} />
           </div>
         )}

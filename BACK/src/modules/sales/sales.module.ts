@@ -3,6 +3,8 @@ import { InventoryModule } from '../inventory/inventory.module';
 import { CustomersController } from './controllers/customers.controller';
 import { SaleOrdersController } from './controllers/sale-orders.controller';
 import { SaleTargetsController } from './controllers/sale-targets.controller';
+import { SalesOnDeliveryListener } from './events/sales-on-delivery.listener';
+import { SalesOnInvoiceListener } from './events/sales-on-invoice.listener';
 import { CustomersRepository } from './repositories/customers.repository';
 import { SaleOrdersRepository } from './repositories/sale-orders.repository';
 import { SaleTargetsRepository } from './repositories/sale-targets.repository';
@@ -20,6 +22,8 @@ import { SaleTargetsService } from './services/sale-targets.service';
     CustomersRepository,
     SaleOrdersRepository,
     SaleTargetsRepository,
+    SalesOnDeliveryListener,
+    SalesOnInvoiceListener,
   ],
   exports: [SaleOrdersRepository],
 })

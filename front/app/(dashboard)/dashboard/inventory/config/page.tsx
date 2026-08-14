@@ -1,10 +1,13 @@
-﻿'use client';
+'use client';
 
 import { useState } from 'react';
 import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Plus, Package, Settings } from 'lucide-react';
+import { Plus, Package, ChartBarStacked, ArrowLeftRight } from 'lucide-react';
 import { inventoryApi, type Brand, type Category } from '../../../../../lib/api/inventory';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 
 // ── Sub-nav ────────────────────────────────────────────────────────────────────
 
@@ -13,17 +16,24 @@ function InventoryNav() {
     <div className="flex gap-1 border-b border-border mb-6">
       <Link
         href="/dashboard/inventory"
-        className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 border-transparent text-muted hover:text-ink -mb-px"
+        className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 border-transparent text-muted-foreground hover:text-foreground -mb-px"
       >
         <Package size={15} />
         Productos
       </Link>
       <Link
-        href="/dashboard/inventory/config"
-        className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 border-ink text-ink -mb-px"
+        href="/dashboard/inventory/movements"
+        className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 border-transparent text-muted-foreground hover:text-foreground -mb-px"
       >
-        <Settings size={15} />
-        Configuración
+        <ArrowLeftRight size={15} />
+        Movimientos
+      </Link>
+      <Link
+        href="/dashboard/inventory/config"
+        className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 border-primary text-foreground -mb-px"
+      >
+        <ChartBarStacked size={15} />
+        Categorias
       </Link>
     </div>
   );
@@ -32,15 +42,9 @@ function InventoryNav() {
 // ── Active badge ───────────────────────────────────────────────────────────────
 
 function ActiveBadge({ isActive }: { isActive: boolean }) {
-  return isActive ? (
-    <span className="inline-flex rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">
-      Activa
-    </span>
-  ) : (
-    <span className="inline-flex rounded-full bg-surface-2 px-2 py-0.5 text-xs font-medium text-muted">
-      Inactiva
-    </span>
-  );
+  return isActive
+    ? <Badge variant="outline" className="bg-accent-subtle text-accent-on border-accent-on/20">Activa</Badge>
+    : <Badge variant="outline" className="bg-muted/30 text-muted-foreground border-border">Inactiva</Badge>;
 }
 
 // ── Categories panel ───────────────────────────────────────────────────────────
@@ -74,8 +78,8 @@ function CategoriesPanel() {
   });
 
   return (
-    <div className="rounded-xl border border-border bg-surface p-5">
-      <h2 className="mb-4 text-sm font-semibold text-ink">Categorías</h2>
+    <div className="rounded-xl border border-border bg-card p-5">
+      <h2 className="mb-4 text-sm font-semibold text-foreground">Categorías</h2>
 
       <form
         onSubmit={(e) => {
@@ -85,40 +89,37 @@ function CategoriesPanel() {
         }}
         className="mb-4 flex gap-2"
       >
-        <input
-          className="flex-1 rounded-lg border border-border-strong bg-surface text-ink px-3 py-2 text-sm focus:border-border-strong focus:outline-none focus:ring-1 focus:ring-border-strong"
+        <Input
+          className="flex-1"
           placeholder="Nombre de la categoría..."
           value={name}
           onChange={(e) => setName(e.target.value)}
           required
         />
-        <button
-          type="submit"
-          disabled={createMutation.isPending}
-          className="flex items-center gap-1.5 rounded-lg bg-ink px-3 py-2 text-sm font-medium text-canvas hover:opacity-80 disabled:opacity-50"
-        >
+        <Button type="submit" size="sm" disabled={createMutation.isPending}>
           <Plus size={14} />
           Agregar
-        </button>
+        </Button>
       </form>
-      {error && <p className="mb-3 text-xs text-red-600">{error}</p>}
+      {error && <p className="mb-3 text-xs text-destructive">{error}</p>}
 
       {categories.length === 0 ? (
-        <p className="py-4 text-center text-sm text-faint">No hay categorías registradas.</p>
+        <p className="py-4 text-center text-sm text-muted-foreground/60">No hay categorías registradas.</p>
       ) : (
         <ul className="space-y-1.5">
           {categories.map((cat: Category) => (
             <li
               key={cat.id}
-              className="flex items-center justify-between rounded-lg border border-border bg-surface text-ink px-3 py-2"
+              className="flex items-center justify-between rounded-lg border border-border bg-card px-3 py-2"
             >
-              <span className="text-sm text-ink">{cat.name}</span>
+              <span className="text-sm text-foreground">{cat.name}</span>
               <div className="flex items-center gap-2">
                 <ActiveBadge isActive={cat.isActive} />
                 <button
+                  type="button"
                   onClick={() => toggleMutation.mutate(cat)}
                   disabled={toggleMutation.isPending}
-                  className="text-xs text-faint hover:text-ink disabled:opacity-50"
+                  className="text-xs text-muted-foreground/60 hover:text-foreground disabled:opacity-50"
                 >
                   {cat.isActive ? 'Desactivar' : 'Activar'}
                 </button>
@@ -162,8 +163,8 @@ function BrandsPanel() {
   });
 
   return (
-    <div className="rounded-xl border border-border bg-surface p-5">
-      <h2 className="mb-4 text-sm font-semibold text-ink">Marcas</h2>
+    <div className="rounded-xl border border-border bg-card p-5">
+      <h2 className="mb-4 text-sm font-semibold text-foreground">Marcas</h2>
 
       <form
         onSubmit={(e) => {
@@ -173,40 +174,37 @@ function BrandsPanel() {
         }}
         className="mb-4 flex gap-2"
       >
-        <input
-          className="flex-1 rounded-lg border border-border-strong bg-surface text-ink px-3 py-2 text-sm focus:border-border-strong focus:outline-none focus:ring-1 focus:ring-border-strong"
+        <Input
+          className="flex-1"
           placeholder="Nombre de la marca..."
           value={name}
           onChange={(e) => setName(e.target.value)}
           required
         />
-        <button
-          type="submit"
-          disabled={createMutation.isPending}
-          className="flex items-center gap-1.5 rounded-lg bg-ink px-3 py-2 text-sm font-medium text-canvas hover:opacity-80 disabled:opacity-50"
-        >
+        <Button type="submit" size="sm" disabled={createMutation.isPending}>
           <Plus size={14} />
           Agregar
-        </button>
+        </Button>
       </form>
-      {error && <p className="mb-3 text-xs text-red-600">{error}</p>}
+      {error && <p className="mb-3 text-xs text-destructive">{error}</p>}
 
       {brands.length === 0 ? (
-        <p className="py-4 text-center text-sm text-faint">No hay marcas registradas.</p>
+        <p className="py-4 text-center text-sm text-muted-foreground/60">No hay marcas registradas.</p>
       ) : (
         <ul className="space-y-1.5">
           {brands.map((brand: Brand) => (
             <li
               key={brand.id}
-              className="flex items-center justify-between rounded-lg border border-border bg-surface text-ink px-3 py-2"
+              className="flex items-center justify-between rounded-lg border border-border bg-card px-3 py-2"
             >
-              <span className="text-sm text-ink">{brand.name}</span>
+              <span className="text-sm text-foreground">{brand.name}</span>
               <div className="flex items-center gap-2">
                 <ActiveBadge isActive={brand.isActive} />
                 <button
+                  type="button"
                   onClick={() => toggleMutation.mutate(brand)}
                   disabled={toggleMutation.isPending}
-                  className="text-xs text-faint hover:text-ink disabled:opacity-50"
+                  className="text-xs text-muted-foreground/60 hover:text-foreground disabled:opacity-50"
                 >
                   {brand.isActive ? 'Desactivar' : 'Activar'}
                 </button>
@@ -225,8 +223,8 @@ export default function InventoryConfigPage() {
   return (
     <div>
       <div className="mb-6">
-        <h1 className="text-2xl font-semibold text-ink">Inventario</h1>
-        <p className="mt-1 text-sm text-muted">Gestión de productos y stock</p>
+        <h1 className="text-2xl font-semibold text-foreground">Inventario</h1>
+        <p className="mt-1 text-sm text-muted-foreground">Gestión de productos y stock</p>
       </div>
 
       <InventoryNav />

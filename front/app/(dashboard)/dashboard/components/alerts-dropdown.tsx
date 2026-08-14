@@ -5,37 +5,37 @@ import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { Bell, Package, CreditCard, FileText, Settings, X, CheckCircle } from 'lucide-react';
 import { alertsApi, type AlertConfig, type AlertType } from '../../../../lib/api/alerts';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
 
 // ── Alert type metadata ────────────────────────────────────────────────────────
 
-const META: Record<AlertType, { label: string; icon: React.ElementType; color: string; href: string; desc: (cfg: AlertConfig) => string }> = {
+const META: Record<AlertType, {
+  label: string;
+  icon: React.ElementType;
+  color: string;
+  href: string;
+  desc: (cfg: AlertConfig) => string;
+}> = {
   STOCK_LOW: {
-    label: 'Stock bajo',
-    icon: Package,
-    color: 'var(--warn)',
+    label: 'Stock bajo', icon: Package, color: 'var(--warn)',
     href: '/dashboard/inventory',
-    desc: (c) => c.threshold != null ? `Umbral configurado: ${c.threshold} unidades` : 'Sin umbral definido',
+    desc: (c) => c.threshold != null ? `Umbral: ${c.threshold} unidades` : 'Sin umbral definido',
   },
   PAYMENT_DUE: {
-    label: 'Pagos próximos',
-    icon: CreditCard,
-    color: 'var(--info)',
+    label: 'Pagos próximos', icon: CreditCard, color: 'var(--info)',
     href: '/dashboard/payments',
     desc: () => 'Notificación activa para pagos próximos a vencer',
   },
   INVOICE_OVERDUE: {
-    label: 'Facturas vencidas',
-    icon: FileText,
-    color: 'var(--danger)',
+    label: 'Facturas vencidas', icon: FileText, color: 'var(--danger)',
     href: '/dashboard/billing',
     desc: () => 'Notificación activa para facturas vencidas',
   },
 };
 
-const CHANNEL_LABEL: Record<string, string> = {
-  EMAIL: 'Email',
-  SYSTEM: 'Sistema',
-};
+const CHANNEL_LABEL: Record<string, string> = { EMAIL: 'Email', SYSTEM: 'Sistema' };
 
 // ── Component ──────────────────────────────────────────────────────────────────
 
@@ -51,7 +51,6 @@ export function AlertsDropdown() {
   const active = configs.filter((c) => c.isActive);
   const count  = active.length;
 
-  // Close on outside click
   useEffect(() => {
     function handle(e: MouseEvent) {
       if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
@@ -61,93 +60,55 @@ export function AlertsDropdown() {
   }, [open]);
 
   return (
-    <div ref={ref} style={{ position: 'relative' }}>
-      {/* Bell button */}
-      <button
+    <div ref={ref} className="relative">
+      <Button
+        variant="outline"
+        size="icon-sm"
         onClick={() => setOpen((v) => !v)}
-        style={{
-          position: 'relative',
-          width: '36px', height: '36px',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          border: '1px solid var(--border)', borderRadius: '9px',
-          background: open ? 'var(--panel-2)' : 'var(--panel-2)',
-          color: open ? 'var(--ink)' : 'var(--muted)',
-          cursor: 'pointer', transition: 'color 0.12s',
-        }}
-        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--ink)'; }}
-        onMouseLeave={(e) => { if (!open) (e.currentTarget as HTMLElement).style.color = 'var(--muted)'; }}
+        title="Alertas"
+        className="relative text-muted-foreground"
       >
-        <Bell size={16} />
+        <Bell size={15} />
         {count > 0 && (
-          <span style={{
-            position: 'absolute', top: '6px', right: '6px',
-            minWidth: '7px', height: '7px', borderRadius: '50%',
-            background: 'var(--danger)',
-            border: '2px solid var(--panel-2)',
-          }} />
+          <span className="absolute right-1.5 top-1.5 size-1.5 rounded-full bg-destructive ring-2 ring-background" />
         )}
-      </button>
+      </Button>
 
-      {/* Dropdown */}
       {open && (
-        <div
-          className="animate-rise-in"
-          style={{
-            position: 'absolute', top: 'calc(100% + 8px)', right: 0,
-            width: '320px', maxHeight: '480px',
-            background: 'var(--panel)',
-            border: '1px solid var(--border)',
-            borderRadius: '14px',
-            boxShadow: 'var(--shadow-lg)',
-            zIndex: 50,
-            overflow: 'hidden',
-            display: 'flex', flexDirection: 'column',
-          }}
-        >
+        <div className="animate-rise-in absolute right-0 top-[calc(100%+8px)] z-50 flex w-80 max-h-[480px] flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-lg">
           {/* Header */}
-          <div style={{
-            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            padding: '14px 16px 10px',
-            borderBottom: '1px solid var(--border)',
-          }}>
+          <div className="flex items-center justify-between px-4 py-3">
             <div>
-              <p style={{ fontWeight: 700, fontSize: '14px', color: 'var(--ink)' }}>Alertas</p>
-              <p style={{ fontSize: '12px', color: 'var(--muted)', marginTop: '1px' }}>
+              <p className="text-[14px] font-semibold text-foreground">Alertas</p>
+              <p className="mt-px text-[12px] text-muted-foreground">
                 {count > 0 ? `${count} regla${count !== 1 ? 's' : ''} activa${count !== 1 ? 's' : ''}` : 'Sin alertas activas'}
               </p>
             </div>
-            <button
-              onClick={() => setOpen(false)}
-              style={{
-                width: '28px', height: '28px', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                border: 'none', borderRadius: '7px', background: 'transparent',
-                color: 'var(--muted)', cursor: 'pointer',
-              }}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'var(--panel-2)'; }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
-            >
-              <X size={14} />
-            </button>
+            <Button variant="ghost" size="icon-xs" onClick={() => setOpen(false)}>
+              <X size={13} />
+            </Button>
           </div>
 
+          <Separator />
+
           {/* Body */}
-          <div style={{ flex: 1, overflowY: 'auto' }}>
+          <div className="flex-1 overflow-y-auto">
             {isLoading ? (
-              <div style={{ padding: '20px 16px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              <div className="flex flex-col gap-2.5 p-4">
                 {[1, 2].map((i) => (
-                  <div key={i} style={{ height: '60px', borderRadius: '10px', background: 'var(--panel-2)', animation: 'pulse 1.5s infinite' }} />
+                  <div key={i} className="h-14 animate-pulse rounded-xl bg-muted" />
                 ))}
               </div>
             ) : active.length === 0 ? (
-              <div style={{ padding: '32px 20px', textAlign: 'center' }}>
-                <CheckCircle size={28} style={{ color: 'var(--faint)', margin: '0 auto 10px' }} />
-                <p style={{ fontSize: '13.5px', color: 'var(--muted)', fontWeight: 500 }}>Sin alertas activas</p>
-                <p style={{ fontSize: '12.5px', color: 'var(--faint)', marginTop: '4px' }}>
+              <div className="flex flex-col items-center py-8 text-center">
+                <CheckCircle size={28} className="mb-2.5 text-muted-foreground/40" />
+                <p className="text-[13.5px] font-medium text-foreground">Sin alertas activas</p>
+                <p className="mt-1 text-[12.5px] text-muted-foreground">
                   Configurá alertas para recibir notificaciones automáticas
                 </p>
               </div>
             ) : (
-              <div style={{ padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <div className="flex flex-col gap-1 p-2.5">
                 {active.map((cfg) => {
                   const meta = META[cfg.type];
                   if (!meta) return null;
@@ -157,43 +118,21 @@ export function AlertsDropdown() {
                       key={cfg.id}
                       href={meta.href}
                       onClick={() => setOpen(false)}
-                      style={{
-                        display: 'flex', alignItems: 'flex-start', gap: '11px',
-                        padding: '11px 12px',
-                        borderRadius: '10px',
-                        textDecoration: 'none',
-                        transition: 'background 0.12s',
-                      }}
-                      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'var(--panel-2)'; }}
-                      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+                      className="flex items-start gap-3 rounded-xl p-3 no-underline transition-colors hover:bg-muted"
                     >
-                      {/* Icon pill */}
-                      <div style={{
-                        width: '34px', height: '34px', flexShrink: 0, borderRadius: '9px',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        background: `color-mix(in srgb, ${meta.color} 14%, transparent)`,
-                        color: meta.color,
-                      }}>
+                      <div
+                        className="flex size-9 shrink-0 items-center justify-center rounded-[9px]"
+                        style={{ background: `color-mix(in srgb, ${meta.color} 14%, transparent)`, color: meta.color }}
+                      >
                         <Icon size={16} />
                       </div>
-
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <p style={{ fontSize: '13.5px', fontWeight: 600, color: 'var(--ink)', lineHeight: 1.2 }}>
-                          {meta.label}
-                        </p>
-                        <p style={{ fontSize: '12px', color: 'var(--muted)', marginTop: '3px', lineHeight: 1.4 }}>
-                          {meta.desc(cfg)}
-                        </p>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[13.5px] font-semibold leading-tight text-foreground">{meta.label}</p>
+                        <p className="mt-0.5 text-[12px] leading-snug text-muted-foreground">{meta.desc(cfg)}</p>
                         {cfg.channel && (
-                          <span style={{
-                            display: 'inline-block', marginTop: '5px',
-                            fontSize: '11px', fontWeight: 600,
-                            padding: '1px 7px', borderRadius: '5px',
-                            background: 'var(--panel-2)', color: 'var(--faint)',
-                            border: '1px solid var(--border)',
-                          }}>
+                          <Badge variant="secondary" className="mt-1.5 text-[10px] font-semibold">
                             {CHANNEL_LABEL[cfg.channel] ?? cfg.channel}
-                          </span>
+                          </Badge>
                         )}
                       </div>
                     </Link>
@@ -203,21 +142,14 @@ export function AlertsDropdown() {
             )}
           </div>
 
+          <Separator />
+
           {/* Footer */}
-          <div style={{
-            borderTop: '1px solid var(--border)',
-            padding: '10px 16px',
-          }}>
+          <div className="px-4 py-2.5">
             <Link
               href="/dashboard/settings/alerts"
               onClick={() => setOpen(false)}
-              style={{
-                display: 'flex', alignItems: 'center', gap: '7px',
-                fontSize: '13px', fontWeight: 500, color: 'var(--muted)',
-                textDecoration: 'none', transition: 'color 0.12s',
-              }}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--ink)'; }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--muted)'; }}
+              className="flex items-center gap-1.5 text-[13px] font-medium text-muted-foreground no-underline transition-colors hover:text-foreground"
             >
               <Settings size={13} />
               Gestionar configuración de alertas

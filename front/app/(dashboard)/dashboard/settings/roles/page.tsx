@@ -1,10 +1,11 @@
-﻿'use client';
+'use client';
 
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus, Shield, ShieldCheck, Trash2, ChevronDown, ChevronRight } from 'lucide-react';
 import { rolesApi, type RoleResponse } from '../../../../../lib/api/roles';
 import { PERMISSION_GROUPS, getPermissionLabel } from '../../../../../lib/permissions';
+import { Button } from '@/components/ui/button';
 
 function CreateRoleModal({ onClose }: { onClose: () => void }) {
   const [name, setName] = useState('');
@@ -24,31 +25,31 @@ function CreateRoleModal({ onClose }: { onClose: () => void }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-sm rounded-2xl bg-surface shadow-xl p-6">
-        <h2 className="mb-4 text-base font-semibold text-ink">Nuevo rol</h2>
+      <div className="w-full max-w-sm rounded-2xl bg-card shadow-xl p-6">
+        <h2 className="mb-4 text-base font-semibold text-foreground">Nuevo rol</h2>
         <input
           autoFocus
           value={name}
           onChange={(e) => setName(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && name.trim() && createMutation.mutate()}
           placeholder="Ej: Vendedor, Administrativo..."
-          className="w-full rounded-lg border border-border bg-surface text-ink px-3 py-2 text-sm outline-none focus:border-border-strong focus:ring-2 focus:ring-border"
+          className="w-full rounded-lg border border-border bg-card text-foreground px-3 py-2 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring/30"
         />
-        {error && <p className="mt-2 text-xs text-red-600">{error}</p>}
+        {error && <p className="mt-2 text-xs text-destructive">{error}</p>}
         <div className="mt-4 flex justify-end gap-2">
           <button
+            type="button"
             onClick={onClose}
-            className="rounded-lg border border-border px-4 py-2 text-sm text-muted hover:bg-surface-2"
+            className="rounded-lg border border-border px-4 py-2 text-sm text-muted-foreground hover:bg-muted/20"
           >
             Cancelar
           </button>
-          <button
+          <Button
             onClick={() => createMutation.mutate()}
             disabled={!name.trim() || createMutation.isPending}
-            className="rounded-lg bg-ink px-4 py-2 text-sm font-medium text-canvas hover:opacity-80 disabled:opacity-50"
           >
             {createMutation.isPending ? 'Creando...' : 'Crear rol'}
-          </button>
+          </Button>
         </div>
       </div>
     </div>
@@ -100,17 +101,17 @@ function RolePermissionsPanel({
   return (
     <div className="fixed inset-0 z-40 flex justify-end">
       <div className="absolute inset-0 bg-black/30" onClick={onClose} />
-      <aside className="relative z-50 flex h-full w-full max-w-md flex-col bg-surface shadow-2xl">
+      <aside className="relative z-50 flex h-full w-full max-w-md flex-col bg-card shadow-2xl">
         <div className="flex items-center justify-between border-b border-border px-6 py-4">
           <div className="flex items-center gap-2">
             {role.isSystem ? (
-              <ShieldCheck size={18} className="text-faint" />
+              <ShieldCheck size={18} className="text-muted-foreground/60" />
             ) : (
-              <Shield size={18} className="text-muted" />
+              <Shield size={18} className="text-muted-foreground" />
             )}
-            <span className="font-semibold text-ink">{role.name}</span>
+            <span className="font-semibold text-foreground">{role.name}</span>
             {role.isSystem && (
-              <span className="rounded-full bg-surface-2 px-2 py-0.5 text-xs text-muted">
+              <span className="rounded-full bg-muted/30 px-2 py-0.5 text-xs text-muted-foreground">
                 Sistema
               </span>
             )}
@@ -118,17 +119,19 @@ function RolePermissionsPanel({
           <div className="flex items-center gap-2">
             {!role.isSystem && (
               <button
+                type="button"
                 onClick={() => {
                   if (confirm(`¿Eliminar el rol "${role.name}"?`)) deleteMutation.mutate();
                 }}
-                className="rounded-md p-1.5 text-red-400 hover:bg-red-50 hover:text-red-600"
+                className="rounded-md p-1.5 text-destructive/60 hover:bg-destructive/10 hover:text-destructive"
               >
                 <Trash2 size={16} />
               </button>
             )}
             <button
+              type="button"
               onClick={onClose}
-              className="rounded-md p-1.5 text-faint hover:bg-surface-2"
+              className="rounded-md p-1.5 text-muted-foreground/60 hover:bg-muted/20"
             >
               ✕
             </button>
@@ -136,7 +139,7 @@ function RolePermissionsPanel({
         </div>
 
         <div className="flex-1 overflow-y-auto px-6 py-4 space-y-2">
-          <p className="mb-3 text-xs text-muted">
+          <p className="mb-3 text-xs text-muted-foreground">
             {role.isSystem
               ? 'Los permisos del rol de sistema no pueden modificarse.'
               : 'Seleccioná los permisos que tendrá este rol.'}
@@ -151,15 +154,15 @@ function RolePermissionsPanel({
                   onClick={() => toggleGroup(group.module)}
                   className="flex w-full items-center justify-between px-3 py-2.5 text-left"
                 >
-                  <span className="text-sm font-medium text-muted">{group.label}</span>
+                  <span className="text-sm font-medium text-muted-foreground">{group.label}</span>
                   <div className="flex items-center gap-2">
-                    <span className="text-xs text-muted">
+                    <span className="text-xs text-muted-foreground">
                       {groupSelected}/{group.permissions.length}
                     </span>
                     {isOpen ? (
-                      <ChevronDown size={14} className="text-faint" />
+                      <ChevronDown size={14} className="text-muted-foreground/60" />
                     ) : (
-                      <ChevronRight size={14} className="text-faint" />
+                      <ChevronRight size={14} className="text-muted-foreground/60" />
                     )}
                   </div>
                 </button>
@@ -175,9 +178,9 @@ function RolePermissionsPanel({
                           checked={selected.has(perm.key)}
                           disabled={role.isSystem}
                           onChange={() => toggle(perm.key)}
-                          className="h-4 w-4 rounded border-border-strong accent-accent"
+                          className="h-4 w-4 rounded border-border accent-primary"
                         />
-                        <span className="text-sm text-muted">{perm.label}</span>
+                        <span className="text-sm text-muted-foreground">{perm.label}</span>
                       </label>
                     ))}
                   </div>
@@ -190,9 +193,10 @@ function RolePermissionsPanel({
         {!role.isSystem && hasChanges && (
           <div className="border-t border-border px-6 py-4">
             <button
+              type="button"
               onClick={() => saveMutation.mutate()}
               disabled={saveMutation.isPending}
-              className="w-full rounded-lg bg-ink py-2.5 text-sm font-medium text-canvas hover:opacity-80 disabled:opacity-50"
+              className="w-full rounded-lg bg-primary py-2.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
             >
               {saveMutation.isPending ? 'Guardando...' : 'Guardar permisos'}
             </button>
@@ -216,40 +220,37 @@ export default function RolesPage() {
     <>
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-ink">Roles</h1>
-          <p className="mt-0.5 text-sm text-muted">
+          <h1 className="text-xl font-semibold text-foreground">Roles</h1>
+          <p className="mt-0.5 text-sm text-muted-foreground">
             Definí los roles y permisos del equipo
           </p>
         </div>
-        <button
-          onClick={() => setShowCreateModal(true)}
-          className="flex items-center gap-2 rounded-lg bg-ink px-4 py-2 text-sm font-medium text-canvas hover:opacity-80"
-        >
+        <Button onClick={() => setShowCreateModal(true)}>
           <Plus size={16} />
           Nuevo rol
-        </button>
+        </Button>
       </div>
 
-      <div className="rounded-xl border border-border bg-surface overflow-hidden">
+      <div className="rounded-xl border border-border bg-card overflow-hidden">
         {isLoading ? (
           <div className="flex items-center justify-center py-16">
-            <div className="h-5 w-5 animate-spin rounded-full border-2 border-border border-t-slate-600" />
+            <div className="h-5 w-5 animate-spin rounded-full border-2 border-border border-t-foreground/30" />
           </div>
         ) : roles.length === 0 ? (
-          <div className="py-16 text-center text-sm text-muted">
+          <div className="py-16 text-center text-sm text-muted-foreground">
             No hay roles creados aún
           </div>
         ) : (
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-border bg-surface-2">
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted">
+              <tr className="border-b border-border bg-muted/30">
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
                   Rol
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted">
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
                   Permisos
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted">
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
                   Tipo
                 </th>
               </tr>
@@ -261,31 +262,31 @@ export default function RolesPage() {
                   <tr
                     key={role.id}
                     onClick={() => setSelectedRole(role)}
-                    className="cursor-pointer hover:bg-surface-2 transition-colors"
+                    className="cursor-pointer hover:bg-muted/20 transition-colors"
                   >
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
                         {role.isSystem ? (
-                          <ShieldCheck size={16} className="shrink-0 text-faint" />
+                          <ShieldCheck size={16} className="shrink-0 text-muted-foreground/60" />
                         ) : (
-                          <Shield size={16} className="shrink-0 text-muted" />
+                          <Shield size={16} className="shrink-0 text-muted-foreground" />
                         )}
-                        <span className="font-medium text-ink">{role.name}</span>
+                        <span className="font-medium text-foreground">{role.name}</span>
                       </div>
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex flex-wrap gap-1 max-w-sm">
                         {permCount === 0 ? (
-                          <span className="text-xs text-faint">Sin permisos</span>
+                          <span className="text-xs text-muted-foreground/60">Sin permisos</span>
                         ) : permCount > 6 ? (
-                          <span className="text-xs text-muted">
+                          <span className="text-xs text-muted-foreground">
                             {permCount} permisos
                           </span>
                         ) : (
                           role.rolePermissions.slice(0, 6).map((rp) => (
                             <span
                               key={rp.permission.key}
-                              className="rounded-md bg-surface-2 px-1.5 py-0.5 text-xs text-muted"
+                              className="rounded-md bg-muted/30 px-1.5 py-0.5 text-xs text-muted-foreground"
                             >
                               {getPermissionLabel(rp.permission.key)}
                             </span>
@@ -295,11 +296,11 @@ export default function RolesPage() {
                     </td>
                     <td className="px-4 py-3">
                       {role.isSystem ? (
-                        <span className="rounded-full bg-surface-2 px-2 py-0.5 text-xs text-muted">
+                        <span className="rounded-full bg-muted/30 px-2 py-0.5 text-xs text-muted-foreground">
                           Sistema
                         </span>
                       ) : (
-                        <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs text-emerald-700 ring-1 ring-emerald-200">
+                        <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs text-emerald-700 ring-1 ring-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:ring-emerald-800/30">
                           Personalizado
                         </span>
                       )}

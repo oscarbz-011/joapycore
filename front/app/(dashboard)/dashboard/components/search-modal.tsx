@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { inventoryApi, type Product } from '../../../../lib/api/inventory';
 import { salesApi, type Customer } from '../../../../lib/api/sales';
+import { cn } from '@/lib/utils';
 
 // ── Module quick links ─────────────────────────────────────────────────────────
 
@@ -41,11 +42,7 @@ function customerFullName(c: Customer) {
 
 function SectionHeader({ label }: { label: string }) {
   return (
-    <p style={{
-      fontSize: '11px', fontWeight: 700, color: 'var(--faint)',
-      textTransform: 'uppercase', letterSpacing: '0.07em',
-      padding: '12px 10px 6px',
-    }}>
+    <p className="px-2.5 pb-1.5 pt-3 text-[11px] font-bold uppercase tracking-[0.07em] text-muted-foreground/60">
       {label}
     </p>
   );
@@ -53,6 +50,7 @@ function SectionHeader({ label }: { label: string }) {
 
 function ResultRow({
   icon: Icon,
+  iconBg,
   iconColor,
   label,
   sub,
@@ -60,6 +58,7 @@ function ResultRow({
   onClick,
 }: {
   icon: React.ElementType;
+  iconBg: string;
   iconColor: string;
   label: string;
   sub?: string;
@@ -69,44 +68,19 @@ function ResultRow({
   return (
     <button
       onClick={onClick}
-      style={{
-        display: 'flex', alignItems: 'center', gap: '10px',
-        width: '100%', padding: '8px 10px',
-        border: 'none', borderRadius: '9px',
-        background: 'transparent', cursor: 'pointer',
-        textAlign: 'left', transition: 'background 0.1s',
-      }}
-      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'var(--panel-2)'; }}
-      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+      className="flex w-full items-center gap-2.5 rounded-[9px] px-2.5 py-2 text-left transition-colors hover:bg-muted/20"
     >
-      <span style={{
-        width: '30px', height: '30px', flexShrink: 0,
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        borderRadius: '8px', background: iconColor + '18',
-        color: iconColor,
-      }}>
+      <span
+        className={cn('flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-lg', iconBg, iconColor)}
+      >
         <Icon size={14} />
       </span>
-      <span style={{ flex: 1, minWidth: 0 }}>
-        <span style={{
-          display: 'block', fontSize: '13.5px', color: 'var(--ink)',
-          fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-        }}>
-          {label}
-        </span>
-        {sub && (
-          <span style={{
-            display: 'block', fontSize: '11.5px', color: 'var(--faint)',
-            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-          }}>
-            {sub}
-          </span>
-        )}
+      <span className="flex-1 min-w-0">
+        <span className="block truncate text-[13.5px] font-medium text-foreground">{label}</span>
+        {sub && <span className="block truncate text-[11.5px] text-muted-foreground/60">{sub}</span>}
       </span>
       {right && (
-        <span style={{ fontSize: '12px', color: 'var(--muted)', fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>
-          {right}
-        </span>
+        <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{right}</span>
       )}
     </button>
   );
@@ -148,16 +122,21 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
     }
     setLoading(true);
 
-    // ── Add more entity searches here as the product grows ──
     Promise.allSettled([
       inventoryApi.listProducts({ search: debouncedQuery }),
-      salesApi.listCustomers({ search: debouncedQuery }),
+      salesApi.listCustomers(),
     ]).then(([prodsResult, custsResult]) => {
       setProducts(
         prodsResult.status === 'fulfilled' ? prodsResult.value.slice(0, MAX_PER_SECTION) : [],
       );
+      const q = debouncedQuery.toLowerCase();
+      const allCustomers = custsResult.status === 'fulfilled' ? custsResult.value : [];
       setCustomers(
-        custsResult.status === 'fulfilled' ? custsResult.value.slice(0, MAX_PER_SECTION) : [],
+        allCustomers
+          .filter((c) =>
+            `${c.firstName} ${c.lastName} ${c.documentNumber ?? ''}`.toLowerCase().includes(q),
+          )
+          .slice(0, MAX_PER_SECTION),
       );
     }).finally(() => setLoading(false));
   }, [debouncedQuery]);
@@ -176,64 +155,30 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
 
   return (
     <div
-      style={{
-        position: 'fixed', inset: 0,
-        background: 'rgba(0,0,0,0.45)',
-        zIndex: 100,
-        display: 'flex', alignItems: 'flex-start', justifyContent: 'center',
-        paddingTop: '72px',
-        backdropFilter: 'blur(2px)',
-      }}
+      className="fixed inset-0 z-[100] flex items-start justify-center bg-black/45 pt-[72px] backdrop-blur-[2px]"
       onClick={onClose}
     >
       <div
-        className="animate-rise-in"
+        className="animate-rise-in flex w-[540px] max-h-[calc(100vh-120px)] flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-lg"
         onClick={(e) => e.stopPropagation()}
-        style={{
-          width: '540px',
-          background: 'var(--panel)',
-          border: '1px solid var(--border)',
-          borderRadius: '16px',
-          boxShadow: 'var(--shadow-lg)',
-          overflow: 'hidden',
-          maxHeight: 'calc(100vh - 120px)',
-          display: 'flex',
-          flexDirection: 'column',
-        }}
       >
         {/* ── Input ── */}
-        <div style={{
-          display: 'flex', alignItems: 'center', gap: '12px',
-          padding: '14px 16px',
-          borderBottom: '1px solid var(--border)',
-          flexShrink: 0,
-        }}>
+        <div className="flex shrink-0 items-center gap-3 border-b border-border px-4 py-3.5">
           {loading
-            ? <Loader2 size={16} style={{ color: 'var(--accent)', flexShrink: 0, animation: 'spin 0.7s linear infinite' }} />
-            : <Search size={16} style={{ color: 'var(--faint)', flexShrink: 0 }} />
+            ? <Loader2 size={16} className="shrink-0 animate-spin text-primary" />
+            : <Search size={16} className="shrink-0 text-muted-foreground/60" />
           }
           <input
             ref={inputRef}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Buscar productos, clientes, módulos…"
-            style={{
-              flex: 1, border: 'none', outline: 'none',
-              background: 'transparent',
-              fontSize: '15px', color: 'var(--ink)',
-              fontFamily: 'inherit',
-            }}
+            className="flex-1 border-none bg-transparent text-[15px] text-foreground outline-none placeholder:text-muted-foreground/50"
           />
           {query && (
             <button
               onClick={() => setQuery('')}
-              style={{
-                width: '26px', height: '26px', flexShrink: 0,
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                border: 'none', borderRadius: '7px',
-                background: 'var(--panel-2)', color: 'var(--muted)',
-                cursor: 'pointer',
-              }}
+              className="flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-[7px] bg-muted/30 text-muted-foreground hover:bg-muted/50"
             >
               <X size={13} />
             </button>
@@ -241,41 +186,22 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
         </div>
 
         {/* ── Results ── */}
-        <div style={{ overflowY: 'auto', flex: 1 }}>
+        <div className="flex-1 overflow-y-auto">
 
           {/* No query → module quick access grid */}
           {!hasQuery && (
-            <div style={{ padding: '10px 10px 14px' }}>
-              <p style={{
-                fontSize: '11px', fontWeight: 700, color: 'var(--faint)',
-                textTransform: 'uppercase', letterSpacing: '0.07em',
-                padding: '0 6px 8px',
-              }}>
+            <div className="px-2.5 py-3">
+              <p className="px-1.5 pb-2 text-[11px] font-bold uppercase tracking-[0.07em] text-muted-foreground/60">
                 Acceso rápido
               </p>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '3px' }}>
+              <div className="grid grid-cols-3 gap-0.5">
                 {MODULE_LINKS.map(({ icon: Icon, label, href }) => (
                   <button
                     key={href}
                     onClick={() => navigate(href)}
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: '9px',
-                      padding: '9px 10px',
-                      border: 'none', borderRadius: '9px',
-                      background: 'transparent', color: 'var(--ink)',
-                      fontSize: '13px', fontFamily: 'inherit',
-                      cursor: 'pointer', textAlign: 'left',
-                      transition: 'background 0.1s',
-                    }}
-                    onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'var(--panel-2)'; }}
-                    onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+                    className="flex items-center gap-2.5 rounded-[9px] px-2.5 py-2.5 text-left text-[13px] text-foreground transition-colors hover:bg-muted/20"
                   >
-                    <span style={{
-                      width: '28px', height: '28px', flexShrink: 0,
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      borderRadius: '7px', background: 'var(--accent-soft)',
-                      color: 'var(--accent-text)',
-                    }}>
+                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[7px] bg-accent-subtle text-accent-on">
                       <Icon size={14} />
                     </span>
                     {label}
@@ -287,20 +213,21 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
 
           {/* With query → grouped results */}
           {hasQuery && !loading && !hasResults && (
-            <p style={{ fontSize: '13.5px', color: 'var(--faint)', textAlign: 'center', padding: '32px 20px' }}>
+            <p className="px-5 py-8 text-center text-[13.5px] text-muted-foreground/60">
               Sin resultados para &ldquo;{debouncedQuery}&rdquo;
             </p>
           )}
 
           {/* Módulos */}
           {hasQuery && filteredModules.length > 0 && (
-            <div style={{ padding: '0 6px' }}>
+            <div className="px-1.5">
               <SectionHeader label="Módulos" />
               {filteredModules.map(({ icon: Icon, label, href }) => (
                 <ResultRow
                   key={href}
                   icon={Icon}
-                  iconColor="var(--accent)"
+                  iconBg="bg-accent-subtle"
+                  iconColor="text-accent-on"
                   label={label}
                   onClick={() => navigate(href)}
                 />
@@ -310,13 +237,14 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
 
           {/* Productos */}
           {hasQuery && products.length > 0 && (
-            <div style={{ padding: '0 6px' }}>
+            <div className="px-1.5">
               <SectionHeader label="Productos" />
               {products.map((p) => (
                 <ResultRow
                   key={p.id}
                   icon={Package}
-                  iconColor="#60a5fa"
+                  iconBg="bg-blue-100 dark:bg-blue-950"
+                  iconColor="text-blue-600 dark:text-blue-400"
                   label={p.name + (p.model ? ` — ${p.model}` : '')}
                   sub={[p.category?.name, p.brand?.name].filter(Boolean).join(' · ')}
                   right={fmtGs(p.salePrice)}
@@ -328,13 +256,14 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
 
           {/* Clientes */}
           {hasQuery && customers.length > 0 && (
-            <div style={{ padding: '0 6px' }}>
+            <div className="px-1.5">
               <SectionHeader label="Clientes" />
               {customers.map((c) => (
                 <ResultRow
                   key={c.id}
                   icon={User}
-                  iconColor="#a78bfa"
+                  iconBg="bg-violet-100 dark:bg-violet-950"
+                  iconColor="text-violet-600 dark:text-violet-400"
                   label={customerFullName(c)}
                   sub={c.documentNumber ?? c.email ?? undefined}
                   onClick={() => navigate('/dashboard/sales/customers')}
@@ -343,24 +272,16 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
             </div>
           )}
 
-          {/* Bottom padding */}
-          {hasQuery && <div style={{ height: '8px' }} />}
+          {hasQuery && <div className="h-2" />}
         </div>
 
         {/* ── Hint bar ── */}
-        <div style={{
-          borderTop: '1px solid var(--border)',
-          padding: '8px 16px',
-          display: 'flex', gap: '14px',
-          flexShrink: 0,
-        }}>
+        <div className="flex shrink-0 gap-3.5 border-t border-border px-4 py-2">
           {[['↵', 'Seleccionar'], ['Esc', 'Cerrar']].map(([key, desc]) => (
-            <span key={key} style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '11.5px', color: 'var(--faint)' }}>
-              <kbd style={{
-                padding: '1px 5px', borderRadius: '4px',
-                border: '1px solid var(--border-strong)',
-                fontSize: '11px', color: 'var(--muted)',
-              }}>{key}</kbd>
+            <span key={key} className="flex items-center gap-1.5 text-[11.5px] text-muted-foreground/60">
+              <kbd className="rounded border border-border px-1.5 py-px text-[11px] text-muted-foreground">
+                {key}
+              </kbd>
               {desc}
             </span>
           ))}

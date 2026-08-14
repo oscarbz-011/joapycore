@@ -11,6 +11,8 @@ import { TenantModuleGuard } from './common/guards/tenant-module.guard';
 import { AlertsModule } from './modules/alerts/alerts.module';
 import { BillingModule } from './modules/billing/billing.module';
 import { BranchesModule } from './modules/branches/branches.module';
+import { CobranzasModule } from './modules/cobranzas/cobranzas.module';
+import { SifenModule } from './modules/sifen/sifen.module';
 import { FinanceModule } from './modules/finance/finance.module';
 import { WarehousesModule } from './modules/warehouses/warehouses.module';
 import { HrModule } from './modules/hr/hr.module';
@@ -18,6 +20,8 @@ import { InventoryModule } from './modules/inventory/inventory.module';
 import { PaymentsModule } from './modules/payments/payments.module';
 import { ProcurementModule } from './modules/procurement/procurement.module';
 import { ReportsModule } from './modules/reports/reports.module';
+import { LogisticsModule } from './modules/logistics/logistics.module';
+import { DocumentsModule } from './modules/documents/documents.module';
 import { SalesModule } from './modules/sales/sales.module';
 import { FilesModule } from './files/files.module';
 import { NotificationsModule } from './notifications/notifications.module';
@@ -38,8 +42,11 @@ import { UsersModule } from './users/users.module';
     InventoryModule,
     ProcurementModule,
     SalesModule,
+    LogisticsModule,
+    DocumentsModule,
     BillingModule,
     FinanceModule,
+    CobranzasModule,
     PaymentsModule,
     BranchesModule,
     WarehousesModule,
@@ -48,6 +55,7 @@ import { UsersModule } from './users/users.module';
     ReportsModule,
     FilesModule,
     NotificationsModule,
+    SifenModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },

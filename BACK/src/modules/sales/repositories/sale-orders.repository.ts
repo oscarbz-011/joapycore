@@ -17,6 +17,8 @@ export class SaleOrdersRepository {
       approvedBy: userSelect,
       rejectedBy: userSelect,
       invoice: { select: { id: true, status: true } },
+      loan: { select: { totalAmount: true, interestRate: true } },
+      salePayments: { orderBy: { paymentDate: 'asc' as const } },
     };
   }
 
