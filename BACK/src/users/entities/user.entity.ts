@@ -1,15 +1,18 @@
 import { User } from '@prisma/client';
 
-export type SafeUser = Omit<User, 'passwordHash'>;
+// tempPasswordEncrypted is internal — never sent to clients
+export type SafeUser = Omit<User, 'passwordHash' | 'tempPasswordEncrypted'>;
 
 export type SafeUserWithRoles = SafeUser & {
   roles: Array<{ id: string; name: string }>;
   extraPermissions: string[];
+  tempPassword: string | null;
 };
 
 export function toSafeUser(user: User): SafeUser {
-  const { passwordHash: _passwordHash, ...safeUser } = user;
-  return safeUser;
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { passwordHash: _h, tempPasswordEncrypted: _e, ...safe } = user;
+  return safe;
 }
 
 export function toSafeUserWithRoles(
@@ -18,15 +21,12 @@ export function toSafeUserWithRoles(
     userPermissions: Array<{ permission: { key: string } }>;
   },
 ): SafeUserWithRoles {
-  const {
-    passwordHash: _passwordHash,
-    userRoles,
-    userPermissions,
-    ...safeUser
-  } = user;
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { passwordHash: _h, tempPasswordEncrypted: _e, userRoles, userPermissions, ...safe } = user;
   return {
-    ...safeUser,
+    ...safe,
     roles: userRoles.map((ur) => ur.role),
     extraPermissions: userPermissions.map((up) => up.permission.key),
+    tempPassword: null, // service sets this after decrypting when applicable
   };
 }

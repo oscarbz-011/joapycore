@@ -22,6 +22,7 @@ import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { RegisterDto } from './dto/register.dto';
 import { RefreshTokensRepository } from './repositories/refresh-tokens.repository';
 import type { AuditLogEvent } from '../audit/audit-log.event';
+import { PERMISSIONS } from '../common/constants/permissions.constant';
 
 const SALT_ROUNDS = 10;
 const OWNER_ROLE_NAME = 'Owner';
@@ -125,6 +126,17 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
+    // Reject login if the temporary password has expired and was never changed
+    if (
+      user.mustChangePassword &&
+      user.tempPasswordExpiresAt &&
+      user.tempPasswordExpiresAt < new Date()
+    ) {
+      throw new UnauthorizedException(
+        'La contraseña temporal expiró. Solicitá al administrador que genere una nueva.',
+      );
+    }
+
     await this.prisma.user.update({
       where: { id: user.id },
       data: { lastLoginAt: new Date() },
@@ -184,10 +196,9 @@ export class AuthService {
     let permissions: string[];
 
     if (hasSystemRole) {
-      // System (Owner) role always gets every permission in the catalog so that
-      // adding new permissions to the seed doesn't require re-assigning them.
-      const allPerms = await this.rolesRepository.findAllPermissions();
-      permissions = allPerms.map((p) => p.key);
+      // Owner gets every permission defined in the constant — no DB lookup needed.
+      // Adding new permissions to the constant is enough; no seed re-run required.
+      permissions = [...PERMISSIONS];
     } else {
       const rolePermissions = userRoles.flatMap((userRole) =>
         userRole.role.rolePermissions.map((rp) => rp.permission.key),
@@ -197,6 +208,7 @@ export class AuthService {
       const extraKeys = userExtraPermissions.map((up) => up.permission.key);
       permissions = Array.from(new Set([...rolePermissions, ...extraKeys]));
     }
+    await this.tenantModulesRepository.backfillMissing(user.tenantId);
     const activeModules =
       await this.tenantModulesRepository.findActiveModuleNames(user.tenantId);
 

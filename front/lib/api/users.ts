@@ -6,7 +6,11 @@ export interface UserResponse {
   username: string | null;
   firstName: string;
   lastName: string;
+  phone: string | null;
   status: 'ACTIVE' | 'INACTIVE';
+  mustChangePassword: boolean;
+  tempPassword: string | null;
+  tempPasswordExpiresAt: string | null;
   tenantId: string;
   roles: Array<{ id: string; name: string }>;
   extraPermissions: string[];
@@ -18,12 +22,12 @@ export interface CreateUserPayload {
   firstName: string;
   lastName: string;
   email: string;
-  password: string;
 }
 
 export interface UpdateProfilePayload {
   firstName?: string;
   lastName?: string;
+  phone?: string;
   username?: string;
 }
 
@@ -41,7 +45,6 @@ export interface Role {
 export const usersApi = {
   listRoles: (): Promise<Role[]> =>
     apiClient.get('/roles').then((r) => r.data),
-
 
   getMe: (): Promise<UserResponse> =>
     apiClient.get('/users/me').then((r) => r.data),

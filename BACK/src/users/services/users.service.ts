@@ -6,7 +6,6 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import * as bcrypt from 'bcryptjs';
-import * as crypto from 'node:crypto';
 import { Prisma } from '@prisma/client';
 import { UserStatus } from '@prisma/client';
 import { EventEmitter2 } from '@nestjs/event-emitter';
@@ -17,7 +16,13 @@ import { AssignUserRolesDto } from '../dto/assign-user-roles.dto';
 import { ChangePasswordDto } from '../dto/change-password.dto';
 import { CreateUserDto } from '../dto/create-user.dto';
 import { UpdateUserDto } from '../dto/update-user.dto';
-import { toSafeUserWithRoles } from '../entities/user.entity';
+import { toSafeUserWithRoles, type SafeUserWithRoles } from '../entities/user.entity';
+import {
+  generateTempPassword,
+  encryptTempPassword,
+  decryptTempPassword,
+  buildTempPasswordExpiry,
+} from '../../common/utils/temp-password.util';
 
 const SALT_ROUNDS = 10;
 const OWNER_ROLE_NAME = 'Owner';
@@ -35,13 +40,19 @@ export class UsersService {
     return users.map(toSafeUserWithRoles);
   }
 
-  async getById(tenantId: string, id: string) {
+  async getById(tenantId: string, id: string): Promise<SafeUserWithRoles> {
     const user = await this.usersRepository.findById(tenantId, id);
     if (!user) throw new NotFoundException('User not found');
-    return toSafeUserWithRoles(user);
+    const safe = toSafeUserWithRoles(user);
+    safe.tempPassword = this.resolveTempPassword(user);
+    return safe;
   }
 
-  async create(tenantId: string, dto: CreateUserDto, actorId?: string) {
+  async create(
+    tenantId: string,
+    dto: CreateUserDto,
+    actorId?: string,
+  ): Promise<SafeUserWithRoles & { tempPassword: string }> {
     const existing = await this.usersRepository.findByEmail(dto.email);
     if (existing) throw new ConflictException('Email already in use');
 
@@ -50,14 +61,22 @@ export class UsersService {
       dto.lastName,
     );
 
-    const passwordHash = await bcrypt.hash(dto.password, SALT_ROUNDS);
+    const tempPwd = generateTempPassword();
+    const passwordHash = await bcrypt.hash(tempPwd, SALT_ROUNDS);
+    const tempPasswordEncrypted = encryptTempPassword(tempPwd);
+    const tempPasswordExpiresAt = buildTempPasswordExpiry();
+
     const user = await this.usersRepository.create(tenantId, {
       email: dto.email,
       passwordHash,
       firstName: dto.firstName,
       lastName: dto.lastName,
       username,
+      mustChangePassword: true,
+      tempPasswordEncrypted,
+      tempPasswordExpiresAt,
     });
+
     this.eventEmitter.emit('audit.log', {
       tenantId,
       userId: actorId,
@@ -65,7 +84,10 @@ export class UsersService {
       action: 'user.created',
       resourceId: user.id,
     } satisfies AuditLogEvent);
-    return this.getById(tenantId, user.id);
+
+    const fullUser = await this.usersRepository.findById(tenantId, user.id);
+    if (!fullUser) throw new NotFoundException('User not found');
+    return { ...toSafeUserWithRoles(fullUser), tempPassword: tempPwd };
   }
 
   async update(tenantId: string, id: string, dto: UpdateUserDto) {
@@ -121,15 +143,19 @@ export class UsersService {
   ): Promise<{ tempPassword: string }> {
     const user = await this.usersRepository.findById(tenantId, id);
     if (!user) throw new NotFoundException('User not found');
-    const tempPassword = crypto
-      .randomBytes(8)
-      .toString('base64url')
-      .slice(0, 10);
-    const passwordHash = await bcrypt.hash(tempPassword, SALT_ROUNDS);
+
+    const tempPwd = generateTempPassword();
+    const passwordHash = await bcrypt.hash(tempPwd, SALT_ROUNDS);
+    const tempPasswordEncrypted = encryptTempPassword(tempPwd);
+    const tempPasswordExpiresAt = buildTempPasswordExpiry();
+
     await this.usersRepository.update(tenantId, id, {
       passwordHash,
       mustChangePassword: true,
+      tempPasswordEncrypted,
+      tempPasswordExpiresAt,
     });
+
     this.eventEmitter.emit('audit.log', {
       tenantId,
       userId: actorId,
@@ -137,7 +163,8 @@ export class UsersService {
       action: 'user.password_reset',
       resourceId: id,
     } satisfies AuditLogEvent);
-    return { tempPassword };
+
+    return { tempPassword: tempPwd };
   }
 
   async assignRoles(tenantId: string, id: string, dto: AssignUserRolesDto) {
@@ -181,6 +208,8 @@ export class UsersService {
     await this.usersRepository.update(user.tenantId, userId, {
       passwordHash: newHash,
       mustChangePassword: false,
+      tempPasswordEncrypted: null,
+      tempPasswordExpiresAt: null,
     });
   }
 
@@ -202,5 +231,25 @@ export class UsersService {
       permissions.map((p) => p.id),
     );
     return this.getById(tenantId, id);
+  }
+
+  private resolveTempPassword(user: {
+    mustChangePassword: boolean;
+    tempPasswordEncrypted: string | null;
+    tempPasswordExpiresAt: Date | null;
+  }): string | null {
+    if (
+      user.mustChangePassword &&
+      user.tempPasswordEncrypted &&
+      user.tempPasswordExpiresAt &&
+      user.tempPasswordExpiresAt > new Date()
+    ) {
+      try {
+        return decryptTempPassword(user.tempPasswordEncrypted);
+      } catch {
+        return null; // Decryption failed (e.g. secret rotated) — treat as expired
+      }
+    }
+    return null;
   }
 }

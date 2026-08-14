@@ -12,6 +12,11 @@ export class UpdateUserDto {
   @IsString()
   lastName?: string;
 
+  @ApiPropertyOptional({ example: '+595 981 000 000' })
+  @IsOptional()
+  @IsString()
+  phone?: string;
+
   @ApiPropertyOptional({
     description: 'Username único para login (solo letras, números, puntos y guiones bajos)',
     example: 'juan.garcia',

@@ -9,6 +9,9 @@ interface CreateUserData {
   firstName: string;
   lastName: string;
   username?: string;
+  mustChangePassword?: boolean;
+  tempPasswordEncrypted?: string;
+  tempPasswordExpiresAt?: Date;
 }
 
 const WITH_ROLES_AND_PERMISSIONS = {
