@@ -49,6 +49,7 @@ export class InvoicesService {
     await this.invoicesRepository.updateStatus(tenantId, id, 'ISSUED', {
       issuedAt: new Date(),
       dueDate: dto.dueDate ? new Date(dto.dueDate) : undefined,
+      paymentMethod: dto.paymentMethod ?? null,
       invoiceNumber: dto.invoiceNumber,
       invoicePrefix: dto.invoicePrefix,
       notes: dto.notes,
@@ -57,6 +58,7 @@ export class InvoicesService {
     this.eventEmitter.emit('invoice.issued', {
       tenantId,
       invoiceId: id,
+      saleOrderId: invoice.saleOrderId,
       paymentCondition: dto.paymentCondition,
       total: Number(invoice.total),
       dueDate: dto.dueDate ?? null,

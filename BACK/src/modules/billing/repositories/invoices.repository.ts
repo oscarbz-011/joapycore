@@ -9,7 +9,12 @@ export class InvoicesRepository {
 
   private get include() {
     return {
-      saleOrder: { include: { customer: true } },
+      saleOrder: {
+        include: {
+          customer: true,
+          loan: { select: { totalAmount: true, interestRate: true } },
+        },
+      },
       items: true,
     };
   }

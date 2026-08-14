@@ -7,6 +7,7 @@ interface SaleOrderCompletedEvent {
   tenantId: string;
   saleOrderId: string;
   order: {
+    saleType?: string;
     items: Array<{
       id: string;
       productId: string;
@@ -25,7 +26,10 @@ export class BillingOnSaleListener {
     private readonly eventEmitter: EventEmitter2,
   ) {}
 
+  // Credit sales: invoice created when order is confirmed (CONFIRMED status)
   @OnEvent('sale.order.completed')
+  // Cash sales: invoice created when payment is collected (PAYMENT_RECEIVED status)
+  @OnEvent('sale.payment.collected')
   async handle(event: SaleOrderCompletedEvent) {
     const { tenantId, saleOrderId, order } = event;
 
@@ -34,11 +38,30 @@ export class BillingOnSaleListener {
     const existing = await this.invoicesRepository.findBySaleOrder(tenantId, saleOrderId);
     if (existing) return;
 
-    const total = order.items.reduce((sum, item) => {
-      const price =
-        typeof item.unitPrice === 'object' ? item.unitPrice.toNumber() : item.unitPrice;
-      return sum + price * item.quantity;
-    }, 0);
+    // For credit sales, the invoice total is the full financed amount (principal + interest),
+    // which lives in the Loan created when credit was approved. For cash sales, sum the items.
+    let total: number;
+    if (order.saleType === 'CREDIT') {
+      const loan = await this.prisma.loan.findUnique({
+        where: { saleOrderId },
+        select: { totalAmount: true },
+      });
+      total = loan
+        ? typeof loan.totalAmount === 'object'
+          ? (loan.totalAmount as { toNumber(): number }).toNumber()
+          : Number(loan.totalAmount)
+        : order.items.reduce((sum, item) => {
+            const price =
+              typeof item.unitPrice === 'object' ? item.unitPrice.toNumber() : item.unitPrice;
+            return sum + price * item.quantity;
+          }, 0);
+    } else {
+      total = order.items.reduce((sum, item) => {
+        const price =
+          typeof item.unitPrice === 'object' ? item.unitPrice.toNumber() : item.unitPrice;
+        return sum + price * item.quantity;
+      }, 0);
+    }
 
     const invoice = await this.prisma.$transaction(async (tx) => {
       const inv = await this.invoicesRepository.create(

@@ -58,7 +58,8 @@ export class PaymentsOnInstallmentListener {
         await this.arRepository.updateStatus(ar.id, 'PAID');
         this.eventEmitter.emit('payment.ar.completed', {
           tenantId: event.tenantId,
-          accountsReceivableId: ar.id,
+          arId: ar.id,
+          invoiceId: invoice.id,
         });
       } else {
         await this.arRepository.updateStatus(ar.id, 'PARTIAL');
