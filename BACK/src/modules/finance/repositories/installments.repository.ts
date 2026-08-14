@@ -20,6 +20,13 @@ export class InstallmentsRepository {
     });
   }
 
+  findPendingByLoan(tenantId: string, loanId: string) {
+    return this.prisma.installment.findMany({
+      where: { tenantId, loanId, status: { in: ['PENDING', 'PARTIAL', 'OVERDUE'] } },
+      orderBy: { number: 'asc' },
+    });
+  }
+
   findOverdue(tenantId: string) {
     return this.prisma.installment.findMany({
       where: {
@@ -32,6 +39,21 @@ export class InstallmentsRepository {
     });
   }
 
+  findAllOverdueForMora() {
+    return this.prisma.installment.findMany({
+      where: { status: 'OVERDUE' },
+      select: {
+        id: true,
+        tenantId: true,
+        loanId: true,
+        amount: true,
+        moraAmount: true,
+        dueDate: true,
+        lastMoraCalculatedAt: true,
+      },
+    });
+  }
+
   markAllOverdue() {
     return this.prisma.installment.updateMany({
       where: {
@@ -39,6 +61,13 @@ export class InstallmentsRepository {
         dueDate: { lt: new Date() },
       },
       data: { status: 'OVERDUE' },
+    });
+  }
+
+  updateMora(id: string, moraAmount: number) {
+    return this.prisma.installment.update({
+      where: { id },
+      data: { moraAmount, lastMoraCalculatedAt: new Date() },
     });
   }
 

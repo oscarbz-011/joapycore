@@ -43,4 +43,8 @@ export class LoansRepository {
   updateContractUrl(id: string, contractUrl: string) {
     return this.prisma.loan.update({ where: { id }, data: { contractUrl } });
   }
+
+  updateStatus(id: string, status: 'ACTIVE' | 'PAID' | 'CANCELLED') {
+    return this.prisma.loan.update({ where: { id }, data: { status } });
+  }
 }
