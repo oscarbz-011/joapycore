@@ -1,6 +1,6 @@
 'use client';
 
-import { useForm } from 'react-hook-form';
+import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import Link from 'next/link';
@@ -8,8 +8,11 @@ import { useState } from 'react';
 import { Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '../../../lib/auth-context';
 import { isApiError } from '../../../lib/api/api-error';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
 
-// Mirrors MODULE_TEMPLATES keys in back-end
 const INDUSTRIES = [
   { value: 'electrodomesticos', label: 'Electrodomésticos' },
   { value: 'ferreteria',        label: 'Ferretería' },
@@ -46,8 +49,12 @@ export default function RegisterPage() {
   const {
     register,
     handleSubmit,
+    control,
     formState: { errors, isSubmitting },
-  } = useForm<FormValues>({ resolver: zodResolver(schema) });
+  } = useForm<FormValues>({
+    resolver: zodResolver(schema),
+    defaultValues: { employeeCount: 'RANGE_1_5' },
+  });
 
   const onSubmit = async (values: FormValues) => {
     setServerError(null);
@@ -70,183 +77,178 @@ export default function RegisterPage() {
     }
   };
 
-  const inputClass =
-    'w-full rounded-lg border border-border-strong bg-surface px-3.5 py-2.5 text-sm text-ink placeholder-faint outline-none transition focus:border-border-strong focus:ring-2 focus:ring-border';
-
   return (
-    <div className="bg-surface rounded-2xl shadow-sm border border-border p-8">
+    <div className="bg-card border border-border rounded-2xl shadow-sm p-8">
       <div className="mb-8 text-center">
-        <div className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-ink mb-4">
-          <span className="text-canvas font-bold text-sm">J</span>
+        <div className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-foreground mb-4">
+          <span className="text-background font-bold text-sm">J</span>
         </div>
-        <h1 className="text-2xl font-semibold text-ink">Crear cuenta</h1>
-        <p className="text-muted text-sm mt-1">
-          Registrá tu empresa en JoapyCore
-        </p>
+        <h1 className="text-2xl font-semibold text-foreground">Crear cuenta</h1>
+        <p className="text-muted-foreground text-sm mt-1">Registrá tu empresa en JoapyCore</p>
       </div>
 
       <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-5">
         {/* Empresa */}
         <div className="grid grid-cols-2 gap-4">
-          <div className="col-span-2 sm:col-span-1">
-            <label className="block text-sm font-medium text-muted mb-1.5" htmlFor="tenantName">
-              Nombre de la empresa
-            </label>
-            <input
+          <div className="col-span-2 sm:col-span-1 space-y-1.5">
+            <Label htmlFor="tenantName">Nombre de la empresa</Label>
+            <Input
               id="tenantName"
               type="text"
               autoComplete="organization"
-              {...register("tenantName")}
-              className={inputClass}
+              {...register('tenantName')}
               placeholder="Mi Empresa S.A."
             />
             {errors.tenantName && (
-              <p className="mt-1.5 text-xs text-red-600">{errors.tenantName.message}</p>
+              <p className="text-xs text-destructive">{errors.tenantName.message}</p>
             )}
           </div>
 
-          <div className="col-span-2 sm:col-span-1">
-            <label className="block text-sm font-medium text-muted mb-1.5" htmlFor="employeeCount">
-              Tamaño
-            </label>
-            <select
-              id="employeeCount"
-              {...register("employeeCount")}
-              className={inputClass}
-              defaultValue="RANGE_1_5"
-            >
-              {EMPLOYEE_RANGES.map((r) => (
-                <option key={r.value} value={r.value}>{r.label}</option>
-              ))}
-            </select>
+          <div className="col-span-2 sm:col-span-1 space-y-1.5">
+            <Label>Tamaño</Label>
+            <Controller
+              name="employeeCount"
+              control={control}
+              render={({ field }) => (
+                <Select value={field.value} onValueChange={field.onChange}>
+                  <SelectTrigger className="w-full">
+                    <span className="flex-1 text-left text-sm truncate">
+                      {EMPLOYEE_RANGES.find((r) => r.value === field.value)?.label ?? 'Seleccionar...'}
+                    </span>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {EMPLOYEE_RANGES.map((r) => (
+                      <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            />
             {errors.employeeCount && (
-              <p className="mt-1.5 text-xs text-red-600">{errors.employeeCount.message as string}</p>
+              <p className="text-xs text-destructive">{errors.employeeCount.message as string}</p>
             )}
           </div>
         </div>
 
         {/* Rubro */}
-        <div>
-          <label className="block text-sm font-medium text-muted mb-1.5" htmlFor="industry">
-            Rubro <span className="text-faint font-normal">(opcional)</span>
-          </label>
-          <select
-            id="industry"
-            {...register("industry")}
-            className={inputClass}
-            defaultValue=""
-          >
-            <option value="">Sin especificar</option>
-            {INDUSTRIES.map((ind) => (
-              <option key={ind.value} value={ind.value}>{ind.label}</option>
-            ))}
-          </select>
-          <p className="mt-1 text-xs text-faint">
+        <div className="space-y-1.5">
+          <Label>
+            Rubro{' '}
+            <span className="text-muted-foreground font-normal">(opcional)</span>
+          </Label>
+          <Controller
+            name="industry"
+            control={control}
+            render={({ field }) => (
+              <Select
+                value={field.value || 'none'}
+                onValueChange={(v) => field.onChange(v === 'none' ? '' : v)}
+              >
+                <SelectTrigger className="w-full">
+                  <span className="flex-1 text-left text-sm truncate">
+                    {INDUSTRIES.find((i) => i.value === field.value)?.label ?? 'Sin especificar'}
+                  </span>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Sin especificar</SelectItem>
+                  {INDUSTRIES.map((ind) => (
+                    <SelectItem key={ind.value} value={ind.value}>{ind.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          />
+          <p className="text-xs text-muted-foreground">
             Usamos esto para pre-configurar categorías y módulos recomendados.
           </p>
         </div>
 
         {/* Responsable */}
         <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-muted mb-1.5" htmlFor="firstName">
-              Nombre
-            </label>
-            <input
+          <div className="space-y-1.5">
+            <Label htmlFor="firstName">Nombre</Label>
+            <Input
               id="firstName"
               type="text"
               autoComplete="given-name"
-              {...register("firstName")}
-              className={inputClass}
+              {...register('firstName')}
               placeholder="Juan"
             />
             {errors.firstName && (
-              <p className="mt-1.5 text-xs text-red-600">{errors.firstName.message}</p>
+              <p className="text-xs text-destructive">{errors.firstName.message}</p>
             )}
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-muted mb-1.5" htmlFor="lastName">
-              Apellido
-            </label>
-            <input
+          <div className="space-y-1.5">
+            <Label htmlFor="lastName">Apellido</Label>
+            <Input
               id="lastName"
               type="text"
               autoComplete="family-name"
-              {...register("lastName")}
-              className={inputClass}
+              {...register('lastName')}
               placeholder="García"
             />
             {errors.lastName && (
-              <p className="mt-1.5 text-xs text-red-600">{errors.lastName.message}</p>
+              <p className="text-xs text-destructive">{errors.lastName.message}</p>
             )}
           </div>
         </div>
 
         {/* Credenciales */}
-        <div>
-          <label className="block text-sm font-medium text-muted mb-1.5" htmlFor="email">
-            Email
-          </label>
-          <input
+        <div className="space-y-1.5">
+          <Label htmlFor="email">Email</Label>
+          <Input
             id="email"
             type="email"
             autoComplete="email"
-            {...register("email")}
-            className={inputClass}
+            {...register('email')}
             placeholder="tu@empresa.com"
           />
           {errors.email && (
-            <p className="mt-1.5 text-xs text-red-600">{errors.email.message}</p>
+            <p className="text-xs text-destructive">{errors.email.message}</p>
           )}
         </div>
 
-        <div>
-          <label className="block text-sm font-medium text-muted mb-1.5" htmlFor="password">
-            Contraseña
-          </label>
+        <div className="space-y-1.5">
+          <Label htmlFor="password">Contraseña</Label>
           <div className="relative">
-            <input
+            <Input
               id="password"
-              type={showPassword ? "text" : "password"}
+              type={showPassword ? 'text' : 'password'}
               autoComplete="new-password"
-              {...register("password")}
-              className={`${inputClass} pr-10`}
+              {...register('password')}
+              className="pr-10"
               placeholder="Mínimo 8 caracteres"
             />
             <button
               type="button"
               onClick={() => setShowPassword((v) => !v)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-faint hover:text-muted transition-colors"
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
               tabIndex={-1}
-              aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+              aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
             >
               {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
             </button>
           </div>
           {errors.password && (
-            <p className="mt-1.5 text-xs text-red-600">{errors.password.message}</p>
+            <p className="text-xs text-destructive">{errors.password.message}</p>
           )}
         </div>
 
         {serverError && (
-          <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+          <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
             {serverError}
           </div>
         )}
 
-        <button
-          type="submit"
-          disabled={isSubmitting}
-          className="w-full rounded-lg bg-ink px-4 py-2.5 text-sm font-medium text-canvas transition hover:opacity-80 disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {isSubmitting ? "Creando cuenta..." : "Crear cuenta"}
-        </button>
+        <Button type="submit" disabled={isSubmitting} className="w-full">
+          {isSubmitting ? 'Creando cuenta...' : 'Crear cuenta'}
+        </Button>
       </form>
 
-      <p className="mt-6 text-center text-sm text-muted">
-        ¿Ya tenés cuenta?{" "}
-        <Link href="/login" className="font-medium text-ink hover:underline">
+      <p className="mt-6 text-center text-sm text-muted-foreground">
+        ¿Ya tenés cuenta?{' '}
+        <Link href="/login" className="font-medium text-foreground hover:underline">
           Iniciá sesión
         </Link>
       </p>

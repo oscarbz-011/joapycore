@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ShoppingCart,
@@ -11,8 +12,15 @@ import {
   Banknote,
   ClipboardList,
   Monitor,
+  Route,
+  Network,
+  FolderKanban,
+  Boxes,
+  FolderOpen,
   Lock,
   AlertCircle,
+  LayoutGrid,
+  List,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { tenantsApi, type TenantModuleResponse } from '../../../../../lib/api/tenants';
@@ -29,26 +37,66 @@ interface CatalogEntry {
 }
 
 const CATALOG: Record<string, CatalogEntry> = {
-  inventory:   { displayName: 'Inventario',        icon: Package,       description: 'Gestión de productos, stock y movimientos de almacén',    dependencies: [],                              isStable: true  },
-  sales:       { displayName: 'Ventas',             icon: ShoppingCart,  description: 'Pedidos, presupuestos y gestión de clientes',             dependencies: ['inventory'],                   isStable: true  },
-  billing:     { displayName: 'Facturación',        icon: FileText,      description: 'Emisión y administración de facturas',                    dependencies: ['sales'],                       isStable: true  },
-  payments:    { displayName: 'Pagos',              icon: CreditCard,    description: 'Cuentas por cobrar y registros de pago',                  dependencies: ['billing'],                     isStable: true  },
-  procurement: { displayName: 'Compras',            icon: Truck,         description: 'Órdenes de compra y gestión de proveedores',              dependencies: ['inventory'],                   isStable: true  },
-  hr:          { displayName: 'Recursos Humanos',   icon: Users,         description: 'Empleados, licencias y procesamiento de nómina',          dependencies: [],                              isStable: true  },
-  finance:     { displayName: 'Finanzas',           icon: Banknote,      description: 'Créditos, planes de cuotas e installments',               dependencies: ['sales', 'billing'],            isStable: false },
-  collections: { displayName: 'Cobranzas',          icon: ClipboardList, description: 'Asignación de cobradores y gestión de mora',              dependencies: ['finance'],                     isStable: false },
-  pos:         { displayName: 'Punto de Venta',     icon: Monitor,       description: 'Venta rápida con código de barras y caja',                dependencies: ['sales', 'inventory', 'billing'], isStable: false },
+  inventory:   { displayName: 'Inventario',        icon: Package,       description: 'Gestión de productos, stock y movimientos de almacén',              dependencies: [],                                isStable: true  },
+  sales:       { displayName: 'Ventas',             icon: ShoppingCart,  description: 'Pedidos, presupuestos y gestión de clientes',                       dependencies: ['inventory'],                     isStable: true  },
+  billing:     { displayName: 'Facturación',        icon: FileText,      description: 'Emisión y administración de facturas',                              dependencies: ['sales'],                         isStable: true  },
+  payments:    { displayName: 'Pagos',              icon: CreditCard,    description: 'Cuentas por cobrar y registros de pago',                            dependencies: ['billing'],                       isStable: true  },
+  procurement: { displayName: 'Compras',            icon: Truck,         description: 'Órdenes de compra y gestión de proveedores',                        dependencies: ['inventory'],                     isStable: true  },
+  hr:          { displayName: 'Recursos Humanos',   icon: Users,         description: 'Empleados, licencias y procesamiento de nómina',                    dependencies: [],                                isStable: true  },
+  finance:     { displayName: 'Financiamiento',       icon: Banknote,      description: 'Créditos, planes de cuotas e installments',                         dependencies: ['sales', 'billing'],              isStable: true  },
+  collections: { displayName: 'Cobranzas',          icon: ClipboardList, description: 'Asignación de cobradores y gestión de mora',                       dependencies: ['finance'],                       isStable: true  },
+  pos:         { displayName: 'Punto de Venta',     icon: Monitor,       description: 'Venta rápida con código de barras y caja',                          dependencies: ['sales', 'inventory', 'billing'], isStable: false },
+  logistics:   { displayName: 'Logística',          icon: Route,         description: 'Entrada, salida, almacenamiento y transporte de mercancías',         dependencies: ['inventory'],                     isStable: false },
+  crm:         { displayName: 'CRM',                icon: Network,       description: 'Gestión de contactos, leads, deals y campañas comerciales',         dependencies: ['sales'],                         isStable: false },
+  projects:    { displayName: 'Proyectos',          icon: FolderKanban,  description: 'Gestión de proyectos, tareas, timesheet y recursos',                dependencies: [],                                isStable: false },
+  assets:      { displayName: 'Activos Fijos',      icon: Boxes,         description: 'Registro, asignación y mantenimiento de activos empresariales',     dependencies: [],                                isStable: false },
+  documents:   { displayName: 'Documentos',         icon: FolderOpen,    description: 'Repositorio de documentos, políticas y contratos',                  dependencies: [],                                isStable: false },
 };
-
-// ── Helpers ────────────────────────────────────────────────────────────────────
 
 function depLabel(key: string) {
   return CATALOG[key]?.displayName ?? key;
 }
 
-// ── Module card ────────────────────────────────────────────────────────────────
+// ── Toggle switch ──────────────────────────────────────────────────────────────
 
-function ModuleCard({
+function Toggle({
+  checked,
+  disabled,
+  title,
+  label,
+  onChange,
+}: {
+  checked: boolean;
+  disabled: boolean;
+  title?: string;
+  label: string;
+  onChange: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onChange}
+      disabled={disabled}
+      title={title}
+      className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none disabled:opacity-40 disabled:cursor-not-allowed ${
+        checked ? 'bg-primary' : 'bg-muted/50'
+      }`}
+      role="switch"
+      aria-checked={checked}
+      aria-label={label}
+    >
+      <span
+        className={`pointer-events-none inline-block h-4 w-4 rounded-full bg-background shadow transform transition-transform duration-200 ${
+          checked ? 'translate-x-4' : 'translate-x-0'
+        }`}
+      />
+    </button>
+  );
+}
+
+// ── Grid card ──────────────────────────────────────────────────────────────────
+
+function GridCard({
   mod,
   activeMap,
   canToggle,
@@ -65,101 +113,208 @@ function ModuleCard({
   if (!meta) return null;
 
   const Icon = meta.icon;
-
-  // Deps check
   const inactiveDeps = meta.dependencies.filter((d) => !activeMap.get(d));
-  const blockingDeps = !mod.active ? inactiveDeps : [];
-
-  // When active, check if deactivating would break something
-  const wouldBreakModules = mod.active
+  const isLocked = !mod.active && inactiveDeps.length > 0;
+  const wouldBreak = mod.active
     ? Object.entries(CATALOG)
         .filter(([key, def]) => key !== mod.moduleName && activeMap.get(key) && def.dependencies.includes(mod.moduleName))
         .map(([, def]) => def.displayName)
     : [];
 
-  const isLocked = !mod.active && blockingDeps.length > 0;
-  const canActivate = !isLocked;
+  return (
+    <div className={`flex flex-col rounded-[14px] border bg-card p-5 transition-colors ${
+      mod.active ? 'border-primary/30' : 'border-border'
+    }`}>
+      {/* Header */}
+      <div className="flex items-start justify-between gap-3 mb-3">
+        <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-[11px] ${
+          mod.active ? 'bg-primary/10' : 'bg-muted/30'
+        }`}>
+          <Icon size={20} className={mod.active ? 'text-primary' : 'text-muted-foreground/60'} />
+        </div>
+        {canToggle && (
+          <Toggle
+            checked={mod.active}
+            disabled={isPending || isLocked}
+            title={isLocked ? `Activá primero: ${inactiveDeps.map(depLabel).join(', ')}` : undefined}
+            label={`${mod.active ? 'Desactivar' : 'Activar'} ${meta.displayName}`}
+            onChange={onToggle}
+          />
+        )}
+      </div>
+
+      {/* Name + badges */}
+      <div className="flex flex-wrap items-center gap-1.5 mb-1">
+        <p className="text-[13.5px] font-semibold text-foreground">{meta.displayName}</p>
+        {!meta.isStable && (
+          <span className="rounded-full bg-warn-subtle px-2 py-0.5 text-[11px] font-medium text-warn">Beta</span>
+        )}
+        {mod.active && (
+          <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary">Activo</span>
+        )}
+      </div>
+
+      {/* Description */}
+      <p className="text-[12.5px] text-muted-foreground leading-relaxed flex-1">{meta.description}</p>
+
+      {/* Footer info */}
+      <div className="mt-3 space-y-1">
+        {meta.dependencies.length > 0 && (
+          <p className="text-[11.5px] text-muted-foreground/60">
+            Requiere: {meta.dependencies.map(depLabel).join(', ')}
+          </p>
+        )}
+        {isLocked && (
+          <div className="flex items-center gap-1 text-[11.5px] text-warn">
+            <Lock size={10} />
+            <span>Activá primero: {inactiveDeps.map(depLabel).join(', ')}</span>
+          </div>
+        )}
+        {mod.active && wouldBreak.length > 0 && (
+          <div className="flex items-center gap-1 text-[11.5px] text-muted-foreground/60">
+            <AlertCircle size={10} />
+            <span>Dependen de este: {wouldBreak.join(', ')}</span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── List row ───────────────────────────────────────────────────────────────────
+
+function ListRow({
+  mod,
+  activeMap,
+  canToggle,
+  isPending,
+  onToggle,
+}: {
+  mod: TenantModuleResponse;
+  activeMap: Map<string, boolean>;
+  canToggle: boolean;
+  isPending: boolean;
+  onToggle: () => void;
+}) {
+  const meta = CATALOG[mod.moduleName];
+  if (!meta) return null;
+
+  const Icon = meta.icon;
+  const inactiveDeps = meta.dependencies.filter((d) => !activeMap.get(d));
+  const isLocked = !mod.active && inactiveDeps.length > 0;
+  const wouldBreak = mod.active
+    ? Object.entries(CATALOG)
+        .filter(([key, def]) => key !== mod.moduleName && activeMap.get(key) && def.dependencies.includes(mod.moduleName))
+        .map(([, def]) => def.displayName)
+    : [];
 
   return (
-    <div className={`flex items-start gap-4 rounded-xl border bg-surface px-5 py-4 transition-colors ${
-      mod.active ? 'border-border' : 'border-border'
-    }`}>
+    <div className="flex items-center gap-4 rounded-xl border border-border bg-card px-5 py-4">
       {/* Icon */}
-      <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${
-        mod.active ? 'bg-accent/10' : 'bg-surface-2'
+      <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px] ${
+        mod.active ? 'bg-primary/10' : 'bg-muted/30'
       }`}>
-        <Icon size={18} className={mod.active ? 'text-accent' : 'text-faint'} />
+        <Icon size={18} className={mod.active ? 'text-primary' : 'text-muted-foreground/60'} />
       </div>
 
       {/* Info */}
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 flex-wrap">
-          <p className="text-sm font-medium text-ink">{meta.displayName}</p>
+        <div className="flex flex-wrap items-center gap-2">
+          <p className="text-[13.5px] font-semibold text-foreground">{meta.displayName}</p>
           {!meta.isStable && (
-            <span className="rounded-full bg-warn-subtle px-2 py-0.5 text-xs font-medium text-warn">
-              Próximamente
-            </span>
+            <span className="rounded-full bg-warn-subtle px-2 py-0.5 text-[11px] font-medium text-warn">Beta</span>
           )}
           {mod.active && (
-            <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">
-              Activo
-            </span>
+            <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary">Activo</span>
           )}
         </div>
-        <p className="text-xs text-muted mt-0.5">{meta.description}</p>
+        <p className="text-[12.5px] text-muted-foreground mt-0.5">{meta.description}</p>
 
-        {/* Dependency info */}
-        {meta.dependencies.length > 0 && (
-          <p className="text-xs text-faint mt-1">
-            Requiere: {meta.dependencies.map(depLabel).join(', ')}
-          </p>
-        )}
-
-        {/* Blocked reason */}
-        {isLocked && (
-          <div className="mt-2 flex items-center gap-1.5 text-xs text-warn">
-            <Lock size={11} />
-            <span>Activá primero: {blockingDeps.map(depLabel).join(', ')}</span>
-          </div>
-        )}
-
-        {/* Would break warning */}
-        {mod.active && wouldBreakModules.length > 0 && (
-          <div className="mt-2 flex items-center gap-1.5 text-xs text-faint">
-            <AlertCircle size={11} />
-            <span>Dependen de este módulo: {wouldBreakModules.join(', ')}</span>
-          </div>
-        )}
+        <div className="mt-1 flex flex-wrap gap-x-4 gap-y-0.5">
+          {meta.dependencies.length > 0 && (
+            <p className="text-[11.5px] text-muted-foreground/60">Requiere: {meta.dependencies.map(depLabel).join(', ')}</p>
+          )}
+          {isLocked && (
+            <div className="flex items-center gap-1 text-[11.5px] text-warn">
+              <Lock size={10} />
+              <span>Activá primero: {inactiveDeps.map(depLabel).join(', ')}</span>
+            </div>
+          )}
+          {mod.active && wouldBreak.length > 0 && (
+            <div className="flex items-center gap-1 text-[11.5px] text-muted-foreground/60">
+              <AlertCircle size={10} />
+              <span>Dependen de este: {wouldBreak.join(', ')}</span>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Toggle */}
-      {canToggle && meta.isStable && (
-        <button
-          onClick={onToggle}
-          disabled={isPending || (isLocked && !mod.active) || (!canActivate && !mod.active)}
-          title={isLocked ? `Activá primero: ${blockingDeps.map(depLabel).join(', ')}` : undefined}
-          className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none disabled:opacity-40 disabled:cursor-not-allowed ${
-            mod.active ? 'bg-ink' : 'bg-border-strong'
-          }`}
-          role="switch"
-          aria-checked={mod.active}
-          aria-label={`${mod.active ? 'Desactivar' : 'Activar'} ${meta.displayName}`}
-        >
-          <span
-            className={`pointer-events-none inline-block h-4 w-4 rounded-full bg-surface shadow transform transition-transform duration-200 ${
-              mod.active ? 'translate-x-4' : 'translate-x-0'
-            }`}
-          />
-        </button>
-      )}
-
-      {/* Coming soon placeholder */}
-      {!meta.isStable && (
-        <span className="shrink-0 rounded-lg border border-border bg-surface-2 px-3 py-1 text-xs text-faint">
-          Beta
-        </span>
+      {canToggle && (
+        <Toggle
+          checked={mod.active}
+          disabled={isPending || isLocked}
+          title={isLocked ? `Activá primero: ${inactiveDeps.map(depLabel).join(', ')}` : undefined}
+          label={`${mod.active ? 'Desactivar' : 'Activar'} ${meta.displayName}`}
+          onChange={onToggle}
+        />
       )}
     </div>
+  );
+}
+
+// ── Section ────────────────────────────────────────────────────────────────────
+
+function Section({
+  title,
+  modules,
+  view,
+  activeMap,
+  canToggle,
+  pendingName,
+  onToggle,
+}: {
+  title: string;
+  modules: TenantModuleResponse[];
+  view: 'grid' | 'list';
+  activeMap: Map<string, boolean>;
+  canToggle: boolean;
+  pendingName: string | undefined;
+  onToggle: (moduleName: string, active: boolean) => void;
+}) {
+  if (modules.length === 0) return null;
+
+  return (
+    <section className="space-y-3">
+      <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/60">{title}</h2>
+      {view === 'grid' ? (
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+          {modules.map((mod) => (
+            <GridCard
+              key={mod.id}
+              mod={mod}
+              activeMap={activeMap}
+              canToggle={canToggle}
+              isPending={pendingName === mod.moduleName}
+              onToggle={() => onToggle(mod.moduleName, !mod.active)}
+            />
+          ))}
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {modules.map((mod) => (
+            <ListRow
+              key={mod.id}
+              mod={mod}
+              activeMap={activeMap}
+              canToggle={canToggle}
+              isPending={pendingName === mod.moduleName}
+              onToggle={() => onToggle(mod.moduleName, !mod.active)}
+            />
+          ))}
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -169,6 +324,7 @@ export default function ModulesPage() {
   const queryClient = useQueryClient();
   const { jwtPayload, refreshSession } = useAuth();
   const canToggle = jwtPayload?.permissions.includes('tenants:modules:manage') ?? false;
+  const [view, setView] = useState<'grid' | 'list'>('grid');
 
   const { data: modules = [], isLoading } = useQuery({
     queryKey: ['tenant-modules'],
@@ -184,9 +340,9 @@ export default function ModulesPage() {
     },
   });
 
+  const pendingName = (toggleMutation.variables as { moduleName: string } | undefined)?.moduleName;
   const activeMap = new Map(modules.map((m) => [m.moduleName, m.active]));
 
-  // Sort: stable first, then by name
   const sorted = [...modules].sort((a, b) => {
     const aStable = CATALOG[a.moduleName]?.isStable ?? false;
     const bStable = CATALOG[b.moduleName]?.isStable ?? false;
@@ -196,79 +352,97 @@ export default function ModulesPage() {
     );
   });
 
-  const stableModules   = sorted.filter((m) => CATALOG[m.moduleName]?.isStable !== false);
-  const betaModules     = sorted.filter((m) => CATALOG[m.moduleName]?.isStable === false);
+  const stableModules = sorted.filter((m) => CATALOG[m.moduleName]?.isStable !== false);
+  const betaModules   = sorted.filter((m) => CATALOG[m.moduleName]?.isStable === false);
+
+  function handleToggle(moduleName: string, active: boolean) {
+    toggleMutation.mutate({ moduleName, active });
+  }
 
   if (isLoading) {
     return (
-      <div className="mx-auto max-w-3xl space-y-3 p-1">
-        {[1, 2, 3, 4].map((i) => (
-          <div key={i} className="h-20 animate-pulse rounded-xl bg-surface-2" />
-        ))}
+      <div className="space-y-3">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+          {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
+            <div key={i} className="h-40 animate-pulse rounded-[14px] bg-muted/30" />
+          ))}
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="mx-auto max-w-3xl space-y-8">
-      <div>
-        <h1 className="text-xl font-semibold text-ink">Módulos</h1>
-        <p className="mt-1 text-sm text-muted">
-          Activá o desactivá los módulos disponibles para tu empresa. Los módulos en beta estarán disponibles próximamente.
-        </p>
+    <div className="space-y-8">
+      {/* Header */}
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-xl font-semibold text-foreground">Módulos</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Activá o desactivá los módulos de tu empresa. Los módulos en Beta pueden tener funcionalidades en desarrollo.
+          </p>
+        </div>
+
+        {/* View toggle */}
+        <div className="flex shrink-0 items-center gap-1 rounded-[10px] border border-border bg-card p-1">
+          <button
+            type="button"
+            onClick={() => setView('grid')}
+            title="Vista grilla"
+            className={`flex items-center gap-1.5 rounded-[7px] px-3 py-1.5 text-[12.5px] font-medium transition-colors ${
+              view === 'grid'
+                ? 'bg-muted/20 text-foreground'
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            <LayoutGrid size={13} />
+            <span>Grilla</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setView('list')}
+            title="Vista lista"
+            className={`flex items-center gap-1.5 rounded-[7px] px-3 py-1.5 text-[12.5px] font-medium transition-colors ${
+              view === 'list'
+                ? 'bg-muted/20 text-foreground'
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            <List size={13} />
+            <span>Lista</span>
+          </button>
+        </div>
       </div>
 
-      {/* Error toast */}
+      {/* Error */}
       {toggleMutation.isError && (
-        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
+        <div className="rounded-[10px] border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
           {(toggleMutation.error as Error & { response?: { data?: { message?: string } } })
             ?.response?.data?.message ?? 'Error al cambiar el módulo'}
         </div>
       )}
 
-      {/* Stable modules */}
-      {stableModules.length > 0 && (
-        <section className="space-y-3">
-          <h2 className="text-xs font-semibold uppercase tracking-wider text-faint">Módulos disponibles</h2>
-          <div className="space-y-2">
-            {stableModules.map((mod) => (
-              <ModuleCard
-                key={mod.id}
-                mod={mod}
-                activeMap={activeMap}
-                canToggle={canToggle}
-                isPending={
-                  toggleMutation.isPending &&
-                  (toggleMutation.variables as { moduleName: string } | undefined)?.moduleName === mod.moduleName
-                }
-                onToggle={() => toggleMutation.mutate({ moduleName: mod.moduleName, active: !mod.active })}
-              />
-            ))}
-          </div>
-        </section>
-      )}
+      <Section
+        title="Módulos disponibles"
+        modules={stableModules}
+        view={view}
+        activeMap={activeMap}
+        canToggle={canToggle}
+        pendingName={toggleMutation.isPending ? pendingName : undefined}
+        onToggle={handleToggle}
+      />
 
-      {/* Beta modules */}
-      {betaModules.length > 0 && (
-        <section className="space-y-3">
-          <h2 className="text-xs font-semibold uppercase tracking-wider text-faint">Próximamente</h2>
-          <div className="space-y-2">
-            {betaModules.map((mod) => (
-              <ModuleCard
-                key={mod.id}
-                mod={mod}
-                activeMap={activeMap}
-                canToggle={canToggle}
-                isPending={false}
-                onToggle={() => {}}
-              />
-            ))}
-          </div>
-        </section>
-      )}
+      <Section
+        title="Beta"
+        modules={betaModules}
+        view={view}
+        activeMap={activeMap}
+        canToggle={canToggle}
+        pendingName={toggleMutation.isPending ? pendingName : undefined}
+        onToggle={handleToggle}
+      />
 
       {!canToggle && (
-        <p className="text-xs text-faint text-center">
+        <p className="text-xs text-muted-foreground/60 text-center">
           Necesitás el permiso <span className="font-mono">tenants:modules:manage</span> para modificar los módulos.
         </p>
       )}

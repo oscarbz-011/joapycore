@@ -1,11 +1,18 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus, Copy, Check, X, Users2, LayoutGrid, Receipt, Pencil } from 'lucide-react';
 import { hrApi, type CreateEmployeePayload, type Employee, type Position } from '../../../../lib/api/hr';
 import { NumericInput } from '../../../../components/numeric-input';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
 
 function buildUsernamePreview(firstName: string, lastName: string): string {
   const norm = (s: string) =>
@@ -28,10 +35,9 @@ const DOC_LABELS: Record<string, string> = {
   PASSPORT: 'Pasaporte',
 };
 
-const PAYMENT_METHOD_LABELS: Record<string, string> = {
-  BANK_TRANSFER: 'Transferencia bancaria',
-  CASH: 'Efectivo',
-};
+// ── Style constants ────────────────────────────────────────────────────────────
+
+const NUM_CLS = 'h-9 w-full min-w-0 rounded-3xl border border-transparent bg-input/50 px-3 text-sm outline-none transition-[color,box-shadow,background-color] focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30';
 
 // ── Sub-nav ────────────────────────────────────────────────────────────────────
 
@@ -50,8 +56,8 @@ function HrNav({ active }: { active: 'employees' | 'areas' | 'payroll' }) {
           href={href}
           className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px ${
             active === key
-              ? 'border-ink text-ink'
-              : 'border-transparent text-muted hover:text-ink'
+              ? 'border-primary text-foreground'
+              : 'border-transparent text-muted-foreground hover:text-foreground'
           }`}
         >
           <Icon size={15} />
@@ -66,23 +72,14 @@ function HrNav({ active }: { active: 'employees' | 'areas' | 'payroll' }) {
 
 function StatusBadge({ isActive, terminationDate }: { isActive: boolean; terminationDate?: string | null }) {
   if (!isActive || terminationDate) {
-    return (
-      <span className="inline-flex items-center rounded-full bg-red-50 px-2 py-0.5 text-xs font-medium text-red-700">
-        Baja
-      </span>
-    );
+    return <Badge variant="destructive">Baja</Badge>;
   }
   return (
-    <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">
+    <Badge variant="outline" className="bg-accent-subtle text-accent-on border-accent-on/20">
       Activo
-    </span>
+    </Badge>
   );
 }
-
-// ── Shared form fields ─────────────────────────────────────────────────────────
-
-const inputCls = 'w-full rounded-lg border border-border-strong bg-surface text-ink px-3 py-2 text-sm focus:border-border-strong focus:outline-none focus:ring-1 focus:ring-border-strong';
-const labelCls = 'block text-xs font-medium text-muted mb-1';
 
 // ── Create employee modal ──────────────────────────────────────────────────────
 
@@ -99,14 +96,16 @@ const EMPTY_FORM: CreateEmployeePayload = {
 };
 
 function CreateEmployeeModal({
+  open,
+  onOpenChange,
   areas,
   positions,
-  onClose,
   onCreated,
 }: {
+  open: boolean;
+  onOpenChange: (o: boolean) => void;
   areas: Array<{ id: string; name: string }>;
   positions: Position[];
-  onClose: () => void;
   onCreated: (tempPassword?: string) => void;
 }) {
   const queryClient = useQueryClient();
@@ -125,6 +124,8 @@ function CreateEmployeeModal({
       }),
     onSuccess: (data) => {
       void queryClient.invalidateQueries({ queryKey: ['hr-employees'] });
+      setForm(EMPTY_FORM);
+      setCreateAccount(false);
       onCreated(data.tempPassword);
     },
     onError: (err: Error & { response?: { data?: { message?: string | string[] } } }) => {
@@ -140,110 +141,134 @@ function CreateEmployeeModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-      <div className="relative z-10 w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl bg-surface shadow-2xl">
-        <div className="flex items-center justify-between border-b border-border px-6 py-4">
-          <h2 className="text-base font-semibold text-ink">Nuevo empleado</h2>
-          <button onClick={onClose} className="rounded-md p-1 text-faint hover:bg-surface-2">
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent showCloseButton={false} className="sm:max-w-2xl p-0 max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between border-b border-border px-6 py-4 sticky top-0 bg-card z-10">
+          <DialogTitle>Nuevo empleado</DialogTitle>
+          <Button variant="ghost" size="icon" onClick={() => onOpenChange(false)}>
             <X size={18} />
-          </button>
+          </Button>
         </div>
 
         <form onSubmit={handleSubmit} className="px-6 py-5 space-y-5">
           {/* Personal */}
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wider text-faint mb-3">Datos personales</p>
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/60 mb-3">Datos personales</p>
             <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className={labelCls}>Nombre *</label>
-                <input className={inputCls} value={form.firstName} onChange={(e) => set('firstName', e.target.value)} required />
+              <div className="space-y-1">
+                <Label>Nombre *</Label>
+                <Input value={form.firstName} onChange={(e) => set('firstName', e.target.value)} required />
               </div>
-              <div>
-                <label className={labelCls}>Apellido *</label>
-                <input className={inputCls} value={form.lastName} onChange={(e) => set('lastName', e.target.value)} required />
+              <div className="space-y-1">
+                <Label>Apellido *</Label>
+                <Input value={form.lastName} onChange={(e) => set('lastName', e.target.value)} required />
               </div>
-              <div>
-                <label className={labelCls}>Tipo doc. *</label>
-                <select className={inputCls} value={form.documentType} onChange={(e) => set('documentType', e.target.value as CreateEmployeePayload['documentType'])}>
-                  <option value="CI">C.I.</option>
-                  <option value="RUC">RUC</option>
-                  <option value="PASSPORT">Pasaporte</option>
-                </select>
+              <div className="space-y-1">
+                <Label>Tipo doc. *</Label>
+                <Select value={form.documentType} onValueChange={(v) => set('documentType', v as CreateEmployeePayload['documentType'])}>
+                  <SelectTrigger className="w-full">
+                    <span className="flex-1 text-left text-sm truncate">{form.documentType === 'PASSPORT' ? 'Pasaporte' : form.documentType === 'RUC' ? 'RUC' : 'C.I.'}</span>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="CI">C.I.</SelectItem>
+                    <SelectItem value="RUC">RUC</SelectItem>
+                    <SelectItem value="PASSPORT">Pasaporte</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
-              <div>
-                <label className={labelCls}>Nro. documento *</label>
-                <input className={inputCls} value={form.documentNumber} onChange={(e) => set('documentNumber', e.target.value)} required />
+              <div className="space-y-1">
+                <Label>Nro. documento *</Label>
+                <Input value={form.documentNumber} onChange={(e) => set('documentNumber', e.target.value)} required />
               </div>
-              <div>
-                <label className={labelCls}>Fecha de nacimiento *</label>
-                <input type="date" lang="es-PY" className={inputCls} value={form.birthDate} onChange={(e) => set('birthDate', e.target.value)} required />
+              <div className="space-y-1">
+                <Label>Fecha de nacimiento *</Label>
+                <input type="date" lang="es-PY" className={NUM_CLS} value={form.birthDate} onChange={(e) => set('birthDate', e.target.value)} required />
               </div>
-              <div>
-                <label className={labelCls}>Género</label>
-                <select className={inputCls} value={form.gender ?? ''} onChange={(e) => set('gender', (e.target.value as CreateEmployeePayload['gender']) || undefined)}>
-                  <option value="">— Seleccionar —</option>
-                  <option value="MASCULINO">Masculino</option>
-                  <option value="FEMENINO">Femenino</option>
-                </select>
+              <div className="space-y-1">
+                <Label>Género</Label>
+                <Select value={form.gender || 'none'} onValueChange={(v) => set('gender', v === 'none' ? undefined : v as CreateEmployeePayload['gender'])}>
+                  <SelectTrigger className="w-full">
+                    <span className="flex-1 text-left text-sm truncate">{form.gender === 'MASCULINO' ? 'Masculino' : form.gender === 'FEMENINO' ? 'Femenino' : '— Seleccionar —'}</span>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">— Seleccionar —</SelectItem>
+                    <SelectItem value="MASCULINO">Masculino</SelectItem>
+                    <SelectItem value="FEMENINO">Femenino</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
-              <div>
-                <label className={labelCls}>Teléfono</label>
-                <input className={inputCls} value={form.phone ?? ''} onChange={(e) => set('phone', e.target.value || undefined)} />
+              <div className="space-y-1">
+                <Label>Teléfono</Label>
+                <Input value={form.phone ?? ''} onChange={(e) => set('phone', e.target.value || undefined)} />
               </div>
-              <div>
-                <label className={labelCls}>Celular</label>
-                <input className={inputCls} value={form.mobilePhone ?? ''} onChange={(e) => set('mobilePhone', e.target.value || undefined)} />
+              <div className="space-y-1">
+                <Label>Celular</Label>
+                <Input value={form.mobilePhone ?? ''} onChange={(e) => set('mobilePhone', e.target.value || undefined)} />
               </div>
             </div>
           </div>
 
           {/* Laboral */}
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wider text-faint mb-3">Datos laborales</p>
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/60 mb-3">Datos laborales</p>
             <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className={labelCls}>Fecha de ingreso *</label>
-                <input type="date" lang="es-PY" className={inputCls} value={form.hireDate} onChange={(e) => set('hireDate', e.target.value)} required />
+              <div className="space-y-1">
+                <Label>Fecha de ingreso *</Label>
+                <input type="date" lang="es-PY" className={NUM_CLS} value={form.hireDate} onChange={(e) => set('hireDate', e.target.value)} required />
               </div>
-              <div>
-                <label className={labelCls}>Tipo de contrato</label>
-                <select className={inputCls} value={form.contractType ?? 'PERMANENT'} onChange={(e) => set('contractType', e.target.value as CreateEmployeePayload['contractType'])}>
-                  <option value="PERMANENT">Permanente</option>
-                  <option value="TEMPORARY">Temporal</option>
-                  <option value="PART_TIME">Medio tiempo</option>
-                  <option value="CONTRACTOR">Contratista</option>
-                </select>
+              <div className="space-y-1">
+                <Label>Tipo de contrato</Label>
+                <Select value={form.contractType ?? 'PERMANENT'} onValueChange={(v) => set('contractType', v as CreateEmployeePayload['contractType'])}>
+                  <SelectTrigger className="w-full">
+                    <span className="flex-1 text-left text-sm truncate">{{ PERMANENT: 'Permanente', TEMPORARY: 'Temporal', PART_TIME: 'Medio tiempo', CONTRACTOR: 'Contratista' }[form.contractType ?? 'PERMANENT']}</span>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="PERMANENT">Permanente</SelectItem>
+                    <SelectItem value="TEMPORARY">Temporal</SelectItem>
+                    <SelectItem value="PART_TIME">Medio tiempo</SelectItem>
+                    <SelectItem value="CONTRACTOR">Contratista</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
-              <div>
-                <label className={labelCls}>Área</label>
-                <select className={inputCls} value={form.areaId ?? ''} onChange={(e) => set('areaId', e.target.value || undefined)}>
-                  <option value="">— Sin área —</option>
-                  {areas.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
-                </select>
+              <div className="space-y-1">
+                <Label>Área</Label>
+                <Select value={form.areaId || 'none'} onValueChange={(v) => set('areaId', v && v !== 'none' ? v : undefined)}>
+                  <SelectTrigger className="w-full">
+                    <span className="flex-1 text-left text-sm truncate">{areas.find((a) => a.id === form.areaId)?.name ?? '— Sin área —'}</span>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">— Sin área —</SelectItem>
+                    {areas.map((a) => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
               </div>
-              <div>
-                <label className={labelCls}>Cargo</label>
-                <select className={inputCls} value={form.positionId ?? ''} onChange={(e) => set('positionId', e.target.value || undefined)}>
-                  <option value="">— Sin cargo —</option>
-                  {positions.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-                </select>
+              <div className="space-y-1">
+                <Label>Cargo</Label>
+                <Select value={form.positionId || 'none'} onValueChange={(v) => set('positionId', v && v !== 'none' ? v : undefined)}>
+                  <SelectTrigger className="w-full">
+                    <span className="flex-1 text-left text-sm truncate">{positions.find((p) => p.id === form.positionId)?.name ?? '— Sin cargo —'}</span>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">— Sin cargo —</SelectItem>
+                    {positions.map((p) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
               </div>
-              <div>
-                <label className={labelCls}>Salario base (PYG) *</label>
-                <NumericInput
-                  value={form.baseSalary}
-                  onChange={(v) => set('baseSalary', Math.round(v))}
-                  className={inputCls}
-                  required
-                />
+              <div className="space-y-1">
+                <Label>Salario base (PYG) *</Label>
+                <NumericInput value={form.baseSalary} onChange={(v) => set('baseSalary', Math.round(v))} className={NUM_CLS} required />
               </div>
-              <div>
-                <label className={labelCls}>Forma de pago</label>
-                <select className={inputCls} value={form.paymentMethod ?? 'BANK_TRANSFER'} onChange={(e) => set('paymentMethod', e.target.value as CreateEmployeePayload['paymentMethod'])}>
-                  <option value="BANK_TRANSFER">Transferencia bancaria</option>
-                  <option value="CASH">Efectivo</option>
-                </select>
+              <div className="space-y-1">
+                <Label>Forma de pago</Label>
+                <Select value={form.paymentMethod ?? 'BANK_TRANSFER'} onValueChange={(v) => set('paymentMethod', v as CreateEmployeePayload['paymentMethod'])}>
+                  <SelectTrigger className="w-full">
+                    <span className="flex-1 text-left text-sm truncate">{form.paymentMethod === 'CASH' ? 'Efectivo' : 'Transferencia bancaria'}</span>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="BANK_TRANSFER">Transferencia bancaria</SelectItem>
+                    <SelectItem value="CASH">Efectivo</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </div>
           </div>
@@ -255,17 +280,16 @@ function CreateEmployeeModal({
                 type="checkbox"
                 checked={createAccount}
                 onChange={(e) => setCreateAccount(e.target.checked)}
-                className="h-4 w-4 rounded border-border-strong accent-accent"
+                className="h-4 w-4 rounded border-border"
               />
-              <span className="text-sm font-medium text-muted">Crear cuenta de acceso al sistema</span>
+              <span className="text-sm font-medium text-muted-foreground">Crear cuenta de acceso al sistema</span>
             </label>
             {createAccount && (
               <div className="mt-3 space-y-3">
-                <div>
-                  <label className={labelCls}>Email *</label>
-                  <input
+                <div className="space-y-1">
+                  <Label>Email *</Label>
+                  <Input
                     type="email"
-                    className={inputCls}
                     value={form.email ?? ''}
                     onChange={(e) => set('email', e.target.value || undefined)}
                     placeholder="empleado@empresa.com"
@@ -273,12 +297,12 @@ function CreateEmployeeModal({
                   />
                 </div>
                 {(form.firstName || form.lastName) && (
-                  <div className="rounded-lg border border-border bg-surface-2 px-3 py-2">
-                    <p className="text-xs text-muted mb-1">Usuario generado automáticamente</p>
-                    <p className="font-mono text-sm font-medium text-ink">
+                  <div className="rounded-xl border border-border bg-muted/30 px-3 py-2">
+                    <p className="text-xs text-muted-foreground mb-1">Usuario generado automáticamente</p>
+                    <p className="font-mono text-sm font-medium text-foreground">
                       {buildUsernamePreview(form.firstName, form.lastName) || '—'}
                     </p>
-                    <p className="mt-0.5 text-xs text-faint">
+                    <p className="mt-0.5 text-xs text-muted-foreground/60">
                       Se agrega un sufijo numérico si el usuario ya existe (ej. jose.benitez2)
                     </p>
                   </div>
@@ -287,14 +311,14 @@ function CreateEmployeeModal({
                   const pos = positions.find((p) => p.id === form.positionId);
                   if (!pos?.role) return null;
                   return (
-                    <div className="flex items-center gap-2 rounded-lg border border-blue-100 bg-blue-50 px-3 py-2">
-                      <span className="text-xs text-blue-700">
+                    <div className="flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 dark:border-blue-800 dark:bg-blue-950">
+                      <span className="text-xs text-blue-700 dark:text-blue-300">
                         Se asignará automáticamente el rol <strong>{pos.role.name}</strong> según el cargo seleccionado.
                       </span>
                     </div>
                   );
                 })()}
-                <p className="text-xs text-muted">
+                <p className="text-xs text-muted-foreground">
                   Se generará una contraseña temporal que el empleado deberá cambiar al iniciar sesión.
                 </p>
               </div>
@@ -302,26 +326,22 @@ function CreateEmployeeModal({
           </div>
 
           {error && (
-            <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+            <div className="rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
               {error}
             </div>
           )}
 
           <div className="flex justify-end gap-3 pt-2 border-t border-border">
-            <button type="button" onClick={onClose} className="rounded-lg border border-border-strong bg-surface text-ink px-4 py-2 text-sm text-muted hover:bg-surface-2">
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancelar
-            </button>
-            <button
-              type="submit"
-              disabled={mutation.isPending}
-              className="rounded-lg bg-ink px-4 py-2 text-sm font-medium text-canvas hover:opacity-80 disabled:opacity-50"
-            >
+            </Button>
+            <Button type="submit" disabled={mutation.isPending}>
               {mutation.isPending ? 'Creando...' : 'Crear empleado'}
-            </button>
+            </Button>
           </div>
         </form>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -329,54 +349,63 @@ function CreateEmployeeModal({
 
 function EditEmployeeModal({
   employee,
+  open,
+  onOpenChange,
   areas,
   positions,
-  onClose,
   onUpdated,
 }: {
-  employee: Employee;
+  employee: Employee | null;
+  open: boolean;
+  onOpenChange: (o: boolean) => void;
   areas: Array<{ id: string; name: string }>;
   positions: Position[];
-  onClose: () => void;
   onUpdated: () => void;
 }) {
   const queryClient = useQueryClient();
 
-  const toDateInput = (iso: string | null | undefined) =>
-    iso ? iso.slice(0, 10) : '';
+  const toDateInput = (iso: string | null | undefined) => iso ? iso.slice(0, 10) : '';
 
-  const [form, setForm] = useState<Partial<CreateEmployeePayload>>({
-    firstName: employee.firstName,
-    lastName: employee.lastName,
-    documentType: employee.documentType,
-    documentNumber: employee.documentNumber,
-    birthDate: toDateInput(employee.birthDate),
-    gender: employee.gender ?? undefined,
-    nationality: employee.nationality ?? undefined,
-    maritalStatus: employee.maritalStatus ?? undefined,
-    phone: employee.phone ?? undefined,
-    mobilePhone: employee.mobilePhone ?? undefined,
-    address: employee.address ?? undefined,
-    city: employee.city ?? undefined,
-    hireDate: toDateInput(employee.hireDate),
-    contractType: employee.contractType,
-    areaId: employee.area?.id ?? undefined,
-    positionId: employee.position?.id ?? undefined,
-    baseSalary: employee.baseSalary,
-    paymentMethod: employee.paymentMethod,
-    bankName: employee.bankName ?? undefined,
-    bankAccount: employee.bankAccount ?? undefined,
-  });
-
+  const [form, setForm] = useState<Partial<CreateEmployeePayload>>({});
   const [error, setError] = useState('');
   const [showTerminate, setShowTerminate] = useState(false);
   const [terminationDate, setTerminationDate] = useState('');
+
+  useEffect(() => {
+    if (employee) {
+      setForm({
+        firstName: employee.firstName,
+        lastName: employee.lastName,
+        documentType: employee.documentType,
+        documentNumber: employee.documentNumber,
+        birthDate: toDateInput(employee.birthDate),
+        gender: employee.gender ?? undefined,
+        nationality: employee.nationality ?? undefined,
+        maritalStatus: employee.maritalStatus ?? undefined,
+        phone: employee.phone ?? undefined,
+        mobilePhone: employee.mobilePhone ?? undefined,
+        address: employee.address ?? undefined,
+        city: employee.city ?? undefined,
+        hireDate: toDateInput(employee.hireDate),
+        contractType: employee.contractType,
+        areaId: employee.area?.id ?? undefined,
+        positionId: employee.position?.id ?? undefined,
+        baseSalary: employee.baseSalary,
+        paymentMethod: employee.paymentMethod,
+        bankName: employee.bankName ?? undefined,
+        bankAccount: employee.bankAccount ?? undefined,
+      });
+      setError('');
+      setShowTerminate(false);
+      setTerminationDate('');
+    }
+  }, [employee]);
 
   const set = <K extends keyof CreateEmployeePayload>(k: K, v: CreateEmployeePayload[K] | undefined) =>
     setForm((f) => ({ ...f, [k]: v }));
 
   const updateMutation = useMutation({
-    mutationFn: () => hrApi.updateEmployee(employee.id, form),
+    mutationFn: () => hrApi.updateEmployee(employee!.id, form),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['hr-employees'] });
       onUpdated();
@@ -388,7 +417,7 @@ function EditEmployeeModal({
   });
 
   const terminateMutation = useMutation({
-    mutationFn: () => hrApi.terminateEmployee(employee.id, terminationDate || undefined),
+    mutationFn: () => hrApi.terminateEmployee(employee!.id, terminationDate || undefined),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['hr-employees'] });
       onUpdated();
@@ -405,220 +434,239 @@ function EditEmployeeModal({
     updateMutation.mutate();
   }
 
+  if (!employee) return null;
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-      <div className="relative z-10 w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl bg-surface shadow-2xl">
-        {/* Header */}
-        <div className="flex items-center justify-between border-b border-border px-6 py-4">
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent showCloseButton={false} className="sm:max-w-2xl p-0 max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between border-b border-border px-6 py-4 sticky top-0 bg-card z-10">
           <div>
-            <h2 className="text-base font-semibold text-ink">
-              {employee.firstName} {employee.lastName}
-            </h2>
+            <DialogTitle>{employee.firstName} {employee.lastName}</DialogTitle>
             {employee.employeeCode && (
-              <p className="text-xs font-mono text-faint mt-0.5">{employee.employeeCode}</p>
+              <p className="text-xs font-mono text-muted-foreground/60 mt-0.5">{employee.employeeCode}</p>
             )}
           </div>
-          <button onClick={onClose} className="rounded-md p-1 text-faint hover:bg-surface-2">
+          <Button variant="ghost" size="icon" onClick={() => onOpenChange(false)}>
             <X size={18} />
-          </button>
+          </Button>
         </div>
 
         <form onSubmit={handleSubmit} className="px-6 py-5 space-y-5">
           {/* Personal */}
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wider text-faint mb-3">Datos personales</p>
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/60 mb-3">Datos personales</p>
             <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className={labelCls}>Nombre *</label>
-                <input className={inputCls} value={form.firstName ?? ''} onChange={(e) => set('firstName', e.target.value)} required />
+              <div className="space-y-1">
+                <Label>Nombre *</Label>
+                <Input value={form.firstName ?? ''} onChange={(e) => set('firstName', e.target.value)} required />
               </div>
-              <div>
-                <label className={labelCls}>Apellido *</label>
-                <input className={inputCls} value={form.lastName ?? ''} onChange={(e) => set('lastName', e.target.value)} required />
+              <div className="space-y-1">
+                <Label>Apellido *</Label>
+                <Input value={form.lastName ?? ''} onChange={(e) => set('lastName', e.target.value)} required />
               </div>
-              <div>
-                <label className={labelCls}>Tipo doc. *</label>
-                <select className={inputCls} value={form.documentType ?? 'CI'} onChange={(e) => set('documentType', e.target.value as CreateEmployeePayload['documentType'])}>
-                  <option value="CI">C.I.</option>
-                  <option value="RUC">RUC</option>
-                  <option value="PASSPORT">Pasaporte</option>
-                </select>
+              <div className="space-y-1">
+                <Label>Tipo doc. *</Label>
+                <Select value={form.documentType ?? 'CI'} onValueChange={(v) => set('documentType', v as CreateEmployeePayload['documentType'])}>
+                  <SelectTrigger className="w-full">
+                    <span className="flex-1 text-left text-sm truncate">{form.documentType === 'PASSPORT' ? 'Pasaporte' : form.documentType === 'RUC' ? 'RUC' : 'C.I.'}</span>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="CI">C.I.</SelectItem>
+                    <SelectItem value="RUC">RUC</SelectItem>
+                    <SelectItem value="PASSPORT">Pasaporte</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
-              <div>
-                <label className={labelCls}>Nro. documento *</label>
-                <input className={inputCls} value={form.documentNumber ?? ''} onChange={(e) => set('documentNumber', e.target.value)} required />
+              <div className="space-y-1">
+                <Label>Nro. documento *</Label>
+                <Input value={form.documentNumber ?? ''} onChange={(e) => set('documentNumber', e.target.value)} required />
               </div>
-              <div>
-                <label className={labelCls}>Fecha de nacimiento</label>
-                <input type="date" lang="es-PY" className={inputCls} value={form.birthDate ?? ''} onChange={(e) => set('birthDate', e.target.value || undefined)} />
+              <div className="space-y-1">
+                <Label>Fecha de nacimiento</Label>
+                <input type="date" lang="es-PY" className={NUM_CLS} value={form.birthDate ?? ''} onChange={(e) => set('birthDate', e.target.value || undefined)} />
               </div>
-              <div>
-                <label className={labelCls}>Género</label>
-                <select className={inputCls} value={form.gender ?? ''} onChange={(e) => set('gender', (e.target.value as CreateEmployeePayload['gender']) || undefined)}>
-                  <option value="">— Seleccionar —</option>
-                  <option value="MASCULINO">Masculino</option>
-                  <option value="FEMENINO">Femenino</option>
-                </select>
+              <div className="space-y-1">
+                <Label>Género</Label>
+                <Select value={form.gender || 'none'} onValueChange={(v) => set('gender', v === 'none' ? undefined : v as CreateEmployeePayload['gender'])}>
+                  <SelectTrigger className="w-full">
+                    <span className="flex-1 text-left text-sm truncate">{form.gender === 'MASCULINO' ? 'Masculino' : form.gender === 'FEMENINO' ? 'Femenino' : '— Seleccionar —'}</span>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">— Seleccionar —</SelectItem>
+                    <SelectItem value="MASCULINO">Masculino</SelectItem>
+                    <SelectItem value="FEMENINO">Femenino</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
-              <div>
-                <label className={labelCls}>Nacionalidad</label>
-                <input className={inputCls} value={form.nationality ?? ''} onChange={(e) => set('nationality', e.target.value || undefined)} />
+              <div className="space-y-1">
+                <Label>Nacionalidad</Label>
+                <Input value={form.nationality ?? ''} onChange={(e) => set('nationality', e.target.value || undefined)} />
               </div>
-              <div>
-                <label className={labelCls}>Estado civil</label>
-                <select className={inputCls} value={form.maritalStatus ?? ''} onChange={(e) => set('maritalStatus', (e.target.value as CreateEmployeePayload['maritalStatus']) || undefined)}>
-                  <option value="">— Seleccionar —</option>
-                  <option value="SINGLE">Soltero/a</option>
-                  <option value="MARRIED">Casado/a</option>
-                  <option value="DIVORCED">Divorciado/a</option>
-                  <option value="WIDOWED">Viudo/a</option>
-                  <option value="OTHER">Otro</option>
-                </select>
+              <div className="space-y-1">
+                <Label>Estado civil</Label>
+                <Select value={form.maritalStatus || 'none'} onValueChange={(v) => set('maritalStatus', v && v !== 'none' ? v as CreateEmployeePayload['maritalStatus'] : undefined)}>
+                  <SelectTrigger className="w-full">
+                    <span className="flex-1 text-left text-sm truncate">{{ SINGLE: 'Soltero/a', MARRIED: 'Casado/a', DIVORCED: 'Divorciado/a', WIDOWED: 'Viudo/a', OTHER: 'Otro' }[form.maritalStatus ?? ''] ?? '— Seleccionar —'}</span>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">— Seleccionar —</SelectItem>
+                    <SelectItem value="SINGLE">Soltero/a</SelectItem>
+                    <SelectItem value="MARRIED">Casado/a</SelectItem>
+                    <SelectItem value="DIVORCED">Divorciado/a</SelectItem>
+                    <SelectItem value="WIDOWED">Viudo/a</SelectItem>
+                    <SelectItem value="OTHER">Otro</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
-              <div>
-                <label className={labelCls}>Teléfono</label>
-                <input className={inputCls} value={form.phone ?? ''} onChange={(e) => set('phone', e.target.value || undefined)} />
+              <div className="space-y-1">
+                <Label>Teléfono</Label>
+                <Input value={form.phone ?? ''} onChange={(e) => set('phone', e.target.value || undefined)} />
               </div>
-              <div>
-                <label className={labelCls}>Celular</label>
-                <input className={inputCls} value={form.mobilePhone ?? ''} onChange={(e) => set('mobilePhone', e.target.value || undefined)} />
+              <div className="space-y-1">
+                <Label>Celular</Label>
+                <Input value={form.mobilePhone ?? ''} onChange={(e) => set('mobilePhone', e.target.value || undefined)} />
               </div>
-              <div>
-                <label className={labelCls}>Dirección</label>
-                <input className={inputCls} value={form.address ?? ''} onChange={(e) => set('address', e.target.value || undefined)} />
+              <div className="space-y-1">
+                <Label>Dirección</Label>
+                <Input value={form.address ?? ''} onChange={(e) => set('address', e.target.value || undefined)} />
               </div>
-              <div>
-                <label className={labelCls}>Ciudad</label>
-                <input className={inputCls} value={form.city ?? ''} onChange={(e) => set('city', e.target.value || undefined)} />
+              <div className="space-y-1">
+                <Label>Ciudad</Label>
+                <Input value={form.city ?? ''} onChange={(e) => set('city', e.target.value || undefined)} />
               </div>
             </div>
           </div>
 
           {/* Laboral */}
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wider text-faint mb-3">Datos laborales</p>
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/60 mb-3">Datos laborales</p>
             <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className={labelCls}>Fecha de ingreso *</label>
-                <input type="date" lang="es-PY" className={inputCls} value={form.hireDate ?? ''} onChange={(e) => set('hireDate', e.target.value)} required />
+              <div className="space-y-1">
+                <Label>Fecha de ingreso *</Label>
+                <input type="date" lang="es-PY" className={NUM_CLS} value={form.hireDate ?? ''} onChange={(e) => set('hireDate', e.target.value)} required />
               </div>
-              <div>
-                <label className={labelCls}>Tipo de contrato</label>
-                <select className={inputCls} value={form.contractType ?? 'PERMANENT'} onChange={(e) => set('contractType', e.target.value as CreateEmployeePayload['contractType'])}>
-                  <option value="PERMANENT">Permanente</option>
-                  <option value="TEMPORARY">Temporal</option>
-                  <option value="PART_TIME">Medio tiempo</option>
-                  <option value="CONTRACTOR">Contratista</option>
-                </select>
+              <div className="space-y-1">
+                <Label>Tipo de contrato</Label>
+                <Select value={form.contractType ?? 'PERMANENT'} onValueChange={(v) => set('contractType', v as CreateEmployeePayload['contractType'])}>
+                  <SelectTrigger className="w-full">
+                    <span className="flex-1 text-left text-sm truncate">{{ PERMANENT: 'Permanente', TEMPORARY: 'Temporal', PART_TIME: 'Medio tiempo', CONTRACTOR: 'Contratista' }[form.contractType ?? 'PERMANENT']}</span>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="PERMANENT">Permanente</SelectItem>
+                    <SelectItem value="TEMPORARY">Temporal</SelectItem>
+                    <SelectItem value="PART_TIME">Medio tiempo</SelectItem>
+                    <SelectItem value="CONTRACTOR">Contratista</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
-              <div>
-                <label className={labelCls}>Área</label>
-                <select className={inputCls} value={form.areaId ?? ''} onChange={(e) => set('areaId', e.target.value || undefined)}>
-                  <option value="">— Sin área —</option>
-                  {areas.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
-                </select>
+              <div className="space-y-1">
+                <Label>Área</Label>
+                <Select value={form.areaId || 'none'} onValueChange={(v) => set('areaId', v && v !== 'none' ? v : undefined)}>
+                  <SelectTrigger className="w-full">
+                    <span className="flex-1 text-left text-sm truncate">{areas.find((a) => a.id === form.areaId)?.name ?? '— Sin área —'}</span>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">— Sin área —</SelectItem>
+                    {areas.map((a) => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
               </div>
-              <div>
-                <label className={labelCls}>Cargo</label>
-                <select className={inputCls} value={form.positionId ?? ''} onChange={(e) => set('positionId', e.target.value || undefined)}>
-                  <option value="">— Sin cargo —</option>
-                  {positions.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-                </select>
+              <div className="space-y-1">
+                <Label>Cargo</Label>
+                <Select value={form.positionId || 'none'} onValueChange={(v) => set('positionId', v && v !== 'none' ? v : undefined)}>
+                  <SelectTrigger className="w-full">
+                    <span className="flex-1 text-left text-sm truncate">{positions.find((p) => p.id === form.positionId)?.name ?? '— Sin cargo —'}</span>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">— Sin cargo —</SelectItem>
+                    {positions.map((p) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
           </div>
 
           {/* Nómina */}
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wider text-faint mb-3">Nómina</p>
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/60 mb-3">Nómina</p>
             <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className={labelCls}>Salario base (PYG) *</label>
-                <NumericInput
-                  value={form.baseSalary ?? 0}
-                  onChange={(v) => set('baseSalary', Math.round(v))}
-                  className={inputCls}
-                  required
-                />
+              <div className="space-y-1">
+                <Label>Salario base (PYG) *</Label>
+                <NumericInput value={form.baseSalary ?? 0} onChange={(v) => set('baseSalary', Math.round(v))} className={NUM_CLS} required />
               </div>
-              <div>
-                <label className={labelCls}>Forma de pago</label>
-                <select className={inputCls} value={form.paymentMethod ?? 'BANK_TRANSFER'} onChange={(e) => set('paymentMethod', e.target.value as CreateEmployeePayload['paymentMethod'])}>
-                  <option value="BANK_TRANSFER">Transferencia bancaria</option>
-                  <option value="CASH">Efectivo</option>
-                </select>
+              <div className="space-y-1">
+                <Label>Forma de pago</Label>
+                <Select value={form.paymentMethod ?? 'BANK_TRANSFER'} onValueChange={(v) => set('paymentMethod', v as CreateEmployeePayload['paymentMethod'])}>
+                  <SelectTrigger className="w-full">
+                    <span className="flex-1 text-left text-sm truncate">{form.paymentMethod === 'CASH' ? 'Efectivo' : 'Transferencia bancaria'}</span>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="BANK_TRANSFER">Transferencia bancaria</SelectItem>
+                    <SelectItem value="CASH">Efectivo</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
-              <div>
-                <label className={labelCls}>Banco</label>
-                <input className={inputCls} value={form.bankName ?? ''} onChange={(e) => set('bankName', e.target.value || undefined)} />
+              <div className="space-y-1">
+                <Label>Banco</Label>
+                <Input value={form.bankName ?? ''} onChange={(e) => set('bankName', e.target.value || undefined)} />
               </div>
-              <div>
-                <label className={labelCls}>Nro. cuenta</label>
-                <input className={inputCls} value={form.bankAccount ?? ''} onChange={(e) => set('bankAccount', e.target.value || undefined)} />
+              <div className="space-y-1">
+                <Label>Nro. cuenta</Label>
+                <Input value={form.bankAccount ?? ''} onChange={(e) => set('bankAccount', e.target.value || undefined)} />
               </div>
             </div>
           </div>
 
           {/* Baja */}
           {employee.isActive && !employee.terminationDate && (
-            <div className="rounded-xl border border-red-100 bg-red-50/50 px-4 py-3">
+            <div className="rounded-xl border border-destructive/20 bg-destructive/5 px-4 py-3">
               <button
                 type="button"
                 onClick={() => setShowTerminate((v) => !v)}
-                className="text-sm font-medium text-red-600 hover:text-red-700"
+                className="text-sm font-medium text-destructive hover:text-destructive/80"
               >
                 {showTerminate ? 'Cancelar baja' : 'Dar de baja al empleado'}
               </button>
               {showTerminate && (
                 <div className="mt-3 flex items-end gap-3">
-                  <div className="flex-1">
-                    <label className={labelCls}>Fecha de baja (opcional)</label>
-                    <input
-                      type="date"
-                      className={inputCls}
-                      value={terminationDate}
-                      onChange={(e) => setTerminationDate(e.target.value)}
-                    />
+                  <div className="flex-1 space-y-1">
+                    <Label>Fecha de baja (opcional)</Label>
+                    <input type="date" className={NUM_CLS} value={terminationDate} onChange={(e) => setTerminationDate(e.target.value)} />
                   </div>
-                  <button
+                  <Button
                     type="button"
+                    variant="destructive"
                     disabled={terminateMutation.isPending}
                     onClick={() => terminateMutation.mutate()}
-                    className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
                   >
                     {terminateMutation.isPending ? 'Procesando...' : 'Confirmar baja'}
-                  </button>
+                  </Button>
                 </div>
               )}
             </div>
           )}
 
           {error && (
-            <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+            <div className="rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
               {error}
             </div>
           )}
 
           <div className="flex justify-end gap-3 pt-2 border-t border-border">
-            <button type="button" onClick={onClose} className="rounded-lg border border-border-strong bg-surface px-4 py-2 text-sm text-muted hover:bg-surface-2">
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancelar
-            </button>
-            <button
-              type="submit"
-              disabled={updateMutation.isPending}
-              className="rounded-lg bg-ink px-4 py-2 text-sm font-medium text-canvas hover:opacity-80 disabled:opacity-50"
-            >
+            </Button>
+            <Button type="submit" disabled={updateMutation.isPending}>
               {updateMutation.isPending ? 'Guardando...' : 'Guardar cambios'}
-            </button>
+            </Button>
           </div>
         </form>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
-// ── Temp password toast ────────────────────────────────────────────────────────
+// ── Temp password banner ───────────────────────────────────────────────────────
 
 function TempPasswordBanner({ password, onDismiss }: { password: string; onDismiss: () => void }) {
   const [copied, setCopied] = useState(false);
@@ -630,12 +678,12 @@ function TempPasswordBanner({ password, onDismiss }: { password: string; onDismi
   };
 
   return (
-    <div className="mb-4 flex items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+    <div className="mb-4 flex items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 dark:border-amber-800 dark:bg-amber-950">
       <div className="flex-1">
-        <p className="text-sm font-medium text-amber-800">Empleado creado con contraseña temporal</p>
+        <p className="text-sm font-medium text-amber-800 dark:text-amber-200">Empleado creado con contraseña temporal</p>
         <div className="mt-1 flex items-center gap-2">
-          <span className="font-mono text-sm text-amber-900">{password}</span>
-          <button onClick={copy} className="rounded p-1 text-amber-600 hover:bg-amber-100">
+          <span className="font-mono text-sm text-amber-900 dark:text-amber-100">{password}</span>
+          <button onClick={copy} className="rounded p-1 text-amber-600 hover:bg-amber-100 dark:hover:bg-amber-900">
             {copied ? <Check size={14} /> : <Copy size={14} />}
           </button>
         </div>
@@ -682,16 +730,13 @@ export default function HrEmployeesPage() {
     <div>
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-ink">RRHH</h1>
-          <p className="mt-1 text-sm text-muted">Gestión de empleados, áreas y nómina</p>
+          <h1 className="text-2xl font-semibold text-foreground">RRHH</h1>
+          <p className="mt-1 text-sm text-muted-foreground">Gestión de empleados, áreas y nómina</p>
         </div>
-        <button
-          onClick={() => setShowCreate(true)}
-          className="flex items-center gap-2 rounded-lg bg-ink px-4 py-2 text-sm font-medium text-canvas hover:opacity-80"
-        >
+        <Button onClick={() => setShowCreate(true)}>
           <Plus size={16} />
           Nuevo empleado
-        </button>
+        </Button>
       </div>
 
       <HrNav active="employees" />
@@ -701,100 +746,102 @@ export default function HrEmployeesPage() {
       )}
 
       {isLoading ? (
-        <div className="py-16 text-center text-sm text-faint">Cargando empleados...</div>
+        <div className="py-16 text-center text-sm text-muted-foreground">Cargando empleados...</div>
       ) : employees.length === 0 ? (
         <div className="py-16 text-center">
-          <p className="text-sm text-faint">No hay empleados registrados.</p>
+          <p className="text-sm text-muted-foreground">No hay empleados registrados.</p>
           <button
             onClick={() => setShowCreate(true)}
-            className="mt-3 text-sm font-medium text-ink underline underline-offset-2"
+            className="mt-3 text-sm font-medium text-foreground underline underline-offset-2"
           >
             Crear el primero
           </button>
         </div>
       ) : (
-        <div className="overflow-hidden rounded-xl border border-border bg-surface">
-          <table className="w-full text-sm">
-            <thead className="border-b border-border bg-surface-2 text-xs font-semibold uppercase tracking-wider text-muted">
-              <tr>
-                <th className="px-4 py-3 text-left">Nro.</th>
-                <th className="px-4 py-3 text-left">Código</th>
-                <th className="px-4 py-3 text-left">Empleado</th>
-                <th className="px-4 py-3 text-left">Documento</th>
-                <th className="px-4 py-3 text-left">Área</th>
-                <th className="px-4 py-3 text-left">Cargo</th>
-                <th className="px-4 py-3 text-right">Salario base</th>
-                <th className="px-4 py-3 text-left">Contrato</th>
-                <th className="px-4 py-3 text-left">Estado</th>
-                <th className="px-4 py-3 text-left"></th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {employees.map((emp: Employee) => (
-                <tr key={emp.id} className="hover:bg-surface-2">
-                  <td className="px-4 py-3 font-mono text-xs text-muted">
-                    #{String(emp.employeeNumber).padStart(4, '0')}
-                  </td>
-                  <td className="px-4 py-3 font-mono text-xs text-muted">
-                    {emp.employeeCode ?? '—'}
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="font-medium text-ink">
-                      {emp.firstName} {emp.lastName}
-                    </div>
-                    {emp.user && (
-                      <div className="text-xs text-faint">{emp.user.email}</div>
-                    )}
-                  </td>
-                  <td className="px-4 py-3 text-muted">
-                    <span className="text-xs text-faint">{DOC_LABELS[emp.documentType] ?? emp.documentType} </span>
-                    {emp.documentNumber}
-                  </td>
-                  <td className="px-4 py-3 text-muted">{emp.area?.name ?? '—'}</td>
-                  <td className="px-4 py-3 text-muted">{emp.position?.name ?? '—'}</td>
-                  <td className="px-4 py-3 text-right font-mono text-muted">
-                    {formatSalary(emp.baseSalary)}
-                  </td>
-                  <td className="px-4 py-3 text-muted">
-                    {CONTRACT_LABELS[emp.contractType] ?? emp.contractType}
-                  </td>
-                  <td className="px-4 py-3">
-                    <StatusBadge isActive={emp.isActive} terminationDate={emp.terminationDate} />
-                  </td>
-                  <td className="px-4 py-3">
-                    <button
-                      onClick={() => setEditEmployee(emp)}
-                      className="rounded-md p-1.5 text-faint hover:bg-surface-2 hover:text-ink transition-colors"
-                      title="Editar empleado"
-                    >
-                      <Pencil size={14} />
-                    </button>
-                  </td>
+        <Card className="overflow-hidden p-0">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="border-b border-border bg-muted/30 text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                <tr>
+                  <th className="px-4 py-3 text-left">Nro.</th>
+                  <th className="px-4 py-3 text-left">Código</th>
+                  <th className="px-4 py-3 text-left">Empleado</th>
+                  <th className="px-4 py-3 text-left">Documento</th>
+                  <th className="px-4 py-3 text-left">Área</th>
+                  <th className="px-4 py-3 text-left">Cargo</th>
+                  <th className="px-4 py-3 text-right">Salario base</th>
+                  <th className="px-4 py-3 text-left">Contrato</th>
+                  <th className="px-4 py-3 text-left">Estado</th>
+                  <th className="px-4 py-3 text-left"></th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {employees.map((emp: Employee) => (
+                  <tr key={emp.id} className="hover:bg-muted/20 transition-colors">
+                    <td className="px-4 py-3 font-mono text-xs text-muted-foreground">
+                      #{String(emp.employeeNumber).padStart(4, '0')}
+                    </td>
+                    <td className="px-4 py-3 font-mono text-xs text-muted-foreground">
+                      {emp.employeeCode ?? '—'}
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="font-medium text-foreground">
+                        {emp.firstName} {emp.lastName}
+                      </div>
+                      {emp.user && (
+                        <div className="text-xs text-muted-foreground/60">{emp.user.email}</div>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-muted-foreground">
+                      <span className="text-xs text-muted-foreground/60">{DOC_LABELS[emp.documentType] ?? emp.documentType} </span>
+                      {emp.documentNumber}
+                    </td>
+                    <td className="px-4 py-3 text-muted-foreground">{emp.area?.name ?? '—'}</td>
+                    <td className="px-4 py-3 text-muted-foreground">{emp.position?.name ?? '—'}</td>
+                    <td className="px-4 py-3 text-right font-mono tabular-nums text-muted-foreground">
+                      {formatSalary(emp.baseSalary)}
+                    </td>
+                    <td className="px-4 py-3 text-muted-foreground">
+                      {CONTRACT_LABELS[emp.contractType] ?? emp.contractType}
+                    </td>
+                    <td className="px-4 py-3">
+                      <StatusBadge isActive={emp.isActive} terminationDate={emp.terminationDate} />
+                    </td>
+                    <td className="px-4 py-3">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => setEditEmployee(emp)}
+                        title="Editar empleado"
+                        className="h-7 w-7"
+                      >
+                        <Pencil size={14} />
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
       )}
 
-      {showCreate && (
-        <CreateEmployeeModal
-          areas={areas}
-          positions={positions}
-          onClose={() => setShowCreate(false)}
-          onCreated={handleCreated}
-        />
-      )}
+      <CreateEmployeeModal
+        open={showCreate}
+        onOpenChange={setShowCreate}
+        areas={areas}
+        positions={positions}
+        onCreated={handleCreated}
+      />
 
-      {editEmployee && (
-        <EditEmployeeModal
-          employee={editEmployee}
-          areas={areas}
-          positions={positions}
-          onClose={() => setEditEmployee(null)}
-          onUpdated={() => setEditEmployee(null)}
-        />
-      )}
+      <EditEmployeeModal
+        employee={editEmployee}
+        open={!!editEmployee}
+        onOpenChange={(o) => { if (!o) setEditEmployee(null); }}
+        areas={areas}
+        positions={positions}
+        onUpdated={() => setEditEmployee(null)}
+      />
     </div>
   );
 }

@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { useState } from 'react';
 import Link from 'next/link';
@@ -6,12 +6,18 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Play, CheckCircle, ChevronDown, ChevronRight, Settings, Users2, LayoutGrid, Receipt } from 'lucide-react';
 import { hrApi, type PayrollRecord, type PayrollRecordItem } from '../../../../../lib/api/hr';
 import { NumericInput } from '../../../../../components/numeric-input';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Label } from '@/components/ui/label';
+import { cn } from '@/lib/utils';
+
+const NUM_CLS = 'h-9 w-full min-w-0 rounded-3xl border border-transparent bg-input/50 px-3 text-sm outline-none transition-[color,box-shadow,background-color] focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30';
 
 function HrNav({ active }: { active: 'employees' | 'areas' | 'payroll' }) {
   const links = [
-    { key: 'employees', label: 'Empleados', href: '/dashboard/hr', icon: Users2 },
-    { key: 'areas', label: 'Áreas y cargos', href: '/dashboard/hr/areas', icon: LayoutGrid },
-    { key: 'payroll', label: 'Nómina', href: '/dashboard/hr/payroll', icon: Receipt },
+    { key: 'employees', label: 'Empleados',      href: '/dashboard/hr',         icon: Users2 },
+    { key: 'areas',     label: 'Áreas y cargos', href: '/dashboard/hr/areas',   icon: LayoutGrid },
+    { key: 'payroll',   label: 'Nómina',          href: '/dashboard/hr/payroll', icon: Receipt },
   ] as const;
 
   return (
@@ -20,11 +26,12 @@ function HrNav({ active }: { active: 'employees' | 'areas' | 'payroll' }) {
         <Link
           key={key}
           href={href}
-          className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px ${
+          className={cn(
+            'flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px',
             active === key
-              ? 'border-ink text-ink'
-              : 'border-transparent text-muted hover:text-ink'
-          }`}
+              ? 'border-primary text-foreground'
+              : 'border-transparent text-muted-foreground hover:text-foreground',
+          )}
         >
           <Icon size={15} />
           {label}
@@ -35,23 +42,19 @@ function HrNav({ active }: { active: 'employees' | 'areas' | 'payroll' }) {
 }
 
 const STATUS_LABELS: Record<string, string> = {
-  PENDING: 'Borrador',
+  PENDING:   'Borrador',
   PROCESSED: 'Procesado',
-  PAID: 'Pagado',
-};
-
-const STATUS_COLORS: Record<string, string> = {
-  PENDING: 'bg-surface-2 text-muted',
-  PROCESSED: 'bg-amber-50 text-amber-700',
-  PAID: 'bg-emerald-50 text-emerald-700',
+  PAID:      'Pagado',
 };
 
 function StatusBadge({ status }: { status: string }) {
-  return (
-    <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_COLORS[status] ?? 'bg-surface-2 text-muted'}`}>
-      {STATUS_LABELS[status] ?? status}
-    </span>
-  );
+  if (status === 'PAID') {
+    return <Badge variant="outline" className="bg-accent-subtle text-accent-on border-accent-on/20">{STATUS_LABELS[status] ?? status}</Badge>;
+  }
+  if (status === 'PROCESSED') {
+    return <Badge variant="outline" className="bg-warn-subtle text-warn border-warn/30">{STATUS_LABELS[status] ?? status}</Badge>;
+  }
+  return <Badge variant="outline" className="bg-muted/30 text-muted-foreground border-border">{STATUS_LABELS[status] ?? status}</Badge>;
 }
 
 function formatPYG(n: number) {
@@ -79,7 +82,7 @@ function ConfigPanel() {
   function handleOpen() {
     if (!open && config) {
       setForm({
-        minimumWage: config.minimumWage,
+        minimumWage:    config.minimumWage,
         ipsEmployeeRate: config.ipsEmployeeRate,
         ipsEmployerRate: config.ipsEmployerRate,
       });
@@ -90,64 +93,67 @@ function ConfigPanel() {
   if (isLoading) return null;
 
   return (
-    <div className="mb-6 rounded-xl border border-border bg-surface">
+    <div className="mb-6 rounded-xl border border-border bg-card">
       <button
+        type="button"
         onClick={handleOpen}
         className="flex w-full items-center justify-between px-5 py-4 text-left"
       >
-        <div className="flex items-center gap-2 text-sm font-semibold text-muted">
+        <div className="flex items-center gap-2 text-sm font-semibold text-muted-foreground">
           <Settings size={16} />
           Parámetros de nómina
         </div>
-        {open ? <ChevronDown size={15} className="text-faint" /> : <ChevronRight size={15} className="text-faint" />}
+        {open
+          ? <ChevronDown size={15} className="text-muted-foreground/60" />
+          : <ChevronRight size={15} className="text-muted-foreground/60" />}
       </button>
 
       {open && (
         <div className="border-t border-border px-5 pb-5">
           <div className="mt-4 grid grid-cols-3 gap-4">
-            <div>
-              <label className="block text-xs font-medium text-muted mb-1">Salario mínimo (PYG)</label>
+            <div className="space-y-1.5">
+              <Label>Salario mínimo (PYG)</Label>
               <NumericInput
                 value={form.minimumWage}
                 onChange={(v) => setForm((f) => ({ ...f, minimumWage: Math.round(v) }))}
-                className="w-full rounded-lg border border-border-strong bg-surface text-ink px-3 py-2 text-sm focus:border-border-strong focus:outline-none focus:ring-1 focus:ring-border-strong"
+                className={NUM_CLS}
               />
             </div>
-            <div>
-              <label className="block text-xs font-medium text-muted mb-1">Aporte IPS empleado (%)</label>
+            <div className="space-y-1.5">
+              <Label>Aporte IPS empleado (%)</Label>
               <input
                 type="number"
                 min={0}
                 max={1}
                 step={0.001}
-                className="w-full rounded-lg border border-border-strong bg-surface text-ink px-3 py-2 text-sm focus:border-border-strong focus:outline-none focus:ring-1 focus:ring-border-strong"
+                className={NUM_CLS}
                 value={form.ipsEmployeeRate}
                 onChange={(e) => setForm((f) => ({ ...f, ipsEmployeeRate: parseFloat(e.target.value) || 0 }))}
               />
-              <p className="mt-0.5 text-xs text-faint">Default: 0.09 (9%)</p>
+              <p className="text-xs text-muted-foreground/60">Default: 0.09 (9%)</p>
             </div>
-            <div>
-              <label className="block text-xs font-medium text-muted mb-1">Aporte IPS empleador (%)</label>
+            <div className="space-y-1.5">
+              <Label>Aporte IPS empleador (%)</Label>
               <input
                 type="number"
                 min={0}
                 max={1}
                 step={0.001}
-                className="w-full rounded-lg border border-border-strong bg-surface text-ink px-3 py-2 text-sm focus:border-border-strong focus:outline-none focus:ring-1 focus:ring-border-strong"
+                className={NUM_CLS}
                 value={form.ipsEmployerRate}
                 onChange={(e) => setForm((f) => ({ ...f, ipsEmployerRate: parseFloat(e.target.value) || 0 }))}
               />
-              <p className="mt-0.5 text-xs text-faint">Default: 0.165 (16.5%)</p>
+              <p className="text-xs text-muted-foreground/60">Default: 0.165 (16.5%)</p>
             </div>
           </div>
           <div className="mt-4 flex items-center gap-3">
-            <button
+            <Button
               onClick={() => saveMutation.mutate()}
               disabled={saveMutation.isPending}
-              className="rounded-lg bg-ink px-4 py-2 text-sm font-medium text-canvas hover:opacity-80 disabled:opacity-50"
+              size="sm"
             >
               {saveMutation.isPending ? 'Guardando...' : 'Guardar parámetros'}
-            </button>
+            </Button>
             {saved && <span className="text-sm text-emerald-600">Guardado</span>}
           </div>
         </div>
@@ -164,13 +170,13 @@ function RecordDetail({ record, onPay }: { record: PayrollRecord; onPay: (id: st
     queryFn: () => hrApi.getPayrollRecord(record.id),
   });
 
-  if (isLoading) return <div className="py-4 text-center text-xs text-faint">Cargando detalle...</div>;
-  if (!detail?.items?.length) return <div className="py-4 text-center text-xs text-faint">Sin items</div>;
+  if (isLoading) return <div className="py-4 text-center text-xs text-muted-foreground/60">Cargando detalle...</div>;
+  if (!detail?.items?.length) return <div className="py-4 text-center text-xs text-muted-foreground/60">Sin items</div>;
 
   return (
     <div className="mt-3 overflow-hidden rounded-lg border border-border">
       <table className="w-full text-xs">
-        <thead className="border-b border-border bg-surface-2 text-muted">
+        <thead className="border-b border-border bg-muted/30 text-muted-foreground">
           <tr>
             <th className="px-3 py-2 text-left">Empleado</th>
             <th className="px-3 py-2 text-right">Salario bruto</th>
@@ -182,26 +188,23 @@ function RecordDetail({ record, onPay }: { record: PayrollRecord; onPay: (id: st
         <tbody className="divide-y divide-border">
           {detail.items.map((item: PayrollRecordItem) => (
             <tr key={item.id}>
-              <td className="px-3 py-2 text-muted">
+              <td className="px-3 py-2 text-muted-foreground">
                 #{String(item.employee.employeeNumber).padStart(4, '0')} {item.employee.firstName} {item.employee.lastName}
               </td>
-              <td className="px-3 py-2 text-right font-mono text-muted">{formatPYG(item.grossSalary)}</td>
-              <td className="px-3 py-2 text-right font-mono text-red-600">-{formatPYG(item.ipsEmployee)}</td>
+              <td className="px-3 py-2 text-right font-mono text-muted-foreground">{formatPYG(item.grossSalary)}</td>
+              <td className="px-3 py-2 text-right font-mono text-destructive">-{formatPYG(item.ipsEmployee)}</td>
               <td className="px-3 py-2 text-right font-mono text-amber-600">{formatPYG(item.aguinaldo)}</td>
-              <td className="px-3 py-2 text-right font-mono font-semibold text-ink">{formatPYG(item.netSalary)}</td>
+              <td className="px-3 py-2 text-right font-mono font-semibold text-foreground">{formatPYG(item.netSalary)}</td>
             </tr>
           ))}
         </tbody>
       </table>
       {record.status === 'PENDING' && (
         <div className="border-t border-border px-3 py-2">
-          <button
-            onClick={() => onPay(record.id)}
-            className="flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-700"
-          >
+          <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700" onClick={() => onPay(record.id)}>
             <CheckCircle size={13} />
             Marcar como pagada
-          </button>
+          </Button>
         </div>
       )}
     </div>
@@ -247,8 +250,8 @@ export default function HrPayrollPage() {
   return (
     <div>
       <div className="mb-6">
-        <h1 className="text-2xl font-semibold text-ink">RRHH</h1>
-        <p className="mt-1 text-sm text-muted">Gestión de empleados, áreas y nómina</p>
+        <h1 className="text-2xl font-semibold text-foreground">RRHH</h1>
+        <p className="mt-1 text-sm text-muted-foreground">Gestión de empleados, áreas y nómina</p>
       </div>
 
       <HrNav active="payroll" />
@@ -256,68 +259,67 @@ export default function HrPayrollPage() {
       <ConfigPanel />
 
       {/* Run payroll */}
-      <div className="mb-6 flex items-start gap-3 rounded-xl border border-border bg-surface p-5">
+      <div className="mb-6 flex items-start gap-3 rounded-xl border border-border bg-card p-5">
         <div className="flex-1">
-          <p className="text-sm font-semibold text-ink">Liquidar nómina</p>
-          <p className="mt-0.5 text-xs text-muted">
+          <p className="text-sm font-semibold text-foreground">Liquidar nómina</p>
+          <p className="mt-0.5 text-xs text-muted-foreground">
             Calcula sueldos, IPS y aguinaldo (diciembre) para todos los empleados activos del período.
           </p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <input
             type="month"
-            className="rounded-lg border border-border-strong bg-surface text-ink px-3 py-2 text-sm focus:border-border-strong focus:outline-none focus:ring-1 focus:ring-border-strong"
+            className={NUM_CLS}
+            style={{ width: '160px' }}
             value={period}
             onChange={(e) => setPeriod(e.target.value)}
           />
-          <button
-            onClick={() => {
-              setRunError('');
-              runMutation.mutate();
-            }}
+          <Button
+            onClick={() => { setRunError(''); runMutation.mutate(); }}
             disabled={runMutation.isPending}
-            className="flex items-center gap-1.5 rounded-lg bg-ink px-4 py-2 text-sm font-medium text-canvas hover:opacity-80 disabled:opacity-50"
+            size="sm"
           >
             <Play size={14} />
             {runMutation.isPending ? 'Liquidando...' : 'Liquidar'}
-          </button>
+          </Button>
         </div>
       </div>
       {runError && (
-        <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+        <div className="mb-4 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
           {runError}
         </div>
       )}
 
       {/* Records list */}
       {isLoading ? (
-        <div className="py-10 text-center text-sm text-faint">Cargando historial...</div>
+        <div className="py-10 text-center text-sm text-muted-foreground/60">Cargando historial...</div>
       ) : records.length === 0 ? (
-        <div className="py-10 text-center text-sm text-faint">No hay liquidaciones generadas.</div>
+        <div className="py-10 text-center text-sm text-muted-foreground/60">No hay liquidaciones generadas.</div>
       ) : (
         <div className="space-y-3">
           {records.map((rec: PayrollRecord) => (
-            <div key={rec.id} className="rounded-xl border border-border bg-surface">
+            <div key={rec.id} className="rounded-xl border border-border bg-card">
               <button
+                type="button"
                 onClick={() => setExpandedId(expandedId === rec.id ? null : rec.id)}
                 className="flex w-full items-center justify-between px-5 py-4"
               >
                 <div className="flex items-center gap-4">
-                  <span className="font-mono text-sm font-semibold text-ink">{rec.period}</span>
+                  <span className="font-mono text-sm font-semibold text-foreground">{rec.period}</span>
                   <StatusBadge status={rec.status} />
                 </div>
                 <div className="flex items-center gap-6">
                   <div className="text-right">
-                    <p className="text-xs text-faint">Total neto</p>
-                    <p className="font-mono text-sm font-semibold text-ink">{formatPYG(rec.totalNet)}</p>
+                    <p className="text-xs text-muted-foreground/60">Total neto</p>
+                    <p className="font-mono text-sm font-semibold text-foreground">{formatPYG(rec.totalNet)}</p>
                   </div>
                   <div className="text-right">
-                    <p className="text-xs text-faint">IPS empleador</p>
-                    <p className="font-mono text-sm text-muted">{formatPYG(rec.totalIpsEmployer)}</p>
+                    <p className="text-xs text-muted-foreground/60">IPS empleador</p>
+                    <p className="font-mono text-sm text-muted-foreground">{formatPYG(rec.totalIpsEmployer)}</p>
                   </div>
                   {expandedId === rec.id
-                    ? <ChevronDown size={15} className="text-faint" />
-                    : <ChevronRight size={15} className="text-faint" />}
+                    ? <ChevronDown size={15} className="text-muted-foreground/60" />
+                    : <ChevronRight size={15} className="text-muted-foreground/60" />}
                 </div>
               </button>
 

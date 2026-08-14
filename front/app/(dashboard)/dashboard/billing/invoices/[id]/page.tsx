@@ -4,40 +4,42 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, Printer, Send, AlertTriangle } from 'lucide-react';
-import { billingApi, type Invoice, type InvoiceStatus, type IssueInvoicePayload } from '../../../../../../lib/api/billing';
+import { billingApi, type Invoice, type InvoiceStatus, type IssueInvoicePayload, type PaymentMethod } from '../../../../../../lib/api/billing';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
 function formatPrice(n: number) {
-  return new Intl.NumberFormat('es-PY', {
-    style: 'currency',
-    currency: 'PYG',
-    maximumFractionDigits: 0,
-  }).format(n);
+  return new Intl.NumberFormat('es-PY', { style: 'currency', currency: 'PYG', maximumFractionDigits: 0 }).format(n);
 }
 
 function formatDate(iso: string | null | undefined) {
   if (!iso) return '—';
-  return new Date(iso).toLocaleDateString('es-PY', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-  });
+  return new Date(iso).toLocaleDateString('es-PY', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
-const STATUS_MAP: Record<InvoiceStatus, { label: string; className: string }> = {
-  PENDING:   { label: 'Borrador',  className: 'bg-warn-subtle text-warn' },
-  ISSUED:    { label: 'Emitida',   className: 'bg-info/10 text-info' },
-  PAID:      { label: 'Pagada',    className: 'bg-accent-subtle text-accent-on' },
-  CANCELLED: { label: 'Cancelada', className: 'bg-danger-subtle text-danger' },
+const STATUS_LABEL: Record<InvoiceStatus, string> = {
+  PENDING:   'Borrador',
+  ISSUED:    'Emitida',
+  PAID:      'Pagada',
+  CANCELLED: 'Cancelada',
+};
+
+const STATUS_CLASS: Partial<Record<InvoiceStatus, string>> = {
+  PENDING: 'bg-warn-subtle text-warn border-warn/30',
+  ISSUED:  'bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-950 dark:text-sky-300 dark:border-sky-800',
+  PAID:    'bg-accent-subtle text-accent-on border-accent-on/20',
 };
 
 function StatusBadge({ status }: { status: InvoiceStatus }) {
-  const { label, className } = STATUS_MAP[status];
   return (
-    <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${className}`}>
-      {label}
-    </span>
+    <Badge variant={status === 'CANCELLED' ? 'destructive' : 'outline'} className={STATUS_CLASS[status]}>
+      {STATUS_LABEL[status]}
+    </Badge>
   );
 }
 
@@ -46,24 +48,26 @@ function StatusBadge({ status }: { status: InvoiceStatus }) {
 function printInvoice(invoice: Invoice) {
   const customer = invoice.saleOrder.customer;
   const customerName = `${customer.firstName} ${customer.lastName}`;
-  const doc = customer.documentNumber
-    ? `${customer.documentType ?? 'CI'}: ${customer.documentNumber}`
-    : '';
+  const doc = customer.documentNumber ? `${customer.documentType ?? 'CI'}: ${customer.documentNumber}` : '';
   const invoiceRef = invoice.invoiceNumber
     ? `${invoice.invoicePrefix ?? ''}${invoice.invoiceNumber}`
     : `#${invoice.id.slice(0, 8).toUpperCase()}`;
 
-  const itemRows = invoice.items
-    .map(
-      (item) =>
-        `<tr>
-          <td style="padding:6px 8px;border-bottom:1px solid #e2e8f0">${item.description}</td>
-          <td style="padding:6px 8px;border-bottom:1px solid #e2e8f0;text-align:center">${item.quantity}</td>
-          <td style="padding:6px 8px;border-bottom:1px solid #e2e8f0;text-align:right">${formatPrice(Number(item.unitPrice))}</td>
-          <td style="padding:6px 8px;border-bottom:1px solid #e2e8f0;text-align:right">${formatPrice(Number(item.total))}</td>
-        </tr>`,
-    )
-    .join('');
+  const isCredit = invoice.saleOrder.saleType === 'CREDIT';
+  const itemsSubtotalPdf = invoice.items.reduce((s, it) => s + Number(it.total), 0);
+  const invoiceTotalPdf  = Number(invoice.total);
+  const itemRows = invoice.items.map((item) => {
+    const displayTotal = isCredit && itemsSubtotalPdf > 0
+      ? invoiceTotalPdf * (Number(item.total) / itemsSubtotalPdf)
+      : Number(item.total);
+    const unitCell = isCredit ? '' : `<td style="padding:6px 8px;border-bottom:1px solid #e2e8f0;text-align:right">${formatPrice(Number(item.unitPrice))}</td>`;
+    return `<tr>
+      <td style="padding:6px 8px;border-bottom:1px solid #e2e8f0">${item.description}</td>
+      <td style="padding:6px 8px;border-bottom:1px solid #e2e8f0;text-align:center">${item.quantity}</td>
+      ${unitCell}
+      <td style="padding:6px 8px;border-bottom:1px solid #e2e8f0;text-align:right">${formatPrice(displayTotal)}</td>
+    </tr>`;
+  }).join('');
 
   const html = `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>Factura ${invoiceRef}</title>
   <style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:Arial,sans-serif;font-size:13px;color:#1e293b;padding:32px}
@@ -88,9 +92,10 @@ function printInvoice(invoice: Invoice) {
   <div style="margin-top:2px">${invoice.saleOrder.saleType === 'CREDIT' ? `Crédito${invoice.saleOrder.installments ? ` — ${invoice.saleOrder.installments} cuotas` : ''}` : 'Contado'}</div>
   </div></div>
   <table><thead><tr><th style="text-align:left">Descripción</th><th style="text-align:center">Cant.</th>
-  <th style="text-align:right">Precio unit.</th><th style="text-align:right">Total</th></tr></thead>
+  ${isCredit ? '' : '<th style="text-align:right">Precio unit.</th>'}
+  <th style="text-align:right">Total</th></tr></thead>
   <tbody>${itemRows}</tbody>
-  <tfoot><tr class="total-row"><td colspan="3" style="text-align:right">TOTAL</td>
+  <tfoot><tr class="total-row"><td colspan="${isCredit ? 2 : 3}" style="text-align:right">TOTAL</td>
   <td style="text-align:right">${formatPrice(Number(invoice.total))}</td></tr></tfoot></table>
   <div class="footer"><div class="sig">Firma del cliente</div><div class="sig">Firma y sello empresa</div></div>
   </body></html>`;
@@ -105,11 +110,31 @@ function printInvoice(invoice: Invoice) {
 
 // ── Row helper ─────────────────────────────────────────────────────────────────
 
+function nextFifth(): string {
+  const now = new Date();
+  const target = now.getDate() < 5
+    ? new Date(now.getFullYear(), now.getMonth(), 5)
+    : new Date(now.getFullYear(), now.getMonth() + 1, 5);
+  return target.toISOString().split('T')[0];
+}
+
+const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
+  CASH:          'Efectivo',
+  BANK_TRANSFER: 'Transferencia bancaria',
+  CARD:          'Tarjeta (débito/crédito)',
+  PAGO_EXPRESS:  'PagoExpress',
+  AQUI_PAGO:     'AquíPago',
+  CHECK:         'Cheque',
+};
+
+const NUM_CLS = 'h-9 w-full min-w-0 rounded-3xl border border-transparent bg-input/50 px-3 text-sm outline-none transition-[color,box-shadow,background-color] focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30';
+const TEXTAREA_CLS = 'w-full min-w-0 rounded-2xl border border-transparent bg-input/50 px-3 py-2 text-sm outline-none resize-none transition-[color,box-shadow,background-color] focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30';
+
 function InfoRow({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div className="flex justify-between items-start py-2 border-b border-border last:border-0">
-      <span className="text-sm text-muted">{label}</span>
-      <span className="text-sm font-medium text-ink text-right">{value}</span>
+      <span className="text-sm text-muted-foreground">{label}</span>
+      <span className="text-sm font-medium text-foreground text-right">{value}</span>
     </div>
   );
 }
@@ -126,10 +151,10 @@ export default function InvoiceDetailPage() {
     queryFn: () => billingApi.getInvoice(id),
   });
 
-  // Issue form state — initialized from invoice once loaded
   const [form, setForm] = useState<IssueInvoicePayload>({
     paymentCondition: 'CASH',
     dueDate: '',
+    paymentMethod: undefined,
     invoiceNumber: '',
     invoicePrefix: '',
     notes: '',
@@ -138,9 +163,13 @@ export default function InvoiceDetailPage() {
 
   useEffect(() => {
     if (!invoice || formReady) return;
+    const isCredit = invoice.saleOrder.saleType === 'CREDIT';
     setForm({
-      paymentCondition: invoice.saleOrder.saleType === 'CREDIT' ? 'CREDIT' : 'CASH',
-      dueDate: invoice.dueDate ? new Date(invoice.dueDate).toISOString().split('T')[0] : '',
+      paymentCondition: isCredit ? 'CREDIT' : 'CASH',
+      dueDate: isCredit
+        ? (invoice.dueDate ? new Date(invoice.dueDate).toISOString().split('T')[0] : nextFifth())
+        : '',
+      paymentMethod: undefined,
       invoiceNumber: invoice.invoiceNumber ?? '',
       invoicePrefix: invoice.invoicePrefix ?? '',
       notes: invoice.notes ?? '',
@@ -148,16 +177,15 @@ export default function InvoiceDetailPage() {
     setFormReady(true);
   }, [invoice, formReady]);
 
-  // Cancel state
   const [showCancelForm, setShowCancelForm] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
 
-  // Mutations
   const issueMutation = useMutation({
     mutationFn: () =>
       billingApi.issueInvoice(id, {
         paymentCondition: form.paymentCondition,
         dueDate: form.dueDate || undefined,
+        paymentMethod: form.paymentMethod,
         invoiceNumber: form.invoiceNumber || undefined,
         invoicePrefix: form.invoicePrefix || undefined,
         notes: form.notes || undefined,
@@ -178,29 +206,20 @@ export default function InvoiceDetailPage() {
     },
   });
 
-  // ── Loading / error ──────────────────────────────────────────────────────────
-
   if (isLoading) {
-    return (
-      <div className="py-24 text-center text-sm text-faint">Cargando factura...</div>
-    );
+    return <div className="py-24 text-center text-sm text-muted-foreground/60">Cargando factura...</div>;
   }
 
   if (error || !invoice) {
     return (
       <div className="py-24 text-center">
-        <p className="text-sm text-faint">No se encontró la factura.</p>
-        <button
-          onClick={() => router.back()}
-          className="mt-3 text-sm font-medium text-ink underline underline-offset-2"
-        >
+        <p className="text-sm text-muted-foreground/60">No se encontró la factura.</p>
+        <button onClick={() => router.back()} className="mt-3 text-sm font-medium text-foreground underline underline-offset-2">
           Volver
         </button>
       </div>
     );
   }
-
-  // ── Derived values ───────────────────────────────────────────────────────────
 
   const isPending = invoice.status === 'PENDING';
   const canCancel = invoice.status === 'PENDING' || invoice.status === 'ISSUED';
@@ -208,20 +227,16 @@ export default function InvoiceDetailPage() {
   const invoiceRef = invoice.invoiceNumber
     ? `${invoice.invoicePrefix ?? ''}${invoice.invoiceNumber}`
     : `#${invoice.id.slice(0, 8).toUpperCase()}`;
-  const isCredit = form.paymentCondition === 'CREDIT';
-  const canIssue = !isCredit || !!form.dueDate;
-
-  const inp = 'w-full rounded-lg border border-border-strong bg-surface px-3 py-2 text-sm text-ink focus:border-border-strong focus:outline-none focus:ring-1 focus:ring-border-strong';
-  const lbl = 'block text-xs font-medium text-muted mb-1';
-
-  // ── Render ───────────────────────────────────────────────────────────────────
+  const isCredit = invoice.saleOrder.saleType === 'CREDIT';
+  const canIssue = isCredit ? !!form.dueDate : !!form.paymentMethod;
 
   return (
     <div className="max-w-5xl">
       {/* Back */}
       <button
+        type="button"
         onClick={() => router.push('/dashboard/billing')}
-        className="mb-6 flex items-center gap-1.5 text-sm text-muted hover:text-ink transition-colors"
+        className="mb-6 flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
       >
         <ArrowLeft size={15} />
         Facturas
@@ -231,145 +246,131 @@ export default function InvoiceDetailPage() {
       <div className="mb-8 flex items-start justify-between gap-4">
         <div>
           <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-semibold text-ink">
+            <h1 className="text-2xl font-semibold text-foreground">
               {customer.firstName} {customer.lastName}
             </h1>
             <StatusBadge status={invoice.status} />
           </div>
-          <p className="mt-1 text-sm text-muted">
+          <p className="mt-1 text-sm text-muted-foreground">
             {customer.email && <span>{customer.email} · </span>}
             <span className="font-mono">{invoiceRef}</span>
           </p>
         </div>
-        <button
-          onClick={() => printInvoice(invoice)}
-          className="shrink-0 flex items-center gap-2 rounded-lg border border-border-strong px-4 py-2 text-sm font-medium text-muted hover:bg-surface-2"
-        >
+        <Button variant="outline" onClick={() => printInvoice(invoice)}>
           <Printer size={15} />
           Imprimir
-        </button>
+        </Button>
       </div>
 
       {/* Main grid */}
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-6">
-
-        {/* ── LEFT: Customer + Items + Timeline ── */}
+        {/* LEFT: Customer + Items + Timeline */}
         <div className="space-y-5">
-
           {/* Customer */}
-          <section className="rounded-xl border border-border bg-surface p-5">
-            <h2 className="text-xs font-semibold uppercase tracking-wider text-faint mb-3">
-              Cliente
-            </h2>
+          <section className="rounded-xl border border-border bg-card p-5">
+            <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/60 mb-3">Cliente</h2>
             <InfoRow label="Nombre" value={`${customer.firstName} ${customer.lastName}`} />
             {customer.email && <InfoRow label="Email" value={customer.email} />}
             {customer.documentNumber && (
-              <InfoRow
-                label="Documento"
-                value={`${customer.documentType ?? 'C.I.'} ${customer.documentNumber}`}
-              />
+              <InfoRow label="Documento" value={`${customer.documentType ?? 'C.I.'} ${customer.documentNumber}`} />
             )}
           </section>
 
           {/* Items */}
-          <section className="rounded-xl border border-border bg-surface overflow-hidden">
+          <section className="rounded-xl border border-border bg-card overflow-hidden">
             <div className="px-5 py-4 border-b border-border">
-              <h2 className="text-xs font-semibold uppercase tracking-wider text-faint">
-                Detalle
-              </h2>
+              <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/60">Detalle</h2>
             </div>
-            <table className="w-full text-sm">
-              <thead className="bg-surface-2 text-xs font-semibold uppercase tracking-wider text-faint">
-                <tr>
-                  <th className="px-5 py-3 text-left">Descripción</th>
-                  <th className="px-5 py-3 text-center w-16">Cant.</th>
-                  <th className="px-5 py-3 text-right">P. Unit.</th>
-                  <th className="px-5 py-3 text-right">Total</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {invoice.items.map((item) => (
-                  <tr key={item.id}>
-                    <td className="px-5 py-3">
-                      <p className="font-medium text-ink">{item.description}</p>
-                      {item.ivaRate ? (
-                        <p className="text-xs text-faint">IVA {item.ivaRate}%</p>
-                      ) : null}
-                    </td>
-                    <td className="px-5 py-3 text-center text-muted tabular-nums">
-                      {item.quantity}
-                    </td>
-                    <td className="px-5 py-3 text-right text-muted tabular-nums">
-                      {formatPrice(Number(item.unitPrice))}
-                    </td>
-                    <td className="px-5 py-3 text-right font-medium text-ink tabular-nums">
-                      {formatPrice(Number(item.total))}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            <div className="flex justify-between items-center px-5 py-4 border-t border-border bg-surface-2">
-              <span className="text-sm font-semibold text-muted">Total</span>
-              <span className="text-lg font-bold text-ink tabular-nums">
+            {(() => {
+              const itemsSubtotal = invoice.items.reduce((s, it) => s + Number(it.total), 0);
+              const invoiceTotal  = Number(invoice.total);
+              return (
+                <table className="w-full text-sm">
+                  <thead className="bg-muted/30 text-xs font-semibold uppercase tracking-wider text-muted-foreground/60">
+                    <tr>
+                      <th className="px-5 py-3 text-left">Descripción</th>
+                      <th className="px-5 py-3 text-center w-16">Cant.</th>
+                      {!isCredit && <th className="px-5 py-3 text-right">P. Unit.</th>}
+                      <th className="px-5 py-3 text-right">Total</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {invoice.items.map((item) => {
+                      const displayTotal = isCredit && itemsSubtotal > 0
+                        ? invoiceTotal * (Number(item.total) / itemsSubtotal)
+                        : Number(item.total);
+                      return (
+                        <tr key={item.id}>
+                          <td className="px-5 py-3">
+                            <p className="font-medium text-foreground">{item.description}</p>
+                            {item.ivaRate ? <p className="text-xs text-muted-foreground/60">IVA {item.ivaRate}%</p> : null}
+                          </td>
+                          <td className="px-5 py-3 text-center text-muted-foreground tabular-nums">{item.quantity}</td>
+                          {!isCredit && (
+                            <td className="px-5 py-3 text-right text-muted-foreground tabular-nums">
+                              {formatPrice(Number(item.unitPrice))}
+                            </td>
+                          )}
+                          <td className="px-5 py-3 text-right font-medium text-foreground tabular-nums">
+                            {formatPrice(displayTotal)}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              );
+            })()}
+            <div className="flex justify-between items-center px-5 py-4 border-t border-border bg-muted/30">
+              <span className="text-sm font-semibold text-muted-foreground">Total</span>
+              <span className="text-lg font-bold text-foreground tabular-nums">
                 {formatPrice(Number(invoice.total))}
               </span>
             </div>
           </section>
 
           {/* Timeline */}
-          <section className="rounded-xl border border-border bg-surface p-5">
-            <h2 className="text-xs font-semibold uppercase tracking-wider text-faint mb-3">
-              Historial
-            </h2>
+          <section className="rounded-xl border border-border bg-card p-5">
+            <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/60 mb-3">Historial</h2>
             <InfoRow label="Creada" value={formatDate(invoice.createdAt)} />
             <InfoRow label="Emitida" value={formatDate(invoice.issuedAt)} />
             <InfoRow label="Vencimiento" value={formatDate(invoice.dueDate)} />
           </section>
         </div>
 
-        {/* ── RIGHT: Emission form / info + Actions ── */}
+        {/* RIGHT: Emission form / info + Actions */}
         <div className="space-y-5">
-
           {isPending ? (
-            /* ── PENDING: editable emission form ── */
-            <section className="rounded-xl border border-border bg-surface p-5">
-              <h2 className="text-xs font-semibold uppercase tracking-wider text-faint mb-4">
-                Emisión
-              </h2>
+            <section className="rounded-xl border border-border bg-card p-5">
+              <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/60 mb-4">Emisión</h2>
 
-              {/* Payment condition */}
-              <div className="mb-4">
-                <label className={lbl}>Condición de venta *</label>
-                <div className="grid grid-cols-2 gap-2">
-                  {(['CASH', 'CREDIT'] as const).map((c) => (
-                    <label
-                      key={c}
-                      className={`flex items-center justify-center rounded-lg border px-3 py-2.5 text-sm font-medium cursor-pointer transition-colors ${
-                        form.paymentCondition === c
-                          ? 'border-accent bg-accent-subtle text-accent-on'
-                          : 'border-border-strong text-muted hover:bg-surface-2'
-                      }`}
-                    >
-                      <input
-                        type="radio"
-                        className="sr-only"
-                        checked={form.paymentCondition === c}
-                        onChange={() => setForm((f) => ({ ...f, paymentCondition: c }))}
-                      />
-                      {c === 'CASH' ? 'Contado' : 'Crédito'}
-                    </label>
-                  ))}
+              {/* Payment condition — read-only */}
+              <div className="mb-4 space-y-1.5">
+                <Label>Condición de venta</Label>
+                <div className="flex items-center gap-2 h-9 rounded-3xl border border-border bg-muted/30 px-3 text-sm cursor-default select-none">
+                  <Badge variant="outline" className={isCredit
+                    ? 'bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-950 dark:text-sky-300 dark:border-sky-800'
+                    : 'bg-accent-subtle text-accent-on border-accent-on/20'
+                  }>
+                    {isCredit ? 'Crédito' : 'Contado'}
+                  </Badge>
+                  {isCredit && invoice.saleOrder.installments && (
+                    <span className="text-xs text-muted-foreground/60">{invoice.saleOrder.installments} cuotas</span>
+                  )}
                 </div>
               </div>
 
-              {/* Due date — only for credit */}
+              {/* Due date — credit only */}
               {isCredit && (
-                <div className="mb-4">
-                  <label className={lbl}>Fecha de vencimiento *</label>
+                <div className="mb-4 space-y-1.5">
+                  <Label htmlFor="due-date">
+                    Fecha de vencimiento *
+                    <span className="ml-1 font-normal text-muted-foreground/60">(por conv. día 5 de cada mes)</span>
+                  </Label>
                   <input
+                    id="due-date"
                     type="date"
-                    className={inp}
+                    className={NUM_CLS}
                     value={form.dueDate ?? ''}
                     onChange={(e) => setForm((f) => ({ ...f, dueDate: e.target.value }))}
                     required
@@ -377,21 +378,42 @@ export default function InvoiceDetailPage() {
                 </div>
               )}
 
+              {/* Payment method — cash only */}
+              {!isCredit && (
+                <div className="mb-4 space-y-1.5">
+                  <Label htmlFor="payment-method">Método de pago *</Label>
+                  <Select
+                    value={form.paymentMethod || 'none'}
+                    onValueChange={(v) => setForm((f) => ({ ...f, paymentMethod: v === 'none' ? undefined : v as PaymentMethod }))}
+                  >
+                    <SelectTrigger className="w-full">
+                      <span className="flex-1 text-left text-sm truncate">
+                        {form.paymentMethod ? PAYMENT_METHOD_LABELS[form.paymentMethod] : 'Seleccionar método...'}
+                      </span>
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Seleccionar método...</SelectItem>
+                      {(Object.keys(PAYMENT_METHOD_LABELS) as PaymentMethod[]).map((m) => (
+                        <SelectItem key={m} value={m}>{PAYMENT_METHOD_LABELS[m]}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
               {/* Numbering */}
               <div className="mb-4 grid grid-cols-2 gap-3">
-                <div>
-                  <label className={lbl}>Timbrado / Prefijo</label>
-                  <input
-                    className={inp}
+                <div className="space-y-1.5">
+                  <Label>Timbrado / Prefijo</Label>
+                  <Input
                     placeholder="001"
                     value={form.invoicePrefix ?? ''}
                     onChange={(e) => setForm((f) => ({ ...f, invoicePrefix: e.target.value }))}
                   />
                 </div>
-                <div>
-                  <label className={lbl}>N° de factura</label>
-                  <input
-                    className={inp}
+                <div className="space-y-1.5">
+                  <Label>N° de factura</Label>
+                  <Input
                     placeholder="000001"
                     value={form.invoiceNumber ?? ''}
                     onChange={(e) => setForm((f) => ({ ...f, invoiceNumber: e.target.value }))}
@@ -400,11 +422,11 @@ export default function InvoiceDetailPage() {
               </div>
 
               {/* Notes */}
-              <div className="mb-5">
-                <label className={lbl}>Notas</label>
+              <div className="mb-5 space-y-1.5">
+                <Label>Notas</Label>
                 <textarea
                   rows={3}
-                  className={`${inp} resize-none`}
+                  className={TEXTAREA_CLS}
                   placeholder="Observaciones para la factura..."
                   value={form.notes ?? ''}
                   onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
@@ -412,76 +434,60 @@ export default function InvoiceDetailPage() {
               </div>
 
               {issueMutation.isError && (
-                <p className="mb-3 text-xs text-danger">
-                  {(issueMutation.error as Error & { response?: { data?: { message?: string } } })
-                    ?.response?.data?.message ?? 'Error al emitir la factura'}
+                <p className="mb-3 text-xs text-destructive">
+                  {(issueMutation.error as Error & { response?: { data?: { message?: string } } })?.response?.data?.message ?? 'Error al emitir la factura'}
                 </p>
               )}
 
-              <button
+              <Button
+                className="w-full"
                 onClick={() => issueMutation.mutate()}
                 disabled={!canIssue || issueMutation.isPending}
-                className="w-full flex items-center justify-center gap-2 rounded-lg bg-accent px-4 py-2.5 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-40 transition-opacity"
               >
                 <Send size={15} />
                 {issueMutation.isPending ? 'Emitiendo...' : 'Emitir factura'}
-              </button>
+              </Button>
             </section>
-
           ) : (
-            /* ── ISSUED / PAID / CANCELLED: read-only info ── */
-            <section className="rounded-xl border border-border bg-surface p-5">
-              <h2 className="text-xs font-semibold uppercase tracking-wider text-faint mb-3">
-                Detalles de emisión
-              </h2>
+            <section className="rounded-xl border border-border bg-card p-5">
+              <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/60 mb-3">Detalles de emisión</h2>
               <InfoRow
                 label="Condición"
-                value={
-                  invoice.saleOrder.saleType === 'CREDIT'
-                    ? `Crédito${invoice.saleOrder.installments ? ` · ${invoice.saleOrder.installments} cuotas` : ''}`
-                    : 'Contado'
-                }
+                value={invoice.saleOrder.saleType === 'CREDIT'
+                  ? `Crédito${invoice.saleOrder.installments ? ` · ${invoice.saleOrder.installments} cuotas` : ''}`
+                  : 'Contado'}
               />
               {(invoice.invoiceNumber || invoice.invoicePrefix) && (
-                <InfoRow
-                  label="N° Factura"
-                  value={`${invoice.invoicePrefix ?? ''}${invoice.invoiceNumber ?? ''}`}
-                />
+                <InfoRow label="N° Factura" value={`${invoice.invoicePrefix ?? ''}${invoice.invoiceNumber ?? ''}`} />
               )}
               {invoice.notes && <InfoRow label="Notas" value={invoice.notes} />}
 
               {invoice.status === 'ISSUED' && (
                 <div className="mt-4">
-                  <button
-                    onClick={() => printInvoice(invoice)}
-                    className="w-full flex items-center justify-center gap-2 rounded-lg border border-border-strong px-4 py-2 text-sm font-medium text-muted hover:bg-surface-2"
-                  >
+                  <Button variant="outline" className="w-full" onClick={() => printInvoice(invoice)}>
                     <Printer size={15} />
                     Imprimir / descargar PDF
-                  </button>
+                  </Button>
                 </div>
               )}
             </section>
           )}
 
-          {/* ── Cancel zone ── */}
+          {/* Cancel zone */}
           {canCancel && (
-            <section className="rounded-xl border border-danger/20 bg-danger-subtle p-5">
+            <section className="rounded-xl border border-destructive/20 bg-destructive/10 p-5">
               {!showCancelForm ? (
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-medium text-danger">
-                      Cancelar factura
-                    </p>
-                    <p className="text-xs text-muted mt-0.5">
-                      {invoice.status === 'ISSUED'
-                        ? 'Se generará una nota de crédito.'
-                        : 'Se descartará el borrador.'}
+                    <p className="text-sm font-medium text-destructive">Cancelar factura</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {invoice.status === 'ISSUED' ? 'Se generará una nota de crédito.' : 'Se descartará el borrador.'}
                     </p>
                   </div>
                   <button
+                    type="button"
                     onClick={() => setShowCancelForm(true)}
-                    className="text-sm font-medium text-danger underline underline-offset-2 hover:opacity-80"
+                    className="text-sm font-medium text-destructive underline underline-offset-2 hover:opacity-80"
                   >
                     Cancelar
                   </button>
@@ -489,47 +495,47 @@ export default function InvoiceDetailPage() {
               ) : (
                 <div>
                   <div className="flex items-start gap-2 mb-3">
-                    <AlertTriangle size={15} className="mt-0.5 shrink-0 text-danger" />
-                    <p className="text-xs text-danger">
+                    <AlertTriangle size={15} className="mt-0.5 shrink-0 text-destructive" />
+                    <p className="text-xs text-destructive">
                       {invoice.status === 'ISSUED'
                         ? 'Al cancelar una factura emitida se generará automáticamente una nota de crédito.'
                         : 'Esta acción descartará el borrador. No se generará nota de crédito.'}
                     </p>
                   </div>
-                  <label className="block text-xs font-medium text-danger mb-1">
-                    Motivo <span>*</span>
-                  </label>
-                  <textarea
-                    rows={2}
-                    className="w-full rounded-lg border border-danger/30 bg-surface px-3 py-2 text-sm text-ink focus:outline-none focus:ring-1 focus:ring-danger/40 resize-none mb-3"
-                    placeholder="Ej: Error en los items, cliente solicitó cambios..."
-                    value={cancelReason}
-                    onChange={(e) => setCancelReason(e.target.value)}
-                  />
+                  <div className="space-y-1.5 mb-3">
+                    <Label className="text-destructive">Motivo *</Label>
+                    <textarea
+                      rows={2}
+                      className="w-full min-w-0 rounded-2xl border border-destructive/30 bg-card px-3 py-2 text-sm outline-none resize-none focus-visible:border-destructive focus-visible:ring-3 focus-visible:ring-destructive/30 transition-[box-shadow,border-color]"
+                      placeholder="Ej: Error en los items, cliente solicitó cambios..."
+                      value={cancelReason}
+                      onChange={(e) => setCancelReason(e.target.value)}
+                    />
+                  </div>
                   {cancelMutation.isError && (
-                    <p className="mb-2 text-xs text-danger">
-                      {(cancelMutation.error as Error & { response?: { data?: { message?: string } } })
-                        ?.response?.data?.message ?? 'Error al cancelar'}
+                    <p className="mb-2 text-xs text-destructive">
+                      {(cancelMutation.error as Error & { response?: { data?: { message?: string } } })?.response?.data?.message ?? 'Error al cancelar'}
                     </p>
                   )}
                   <div className="flex gap-2">
-                    <button
+                    <Button
+                      variant="destructive"
+                      className="flex-1"
                       onClick={() => cancelMutation.mutate()}
                       disabled={cancelReason.trim().length < 5 || cancelMutation.isPending}
-                      className="flex-1 rounded-lg bg-danger px-3 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-40"
                     >
                       {cancelMutation.isPending
                         ? 'Cancelando...'
                         : invoice.status === 'ISSUED'
                           ? 'Cancelar y emitir nota de crédito'
                           : 'Confirmar cancelación'}
-                    </button>
-                    <button
+                    </Button>
+                    <Button
+                      variant="outline"
                       onClick={() => { setShowCancelForm(false); setCancelReason(''); }}
-                      className="rounded-lg border border-border-strong px-3 py-2 text-sm text-muted hover:bg-surface-2"
                     >
                       Volver
-                    </button>
+                    </Button>
                   </div>
                 </div>
               )}

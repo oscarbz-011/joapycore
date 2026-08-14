@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -46,12 +46,12 @@ function AddPlanForm({
   }
 
   return (
-    <div className="rounded-xl border-2 border-dashed border-border bg-surface-2 p-4 space-y-3">
-      <p className="text-sm font-medium text-muted">Nuevo plan</p>
+    <div className="rounded-xl border-2 border-dashed border-border bg-muted/30 p-4 space-y-3">
+      <p className="text-sm font-medium text-muted-foreground">Nuevo plan</p>
 
       {/* Quick-select installments */}
       <div>
-        <p className="mb-1.5 text-xs text-faint">Cuotas</p>
+        <p className="mb-1.5 text-xs text-muted-foreground/60">Cuotas</p>
         <div className="flex flex-wrap gap-2">
           {QUICK_INSTALLMENTS.map((n) => (
             <button
@@ -61,10 +61,10 @@ function AddPlanForm({
               onClick={() => setInstallments(n)}
               className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-all ${
                 installments === n
-                  ? 'bg-border-strong text-white'
+                  ? 'bg-primary text-primary-foreground'
                   : existingInstallments.includes(n)
-                    ? 'cursor-not-allowed bg-surface-2 text-faint'
-                    : 'bg-surface border border-border text-muted hover:border-border-strong'
+                    ? 'cursor-not-allowed bg-muted/30 text-muted-foreground/60'
+                    : 'bg-card border border-border text-muted-foreground hover:border-ring/50'
               }`}
             >
               {n}×
@@ -76,7 +76,7 @@ function AddPlanForm({
             placeholder="Otro…"
             value={typeof installments === 'number' && !QUICK_INSTALLMENTS.includes(installments) ? installments : ''}
             onChange={(e) => setInstallments(e.target.value ? Number(e.target.value) : '')}
-            className="w-20 rounded-lg border border-border px-2.5 py-1.5 text-sm focus:border-border-strong focus:outline-none"
+            className="w-20 rounded-lg border border-border px-2.5 py-1.5 text-sm focus:border-ring focus:outline-none"
           />
         </div>
         {isDuplicate && (
@@ -86,7 +86,7 @@ function AddPlanForm({
 
       {/* Interest rate */}
       <div>
-        <p className="mb-1.5 text-xs text-faint">Tasa de interés total</p>
+        <p className="mb-1.5 text-xs text-muted-foreground/60">Tasa de interés total</p>
         <div className="relative w-32">
           <input
             type="number"
@@ -95,26 +95,26 @@ function AddPlanForm({
             placeholder="15"
             value={rate}
             onChange={(e) => setRate(e.target.value)}
-            className="w-full rounded-lg border border-border py-1.5 pl-3 pr-8 text-sm focus:border-border-strong focus:outline-none"
+            className="w-full rounded-lg border border-border py-1.5 pl-3 pr-8 text-sm focus:border-ring focus:outline-none"
           />
-          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-faint">%</span>
+          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground/60">%</span>
         </div>
         {rate && installments && !isDuplicate && (
-          <p className="mt-1 text-xs text-faint">
+          <p className="mt-1 text-xs text-muted-foreground/60">
             Un pedido de Gs. 1.000.000 en {chosen} cuotas: Gs.{' '}
             {Math.round((1_000_000 * (1 + Number(rate) / 100)) / chosen).toLocaleString('es-PY')} / cuota
           </p>
         )}
       </div>
 
-      {error && <p className="text-xs text-red-500">{error}</p>}
+      {error && <p className="text-xs text-destructive">{error}</p>}
 
       <div className="flex gap-2">
         <button
           type="button"
           disabled={!installments || !rate || isDuplicate || submitting}
           onClick={() => void handleSubmit()}
-          className="flex items-center gap-1.5 rounded-lg bg-border-strong px-3.5 py-1.5 text-sm font-medium text-ink hover:opacity-80 disabled:opacity-40 disabled:cursor-not-allowed"
+          className="flex items-center gap-1.5 rounded-lg bg-primary px-3.5 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed"
         >
           <Check size={14} />
           {submitting ? 'Agregando…' : 'Agregar'}
@@ -122,7 +122,7 @@ function AddPlanForm({
         <button
           type="button"
           onClick={onCancel}
-          className="flex items-center gap-1.5 rounded-lg border border-border px-3.5 py-1.5 text-sm text-muted hover:bg-surface-2"
+          className="flex items-center gap-1.5 rounded-lg border border-border px-3.5 py-1.5 text-sm text-muted-foreground hover:bg-muted/20"
         >
           <X size={14} />
           Cancelar
@@ -158,16 +158,16 @@ function PlanRow({
 
   return (
     <div className={`flex items-center gap-4 rounded-xl border px-4 py-3 transition-all ${
-      plan.isActive ? 'border-border bg-surface' : 'border-border bg-surface-2 opacity-60'
+      plan.isActive ? 'border-border bg-card' : 'border-border bg-muted/30 opacity-60'
     }`}>
       {/* Installments badge */}
-      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-surface-2">
-        <span className="text-sm font-bold text-muted">{plan.installments}×</span>
+      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-muted/30">
+        <span className="text-sm font-bold text-muted-foreground">{plan.installments}×</span>
       </div>
 
       {/* Info */}
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium text-ink">{plan.installments} cuotas</p>
+        <p className="text-sm font-medium text-foreground">{plan.installments} cuotas</p>
         {editing ? (
           <div className="mt-1 flex items-center gap-1.5">
             <div className="relative w-24">
@@ -179,17 +179,18 @@ function PlanRow({
                 value={rateInput}
                 onChange={(e) => setRateInput(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter') commitEdit(); if (e.key === 'Escape') setEditing(false); }}
-                className="w-full rounded-md border border-border-strong py-0.5 pl-2 pr-6 text-xs focus:border-border-strong focus:outline-none"
+                className="w-full rounded-md border border-border py-0.5 pl-2 pr-6 text-xs focus:border-ring focus:outline-none"
               />
-              <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-faint">%</span>
+              <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground/60">%</span>
             </div>
-            <button onClick={commitEdit} className="text-muted hover:text-ink"><Check size={13} /></button>
-            <button onClick={() => { setRateInput(String(plan.interestRate)); setEditing(false); }} className="text-faint hover:text-muted"><X size={13} /></button>
+            <button type="button" onClick={commitEdit} className="text-muted-foreground hover:text-foreground"><Check size={13} /></button>
+            <button type="button" onClick={() => { setRateInput(String(plan.interestRate)); setEditing(false); }} className="text-muted-foreground/60 hover:text-muted-foreground"><X size={13} /></button>
           </div>
         ) : (
           <button
+            type="button"
             onClick={() => setEditing(true)}
-            className="mt-0.5 flex items-center gap-1 text-xs text-faint hover:text-muted transition-colors"
+            className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground/60 hover:text-muted-foreground transition-colors"
           >
             <span>{fmtRate(plan.interestRate)} interés total</span>
             <Pencil size={10} />
@@ -199,8 +200,8 @@ function PlanRow({
 
       {/* Monthly estimate hint */}
       <div className="hidden sm:block text-right">
-        <p className="text-xs text-faint">Por Gs. 1.000.000</p>
-        <p className="text-xs font-medium text-muted">
+        <p className="text-xs text-muted-foreground/60">Por Gs. 1.000.000</p>
+        <p className="text-xs font-medium text-muted-foreground">
           ≈ Gs. {Math.round((1_000_000 * (1 + plan.interestRate / 100)) / plan.installments).toLocaleString('es-PY')} /cuota
         </p>
       </div>
@@ -208,16 +209,18 @@ function PlanRow({
       {/* Actions */}
       <div className="flex items-center gap-2">
         <button
+          type="button"
           title={plan.isActive ? 'Desactivar plan' : 'Activar plan'}
           onClick={() => onToggle(plan.id, !plan.isActive)}
-          className="text-faint hover:text-ink transition-colors"
+          className="text-muted-foreground/60 hover:text-foreground transition-colors"
         >
           {plan.isActive ? <ToggleRight size={20} className="text-emerald-500" /> : <ToggleLeft size={20} />}
         </button>
         <button
+          type="button"
           title="Eliminar plan"
           onClick={() => onDelete(plan.id)}
-          className="text-faint hover:text-red-500 transition-colors"
+          className="text-muted-foreground/60 hover:text-destructive transition-colors"
         >
           <Trash2 size={15} />
         </button>
@@ -270,12 +273,12 @@ export default function CreditSettingsPage() {
     <div className="mx-auto max-w-2xl space-y-8 p-8">
       {/* Header */}
       <div className="flex items-start gap-3">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-surface-2">
-          <CreditCard size={20} className="text-muted" />
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-muted/30">
+          <CreditCard size={20} className="text-muted-foreground" />
         </div>
         <div>
-          <h1 className="text-xl font-semibold text-ink">Configuración de Crédito</h1>
-          <p className="mt-0.5 text-sm text-muted">
+          <h1 className="text-xl font-semibold text-foreground">Configuración de Crédito</h1>
+          <p className="mt-0.5 text-sm text-muted-foreground">
             Habilita las ventas a crédito y define los planes de financiamiento disponibles.
           </p>
         </div>
@@ -284,16 +287,16 @@ export default function CreditSettingsPage() {
       {isLoading ? (
         <div className="space-y-3">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="h-16 animate-pulse rounded-xl bg-surface-2" />
+            <div key={i} className="h-16 animate-pulse rounded-xl bg-muted/30" />
           ))}
         </div>
       ) : (
         <div className="space-y-4">
           {/* Enable/disable toggle */}
-          <div className="flex items-center justify-between rounded-2xl border border-border bg-surface px-6 py-4">
+          <div className="flex items-center justify-between rounded-2xl border border-border bg-card px-6 py-4">
             <div>
-              <p className="text-sm font-medium text-ink">Ventas a crédito</p>
-              <p className="text-xs text-faint mt-0.5">
+              <p className="text-sm font-medium text-foreground">Ventas a crédito</p>
+              <p className="text-xs text-muted-foreground/60 mt-0.5">
                 Permite registrar pedidos con plan de cuotas en el módulo de Ventas.
               </p>
             </div>
@@ -302,11 +305,11 @@ export default function CreditSettingsPage() {
               disabled={toggleEnabled.isPending}
               onClick={() => toggleEnabled.mutate(!enabled)}
               className={`relative flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${
-                enabled ? 'bg-emerald-500' : 'bg-border-strong'
+                enabled ? 'bg-emerald-500' : 'bg-muted/50'
               } disabled:opacity-50`}
             >
               <span
-                className={`absolute left-0.5 h-5 w-5 rounded-full bg-surface shadow transition-transform ${
+                className={`absolute left-0.5 h-5 w-5 rounded-full bg-background shadow transition-transform ${
                   enabled ? 'translate-x-5' : 'translate-x-0'
                 }`}
               />
@@ -315,11 +318,11 @@ export default function CreditSettingsPage() {
 
           {/* Plans section — only visible when enabled */}
           {enabled && (
-            <div className="rounded-2xl border border-border bg-surface">
+            <div className="rounded-2xl border border-border bg-card">
               <div className="flex items-center justify-between border-b border-border px-6 py-4">
                 <div>
-                  <p className="text-sm font-medium text-ink">Planes de financiamiento</p>
-                  <p className="text-xs text-faint mt-0.5">
+                  <p className="text-sm font-medium text-foreground">Planes de financiamiento</p>
+                  <p className="text-xs text-muted-foreground/60 mt-0.5">
                     El vendedor podrá seleccionar cualquiera de los planes activos al crear un pedido.
                   </p>
                 </div>
@@ -327,7 +330,7 @@ export default function CreditSettingsPage() {
                   <button
                     type="button"
                     onClick={() => setShowAddForm(true)}
-                    className="flex items-center gap-1.5 rounded-lg bg-border-strong px-3 py-1.5 text-sm font-medium text-ink hover:opacity-80 transition-colors"
+                    className="flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
                   >
                     <Plus size={14} />
                     Agregar
@@ -348,11 +351,11 @@ export default function CreditSettingsPage() {
 
                 {plans.length === 0 && !showAddForm ? (
                   <div className="py-8 text-center">
-                    <p className="text-sm text-faint">No hay planes configurados.</p>
+                    <p className="text-sm text-muted-foreground/60">No hay planes configurados.</p>
                     <button
                       type="button"
                       onClick={() => setShowAddForm(true)}
-                      className="mt-2 text-sm font-medium text-muted hover:text-ink underline underline-offset-2"
+                      className="mt-2 text-sm font-medium text-muted-foreground hover:text-foreground underline underline-offset-2"
                     >
                       Agrega el primero
                     </button>
@@ -378,8 +381,8 @@ export default function CreditSettingsPage() {
 
           {/* Info banner when disabled */}
           {!enabled && (
-            <div className="rounded-xl bg-amber-50 border border-amber-200 px-4 py-3">
-              <p className="text-xs text-amber-700">
+            <div className="rounded-xl bg-amber-50 border border-amber-200 px-4 py-3 dark:bg-amber-950/30 dark:border-amber-800/30">
+              <p className="text-xs text-amber-700 dark:text-amber-300">
                 Las ventas a crédito están deshabilitadas. Los pedidos solo pueden registrarse al contado.
               </p>
             </div>

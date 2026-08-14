@@ -1,44 +1,41 @@
-﻿'use client';
+'use client';
 
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { CheckCircle, XCircle, X, Clock, CreditCard } from 'lucide-react';
 import { salesApi, type SaleOrder } from '../../../../../lib/api/sales';
 import { useAuth } from '../../../../../lib/auth-context';
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
 function formatPrice(n: number) {
-  return new Intl.NumberFormat('es-PY', {
-    style: 'currency',
-    currency: 'PYG',
-    maximumFractionDigits: 0,
-  }).format(n);
+  return new Intl.NumberFormat('es-PY', { style: 'currency', currency: 'PYG', maximumFractionDigits: 0 }).format(n);
 }
 
 function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString('es-PY', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+  return new Date(iso).toLocaleDateString('es-PY', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
-function orderTotal(order: SaleOrder) {
+function orderBase(order: SaleOrder) {
   return order.items.reduce((s, i) => s + Number(i.unitPrice) * i.quantity, 0);
 }
 
+function orderTotal(order: SaleOrder) {
+  if (order.saleType === 'CREDIT') {
+    if (order.loan?.totalAmount) return Number(order.loan.totalAmount);
+    if (order.interestRate) return orderBase(order) * (1 + Number(order.interestRate) / 100);
+  }
+  return orderBase(order);
+}
+
+const TEXTAREA_CLS = 'w-full min-w-0 rounded-2xl border border-transparent bg-input/50 px-3 py-2 text-sm outline-none resize-none transition-[color,box-shadow,background-color] focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30';
+
 // ── Reject modal ───────────────────────────────────────────────────────────────
 
-function RejectModal({
-  order,
-  onClose,
-}: {
-  order: SaleOrder;
-  onClose: () => void;
-}) {
+function RejectModal({ order, open, onOpenChange }: { order: SaleOrder; open: boolean; onOpenChange: (o: boolean) => void }) {
   const queryClient = useQueryClient();
   const [reason, setReason] = useState('');
 
@@ -46,63 +43,60 @@ function RejectModal({
     mutationFn: () => salesApi.rejectCredit(order.id, reason),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['pending-approvals'] });
-      onClose();
+      setReason('');
+      onOpenChange(false);
     },
   });
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-      <div className="relative z-10 w-full max-w-md rounded-2xl bg-surface p-6 shadow-2xl">
-        <div className="flex items-start justify-between mb-4">
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent showCloseButton={false} className="sm:max-w-md p-0">
+        <div className="flex items-start justify-between border-b border-border px-6 py-4">
           <div>
-            <h3 className="text-base font-semibold text-ink">Rechazar crédito</h3>
-            <p className="text-xs text-muted mt-1">
+            <DialogTitle>Rechazar crédito</DialogTitle>
+            <p className="text-xs text-muted-foreground mt-1">
               Pedido de {order.customer.firstName} {order.customer.lastName}
             </p>
           </div>
-          <button onClick={onClose} className="ml-3 rounded-md p-1 text-faint hover:bg-surface-2">
+          <Button variant="ghost" size="icon" onClick={() => onOpenChange(false)}>
             <X size={18} />
-          </button>
+          </Button>
         </div>
 
-        <div className="mb-4">
-          <label className="block text-xs font-medium text-muted mb-1">
-            Motivo del rechazo <span className="text-red-500">*</span>
-          </label>
-          <textarea
-            rows={3}
-            className="w-full rounded-lg border border-border-strong bg-surface text-ink px-3 py-2 text-sm focus:border-border-strong focus:outline-none focus:ring-1 focus:ring-border-strong resize-none"
-            placeholder="Ej: Capacidad de pago insuficiente, historial de deuda..."
-            value={reason}
-            onChange={(e) => setReason(e.target.value)}
-          />
-        </div>
+        <div className="px-6 py-5 space-y-4">
+          <div className="space-y-1.5">
+            <Label>Motivo del rechazo <span className="text-destructive">*</span></Label>
+            <textarea
+              rows={3}
+              className={TEXTAREA_CLS}
+              placeholder="Ej: Capacidad de pago insuficiente, historial de deuda..."
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+            />
+          </div>
 
-        {mutation.isError && (
-          <p className="mb-3 text-xs text-red-600">
-            {(mutation.error as Error & { response?: { data?: { message?: string } } })
-              ?.response?.data?.message ?? 'Error al rechazar'}
-          </p>
-        )}
+          {mutation.isError && (
+            <p className="text-xs text-destructive">
+              {(mutation.error as Error & { response?: { data?: { message?: string } } })?.response?.data?.message ?? 'Error al rechazar'}
+            </p>
+          )}
 
-        <div className="flex gap-2">
-          <button
-            onClick={() => mutation.mutate()}
-            disabled={reason.trim().length < 5 || mutation.isPending}
-            className="flex-1 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-40"
-          >
-            {mutation.isPending ? 'Rechazando...' : 'Confirmar rechazo'}
-          </button>
-          <button
-            onClick={onClose}
-            className="rounded-lg border border-border-strong bg-surface text-ink px-4 py-2 text-sm font-medium text-muted hover:bg-surface-2"
-          >
-            Cancelar
-          </button>
+          <div className="flex gap-2">
+            <Button
+              variant="destructive"
+              className="flex-1"
+              onClick={() => mutation.mutate()}
+              disabled={reason.trim().length < 5 || mutation.isPending}
+            >
+              {mutation.isPending ? 'Rechazando...' : 'Confirmar rechazo'}
+            </Button>
+            <Button variant="outline" onClick={() => onOpenChange(false)}>
+              Cancelar
+            </Button>
+          </div>
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -124,32 +118,32 @@ function OrderCard({ order }: { order: SaleOrder }) {
 
   return (
     <>
-      <div className="rounded-xl border border-border bg-surface p-5">
-        {/* Header */}
+      <div className="rounded-xl border border-border bg-card p-5">
         <div className="flex items-start justify-between gap-3 mb-4">
           <div>
-            <p className="font-semibold text-ink">
+            <p className="font-semibold text-foreground">
               {order.customer.firstName} {order.customer.lastName}
             </p>
-            {order.customer.email && (
-              <p className="text-xs text-faint mt-0.5">{order.customer.email}</p>
-            )}
+            {order.customer.email && <p className="text-xs text-muted-foreground/60 mt-0.5">{order.customer.email}</p>}
             {order.customer.documentNumber && (
-              <p className="text-xs text-faint">
+              <p className="text-xs text-muted-foreground/60">
                 {order.customer.documentType ?? 'CI'}: {order.customer.documentNumber}
               </p>
             )}
           </div>
           <div className="text-right shrink-0">
-            <p className="text-base font-bold text-ink">{formatPrice(total)}</p>
-            <p className="text-xs text-faint mt-0.5">
-              {order.installments ? `${order.installments} cuotas` : 'Sin cuotas'}
-            </p>
+            <p className="text-base font-bold text-foreground">{formatPrice(total)}</p>
+            {order.installments ? (
+              <p className="text-xs text-muted-foreground/60 mt-0.5">
+                {order.installments} cuotas · {formatPrice(Math.ceil(total / order.installments))}/mes
+              </p>
+            ) : (
+              <p className="text-xs text-muted-foreground/60 mt-0.5">Sin cuotas</p>
+            )}
           </div>
         </div>
 
-        {/* Meta */}
-        <div className="flex items-center gap-4 text-xs text-muted mb-4">
+        <div className="flex items-center gap-4 text-xs text-muted-foreground mb-4">
           <span className="flex items-center gap-1">
             <Clock size={12} />
             {formatDate(order.orderDate)}
@@ -158,53 +152,47 @@ function OrderCard({ order }: { order: SaleOrder }) {
             <CreditCard size={12} />
             Crédito
           </span>
-          {seller && (
-            <span>Vendedor: {seller.firstName} {seller.lastName}</span>
-          )}
+          {seller && <span>Vendedor: {seller.firstName} {seller.lastName}</span>}
         </div>
 
-        {/* Items */}
-        <div className="rounded-lg bg-surface-2 p-3 mb-4 space-y-1">
+        <div className="rounded-xl bg-muted/30 p-3 mb-4 space-y-1">
           {order.items.map((item) => (
             <div key={item.id} className="flex justify-between text-sm">
-              <span className="text-muted truncate flex-1">{item.product.name}</span>
-              <span className="text-muted ml-4 shrink-0">
+              <span className="text-muted-foreground truncate flex-1">{item.product.name}</span>
+              <span className="text-muted-foreground ml-4 shrink-0 tabular-nums">
                 {item.quantity} × {formatPrice(Number(item.unitPrice))}
               </span>
             </div>
           ))}
         </div>
 
-        {/* Actions */}
         <div className="flex gap-2">
-          <button
+          <Button
+            className="flex-1 bg-emerald-600 hover:bg-emerald-700"
             onClick={() => approveMutation.mutate()}
             disabled={approveMutation.isPending}
-            className="flex-1 flex items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
           >
             <CheckCircle size={15} />
             {approveMutation.isPending ? 'Aprobando...' : 'Aprobar crédito'}
-          </button>
-          <button
+          </Button>
+          <Button
+            variant="outline"
+            className="flex-1 border-destructive/30 text-destructive hover:bg-destructive/10"
             onClick={() => setShowReject(true)}
-            className="flex-1 flex items-center justify-center gap-2 rounded-lg border border-red-200 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50"
           >
             <XCircle size={15} />
             Rechazar
-          </button>
+          </Button>
         </div>
 
         {approveMutation.isError && (
-          <p className="mt-2 text-xs text-red-600">
-            {(approveMutation.error as Error & { response?: { data?: { message?: string } } })
-              ?.response?.data?.message ?? 'Error al aprobar'}
+          <p className="mt-2 text-xs text-destructive">
+            {(approveMutation.error as Error & { response?: { data?: { message?: string } } })?.response?.data?.message ?? 'Error al aprobar'}
           </p>
         )}
       </div>
 
-      {showReject && (
-        <RejectModal order={order} onClose={() => setShowReject(false)} />
-      )}
+      <RejectModal order={order} open={showReject} onOpenChange={setShowReject} />
     </>
   );
 }
@@ -224,7 +212,7 @@ export default function ApprovalsPage() {
   if (!canManage) {
     return (
       <div className="py-24 text-center">
-        <p className="text-sm text-faint">No tenés permisos para acceder a esta sección.</p>
+        <p className="text-sm text-muted-foreground/60">No tenés permisos para acceder a esta sección.</p>
       </div>
     );
   }
@@ -232,19 +220,19 @@ export default function ApprovalsPage() {
   return (
     <div>
       <div className="mb-6">
-        <h1 className="text-2xl font-semibold text-ink">Aprobaciones de crédito</h1>
-        <p className="mt-1 text-sm text-muted">
+        <h1 className="text-2xl font-semibold text-foreground">Aprobaciones de crédito</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
           Pedidos de venta a crédito pendientes de evaluación antes de confirmar.
         </p>
       </div>
 
       {isLoading ? (
-        <div className="py-16 text-center text-sm text-faint">Cargando...</div>
+        <div className="py-16 text-center text-sm text-muted-foreground/60">Cargando...</div>
       ) : orders.length === 0 ? (
         <div className="py-24 text-center">
           <CheckCircle size={40} className="mx-auto mb-3 text-emerald-400" />
-          <p className="text-base font-medium text-muted">Todo al día</p>
-          <p className="text-sm text-faint mt-1">No hay pedidos pendientes de aprobación.</p>
+          <p className="text-base font-medium text-muted-foreground">Todo al día</p>
+          <p className="text-sm text-muted-foreground/60 mt-1">No hay pedidos pendientes de aprobación.</p>
         </div>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -21,14 +21,18 @@ import {
 } from '../../../../../lib/api/sales';
 import { NumericInput } from '../../../../../components/numeric-input';
 import { usersApi } from '../../../../../lib/api/users';
+import { Button } from '@/components/ui/button';
+import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
+import { cn } from '@/lib/utils';
+
+// ── Constants ──────────────────────────────────────────────────────────────────
+
+const NUM_CLS = 'h-9 w-full min-w-0 rounded-3xl border border-transparent bg-input/50 px-3 text-sm outline-none transition-[color,box-shadow,background-color] focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30';
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
 function fmtGs(n: number) {
-  if (n >= 1_000_000_000) return `Gs. ${(n / 1_000_000_000).toFixed(1)}B`;
-  if (n >= 1_000_000)     return `Gs. ${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000)         return `Gs. ${Math.round(n / 1_000)}k`;
-  return `Gs. ${Math.round(n)}`;
+  return 'Gs. ' + new Intl.NumberFormat('es-PY').format(Math.round(n));
 }
 
 function pct(actual: number, target: number | null) {
@@ -59,7 +63,7 @@ function currentPeriod() {
 
 function ProgressBar({ value, color = '#059669' }: { value: number; color?: string }) {
   return (
-    <div className="h-2 w-full rounded-full bg-surface-2 overflow-hidden">
+    <div className="h-2 w-full rounded-full bg-muted/30 overflow-hidden">
       <div
         className="h-full rounded-full transition-all duration-500"
         style={{ width: `${Math.min(100, value)}%`, background: color }}
@@ -88,19 +92,19 @@ function TargetInput({
   if (editing) {
     return (
       <div className="flex items-center gap-1.5 mt-1">
-        <div className="relative">
+        <div className="relative w-28">
           <NumericInput
             autoFocus
             value={value}
             onChange={setValue}
             decimals={1}
             onKeyDown={(e) => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') setEditing(false); }}
-            className="w-28 rounded-md border border-border-strong py-1 pl-2 pr-8 text-xs focus:border-border-strong focus:outline-none"
+            className="w-full h-7 min-w-0 rounded-xl border border-transparent bg-input/50 pl-2 pr-7 text-xs outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30"
           />
-          <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-faint">M</span>
+          <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground/60">M</span>
         </div>
         <button onClick={commit} className="text-emerald-600 hover:text-emerald-800"><Check size={14} /></button>
-        <button onClick={() => setEditing(false)} className="text-faint hover:text-muted"><X size={14} /></button>
+        <button onClick={() => setEditing(false)} className="text-muted-foreground/60 hover:text-muted-foreground"><X size={14} /></button>
       </div>
     );
   }
@@ -108,7 +112,7 @@ function TargetInput({
   return (
     <button
       onClick={() => { setValue(current != null ? current / 1_000_000 : 0); setEditing(true); }}
-      className="flex items-center gap-1 text-xs text-faint hover:text-muted mt-1 transition-colors"
+      className="flex items-center gap-1 text-xs text-muted-foreground/60 hover:text-muted-foreground mt-1 transition-colors"
     >
       <span>{current != null ? `Meta: ${fmtGs(current)}` : 'Sin meta establecida'}</span>
       <Pencil size={10} />
@@ -117,6 +121,18 @@ function TargetInput({
 }
 
 // ── Seller card ────────────────────────────────────────────────────────────────
+
+const RANK_BADGE: Record<number, string> = {
+  1: 'bg-yellow-100 text-amber-800 dark:bg-yellow-900/30 dark:text-yellow-300',
+  2: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300',
+  3: 'bg-orange-100 text-amber-900 dark:bg-orange-900/30 dark:text-orange-300',
+};
+
+const RANK_LABEL: Record<number, string> = {
+  1: '🥇 1°',
+  2: '🥈 2°',
+  3: '🥉 3°',
+};
 
 function SellerCard({
   stat,
@@ -139,26 +155,17 @@ function SellerCard({
     progress >= 40    ? '#b45309' :
                         '#dc2626';
 
-  const rankBadge =
-    rank === 1 ? { bg: '#fef9c3', text: '#854d0e', label: '🥇 1°' } :
-    rank === 2 ? { bg: '#f1f5f9', text: '#475569', label: '🥈 2°' } :
-    rank === 3 ? { bg: '#fef3e2', text: '#92400e', label: '🥉 3°' } :
-                 null;
-
   const totalOrders = stat.cashCount + stat.creditCount;
 
   return (
-    <div className="rounded-xl border border-border bg-surface px-5 py-4 space-y-3">
+    <div className="rounded-xl border border-border bg-card px-5 py-4 space-y-3">
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <p className="font-semibold text-ink text-sm truncate">{name}</p>
-            {canManage && rankBadge && (
-              <span
-                className="rounded-[6px] px-1.5 py-0.5 text-[11px] font-bold shrink-0"
-                style={{ background: rankBadge.bg, color: rankBadge.text }}
-              >
-                {rankBadge.label}
+            <p className="font-semibold text-foreground text-sm truncate">{name}</p>
+            {canManage && RANK_BADGE[rank] && (
+              <span className={cn('rounded-md px-1.5 py-0.5 text-xs font-bold shrink-0', RANK_BADGE[rank])}>
+                {RANK_LABEL[rank]}
               </span>
             )}
           </div>
@@ -168,15 +175,15 @@ function SellerCard({
               onSave={(amount) => onTargetSave(stat.seller.id, amount)}
             />
           ) : (
-            <p className="text-xs text-faint mt-0.5">
+            <p className="text-xs text-muted-foreground/60 mt-0.5">
               {stat.target != null ? `Meta: ${fmtGs(stat.target)}` : 'Sin meta establecida'}
             </p>
           )}
         </div>
         <div className="text-right shrink-0">
-          <p className="text-lg font-bold text-ink">{fmtGs(stat.actual)}</p>
+          <p className="text-lg font-bold text-foreground">{fmtGs(stat.actual)}</p>
           {progress !== null && (
-            <p className={`text-xs font-semibold ${progress >= 100 ? 'text-emerald-600' : progress >= 70 ? 'text-blue-600' : 'text-muted'}`}>
+            <p className={cn('text-xs font-semibold', progress >= 100 ? 'text-emerald-600' : progress >= 70 ? 'text-blue-600' : 'text-muted-foreground')}>
               {progress}% de meta
             </p>
           )}
@@ -185,28 +192,23 @@ function SellerCard({
 
       <ProgressBar value={progress ?? 0} color={barColor} />
 
-      {/* Cash / Credit breakdown */}
       {totalOrders > 0 && (
         <div className="flex gap-4 pt-1">
-          <div className="flex items-center gap-1.5 text-xs text-muted">
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
             <Banknote size={12} className="text-emerald-500 shrink-0" />
             <span>Contado:</span>
-            <span className="font-medium text-muted">
-              {fmtGs(stat.cashAmount)} ({stat.cashCount})
-            </span>
+            <span className="font-medium">{fmtGs(stat.cashAmount)} ({stat.cashCount})</span>
           </div>
-          <div className="flex items-center gap-1.5 text-xs text-muted">
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
             <CreditCard size={12} className="text-amber-500 shrink-0" />
             <span>Crédito:</span>
-            <span className="font-medium text-muted">
-              {fmtGs(stat.creditAmount)} ({stat.creditCount})
-            </span>
+            <span className="font-medium">{fmtGs(stat.creditAmount)} ({stat.creditCount})</span>
           </div>
         </div>
       )}
 
       {stat.target != null && (
-        <p className="text-xs text-faint">
+        <p className="text-xs text-muted-foreground/60">
           Faltan {fmtGs(Math.max(0, stat.target - stat.actual))} para la meta
         </p>
       )}
@@ -217,7 +219,6 @@ function SellerCard({
 // ── Add seller target form ─────────────────────────────────────────────────────
 
 function AddSellerForm({
-  period,
   existingIds,
   onAdd,
   onCancel,
@@ -238,48 +239,45 @@ function AddSellerForm({
   const available = users.filter((u) => u.status === 'ACTIVE' && !existingIds.has(u.id));
 
   return (
-    <div className="rounded-xl border-2 border-dashed border-border bg-surface-2 p-4 space-y-3">
-      <p className="text-sm font-medium text-muted">Agregar meta para vendedor</p>
+    <div className="rounded-xl border-2 border-dashed border-border bg-muted/30 p-4 space-y-3">
+      <p className="text-sm font-medium text-muted-foreground">Agregar meta para vendedor</p>
       <div className="flex gap-2">
-        <select
-          className="flex-1 rounded-lg border border-border bg-surface text-ink px-3 py-2 text-sm focus:border-border-strong focus:outline-none"
-          value={userId}
-          onChange={(e) => setUserId(e.target.value)}
-        >
-          <option value="">Seleccionar vendedor…</option>
-          {available.map((u) => (
-            <option key={u.id} value={u.id}>{u.firstName} {u.lastName}</option>
-          ))}
-        </select>
+        <Select value={userId || 'none'} onValueChange={(v) => setUserId(v && v !== 'none' ? v : '')}>
+          <SelectTrigger className="flex-1">
+            <span className="flex-1 text-left text-sm truncate">{available.find((u) => u.id === userId) ? `${available.find((u) => u.id === userId)?.firstName} ${available.find((u) => u.id === userId)?.lastName}` : 'Seleccionar vendedor…'}</span>
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="none">Seleccionar vendedor…</SelectItem>
+            {available.map((u) => (
+              <SelectItem key={u.id} value={u.id}>{u.firstName} {u.lastName}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
         <div className="relative w-36">
           <NumericInput
             value={amount}
             onChange={setAmount}
             decimals={1}
             placeholder="Meta en M"
-            className="w-full rounded-lg border border-border py-2 pl-3 pr-8 text-sm focus:border-border-strong focus:outline-none"
+            className={cn(NUM_CLS, 'pr-12')}
           />
-          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-faint">M Gs.</span>
+          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground/60">M Gs.</span>
         </div>
       </div>
       <div className="flex gap-2">
-        <button
+        <Button
           type="button"
+          size="sm"
           disabled={!userId || !amount}
           onClick={() => onAdd(userId, amount * 1_000_000)}
-          className="flex items-center gap-1.5 rounded-lg bg-border-strong px-3.5 py-1.5 text-sm font-medium text-ink hover:opacity-80 disabled:opacity-40"
         >
           <Check size={13} />
           Guardar
-        </button>
-        <button
-          type="button"
-          onClick={onCancel}
-          className="flex items-center gap-1.5 rounded-lg border border-border px-3.5 py-1.5 text-sm text-muted hover:bg-surface-2"
-        >
+        </Button>
+        <Button type="button" variant="outline" size="sm" onClick={onCancel}>
           <X size={13} />
           Cancelar
-        </button>
+        </Button>
       </div>
     </div>
   );
@@ -319,34 +317,37 @@ export default function SalesTargetsPage() {
 
   return (
     <div>
-      {/* Page header */}
       <div className="mb-6">
-        <h1 className="text-2xl font-semibold text-ink">Metas</h1>
-        <p className="mt-1 text-sm text-muted">Rendimiento y metas por vendedor</p>
+        <h1 className="text-2xl font-semibold text-foreground">Metas</h1>
+        <p className="mt-1 text-sm text-muted-foreground">Rendimiento y metas por vendedor</p>
       </div>
 
       {/* Period navigator */}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
-          <button
+          <Button
+            variant="outline"
+            size="icon"
+            className="h-8 w-8"
             onClick={() => setPeriod((p) => addMonths(p, -1))}
-            className="rounded-lg border border-border p-1.5 text-muted hover:bg-surface-2 transition-colors"
           >
             <ChevronLeft size={16} />
-          </button>
-          <h2 className="text-base font-semibold text-ink capitalize min-w-[160px] text-center">
+          </Button>
+          <h2 className="text-base font-semibold text-foreground capitalize min-w-[160px] text-center">
             {periodLabel(period)}
           </h2>
-          <button
+          <Button
+            variant="outline"
+            size="icon"
+            className="h-8 w-8"
             onClick={() => setPeriod((p) => addMonths(p, 1))}
-            className="rounded-lg border border-border p-1.5 text-muted hover:bg-surface-2 transition-colors"
           >
             <ChevronRight size={16} />
-          </button>
+          </Button>
           {period !== currentPeriod() && (
             <button
               onClick={() => setPeriod(currentPeriod())}
-              className="text-xs font-medium text-muted hover:text-ink underline underline-offset-2"
+              className="text-xs font-medium text-muted-foreground hover:text-foreground underline underline-offset-2"
             >
               Hoy
             </button>
@@ -357,28 +358,28 @@ export default function SalesTargetsPage() {
       {isLoading ? (
         <div className="space-y-4">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="h-24 animate-pulse rounded-xl bg-surface-2" />
+            <div key={i} className="h-24 animate-pulse rounded-xl bg-muted/30" />
           ))}
         </div>
       ) : (
         <div className="space-y-6">
           {/* Company-wide card — only shown to managers */}
           {canManage && (
-            <div className="rounded-2xl border border-border bg-surface p-5 space-y-3">
+            <div className="rounded-2xl border border-border bg-card p-5 space-y-3">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-surface-2">
-                    <Building2 size={16} className="text-muted" />
+                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted/30">
+                    <Building2 size={16} className="text-muted-foreground" />
                   </div>
                   <div>
-                    <p className="text-sm font-semibold text-ink">Meta empresa</p>
-                    <p className="text-xs text-faint">Total de ventas del período</p>
+                    <p className="text-sm font-semibold text-foreground">Meta empresa</p>
+                    <p className="text-xs text-muted-foreground/60">Total de ventas del período</p>
                   </div>
                 </div>
                 <div className="text-right">
-                  <p className="text-xl font-bold text-ink">{fmtGs(perf?.companyActual ?? 0)}</p>
+                  <p className="text-xl font-bold text-foreground">{fmtGs(perf?.companyActual ?? 0)}</p>
                   {companyProgress !== null && (
-                    <p className={`text-xs font-semibold ${companyProgress >= 100 ? 'text-emerald-600' : 'text-muted'}`}>
+                    <p className={cn('text-xs font-semibold', companyProgress >= 100 ? 'text-emerald-600' : 'text-muted-foreground')}>
                       {companyProgress}% de meta
                     </p>
                   )}
@@ -402,22 +403,19 @@ export default function SalesTargetsPage() {
             {canManage && (
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
-                  <Trophy size={15} className="text-muted" />
-                  <p className="text-sm font-semibold text-muted">Vendedores</p>
+                  <Trophy size={15} className="text-muted-foreground" />
+                  <p className="text-sm font-semibold text-muted-foreground">Vendedores</p>
                   {perf && perf.sellers.length > 0 && (
-                    <span className="rounded-full bg-surface-2 px-2 py-0.5 text-xs font-medium text-muted">
+                    <span className="rounded-full bg-muted/30 px-2 py-0.5 text-xs font-medium text-muted-foreground">
                       {perf.sellers.length}
                     </span>
                   )}
                 </div>
                 {!showAddForm && (
-                  <button
-                    onClick={() => setShowAddForm(true)}
-                    className="flex items-center gap-1.5 rounded-lg border border-border bg-surface text-ink px-3 py-1.5 text-xs font-medium text-muted hover:bg-surface-2 transition-colors"
-                  >
+                  <Button variant="outline" size="sm" onClick={() => setShowAddForm(true)}>
                     <Plus size={13} />
                     Agregar meta
-                  </button>
+                  </Button>
                 )}
               </div>
             )}
@@ -434,13 +432,13 @@ export default function SalesTargetsPage() {
 
               {!perf || perf.sellers.length === 0 ? (
                 <div className="rounded-xl border border-dashed border-border py-10 text-center">
-                  <Target size={28} className="mx-auto mb-2 text-faint" />
-                  <p className="text-sm text-muted">
+                  <Target size={28} className="mx-auto mb-2 text-muted-foreground/60" />
+                  <p className="text-sm text-muted-foreground">
                     {canManage
                       ? 'Sin ventas registradas en este período'
                       : 'No tenés ventas registradas en este período'}
                   </p>
-                  <p className="text-xs text-faint mt-1">
+                  <p className="text-xs text-muted-foreground/60 mt-1">
                     Las ventas confirmadas o facturadas aparecerán aquí.
                   </p>
                 </div>
