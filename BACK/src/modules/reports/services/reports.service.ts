@@ -57,6 +57,7 @@ export class ReportsService {
     >();
     for (const order of orders) {
       for (const item of order.items) {
+        if (!item.productId || !item.product) continue; // skip free-text service lines
         const e = productMap.get(item.productId) ?? {
           name: item.product.name,
           quantity: 0,
@@ -105,8 +106,8 @@ export class ReportsService {
         id: p.id,
         name: p.name,
         model: p.model,
-        category: p.category.name,
-        brand: p.brand.name,
+        category: p.category?.name ?? '',
+        brand: p.brand?.name ?? '',
         isSerialized: p.isSerialized,
         stock,
         costPrice: Number(p.costPrice),

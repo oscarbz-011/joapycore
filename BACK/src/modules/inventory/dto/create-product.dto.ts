@@ -13,13 +13,15 @@ import {
 import { MarkupType } from '@prisma/client';
 
 export class CreateProductDto {
-  @ApiProperty()
+  @ApiPropertyOptional()
+  @IsOptional()
   @IsUUID()
-  categoryId: string;
+  categoryId?: string;
 
-  @ApiProperty()
+  @ApiPropertyOptional()
+  @IsOptional()
   @IsUUID()
-  brandId: string;
+  brandId?: string;
 
   @ApiPropertyOptional()
   @IsOptional()

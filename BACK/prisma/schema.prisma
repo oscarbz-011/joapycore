@@ -39,6 +39,7 @@ enum StockMovementType {
   OUT
   ADJUSTMENT
   TRANSFER
+  RESERVED
 }
 
 enum MovementReason {
@@ -81,9 +82,17 @@ enum SaleOrderStatus {
   PENDING_CREDIT_APPROVAL
   CREDIT_APPROVED
   CREDIT_REJECTED
+  PAYMENT_RECEIVED
   CONFIRMED
   DELIVERED
   INVOICED
+  CANCELLED
+}
+
+enum DeliveryNoteStatus {
+  PENDING
+  DISPATCHED
+  DELIVERED
   CANCELLED
 }
 
@@ -169,6 +178,15 @@ enum ContractType {
 enum PaymentMethod {
   BANK_TRANSFER
   CASH
+  CARD
+  PAGO_EXPRESS
+  AQUI_PAGO
+  CHECK
+}
+
+enum AdvancePaymentMode {
+  REDUCE_INSTALLMENTS
+  REDUCE_AMOUNT
 }
 
 enum LeaveType {
@@ -193,6 +211,51 @@ enum PayrollStatus {
   PAID
 }
 
+enum CollectionRouteStatus {
+  OPEN
+  CLOSED
+  CANCELLED
+}
+
+enum VisitResult {
+  COLLECTED
+  PARTIAL
+  ABSENT
+  REFUSED
+  PROMISE
+}
+
+enum AgreementStatus {
+  ACTIVE
+  FULFILLED
+  BROKEN
+  CANCELLED
+}
+
+enum CollectionNoteType {
+  VISIT
+  CALL
+  MESSAGE
+  GENERAL
+}
+
+enum SifenEnvironment {
+  TESTING
+  PRODUCTION
+}
+
+enum OrderChannel {
+  NORMAL
+  POS
+  ECOMMERCE
+}
+
+enum PosSessionStatus {
+  OPEN
+  CLOSED
+  DISCREPANCY
+}
+
 // ─── Core ─────────────────────────────────────────────────────────────────────
 
 model Tenant {
@@ -204,8 +267,10 @@ model Tenant {
 
   // Company profile
   razonSocial   String? @map("razon_social")
+  nombreFantasia String? @map("nombre_fantasia")
   ruc           String?
   address       String?
+  numeroCasa    String? @map("numero_casa")
   postalCode    String? @map("postal_code")
   city          String?
   department    String?
@@ -215,6 +280,21 @@ model Tenant {
   logoUrl       String? @map("logo_url")
   employeeCount EmployeeCount? @map("employee_count")
   currency      String  @default("PYG")
+
+  // SIFEN — datos fiscales
+  timbradoNumero        String?   @map("timbrado_numero")
+  timbradoFecha         DateTime? @map("timbrado_fecha")
+  tipoContribuyente     Int?      @map("tipo_contribuyente")   // 1=Física 2=Jurídica
+  tipoRegimen           Int?      @map("tipo_regimen")         // 8=IVA General, etc.
+  actividadesEconomicas Json?     @map("actividades_economicas") // [{codigo, descripcion}]
+
+  // SIFEN — dirección estructurada (códigos SET)
+  departamentoCodigo    Int?      @map("departamento_codigo")
+  departamentoDesc      String?   @map("departamento_desc")
+  distritoCodigo        Int?      @map("distrito_codigo")
+  distritoDesc          String?   @map("distrito_desc")
+  ciudadCodigo          Int?      @map("ciudad_codigo")
+  ciudadDesc            String?   @map("ciudad_desc")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -234,6 +314,8 @@ model Tenant {
   productUnits     ProductUnit[]
   productBatches ProductBatch[]
   stockMovements StockMovement[]
+  posTerminals   PosTerminal[]
+  posSessions    PosSession[]
   customers      Customer[]
   suppliers      Supplier[]
   purchaseOrders PurchaseOrder[]
@@ -249,11 +331,50 @@ model Tenant {
   auditLogs      AuditLog[]
   alertConfigs   AlertConfig[]
   fileRecords    FileRecord[]
+  documents      Document[]
   creditConfig   CreditConfig?
   pricingConfig  PricingConfig?
   saleTargets    SaleTarget[]
+  downPayments      DownPayment[]
+  salePayments      SalePayment[]
+  deliveryNotes     DeliveryNote[]
+  collectionRoutes  CollectionRoute[]
+  collectionVisits  CollectionVisit[]
+  paymentAgreements PaymentAgreement[]
+  collectionNotes   CollectionNote[]
+  sifenConfig       SifenConfig?
 
   @@map("tenants")
+}
+
+model SifenConfig {
+  id       String @id @default(uuid())
+  tenantId String @unique @map("tenant_id")
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
+  environment SifenEnvironment @default(TESTING)
+
+  // Certificado de firma (.p12 / .pfx) — almacenado cifrado con AES-256-GCM
+  certFilename   String?   @map("cert_filename")
+  certData       Bytes?    @map("cert_data")
+  certPassword   String?   @map("cert_password")   // cifrado
+  certType       String?   @map("cert_type")        // p12 | pfx | cer | crt
+  certValidFrom  DateTime? @map("cert_valid_from")
+  certValidUntil DateTime? @map("cert_valid_until")
+  certSubject    String?   @map("cert_subject")
+
+  // Certificado CA raíz SET Paraguay (opcional, .cer / .crt)
+  caCertFilename String? @map("ca_cert_filename")
+  caCertData     Bytes?  @map("ca_cert_data")
+
+  isConfigured Boolean  @default(false) @map("is_configured")
+  lastTestedAt DateTime? @map("last_tested_at")
+  lastTestOk   Boolean?  @map("last_test_ok")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("sifen_configs")
 }
 
 model Branch {
@@ -261,10 +382,21 @@ model Branch {
   tenantId String  @map("tenant_id")
   name     String
   address  String?
+  numeroCasa String? @map("numero_casa")
   city     String?
   phone    String?
+  email    String?
   isMain   Boolean @default(false) @map("is_main")
   isActive Boolean @default(true)  @map("is_active")
+
+  // SIFEN — datos de establecimiento
+  codigoEstablecimiento String? @map("codigo_establecimiento") // "001" registro ante SET
+  departamentoCodigo    Int?    @map("departamento_codigo")
+  departamentoDesc      String? @map("departamento_desc")
+  distritoCodigo        Int?    @map("distrito_codigo")
+  distritoDesc          String? @map("distrito_desc")
+  ciudadCodigo          Int?    @map("ciudad_codigo")
+  ciudadDesc            String? @map("ciudad_desc")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt      @map("updated_at")
@@ -276,6 +408,7 @@ model Branch {
   saleOrders     SaleOrder[]
   purchaseOrders PurchaseOrder[]
   employees      Employee[]
+  posTerminals   PosTerminal[]
 
   @@unique([tenantId, name])
   @@map("branches")
@@ -324,9 +457,12 @@ model User {
   passwordHash       String     @map("password_hash")
   firstName          String     @map("first_name")
   lastName           String     @map("last_name")
+  phone              String?    @map("phone")
   status             UserStatus @default(ACTIVE)
-  mustChangePassword Boolean    @default(false) @map("must_change_password")
-  lastLoginAt        DateTime?  @map("last_login_at")
+  mustChangePassword    Boolean   @default(false) @map("must_change_password")
+  tempPasswordEncrypted String?  @map("temp_password_encrypted")
+  tempPasswordExpiresAt DateTime? @map("temp_password_expires_at")
+  lastLoginAt           DateTime? @map("last_login_at")
   createdAt          DateTime   @default(now()) @map("created_at")
   updatedAt          DateTime   @updatedAt @map("updated_at")
   deletedAt          DateTime?  @map("deleted_at")
@@ -342,7 +478,16 @@ model User {
   selledSaleOrders     SaleOrder[]      @relation("SaleSeller")
   approvedSaleOrders   SaleOrder[]      @relation("CreditApprover")
   rejectedSaleOrders   SaleOrder[]      @relation("CreditRejecter")
-  saleTargets          SaleTarget[]
+  registeredDownPayments      DownPayment[]      @relation("DownPaymentRegistrar")
+  collectedSalePayments       SalePayment[]      @relation("SalePaymentCollector")
+  saleTargets                 SaleTarget[]
+  collectionRoutesAsCollector CollectionRoute[]  @relation("RouteCollector")
+  closedCollectionRoutes      CollectionRoute[]  @relation("RouteClosedBy")
+  createdCollectionRoutes     CollectionRoute[]  @relation("RouteCreatedBy")
+  approvedAgreements          PaymentAgreement[] @relation("AgreementApprovedBy")
+  createdAgreements           PaymentAgreement[] @relation("AgreementCreatedBy")
+  createdCollectionNotes      CollectionNote[]   @relation("NoteCreatedBy")
+  posSessionsAsCashier        PosSession[]       @relation("SessionCashier")
 
   @@map("users")
 }
@@ -449,8 +594,8 @@ model Brand {
 model Product {
   id           String    @id @default(uuid())
   tenantId     String    @map("tenant_id")
-  categoryId   String    @map("category_id")
-  brandId      String    @map("brand_id")
+  categoryId   String?   @map("category_id")
+  brandId      String?   @map("brand_id")
   model        String?
   name         String
   description  String?
@@ -475,8 +620,8 @@ model Product {
   updatedAt    DateTime  @updatedAt @map("updated_at")
 
   tenant             Tenant              @relation(fields: [tenantId], references: [id])
-  category           Category            @relation(fields: [categoryId], references: [id])
-  brand              Brand               @relation(fields: [brandId], references: [id])
+  category           Category?           @relation(fields: [categoryId], references: [id])
+  brand              Brand?              @relation(fields: [brandId], references: [id])
   units              ProductUnit[]
   productBatches     ProductBatch[]
   stockMovements     StockMovement[]
@@ -652,6 +797,7 @@ model Customer {
   city            String?
   profession      String?
   monthlyIncome   Decimal?      @db.Decimal(12, 2) @map("monthly_income")
+  creditLimit     Decimal?      @db.Decimal(12, 2) @map("credit_limit")
   notes           String?
 
   // Structured delivery address — Casa
@@ -669,9 +815,12 @@ model Customer {
   createdAt DateTime  @default(now()) @map("created_at")
   updatedAt DateTime  @updatedAt @map("updated_at")
 
-  tenant     Tenant      @relation(fields: [tenantId], references: [id])
-  saleOrders SaleOrder[]
-  loans      Loan[]
+  tenant            Tenant             @relation(fields: [tenantId], references: [id])
+  saleOrders        SaleOrder[]
+  loans             Loan[]
+  collectionVisits  CollectionVisit[]
+  paymentAgreements PaymentAgreement[]
+  collectionNotes   CollectionNote[]
 
   @@unique([tenantId, customerCode])
   @@map("customers")
@@ -687,10 +836,18 @@ model SaleOrder {
   status       SaleOrderStatus @default(PENDING)
   orderType    OrderType       @default(STANDARD) @map("order_type")
   saleType     SaleType        @default(CASH) @map("sale_type")
+  channel      OrderChannel    @default(NORMAL) @map("channel")
   installments Int?
   interestRate Decimal?        @db.Decimal(5, 2) @map("interest_rate")
   orderDate    DateTime        @map("order_date")
   notes        String?
+
+  // Totals (denormalized from items for reporting and POS display)
+  subtotal     Decimal?        @db.Decimal(12, 2) @map("subtotal")
+  total        Decimal?        @db.Decimal(12, 2) @map("total")
+
+  // POS session link (null for NORMAL channel)
+  posSessionId String?         @map("pos_session_id")
 
   // Delivery surcharge (freight / zone)
   surchargeType   MarkupType? @map("surcharge_type")
@@ -714,17 +871,85 @@ model SaleOrder {
   seller     User?           @relation("SaleSeller", fields: [sellerId], references: [id])
   approvedBy User?           @relation("CreditApprover", fields: [approvedById], references: [id])
   rejectedBy User?           @relation("CreditRejecter", fields: [rejectedById], references: [id])
-  items      SaleOrderItem[]
-  invoice    Invoice?
-  loan       Loan?
+  items        SaleOrderItem[]
+  invoice      Invoice?
+  loan         Loan?
+  downPayment  DownPayment?
+  salePayments SalePayment[]
+  deliveryNote DeliveryNote?
+  posSession   PosSession?     @relation(fields: [posSessionId], references: [id])
 
   @@map("sale_orders")
+}
+
+model SalePayment {
+  id            String        @id @default(uuid())
+  tenantId      String        @map("tenant_id")
+  saleOrderId   String        @map("sale_order_id")
+  amount        Decimal       @db.Decimal(12, 2)
+  paymentMethod PaymentMethod @map("payment_method")
+  paymentDate   DateTime      @map("payment_date")
+  reference     String?
+  notes         String?
+  collectedById String?       @map("collected_by_id")
+  posSessionId  String?       @map("pos_session_id")
+  createdAt     DateTime      @default(now()) @map("created_at")
+  updatedAt     DateTime      @updatedAt @map("updated_at")
+
+  tenant      Tenant      @relation(fields: [tenantId], references: [id])
+  saleOrder   SaleOrder   @relation(fields: [saleOrderId], references: [id])
+  collectedBy User?       @relation("SalePaymentCollector", fields: [collectedById], references: [id])
+  posSession  PosSession? @relation(fields: [posSessionId], references: [id])
+
+  @@index([tenantId, saleOrderId])
+  @@map("sale_payments")
+}
+
+model DeliveryNote {
+  id          String             @id @default(uuid())
+  tenantId    String             @map("tenant_id")
+  saleOrderId String             @unique @map("sale_order_id")
+  noteNumber  String?            @map("note_number")
+  carrier     String?
+  vehicle     String?
+  status      DeliveryNoteStatus @default(PENDING)
+  issuedAt    DateTime?          @map("issued_at")
+  deliveredAt DateTime?          @map("delivered_at")
+  notes       String?
+  createdAt   DateTime           @default(now()) @map("created_at")
+  updatedAt   DateTime           @updatedAt @map("updated_at")
+
+  tenant    Tenant    @relation(fields: [tenantId], references: [id])
+  saleOrder SaleOrder @relation(fields: [saleOrderId], references: [id])
+
+  @@map("delivery_notes")
+}
+
+model DownPayment {
+  id             String        @id @default(uuid())
+  tenantId       String        @map("tenant_id")
+  saleOrderId    String        @unique @map("sale_order_id")
+  amount         Decimal       @db.Decimal(12, 2)
+  paymentMethod  PaymentMethod @map("payment_method")
+  paymentDate    DateTime      @map("payment_date")
+  reference      String?
+  notes          String?
+  registeredById String?       @map("registered_by_id")
+  createdAt      DateTime      @default(now()) @map("created_at")
+  updatedAt      DateTime      @updatedAt @map("updated_at")
+
+  tenant       Tenant    @relation(fields: [tenantId], references: [id])
+  saleOrder    SaleOrder @relation(fields: [saleOrderId], references: [id])
+  registeredBy User?     @relation("DownPaymentRegistrar", fields: [registeredById], references: [id])
+
+  @@map("down_payments")
 }
 
 model SaleOrderItem {
   id          String   @id @default(uuid())
   saleOrderId String   @map("sale_order_id")
-  productId   String   @map("product_id")
+  productId   String?  @map("product_id")    // null = item de servicio / línea libre
+  description String?                          // requerido cuando productId es null
   batchId     String?  @map("batch_id")
   warehouseId String?  @map("warehouse_id")
   quantity    Int
@@ -736,7 +961,7 @@ model SaleOrderItem {
   unitPriceWithoutIva Decimal? @db.Decimal(12, 2) @map("unit_price_without_iva")
 
   saleOrder    SaleOrder     @relation(fields: [saleOrderId], references: [id])
-  product      Product       @relation(fields: [productId], references: [id])
+  product      Product?      @relation(fields: [productId], references: [id])
   batch        ProductBatch? @relation(fields: [batchId], references: [id])
   warehouse    Warehouse?    @relation(fields: [warehouseId], references: [id])
   productUnits ProductUnit[]
@@ -759,6 +984,9 @@ model Invoice {
   // Numbering (timbrado / serie)
   invoiceNumber String? @map("invoice_number")
   invoicePrefix String? @map("invoice_prefix")
+
+  // Payment details (populated on issue)
+  paymentMethod PaymentMethod? @map("payment_method")
 
   // PDF storage
   pdfUrl String? @map("pdf_url")
@@ -829,9 +1057,10 @@ model AccountsReceivable {
   createdAt  DateTime  @default(now()) @map("created_at")
   updatedAt  DateTime  @updatedAt @map("updated_at")
 
-  tenant         Tenant          @relation(fields: [tenantId], references: [id])
-  invoice        Invoice         @relation(fields: [invoiceId], references: [id])
-  paymentRecords PaymentRecord[]
+  tenant           Tenant            @relation(fields: [tenantId], references: [id])
+  invoice          Invoice           @relation(fields: [invoiceId], references: [id])
+  paymentRecords   PaymentRecord[]
+  collectionVisits CollectionVisit[]
 
   @@map("accounts_receivable")
 }
@@ -1086,6 +1315,57 @@ model AlertConfig {
   @@map("alert_configs")
 }
 
+// ─── Documents ────────────────────────────────────────────────────────────────
+
+enum DocType {
+  INTERNAL   // Políticas, manuales, reglamentos internos
+  CONTRACT   // Contratos con clientes o proveedores
+  COMPLIANCE // Habilitaciones, registros fiscales, certificados
+}
+
+enum DocVisibility {
+  PUBLIC     // Todos los usuarios del tenant con documents:read
+  PRIVATE    // Solo el autor + documents:manage
+  ROLE_BASED // Solo los roles listados en allowedRoles
+}
+
+model Document {
+  id           String        @id @default(uuid())
+  tenantId     String        @map("tenant_id")
+  type         DocType
+  title        String
+  description  String?
+  category     String?            // etiqueta libre: "Legal", "RRHH", "Garantías", etc.
+  tags         String[]           @default([])
+  visibility   DocVisibility @default(PUBLIC)
+  allowedRoles String[]           @default([]) @map("allowed_roles")
+
+  // Archivo adjunto (puede ser un link o un upload)
+  fileUrl      String?  @map("file_url")
+  fileName     String?  @map("file_name")
+  fileSizeBytes Int?    @map("file_size_bytes")
+  mimeType     String?  @map("mime_type")
+
+  // Entidad vinculada (contratos → cliente / orden)
+  entityType   String?  @map("entity_type")
+  entityId     String?  @map("entity_id")
+
+  // Compliance: fecha de vencimiento del documento
+  expiresAt    DateTime? @map("expires_at")
+
+  // Rich text body (TipTap JSON stored as string)
+  content      String?
+
+  uploadedById String?   @map("uploaded_by_id")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+  deletedAt    DateTime? @map("deleted_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@map("documents")
+}
+
 // ─── Files ────────────────────────────────────────────────────────────────────
 
 model FileRecord {
@@ -1114,6 +1394,7 @@ model CreditConfig {
   id        String   @id @default(uuid())
   tenantId  String   @unique @map("tenant_id")
   isEnabled Boolean  @default(false) @map("is_enabled")
+  moraRate  Decimal  @default(0) @db.Decimal(5, 2) @map("mora_rate")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
@@ -1154,10 +1435,12 @@ model Loan {
   createdAt         DateTime   @default(now()) @map("created_at")
   updatedAt         DateTime   @updatedAt @map("updated_at")
 
-  tenant       Tenant        @relation(fields: [tenantId], references: [id])
-  saleOrder    SaleOrder     @relation(fields: [saleOrderId], references: [id])
-  customer     Customer      @relation(fields: [customerId], references: [id])
-  installments Installment[]
+  tenant            Tenant             @relation(fields: [tenantId], references: [id])
+  saleOrder         SaleOrder          @relation(fields: [saleOrderId], references: [id])
+  customer          Customer           @relation(fields: [customerId], references: [id])
+  installments      Installment[]
+  collectionVisits  CollectionVisit[]
+  paymentAgreements PaymentAgreement[]
 
   @@map("loans")
 }
@@ -1174,13 +1457,16 @@ model Installment {
   paymentMethod    PaymentMethod?    @map("payment_method")
   paymentReference String?           @map("payment_reference")
   paymentDate      DateTime?         @map("payment_date")
-  status           InstallmentStatus @default(PENDING)
-  notes            String?
-  createdAt        DateTime          @default(now()) @map("created_at")
-  updatedAt        DateTime          @updatedAt @map("updated_at")
+  status               InstallmentStatus @default(PENDING)
+  moraAmount           Decimal           @default(0) @db.Decimal(12, 2) @map("mora_amount")
+  lastMoraCalculatedAt DateTime?         @map("last_mora_calculated_at")
+  notes                String?
+  createdAt            DateTime          @default(now()) @map("created_at")
+  updatedAt            DateTime          @updatedAt @map("updated_at")
 
-  loan   Loan   @relation(fields: [loanId], references: [id])
-  tenant Tenant @relation(fields: [tenantId], references: [id])
+  loan             Loan              @relation(fields: [loanId], references: [id])
+  tenant           Tenant            @relation(fields: [tenantId], references: [id])
+  collectionVisits CollectionVisit[]
 
   @@unique([loanId, number])
   @@index([tenantId, dueDate])
@@ -1216,4 +1502,155 @@ model SaleTarget {
   user   User?  @relation(fields: [userId], references: [id])
 
   @@map("sale_targets")
+}
+
+// ─── Cobranzas ────────────────────────────────────────────────────────────────
+
+model CollectionRoute {
+  id             String                @id @default(uuid())
+  tenantId       String                @map("tenant_id")
+  routeDate      DateTime              @db.Date @map("route_date")
+  collectorId    String?               @map("collector_id")
+  status         CollectionRouteStatus @default(OPEN)
+  totalPlanned   Decimal               @default(0) @db.Decimal(12, 2) @map("total_planned")
+  totalCollected Decimal               @default(0) @db.Decimal(12, 2) @map("total_collected")
+  notes          String?
+  closedAt       DateTime?             @map("closed_at")
+  closedById     String?               @map("closed_by_id")
+  createdById    String?               @map("created_by_id")
+  createdAt      DateTime              @default(now()) @map("created_at")
+  updatedAt      DateTime              @updatedAt @map("updated_at")
+
+  tenant    Tenant            @relation(fields: [tenantId], references: [id])
+  collector User?             @relation("RouteCollector", fields: [collectorId], references: [id])
+  closedBy  User?             @relation("RouteClosedBy", fields: [closedById], references: [id])
+  createdBy User?             @relation("RouteCreatedBy", fields: [createdById], references: [id])
+  visits    CollectionVisit[]
+
+  @@index([tenantId, routeDate])
+  @@index([tenantId, collectorId])
+  @@map("collection_routes")
+}
+
+model CollectionVisit {
+  id              String         @id @default(uuid())
+  tenantId        String         @map("tenant_id")
+  routeId         String         @map("route_id")
+  customerId      String         @map("customer_id")
+  loanId          String?        @map("loan_id")
+  installmentId   String?        @map("installment_id")
+  arId            String?        @map("ar_id")
+  plannedAmount   Decimal        @db.Decimal(12, 2) @map("planned_amount")
+  collectedAmount Decimal        @default(0) @db.Decimal(12, 2) @map("collected_amount")
+  result          VisitResult?
+  promiseDate     DateTime?      @map("promise_date")
+  paymentMethod   PaymentMethod? @map("payment_method")
+  reference       String?
+  notes           String?
+  visitedAt       DateTime?      @map("visited_at")
+  visitOrder      Int            @default(0) @map("visit_order")
+  createdAt       DateTime       @default(now()) @map("created_at")
+  updatedAt       DateTime       @updatedAt @map("updated_at")
+
+  tenant      Tenant              @relation(fields: [tenantId], references: [id])
+  route       CollectionRoute     @relation(fields: [routeId], references: [id])
+  customer    Customer            @relation(fields: [customerId], references: [id])
+  loan        Loan?               @relation(fields: [loanId], references: [id])
+  installment Installment?        @relation(fields: [installmentId], references: [id])
+  ar          AccountsReceivable? @relation(fields: [arId], references: [id])
+
+  @@index([tenantId, routeId])
+  @@index([tenantId, customerId])
+  @@map("collection_visits")
+}
+
+model PaymentAgreement {
+  id                 String          @id @default(uuid())
+  tenantId           String          @map("tenant_id")
+  customerId         String          @map("customer_id")
+  loanId             String?         @map("loan_id")
+  originalDebt       Decimal         @db.Decimal(12, 2) @map("original_debt")
+  agreedInstallments Int             @map("agreed_installments")
+  agreedAmount       Decimal         @db.Decimal(12, 2) @map("agreed_amount")
+  startDate          DateTime        @db.Date @map("start_date")
+  status             AgreementStatus @default(ACTIVE)
+  notes              String?
+  approvedById       String?         @map("approved_by_id")
+  createdById        String?         @map("created_by_id")
+  createdAt          DateTime        @default(now()) @map("created_at")
+  updatedAt          DateTime        @updatedAt @map("updated_at")
+
+  tenant     Tenant   @relation(fields: [tenantId], references: [id])
+  customer   Customer @relation(fields: [customerId], references: [id])
+  loan       Loan?    @relation(fields: [loanId], references: [id])
+  approvedBy User?    @relation("AgreementApprovedBy", fields: [approvedById], references: [id])
+  createdBy  User?    @relation("AgreementCreatedBy", fields: [createdById], references: [id])
+
+  @@index([tenantId, customerId])
+  @@map("payment_agreements")
+}
+
+model CollectionNote {
+  id          String             @id @default(uuid())
+  tenantId    String             @map("tenant_id")
+  customerId  String             @map("customer_id")
+  note        String
+  type        CollectionNoteType @default(GENERAL)
+  createdById String?            @map("created_by_id")
+  createdAt   DateTime           @default(now()) @map("created_at")
+
+  tenant    Tenant   @relation(fields: [tenantId], references: [id])
+  customer  Customer @relation(fields: [customerId], references: [id])
+  createdBy User?    @relation("NoteCreatedBy", fields: [createdById], references: [id])
+
+  @@index([tenantId, customerId])
+  @@map("collection_notes")
+}
+
+// ─── POS ──────────────────────────────────────────────────────────────────────
+
+model PosTerminal {
+  id       String  @id @default(uuid())
+  tenantId String  @map("tenant_id")
+  branchId String  @map("branch_id")
+  name     String                      // "Caja 1", "Caja 2"
+  isActive Boolean @default(true) @map("is_active")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  tenant   Tenant       @relation(fields: [tenantId], references: [id])
+  branch   Branch       @relation(fields: [branchId], references: [id])
+  sessions PosSession[]
+
+  @@unique([tenantId, branchId, name])
+  @@map("pos_terminals")
+}
+
+model PosSession {
+  id           String          @id @default(uuid())
+  tenantId     String          @map("tenant_id")
+  terminalId   String          @map("terminal_id")
+  cashierId    String          @map("cashier_id")
+  status       PosSessionStatus @default(OPEN)
+  openingCash  Decimal         @db.Decimal(12, 2) @map("opening_cash")
+  closingCash  Decimal?        @db.Decimal(12, 2) @map("closing_cash")
+  expectedCash Decimal?        @db.Decimal(12, 2) @map("expected_cash")
+  difference   Decimal?        @db.Decimal(12, 2)
+  openedAt     DateTime        @map("opened_at")
+  closedAt     DateTime?       @map("closed_at")
+  notes        String?
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  tenant   Tenant        @relation(fields: [tenantId], references: [id])
+  terminal PosTerminal   @relation(fields: [terminalId], references: [id])
+  cashier  User          @relation("SessionCashier", fields: [cashierId], references: [id])
+  orders   SaleOrder[]
+  payments SalePayment[]
+
+  @@index([tenantId, status])
+  @@index([tenantId, terminalId])
+  @@map("pos_sessions")
 }

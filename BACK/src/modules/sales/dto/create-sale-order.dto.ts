@@ -15,9 +15,15 @@ import {
 import { MarkupType, OrderType, SaleType } from '@prisma/client';
 
 export class SaleOrderItemDto {
-  @ApiProperty()
+  @ApiPropertyOptional({ description: 'UUID del producto. Null para ítems de servicio o línea libre.' })
+  @IsOptional()
   @IsUUID()
-  productId: string;
+  productId?: string;
+
+  @ApiPropertyOptional({ description: 'Descripción libre (requerida cuando productId es null)' })
+  @IsOptional()
+  @IsString()
+  description?: string;
 
   @ApiProperty()
   @IsInt()

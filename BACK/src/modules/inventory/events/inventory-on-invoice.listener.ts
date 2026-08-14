@@ -45,7 +45,8 @@ export class InventoryOnInvoiceListener {
       if (alreadyReversed) return;
 
       for (const item of invoice.saleOrder!.items) {
-        if (item.product.isSerialized) {
+        if (!item.productId) continue; // free-text / service lines have no stock
+        if (item.product?.isSerialized) {
           // Reset units to available and unlink them from the cancelled sale order item.
           await tx.productUnit.updateMany({
             where: { tenantId, saleOrderItemId: item.id },
