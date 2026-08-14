@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { CustomersRepository } from '../repositories/customers.repository';
 import { CreateCustomerDto } from '../dto/create-customer.dto';
 import { toTitleCase } from '../../../common/utils/normalize.util';
@@ -18,6 +18,10 @@ export class CustomersService {
   }
 
   async create(tenantId: string, dto: CreateCustomerDto) {
+    if (dto.email) {
+      const existing = await this.customersRepository.findByEmail(tenantId, dto.email);
+      if (existing) throw new ConflictException('Ya existe un cliente con ese email');
+    }
     const customerCode = await this.generateCustomerCode(tenantId);
     return this.customersRepository.create(tenantId, {
       ...dto,
@@ -29,6 +33,10 @@ export class CustomersService {
 
   async update(tenantId: string, id: string, dto: Partial<CreateCustomerDto>) {
     await this.findOne(tenantId, id);
+    if (dto.email) {
+      const existing = await this.customersRepository.findByEmail(tenantId, dto.email, id);
+      if (existing) throw new ConflictException('Ya existe un cliente con ese email');
+    }
     return this.customersRepository.update(tenantId, id, {
       ...dto,
       ...(dto.firstName ? { firstName: toTitleCase(dto.firstName) } : {}),

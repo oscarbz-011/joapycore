@@ -19,6 +19,13 @@ export class CustomersRepository {
     });
   }
 
+  findByEmail(tenantId: string, email: string, excludeId?: string) {
+    return this.prisma.customer.findFirst({
+      where: { tenantId, email, deletedAt: null, ...(excludeId ? { id: { not: excludeId } } : {}) },
+      select: { id: true },
+    });
+  }
+
   findLastCode(tenantId: string) {
     return this.prisma.customer.findFirst({
       where: { tenantId, customerCode: { startsWith: 'CLI-' } },
