@@ -1,7 +1,6 @@
 import {
   BadRequestException,
   Injectable,
-  NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
 import {
@@ -16,7 +15,8 @@ export class TenantModulesService {
     private readonly tenantModulesRepository: TenantModulesRepository,
   ) {}
 
-  list(tenantId: string) {
+  async list(tenantId: string) {
+    await this.tenantModulesRepository.backfillMissing(tenantId);
     return this.tenantModulesRepository.findAllForTenant(tenantId);
   }
 
@@ -60,16 +60,8 @@ export class TenantModulesService {
       }
     }
 
-    const count = await this.tenantModulesRepository.setActive(
-      tenantId,
-      moduleName,
-      active,
-    );
-    if (count === 0) {
-      throw new NotFoundException(
-        `Module "${moduleName}" is not configured for this tenant`,
-      );
-    }
+    await this.tenantModulesRepository.backfillMissing(tenantId);
+    await this.tenantModulesRepository.setActive(tenantId, moduleName, active);
     return this.tenantModulesRepository.findAllForTenant(tenantId);
   }
 }

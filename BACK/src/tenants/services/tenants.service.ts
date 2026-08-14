@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { TenantsRepository } from '../repositories/tenants.repository';
 import { UpdateTenantDto } from '../dto/update-tenant.dto';
 
@@ -16,6 +17,13 @@ export class TenantsService {
 
   async update(tenantId: string, dto: UpdateTenantDto) {
     await this.getById(tenantId);
-    return this.tenantsRepository.update(tenantId, dto);
+    const { actividadesEconomicas, ...rest } = dto;
+    const data: Prisma.TenantUpdateInput = {
+      ...rest,
+      ...(actividadesEconomicas !== undefined
+        ? { actividadesEconomicas: actividadesEconomicas as unknown as Prisma.InputJsonValue }
+        : {}),
+    };
+    return this.tenantsRepository.update(tenantId, data);
   }
 }

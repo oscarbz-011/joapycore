@@ -96,7 +96,7 @@ export class TenantsController {
   // ─── Credit config ────────────────────────────────────────────────────────
 
   @Get('credit')
-  @Permissions('tenants:update')
+  @Permissions('sales:read')
   @ApiOperation({ summary: 'Get the credit configuration with all plans' })
   getCreditConfig(@CurrentTenant() tenantId: string) {
     return this.creditConfigService.get(tenantId);
