@@ -64,6 +64,8 @@ export interface CreateEmployeePayload {
   positionId?: string;
   managerId?: string;
   email?: string;
+  bankName?: string;
+  bankAccount?: string;
 }
 
 export interface Area {

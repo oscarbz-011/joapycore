@@ -6,20 +6,19 @@ import {
 } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import * as bcrypt from 'bcryptjs';
-import * as crypto from 'node:crypto';
 import { EmployeesRepository } from '../repositories/employees.repository';
 import { CreateEmployeeDto } from '../dto/create-employee.dto';
 import { UpdateEmployeeDto } from '../dto/update-employee.dto';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { buildUsernameBase, resolveUsername } from '../../../common/utils/username.util';
 import { toTitleCase } from '../../../common/utils/normalize.util';
+import {
+  generateTempPassword,
+  encryptTempPassword,
+  buildTempPasswordExpiry,
+} from '../../../common/utils/temp-password.util';
 
 const SALT_ROUNDS = 10;
-
-function generateTempPassword(): string {
-  // 10-char alphanumeric, URL-safe
-  return crypto.randomBytes(8).toString('base64url').slice(0, 10);
-}
 
 @Injectable()
 export class EmployeesService {
@@ -70,6 +69,8 @@ export class EmployeesService {
 
         tempPassword = generateTempPassword();
         const passwordHash = await bcrypt.hash(tempPassword, SALT_ROUNDS);
+        const tempPasswordEncrypted = encryptTempPassword(tempPassword);
+        const tempPasswordExpiresAt = buildTempPasswordExpiry();
 
         const user = await tx.user.create({
           data: {
@@ -80,6 +81,8 @@ export class EmployeesService {
             firstName,
             lastName,
             mustChangePassword: true,
+            tempPasswordEncrypted,
+            tempPasswordExpiresAt,
           },
         });
         userId = user.id;
@@ -216,10 +219,17 @@ export class EmployeesService {
 
     const tempPassword = generateTempPassword();
     const passwordHash = await bcrypt.hash(tempPassword, SALT_ROUNDS);
+    const tempPasswordEncrypted = encryptTempPassword(tempPassword);
+    const tempPasswordExpiresAt = buildTempPasswordExpiry();
 
     await this.prisma.user.update({
       where: { id: employee.userId },
-      data: { passwordHash, mustChangePassword: true },
+      data: {
+        passwordHash,
+        mustChangePassword: true,
+        tempPasswordEncrypted,
+        tempPasswordExpiresAt,
+      },
     });
 
     return { tempPassword };
