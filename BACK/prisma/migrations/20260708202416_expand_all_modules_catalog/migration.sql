@@ -109,7 +109,10 @@ CREATE TABLE IF NOT EXISTS "branches" (
     CONSTRAINT "branches_pkey" PRIMARY KEY ("id")
 );
 CREATE UNIQUE INDEX IF NOT EXISTS "branches_tenant_id_name_key" ON "branches"("tenant_id", "name");
-ALTER TABLE "branches" ADD CONSTRAINT "branches_tenant_id_fkey" FOREIGN KEY ("tenant_id") REFERENCES "tenants"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+DO $do$ BEGIN
+  ALTER TABLE "branches" ADD CONSTRAINT "branches_tenant_id_fkey" FOREIGN KEY ("tenant_id") REFERENCES "tenants"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+EXCEPTION WHEN OTHERS THEN NULL;
+END; $do$;
 
 -- ── categories & brands ───────────────────────────────────────────────────────
 
@@ -121,7 +124,10 @@ CREATE TABLE IF NOT EXISTS "categories" (
     CONSTRAINT "categories_pkey" PRIMARY KEY ("id")
 );
 CREATE UNIQUE INDEX IF NOT EXISTS "categories_tenant_id_name_key" ON "categories"("tenant_id", "name");
-ALTER TABLE "categories" ADD CONSTRAINT "categories_tenant_id_fkey" FOREIGN KEY ("tenant_id") REFERENCES "tenants"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+DO $do$ BEGIN
+  ALTER TABLE "categories" ADD CONSTRAINT "categories_tenant_id_fkey" FOREIGN KEY ("tenant_id") REFERENCES "tenants"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+EXCEPTION WHEN OTHERS THEN NULL;
+END; $do$;
 
 CREATE TABLE IF NOT EXISTS "brands" (
     "id"        TEXT NOT NULL,
@@ -131,7 +137,10 @@ CREATE TABLE IF NOT EXISTS "brands" (
     CONSTRAINT "brands_pkey" PRIMARY KEY ("id")
 );
 CREATE UNIQUE INDEX IF NOT EXISTS "brands_tenant_id_name_key" ON "brands"("tenant_id", "name");
-ALTER TABLE "brands" ADD CONSTRAINT "brands_tenant_id_fkey" FOREIGN KEY ("tenant_id") REFERENCES "tenants"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+DO $do$ BEGIN
+  ALTER TABLE "brands" ADD CONSTRAINT "brands_tenant_id_fkey" FOREIGN KEY ("tenant_id") REFERENCES "tenants"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+EXCEPTION WHEN OTHERS THEN NULL;
+END; $do$;
 
 -- ── products ─────────────────────────────────────────────────────────────────
 
@@ -162,9 +171,18 @@ CREATE TABLE IF NOT EXISTS "products" (
     "updated_at"   TIMESTAMP(3) NOT NULL,
     CONSTRAINT "products_pkey" PRIMARY KEY ("id")
 );
-ALTER TABLE "products" ADD CONSTRAINT "products_tenant_id_fkey"   FOREIGN KEY ("tenant_id")   REFERENCES "tenants"("id")     ON DELETE RESTRICT ON UPDATE CASCADE;
-ALTER TABLE "products" ADD CONSTRAINT "products_category_id_fkey" FOREIGN KEY ("category_id") REFERENCES "categories"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-ALTER TABLE "products" ADD CONSTRAINT "products_brand_id_fkey"    FOREIGN KEY ("brand_id")    REFERENCES "brands"("id")     ON DELETE RESTRICT ON UPDATE CASCADE;
+DO $do$ BEGIN
+  ALTER TABLE "products" ADD CONSTRAINT "products_tenant_id_fkey"   FOREIGN KEY ("tenant_id")   REFERENCES "tenants"("id")     ON DELETE RESTRICT ON UPDATE CASCADE;
+EXCEPTION WHEN OTHERS THEN NULL;
+END; $do$;
+DO $do$ BEGIN
+  ALTER TABLE "products" ADD CONSTRAINT "products_category_id_fkey" FOREIGN KEY ("category_id") REFERENCES "categories"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+EXCEPTION WHEN OTHERS THEN NULL;
+END; $do$;
+DO $do$ BEGIN
+  ALTER TABLE "products" ADD CONSTRAINT "products_brand_id_fkey"    FOREIGN KEY ("brand_id")    REFERENCES "brands"("id")     ON DELETE RESTRICT ON UPDATE CASCADE;
+EXCEPTION WHEN OTHERS THEN NULL;
+END; $do$;
 
 -- ── product_suppliers ─────────────────────────────────────────────────────────
 
@@ -196,8 +214,14 @@ CREATE TABLE IF NOT EXISTS "product_units" (
     CONSTRAINT "product_units_pkey" PRIMARY KEY ("id")
 );
 CREATE UNIQUE INDEX IF NOT EXISTS "product_units_tenant_id_product_id_serial_number_key" ON "product_units"("tenant_id", "product_id", "serial_number");
-ALTER TABLE "product_units" ADD CONSTRAINT "product_units_tenant_id_fkey"  FOREIGN KEY ("tenant_id")  REFERENCES "tenants"("id")   ON DELETE RESTRICT ON UPDATE CASCADE;
-ALTER TABLE "product_units" ADD CONSTRAINT "product_units_product_id_fkey" FOREIGN KEY ("product_id") REFERENCES "products"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+DO $do$ BEGIN
+  ALTER TABLE "product_units" ADD CONSTRAINT "product_units_tenant_id_fkey"  FOREIGN KEY ("tenant_id")  REFERENCES "tenants"("id")   ON DELETE RESTRICT ON UPDATE CASCADE;
+EXCEPTION WHEN OTHERS THEN NULL;
+END; $do$;
+DO $do$ BEGIN
+  ALTER TABLE "product_units" ADD CONSTRAINT "product_units_product_id_fkey" FOREIGN KEY ("product_id") REFERENCES "products"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+EXCEPTION WHEN OTHERS THEN NULL;
+END; $do$;
 
 -- ── product_batches ───────────────────────────────────────────────────────────
 
@@ -218,8 +242,14 @@ CREATE TABLE IF NOT EXISTS "product_batches" (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS "product_batches_tenant_id_product_id_batch_number_key" ON "product_batches"("tenant_id", "product_id", "batch_number");
 CREATE INDEX IF NOT EXISTS "product_batches_tenant_id_product_id_remaining_qty_idx" ON "product_batches"("tenant_id", "product_id", "remaining_qty");
-ALTER TABLE "product_batches" ADD CONSTRAINT "product_batches_tenant_id_fkey"  FOREIGN KEY ("tenant_id")  REFERENCES "tenants"("id")   ON DELETE RESTRICT ON UPDATE CASCADE;
-ALTER TABLE "product_batches" ADD CONSTRAINT "product_batches_product_id_fkey" FOREIGN KEY ("product_id") REFERENCES "products"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+DO $do$ BEGIN
+  ALTER TABLE "product_batches" ADD CONSTRAINT "product_batches_tenant_id_fkey"  FOREIGN KEY ("tenant_id")  REFERENCES "tenants"("id")   ON DELETE RESTRICT ON UPDATE CASCADE;
+EXCEPTION WHEN OTHERS THEN NULL;
+END; $do$;
+DO $do$ BEGIN
+  ALTER TABLE "product_batches" ADD CONSTRAINT "product_batches_product_id_fkey" FOREIGN KEY ("product_id") REFERENCES "products"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+EXCEPTION WHEN OTHERS THEN NULL;
+END; $do$;
 
 -- ── stock_movements ───────────────────────────────────────────────────────────
 
@@ -235,9 +265,18 @@ CREATE TABLE IF NOT EXISTS "stock_movements" (
     "created_at"   TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT "stock_movements_pkey" PRIMARY KEY ("id")
 );
-ALTER TABLE "stock_movements" ADD CONSTRAINT "stock_movements_tenant_id_fkey"  FOREIGN KEY ("tenant_id")  REFERENCES "tenants"("id")   ON DELETE RESTRICT ON UPDATE CASCADE;
-ALTER TABLE "stock_movements" ADD CONSTRAINT "stock_movements_product_id_fkey" FOREIGN KEY ("product_id") REFERENCES "products"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-ALTER TABLE "stock_movements" ADD CONSTRAINT "stock_movements_branch_id_fkey"  FOREIGN KEY ("branch_id")  REFERENCES "branches"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+DO $do$ BEGIN
+  ALTER TABLE "stock_movements" ADD CONSTRAINT "stock_movements_tenant_id_fkey"  FOREIGN KEY ("tenant_id")  REFERENCES "tenants"("id")   ON DELETE RESTRICT ON UPDATE CASCADE;
+EXCEPTION WHEN OTHERS THEN NULL;
+END; $do$;
+DO $do$ BEGIN
+  ALTER TABLE "stock_movements" ADD CONSTRAINT "stock_movements_product_id_fkey" FOREIGN KEY ("product_id") REFERENCES "products"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+EXCEPTION WHEN OTHERS THEN NULL;
+END; $do$;
+DO $do$ BEGIN
+  ALTER TABLE "stock_movements" ADD CONSTRAINT "stock_movements_branch_id_fkey"  FOREIGN KEY ("branch_id")  REFERENCES "branches"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+EXCEPTION WHEN OTHERS THEN NULL;
+END; $do$;
 
 -- ── suppliers ─────────────────────────────────────────────────────────────────
 
@@ -257,11 +296,23 @@ CREATE TABLE IF NOT EXISTS "suppliers" (
     "updated_at"   TIMESTAMP(3) NOT NULL,
     CONSTRAINT "suppliers_pkey" PRIMARY KEY ("id")
 );
-ALTER TABLE "suppliers" ADD CONSTRAINT "suppliers_tenant_id_fkey" FOREIGN KEY ("tenant_id") REFERENCES "tenants"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+DO $do$ BEGIN
+  ALTER TABLE "suppliers" ADD CONSTRAINT "suppliers_tenant_id_fkey" FOREIGN KEY ("tenant_id") REFERENCES "tenants"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+EXCEPTION WHEN OTHERS THEN NULL;
+END; $do$;
 
-ALTER TABLE "product_suppliers" ADD CONSTRAINT "product_suppliers_tenant_id_fkey"   FOREIGN KEY ("tenant_id")   REFERENCES "tenants"("id")    ON DELETE RESTRICT ON UPDATE CASCADE;
-ALTER TABLE "product_suppliers" ADD CONSTRAINT "product_suppliers_product_id_fkey"  FOREIGN KEY ("product_id")  REFERENCES "products"("id")   ON DELETE RESTRICT ON UPDATE CASCADE;
-ALTER TABLE "product_suppliers" ADD CONSTRAINT "product_suppliers_supplier_id_fkey" FOREIGN KEY ("supplier_id") REFERENCES "suppliers"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+DO $do$ BEGIN
+  ALTER TABLE "product_suppliers" ADD CONSTRAINT "product_suppliers_tenant_id_fkey"   FOREIGN KEY ("tenant_id")   REFERENCES "tenants"("id")    ON DELETE RESTRICT ON UPDATE CASCADE;
+EXCEPTION WHEN OTHERS THEN NULL;
+END; $do$;
+DO $do$ BEGIN
+  ALTER TABLE "product_suppliers" ADD CONSTRAINT "product_suppliers_product_id_fkey"  FOREIGN KEY ("product_id")  REFERENCES "products"("id")   ON DELETE RESTRICT ON UPDATE CASCADE;
+EXCEPTION WHEN OTHERS THEN NULL;
+END; $do$;
+DO $do$ BEGIN
+  ALTER TABLE "product_suppliers" ADD CONSTRAINT "product_suppliers_supplier_id_fkey" FOREIGN KEY ("supplier_id") REFERENCES "suppliers"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+EXCEPTION WHEN OTHERS THEN NULL;
+END; $do$;
 
 -- ── purchase_orders ───────────────────────────────────────────────────────────
 
@@ -282,9 +333,18 @@ CREATE TABLE IF NOT EXISTS "purchase_orders" (
     "updated_at"    TIMESTAMP(3) NOT NULL,
     CONSTRAINT "purchase_orders_pkey" PRIMARY KEY ("id")
 );
-ALTER TABLE "purchase_orders" ADD CONSTRAINT "purchase_orders_tenant_id_fkey"   FOREIGN KEY ("tenant_id")   REFERENCES "tenants"("id")    ON DELETE RESTRICT ON UPDATE CASCADE;
-ALTER TABLE "purchase_orders" ADD CONSTRAINT "purchase_orders_supplier_id_fkey" FOREIGN KEY ("supplier_id") REFERENCES "suppliers"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-ALTER TABLE "purchase_orders" ADD CONSTRAINT "purchase_orders_branch_id_fkey"   FOREIGN KEY ("branch_id")   REFERENCES "branches"("id")  ON DELETE SET NULL ON UPDATE CASCADE;
+DO $do$ BEGIN
+  ALTER TABLE "purchase_orders" ADD CONSTRAINT "purchase_orders_tenant_id_fkey"   FOREIGN KEY ("tenant_id")   REFERENCES "tenants"("id")    ON DELETE RESTRICT ON UPDATE CASCADE;
+EXCEPTION WHEN OTHERS THEN NULL;
+END; $do$;
+DO $do$ BEGIN
+  ALTER TABLE "purchase_orders" ADD CONSTRAINT "purchase_orders_supplier_id_fkey" FOREIGN KEY ("supplier_id") REFERENCES "suppliers"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+EXCEPTION WHEN OTHERS THEN NULL;
+END; $do$;
+DO $do$ BEGIN
+  ALTER TABLE "purchase_orders" ADD CONSTRAINT "purchase_orders_branch_id_fkey"   FOREIGN KEY ("branch_id")   REFERENCES "branches"("id")  ON DELETE SET NULL ON UPDATE CASCADE;
+EXCEPTION WHEN OTHERS THEN NULL;
+END; $do$;
 
 CREATE TABLE IF NOT EXISTS "purchase_order_items" (
     "id"               TEXT NOT NULL,
@@ -295,11 +355,23 @@ CREATE TABLE IF NOT EXISTS "purchase_order_items" (
     "unit_cost"        DECIMAL(12,2) NOT NULL,
     CONSTRAINT "purchase_order_items_pkey" PRIMARY KEY ("id")
 );
-ALTER TABLE "purchase_order_items" ADD CONSTRAINT "purchase_order_items_purchase_order_id_fkey" FOREIGN KEY ("purchase_order_id") REFERENCES "purchase_orders"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-ALTER TABLE "purchase_order_items" ADD CONSTRAINT "purchase_order_items_product_id_fkey"        FOREIGN KEY ("product_id")        REFERENCES "products"("id")       ON DELETE RESTRICT ON UPDATE CASCADE;
+DO $do$ BEGIN
+  ALTER TABLE "purchase_order_items" ADD CONSTRAINT "purchase_order_items_purchase_order_id_fkey" FOREIGN KEY ("purchase_order_id") REFERENCES "purchase_orders"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+EXCEPTION WHEN OTHERS THEN NULL;
+END; $do$;
+DO $do$ BEGIN
+  ALTER TABLE "purchase_order_items" ADD CONSTRAINT "purchase_order_items_product_id_fkey"        FOREIGN KEY ("product_id")        REFERENCES "products"("id")       ON DELETE RESTRICT ON UPDATE CASCADE;
+EXCEPTION WHEN OTHERS THEN NULL;
+END; $do$;
 
-ALTER TABLE "product_units"  ADD CONSTRAINT "product_units_purchase_order_item_id_fkey"  FOREIGN KEY ("purchase_order_item_id") REFERENCES "purchase_order_items"("id") ON DELETE SET NULL ON UPDATE CASCADE;
-ALTER TABLE "product_batches" ADD CONSTRAINT "product_batches_purchase_order_item_id_fkey" FOREIGN KEY ("purchase_order_item_id") REFERENCES "purchase_order_items"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+DO $do$ BEGIN
+  ALTER TABLE "product_units"  ADD CONSTRAINT "product_units_purchase_order_item_id_fkey"  FOREIGN KEY ("purchase_order_item_id") REFERENCES "purchase_order_items"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+EXCEPTION WHEN OTHERS THEN NULL;
+END; $do$;
+DO $do$ BEGIN
+  ALTER TABLE "product_batches" ADD CONSTRAINT "product_batches_purchase_order_item_id_fkey" FOREIGN KEY ("purchase_order_item_id") REFERENCES "purchase_order_items"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+EXCEPTION WHEN OTHERS THEN NULL;
+END; $do$;
 
 -- ── customers ─────────────────────────────────────────────────────────────────
 
@@ -333,7 +405,10 @@ CREATE TABLE IF NOT EXISTS "customers" (
     CONSTRAINT "customers_pkey" PRIMARY KEY ("id")
 );
 CREATE UNIQUE INDEX IF NOT EXISTS "customers_tenant_id_customer_code_key" ON "customers"("tenant_id", "customer_code") WHERE "customer_code" IS NOT NULL;
-ALTER TABLE "customers" ADD CONSTRAINT "customers_tenant_id_fkey" FOREIGN KEY ("tenant_id") REFERENCES "tenants"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+DO $do$ BEGIN
+  ALTER TABLE "customers" ADD CONSTRAINT "customers_tenant_id_fkey" FOREIGN KEY ("tenant_id") REFERENCES "tenants"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+EXCEPTION WHEN OTHERS THEN NULL;
+END; $do$;
 
 -- ── sale_orders ───────────────────────────────────────────────────────────────
 
@@ -359,13 +434,34 @@ CREATE TABLE IF NOT EXISTS "sale_orders" (
     "updated_at"       TIMESTAMP(3) NOT NULL,
     CONSTRAINT "sale_orders_pkey" PRIMARY KEY ("id")
 );
-ALTER TABLE "sale_orders" ADD CONSTRAINT "sale_orders_tenant_id_fkey"      FOREIGN KEY ("tenant_id")      REFERENCES "tenants"("id")   ON DELETE RESTRICT ON UPDATE CASCADE;
-ALTER TABLE "sale_orders" ADD CONSTRAINT "sale_orders_customer_id_fkey"    FOREIGN KEY ("customer_id")    REFERENCES "customers"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-ALTER TABLE "sale_orders" ADD CONSTRAINT "sale_orders_branch_id_fkey"      FOREIGN KEY ("branch_id")      REFERENCES "branches"("id")  ON DELETE SET NULL ON UPDATE CASCADE;
-ALTER TABLE "sale_orders" ADD CONSTRAINT "sale_orders_created_by_id_fkey"  FOREIGN KEY ("created_by_id")  REFERENCES "users"("id")     ON DELETE SET NULL ON UPDATE CASCADE;
-ALTER TABLE "sale_orders" ADD CONSTRAINT "sale_orders_seller_id_fkey"      FOREIGN KEY ("seller_id")      REFERENCES "users"("id")     ON DELETE SET NULL ON UPDATE CASCADE;
-ALTER TABLE "sale_orders" ADD CONSTRAINT "sale_orders_approved_by_id_fkey" FOREIGN KEY ("approved_by_id") REFERENCES "users"("id")     ON DELETE SET NULL ON UPDATE CASCADE;
-ALTER TABLE "sale_orders" ADD CONSTRAINT "sale_orders_rejected_by_id_fkey" FOREIGN KEY ("rejected_by_id") REFERENCES "users"("id")     ON DELETE SET NULL ON UPDATE CASCADE;
+DO $do$ BEGIN
+  ALTER TABLE "sale_orders" ADD CONSTRAINT "sale_orders_tenant_id_fkey"      FOREIGN KEY ("tenant_id")      REFERENCES "tenants"("id")   ON DELETE RESTRICT ON UPDATE CASCADE;
+EXCEPTION WHEN OTHERS THEN NULL;
+END; $do$;
+DO $do$ BEGIN
+  ALTER TABLE "sale_orders" ADD CONSTRAINT "sale_orders_customer_id_fkey"    FOREIGN KEY ("customer_id")    REFERENCES "customers"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+EXCEPTION WHEN OTHERS THEN NULL;
+END; $do$;
+DO $do$ BEGIN
+  ALTER TABLE "sale_orders" ADD CONSTRAINT "sale_orders_branch_id_fkey"      FOREIGN KEY ("branch_id")      REFERENCES "branches"("id")  ON DELETE SET NULL ON UPDATE CASCADE;
+EXCEPTION WHEN OTHERS THEN NULL;
+END; $do$;
+DO $do$ BEGIN
+  ALTER TABLE "sale_orders" ADD CONSTRAINT "sale_orders_created_by_id_fkey"  FOREIGN KEY ("created_by_id")  REFERENCES "users"("id")     ON DELETE SET NULL ON UPDATE CASCADE;
+EXCEPTION WHEN OTHERS THEN NULL;
+END; $do$;
+DO $do$ BEGIN
+  ALTER TABLE "sale_orders" ADD CONSTRAINT "sale_orders_seller_id_fkey"      FOREIGN KEY ("seller_id")      REFERENCES "users"("id")     ON DELETE SET NULL ON UPDATE CASCADE;
+EXCEPTION WHEN OTHERS THEN NULL;
+END; $do$;
+DO $do$ BEGIN
+  ALTER TABLE "sale_orders" ADD CONSTRAINT "sale_orders_approved_by_id_fkey" FOREIGN KEY ("approved_by_id") REFERENCES "users"("id")     ON DELETE SET NULL ON UPDATE CASCADE;
+EXCEPTION WHEN OTHERS THEN NULL;
+END; $do$;
+DO $do$ BEGIN
+  ALTER TABLE "sale_orders" ADD CONSTRAINT "sale_orders_rejected_by_id_fkey" FOREIGN KEY ("rejected_by_id") REFERENCES "users"("id")     ON DELETE SET NULL ON UPDATE CASCADE;
+EXCEPTION WHEN OTHERS THEN NULL;
+END; $do$;
 
 CREATE TABLE IF NOT EXISTS "sale_order_items" (
     "id"                    TEXT NOT NULL,
@@ -379,11 +475,23 @@ CREATE TABLE IF NOT EXISTS "sale_order_items" (
     "unit_price_without_iva" DECIMAL(12,2),
     CONSTRAINT "sale_order_items_pkey" PRIMARY KEY ("id")
 );
-ALTER TABLE "sale_order_items" ADD CONSTRAINT "sale_order_items_sale_order_id_fkey" FOREIGN KEY ("sale_order_id") REFERENCES "sale_orders"("id")    ON DELETE RESTRICT ON UPDATE CASCADE;
-ALTER TABLE "sale_order_items" ADD CONSTRAINT "sale_order_items_product_id_fkey"    FOREIGN KEY ("product_id")    REFERENCES "products"("id")        ON DELETE RESTRICT ON UPDATE CASCADE;
-ALTER TABLE "sale_order_items" ADD CONSTRAINT "sale_order_items_batch_id_fkey"      FOREIGN KEY ("batch_id")      REFERENCES "product_batches"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+DO $do$ BEGIN
+  ALTER TABLE "sale_order_items" ADD CONSTRAINT "sale_order_items_sale_order_id_fkey" FOREIGN KEY ("sale_order_id") REFERENCES "sale_orders"("id")    ON DELETE RESTRICT ON UPDATE CASCADE;
+EXCEPTION WHEN OTHERS THEN NULL;
+END; $do$;
+DO $do$ BEGIN
+  ALTER TABLE "sale_order_items" ADD CONSTRAINT "sale_order_items_product_id_fkey"    FOREIGN KEY ("product_id")    REFERENCES "products"("id")        ON DELETE RESTRICT ON UPDATE CASCADE;
+EXCEPTION WHEN OTHERS THEN NULL;
+END; $do$;
+DO $do$ BEGIN
+  ALTER TABLE "sale_order_items" ADD CONSTRAINT "sale_order_items_batch_id_fkey"      FOREIGN KEY ("batch_id")      REFERENCES "product_batches"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+EXCEPTION WHEN OTHERS THEN NULL;
+END; $do$;
 
-ALTER TABLE "product_units" ADD CONSTRAINT "product_units_sale_order_item_id_fkey" FOREIGN KEY ("sale_order_item_id") REFERENCES "sale_order_items"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+DO $do$ BEGIN
+  ALTER TABLE "product_units" ADD CONSTRAINT "product_units_sale_order_item_id_fkey" FOREIGN KEY ("sale_order_item_id") REFERENCES "sale_order_items"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+EXCEPTION WHEN OTHERS THEN NULL;
+END; $do$;
 
 -- ── invoices ──────────────────────────────────────────────────────────────────
 
@@ -408,8 +516,14 @@ CREATE TABLE IF NOT EXISTS "invoices" (
     CONSTRAINT "invoices_pkey" PRIMARY KEY ("id")
 );
 CREATE UNIQUE INDEX IF NOT EXISTS "invoices_sale_order_id_key" ON "invoices"("sale_order_id");
-ALTER TABLE "invoices" ADD CONSTRAINT "invoices_tenant_id_fkey"     FOREIGN KEY ("tenant_id")     REFERENCES "tenants"("id")     ON DELETE RESTRICT ON UPDATE CASCADE;
-ALTER TABLE "invoices" ADD CONSTRAINT "invoices_sale_order_id_fkey" FOREIGN KEY ("sale_order_id") REFERENCES "sale_orders"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+DO $do$ BEGIN
+  ALTER TABLE "invoices" ADD CONSTRAINT "invoices_tenant_id_fkey"     FOREIGN KEY ("tenant_id")     REFERENCES "tenants"("id")     ON DELETE RESTRICT ON UPDATE CASCADE;
+EXCEPTION WHEN OTHERS THEN NULL;
+END; $do$;
+DO $do$ BEGIN
+  ALTER TABLE "invoices" ADD CONSTRAINT "invoices_sale_order_id_fkey" FOREIGN KEY ("sale_order_id") REFERENCES "sale_orders"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+EXCEPTION WHEN OTHERS THEN NULL;
+END; $do$;
 
 CREATE TABLE IF NOT EXISTS "invoice_items" (
     "id"                    TEXT NOT NULL,
@@ -423,7 +537,10 @@ CREATE TABLE IF NOT EXISTS "invoice_items" (
     "unit_price_without_iva" DECIMAL(12,2),
     CONSTRAINT "invoice_items_pkey" PRIMARY KEY ("id")
 );
-ALTER TABLE "invoice_items" ADD CONSTRAINT "invoice_items_invoice_id_fkey" FOREIGN KEY ("invoice_id") REFERENCES "invoices"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+DO $do$ BEGIN
+  ALTER TABLE "invoice_items" ADD CONSTRAINT "invoice_items_invoice_id_fkey" FOREIGN KEY ("invoice_id") REFERENCES "invoices"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+EXCEPTION WHEN OTHERS THEN NULL;
+END; $do$;
 
 -- ── credit_notes ──────────────────────────────────────────────────────────────
 
@@ -439,8 +556,14 @@ CREATE TABLE IF NOT EXISTS "credit_notes" (
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT "credit_notes_pkey" PRIMARY KEY ("id")
 );
-ALTER TABLE "credit_notes" ADD CONSTRAINT "credit_notes_tenant_id_fkey"  FOREIGN KEY ("tenant_id")  REFERENCES "tenants"("id")   ON DELETE RESTRICT ON UPDATE CASCADE;
-ALTER TABLE "credit_notes" ADD CONSTRAINT "credit_notes_invoice_id_fkey" FOREIGN KEY ("invoice_id") REFERENCES "invoices"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+DO $do$ BEGIN
+  ALTER TABLE "credit_notes" ADD CONSTRAINT "credit_notes_tenant_id_fkey"  FOREIGN KEY ("tenant_id")  REFERENCES "tenants"("id")   ON DELETE RESTRICT ON UPDATE CASCADE;
+EXCEPTION WHEN OTHERS THEN NULL;
+END; $do$;
+DO $do$ BEGIN
+  ALTER TABLE "credit_notes" ADD CONSTRAINT "credit_notes_invoice_id_fkey" FOREIGN KEY ("invoice_id") REFERENCES "invoices"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+EXCEPTION WHEN OTHERS THEN NULL;
+END; $do$;
 
 -- ── accounts_receivable ───────────────────────────────────────────────────────
 
@@ -457,8 +580,14 @@ CREATE TABLE IF NOT EXISTS "accounts_receivable" (
     CONSTRAINT "accounts_receivable_pkey" PRIMARY KEY ("id")
 );
 CREATE UNIQUE INDEX IF NOT EXISTS "accounts_receivable_invoice_id_key" ON "accounts_receivable"("invoice_id");
-ALTER TABLE "accounts_receivable" ADD CONSTRAINT "accounts_receivable_tenant_id_fkey"  FOREIGN KEY ("tenant_id")  REFERENCES "tenants"("id")   ON DELETE RESTRICT ON UPDATE CASCADE;
-ALTER TABLE "accounts_receivable" ADD CONSTRAINT "accounts_receivable_invoice_id_fkey" FOREIGN KEY ("invoice_id") REFERENCES "invoices"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+DO $do$ BEGIN
+  ALTER TABLE "accounts_receivable" ADD CONSTRAINT "accounts_receivable_tenant_id_fkey"  FOREIGN KEY ("tenant_id")  REFERENCES "tenants"("id")   ON DELETE RESTRICT ON UPDATE CASCADE;
+EXCEPTION WHEN OTHERS THEN NULL;
+END; $do$;
+DO $do$ BEGIN
+  ALTER TABLE "accounts_receivable" ADD CONSTRAINT "accounts_receivable_invoice_id_fkey" FOREIGN KEY ("invoice_id") REFERENCES "invoices"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+EXCEPTION WHEN OTHERS THEN NULL;
+END; $do$;
 
 -- ── payment_records ───────────────────────────────────────────────────────────
 
@@ -474,8 +603,14 @@ CREATE TABLE IF NOT EXISTS "payment_records" (
     "created_at"             TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT "payment_records_pkey" PRIMARY KEY ("id")
 );
-ALTER TABLE "payment_records" ADD CONSTRAINT "payment_records_tenant_id_fkey"              FOREIGN KEY ("tenant_id")              REFERENCES "tenants"("id")              ON DELETE RESTRICT ON UPDATE CASCADE;
-ALTER TABLE "payment_records" ADD CONSTRAINT "payment_records_accounts_receivable_id_fkey" FOREIGN KEY ("accounts_receivable_id") REFERENCES "accounts_receivable"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+DO $do$ BEGIN
+  ALTER TABLE "payment_records" ADD CONSTRAINT "payment_records_tenant_id_fkey"              FOREIGN KEY ("tenant_id")              REFERENCES "tenants"("id")              ON DELETE RESTRICT ON UPDATE CASCADE;
+EXCEPTION WHEN OTHERS THEN NULL;
+END; $do$;
+DO $do$ BEGIN
+  ALTER TABLE "payment_records" ADD CONSTRAINT "payment_records_accounts_receivable_id_fkey" FOREIGN KEY ("accounts_receivable_id") REFERENCES "accounts_receivable"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+EXCEPTION WHEN OTHERS THEN NULL;
+END; $do$;
 
 -- ── positions: add area_id + role_id ─────────────────────────────────────────
 
@@ -483,15 +618,24 @@ ALTER TABLE "positions"
   ADD COLUMN IF NOT EXISTS "area_id" TEXT,
   ADD COLUMN IF NOT EXISTS "role_id" TEXT;
 
-ALTER TABLE "positions" ADD CONSTRAINT "positions_area_id_fkey" FOREIGN KEY ("area_id") REFERENCES "areas"("id")  ON DELETE SET NULL ON UPDATE CASCADE;
-ALTER TABLE "positions" ADD CONSTRAINT "positions_role_id_fkey" FOREIGN KEY ("role_id") REFERENCES "roles"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+DO $do$ BEGIN
+  ALTER TABLE "positions" ADD CONSTRAINT "positions_area_id_fkey" FOREIGN KEY ("area_id") REFERENCES "areas"("id")  ON DELETE SET NULL ON UPDATE CASCADE;
+EXCEPTION WHEN OTHERS THEN NULL;
+END; $do$;
+DO $do$ BEGIN
+  ALTER TABLE "positions" ADD CONSTRAINT "positions_role_id_fkey" FOREIGN KEY ("role_id") REFERENCES "roles"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+EXCEPTION WHEN OTHERS THEN NULL;
+END; $do$;
 
 -- ── employees: add branch_id ──────────────────────────────────────────────────
 
 ALTER TABLE "employees"
   ADD COLUMN IF NOT EXISTS "branch_id" TEXT;
 
-ALTER TABLE "employees" ADD CONSTRAINT "employees_branch_id_fkey" FOREIGN KEY ("branch_id") REFERENCES "branches"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+DO $do$ BEGIN
+  ALTER TABLE "employees" ADD CONSTRAINT "employees_branch_id_fkey" FOREIGN KEY ("branch_id") REFERENCES "branches"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+EXCEPTION WHEN OTHERS THEN NULL;
+END; $do$;
 
 -- ── payroll_records: DRAFT → PENDING ─────────────────────────────────────────
 
@@ -514,8 +658,14 @@ CREATE TABLE IF NOT EXISTS "audit_logs" (
 );
 CREATE INDEX IF NOT EXISTS "audit_logs_tenant_id_created_at_idx" ON "audit_logs"("tenant_id", "created_at" DESC);
 CREATE INDEX IF NOT EXISTS "audit_logs_tenant_id_module_idx"     ON "audit_logs"("tenant_id", "module");
-ALTER TABLE "audit_logs" ADD CONSTRAINT "audit_logs_tenant_id_fkey" FOREIGN KEY ("tenant_id") REFERENCES "tenants"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-ALTER TABLE "audit_logs" ADD CONSTRAINT "audit_logs_user_id_fkey"   FOREIGN KEY ("user_id")   REFERENCES "users"("id")   ON DELETE SET NULL ON UPDATE CASCADE;
+DO $do$ BEGIN
+  ALTER TABLE "audit_logs" ADD CONSTRAINT "audit_logs_tenant_id_fkey" FOREIGN KEY ("tenant_id") REFERENCES "tenants"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+EXCEPTION WHEN OTHERS THEN NULL;
+END; $do$;
+DO $do$ BEGIN
+  ALTER TABLE "audit_logs" ADD CONSTRAINT "audit_logs_user_id_fkey"   FOREIGN KEY ("user_id")   REFERENCES "users"("id")   ON DELETE SET NULL ON UPDATE CASCADE;
+EXCEPTION WHEN OTHERS THEN NULL;
+END; $do$;
 
 -- ── alert_configs ─────────────────────────────────────────────────────────────
 
@@ -531,7 +681,10 @@ CREATE TABLE IF NOT EXISTS "alert_configs" (
     CONSTRAINT "alert_configs_pkey" PRIMARY KEY ("id")
 );
 CREATE UNIQUE INDEX IF NOT EXISTS "alert_configs_tenant_id_type_key" ON "alert_configs"("tenant_id", "type");
-ALTER TABLE "alert_configs" ADD CONSTRAINT "alert_configs_tenant_id_fkey" FOREIGN KEY ("tenant_id") REFERENCES "tenants"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+DO $do$ BEGIN
+  ALTER TABLE "alert_configs" ADD CONSTRAINT "alert_configs_tenant_id_fkey" FOREIGN KEY ("tenant_id") REFERENCES "tenants"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+EXCEPTION WHEN OTHERS THEN NULL;
+END; $do$;
 
 -- ── file_records ──────────────────────────────────────────────────────────────
 
@@ -551,7 +704,10 @@ CREATE TABLE IF NOT EXISTS "file_records" (
     "created_at"    TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT "file_records_pkey" PRIMARY KEY ("id")
 );
-ALTER TABLE "file_records" ADD CONSTRAINT "file_records_tenant_id_fkey" FOREIGN KEY ("tenant_id") REFERENCES "tenants"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+DO $do$ BEGIN
+  ALTER TABLE "file_records" ADD CONSTRAINT "file_records_tenant_id_fkey" FOREIGN KEY ("tenant_id") REFERENCES "tenants"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+EXCEPTION WHEN OTHERS THEN NULL;
+END; $do$;
 
 -- ── credit_configs + credit_plans ────────────────────────────────────────────
 
@@ -564,7 +720,10 @@ CREATE TABLE IF NOT EXISTS "credit_configs" (
     CONSTRAINT "credit_configs_pkey" PRIMARY KEY ("id")
 );
 CREATE UNIQUE INDEX IF NOT EXISTS "credit_configs_tenant_id_key" ON "credit_configs"("tenant_id");
-ALTER TABLE "credit_configs" ADD CONSTRAINT "credit_configs_tenant_id_fkey" FOREIGN KEY ("tenant_id") REFERENCES "tenants"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+DO $do$ BEGIN
+  ALTER TABLE "credit_configs" ADD CONSTRAINT "credit_configs_tenant_id_fkey" FOREIGN KEY ("tenant_id") REFERENCES "tenants"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+EXCEPTION WHEN OTHERS THEN NULL;
+END; $do$;
 
 CREATE TABLE IF NOT EXISTS "credit_plans" (
     "id"               TEXT NOT NULL,
@@ -577,7 +736,10 @@ CREATE TABLE IF NOT EXISTS "credit_plans" (
     CONSTRAINT "credit_plans_pkey" PRIMARY KEY ("id")
 );
 CREATE UNIQUE INDEX IF NOT EXISTS "credit_plans_credit_config_id_installments_key" ON "credit_plans"("credit_config_id", "installments");
-ALTER TABLE "credit_plans" ADD CONSTRAINT "credit_plans_credit_config_id_fkey" FOREIGN KEY ("credit_config_id") REFERENCES "credit_configs"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+DO $do$ BEGIN
+  ALTER TABLE "credit_plans" ADD CONSTRAINT "credit_plans_credit_config_id_fkey" FOREIGN KEY ("credit_config_id") REFERENCES "credit_configs"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+EXCEPTION WHEN OTHERS THEN NULL;
+END; $do$;
 
 -- ── pricing_configs ───────────────────────────────────────────────────────────
 
@@ -590,7 +752,10 @@ CREATE TABLE IF NOT EXISTS "pricing_configs" (
     CONSTRAINT "pricing_configs_pkey" PRIMARY KEY ("id")
 );
 CREATE UNIQUE INDEX IF NOT EXISTS "pricing_configs_tenant_id_key" ON "pricing_configs"("tenant_id");
-ALTER TABLE "pricing_configs" ADD CONSTRAINT "pricing_configs_tenant_id_fkey" FOREIGN KEY ("tenant_id") REFERENCES "tenants"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+DO $do$ BEGIN
+  ALTER TABLE "pricing_configs" ADD CONSTRAINT "pricing_configs_tenant_id_fkey" FOREIGN KEY ("tenant_id") REFERENCES "tenants"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+EXCEPTION WHEN OTHERS THEN NULL;
+END; $do$;
 
 -- ── sale_targets ──────────────────────────────────────────────────────────────
 
@@ -604,8 +769,14 @@ CREATE TABLE IF NOT EXISTS "sale_targets" (
     "updated_at"    TIMESTAMP(3) NOT NULL,
     CONSTRAINT "sale_targets_pkey" PRIMARY KEY ("id")
 );
-ALTER TABLE "sale_targets" ADD CONSTRAINT "sale_targets_tenant_id_fkey" FOREIGN KEY ("tenant_id") REFERENCES "tenants"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-ALTER TABLE "sale_targets" ADD CONSTRAINT "sale_targets_user_id_fkey"   FOREIGN KEY ("user_id")   REFERENCES "users"("id")   ON DELETE SET NULL ON UPDATE CASCADE;
+DO $do$ BEGIN
+  ALTER TABLE "sale_targets" ADD CONSTRAINT "sale_targets_tenant_id_fkey" FOREIGN KEY ("tenant_id") REFERENCES "tenants"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+EXCEPTION WHEN OTHERS THEN NULL;
+END; $do$;
+DO $do$ BEGIN
+  ALTER TABLE "sale_targets" ADD CONSTRAINT "sale_targets_user_id_fkey"   FOREIGN KEY ("user_id")   REFERENCES "users"("id")   ON DELETE SET NULL ON UPDATE CASCADE;
+EXCEPTION WHEN OTHERS THEN NULL;
+END; $do$;
 
 -- ── user_permissions ──────────────────────────────────────────────────────────
 
@@ -614,5 +785,14 @@ CREATE TABLE IF NOT EXISTS "user_permissions" (
     "permission_id" TEXT NOT NULL,
     CONSTRAINT "user_permissions_pkey" PRIMARY KEY ("user_id", "permission_id")
 );
-ALTER TABLE "user_permissions" ADD CONSTRAINT "user_permissions_user_id_fkey"       FOREIGN KEY ("user_id")       REFERENCES "users"("id")       ON DELETE CASCADE ON UPDATE CASCADE;
-ALTER TABLE "user_permissions" ADD CONSTRAINT "user_permissions_permission_id_fkey" FOREIGN KEY ("permission_id") REFERENCES "permissions"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+DO $do$ BEGIN
+  ALTER TABLE "user_permissions" ADD CONSTRAINT "user_permissions_user_id_fkey"       FOREIGN KEY ("user_id")       REFERENCES "users"("id")       ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION WHEN OTHERS THEN NULL;
+END; $do$;
+DO $do$ BEGIN
+  ALTER TABLE "user_permissions" ADD CONSTRAINT "user_permissions_permission_id_fkey" FOREIGN KEY ("permission_id") REFERENCES "permissions"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION WHEN OTHERS THEN NULL;
+END; $do$;
+
+
+

@@ -54,11 +54,24 @@ export const PERMISSIONS = [
   // Files
   'files:upload',
   'files:read',
+  // Documents
+  'documents:read',
+  'documents:manage',
   // Finance
   'finance:read',
   'finance:manage',
+  // Logistics
+  'logistics:read',
+  'logistics:manage',
+  // Collections
+  'collections:read',
+  'collections:manage',
+  'collections:collect',
   // Reports
   'reports:read',
+  // SIFEN (Facturación Electrónica)
+  'sifen:read',
+  'sifen:manage',
   // HR
   'hr:read',
   'hr:employees:create',
