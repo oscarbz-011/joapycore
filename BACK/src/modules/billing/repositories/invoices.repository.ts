@@ -9,10 +9,50 @@ export class InvoicesRepository {
 
   private get include() {
     return {
+      tenant: {
+        select: {
+          razonSocial: true,
+          nombreFantasia: true,
+          ruc: true,
+          address: true,
+          numeroCasa: true,
+          city: true,
+          department: true,
+          phone: true,
+          logoFileId: true,
+          timbradoNumero: true,
+          timbradoFecha: true,
+          timbradoFechaFin: true,
+        },
+      },
       saleOrder: {
         include: {
           customer: true,
-          loan: { select: { totalAmount: true, interestRate: true } },
+          downPayment: true,
+          loan: {
+            select: {
+              totalAmount: true,
+              interestRate: true,
+              totalInstallments: true,
+              installments: {
+                orderBy: { number: 'asc' as const },
+                take: 1,
+                select: { dueDate: true },
+              },
+            },
+          },
+          branch: {
+            select: {
+              id: true,
+              name: true,
+              address: true,
+              numeroCasa: true,
+              city: true,
+              phone: true,
+              codigoEstablecimiento: true,
+              puntoExpedicion: true,
+            },
+          },
         },
       },
       items: true,

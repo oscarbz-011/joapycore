@@ -14,6 +14,9 @@ function makeInvoice(overrides = {}) {
     dueDate: null,
     notes: null,
     createdAt: new Date(),
+    saleOrder: {
+      branch: { codigoEstablecimiento: '001', puntoExpedicion: '002' },
+    },
     ...overrides,
   };
 }
@@ -32,8 +35,9 @@ describe('InvoicesService', () => {
     create: jest.Mock;
     generateNumber: jest.Mock;
   };
-  let eventEmitter: { emit: jest.Mock };
+  let eventEmitter: { emit: jest.Mock; emitAsync: jest.Mock };
   let prisma: { $transaction: jest.Mock };
+  let invoiceFindFirstMock: jest.Mock;
 
   beforeEach(() => {
     invoicesRepository = {
@@ -46,9 +50,10 @@ describe('InvoicesService', () => {
       create: jest.fn().mockResolvedValue({}),
       generateNumber: jest.fn().mockResolvedValue('NC-0001'),
     };
-    eventEmitter = { emit: jest.fn() };
+    eventEmitter = { emit: jest.fn(), emitAsync: jest.fn().mockResolvedValue([]) };
 
-    const tx = {};
+    invoiceFindFirstMock = jest.fn().mockResolvedValue(null);
+    const tx = { invoice: { findFirst: invoiceFindFirstMock } };
     prisma = {
       $transaction: jest.fn().mockImplementation((cb) => cb(tx)),
     };
@@ -83,6 +88,95 @@ describe('InvoicesService', () => {
     it('throws NotFoundException when invoice does not exist', async () => {
       invoicesRepository.findById.mockResolvedValue(null);
       await expect(service.findOne('tenant-1', 'ghost')).rejects.toBeInstanceOf(NotFoundException);
+    });
+  });
+
+  // ── issue ──────────────────────────────────────────────────────────────────
+
+  describe('issue', () => {
+    it('throws UnprocessableEntityException when invoice is not PENDING', async () => {
+      invoicesRepository.findById.mockResolvedValue(makeInvoice({ status: 'ISSUED' }));
+
+      await expect(
+        service.issue('tenant-1', 'inv-1', { paymentCondition: 'CASH', paymentMethod: 'CASH' as never }),
+      ).rejects.toBeInstanceOf(UnprocessableEntityException);
+      expect(invoicesRepository.updateStatus).not.toHaveBeenCalled();
+    });
+
+    it('throws UnprocessableEntityException for CREDIT without dueDate', async () => {
+      invoicesRepository.findById.mockResolvedValue(makeInvoice());
+
+      await expect(
+        service.issue('tenant-1', 'inv-1', { paymentCondition: 'CREDIT' }),
+      ).rejects.toBeInstanceOf(UnprocessableEntityException);
+      expect(invoicesRepository.updateStatus).not.toHaveBeenCalled();
+    });
+
+    it('auto-generates the invoice number from the branch establecimiento/puntoExpedicion — never accepts one from the client', async () => {
+      invoicesRepository.findById.mockResolvedValue(makeInvoice());
+      invoiceFindFirstMock.mockResolvedValue({ sequential: 4 });
+
+      await service.issue('tenant-1', 'inv-1', { paymentCondition: 'CASH', paymentMethod: 'CASH' as never });
+
+      expect(invoiceFindFirstMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { tenantId: 'tenant-1', establecimiento: '001', puntoExpedicion: '002' },
+        }),
+      );
+      expect(invoicesRepository.updateStatus).toHaveBeenCalledWith(
+        'tenant-1',
+        'inv-1',
+        'ISSUED',
+        expect.objectContaining({
+          establecimiento: '001',
+          puntoExpedicion: '002',
+          sequential: 5,
+          invoiceNumber: '0000005',
+          invoicePrefix: '001-002-',
+        }),
+        expect.anything(),
+      );
+    });
+
+    it('starts sequential numbering at 1 for the first invoice of an establecimiento/puntoExpedicion', async () => {
+      invoicesRepository.findById.mockResolvedValue(makeInvoice());
+      invoiceFindFirstMock.mockResolvedValue(null);
+
+      await service.issue('tenant-1', 'inv-1', { paymentCondition: 'CASH', paymentMethod: 'CASH' as never });
+
+      expect(invoicesRepository.updateStatus).toHaveBeenCalledWith(
+        'tenant-1',
+        'inv-1',
+        'ISSUED',
+        expect.objectContaining({ sequential: 1, invoiceNumber: '0000001' }),
+        expect.anything(),
+      );
+    });
+
+    it("falls back to '001'/'001' when the sale order has no branch configured", async () => {
+      invoicesRepository.findById.mockResolvedValue(makeInvoice({ saleOrder: { branch: null } }));
+
+      await service.issue('tenant-1', 'inv-1', { paymentCondition: 'CASH', paymentMethod: 'CASH' as never });
+
+      expect(invoicesRepository.updateStatus).toHaveBeenCalledWith(
+        'tenant-1',
+        'inv-1',
+        'ISSUED',
+        expect.objectContaining({ establecimiento: '001', puntoExpedicion: '001' }),
+        expect.anything(),
+      );
+    });
+
+    it('awaits invoice.issued via emitAsync before returning (so the PDF listener has a chance to finish)', async () => {
+      invoicesRepository.findById.mockResolvedValue(makeInvoice());
+
+      await service.issue('tenant-1', 'inv-1', { paymentCondition: 'CASH', paymentMethod: 'CASH' as never });
+
+      expect(eventEmitter.emitAsync).toHaveBeenCalledWith(
+        'invoice.issued',
+        expect.objectContaining({ tenantId: 'tenant-1', invoiceId: 'inv-1' }),
+      );
+      expect(eventEmitter.emit).not.toHaveBeenCalledWith('invoice.issued', expect.anything());
     });
   });
 

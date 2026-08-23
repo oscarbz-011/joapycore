@@ -24,18 +24,6 @@ export class IssueInvoiceDto {
   @IsEnum(PaymentMethod)
   paymentMethod?: PaymentMethod;
 
-  @ApiPropertyOptional({ description: 'Número de factura timbrada' })
-  @IsOptional()
-  @IsString()
-  @MaxLength(20)
-  invoiceNumber?: string;
-
-  @ApiPropertyOptional({ description: 'Prefijo o timbrado' })
-  @IsOptional()
-  @IsString()
-  @MaxLength(20)
-  invoicePrefix?: string;
-
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()

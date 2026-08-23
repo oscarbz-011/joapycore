@@ -46,22 +46,63 @@ export class InvoicesService {
       );
     }
 
-    await this.invoicesRepository.updateStatus(tenantId, id, 'ISSUED', {
-      issuedAt: new Date(),
-      dueDate: dto.dueDate ? new Date(dto.dueDate) : undefined,
-      paymentMethod: dto.paymentMethod ?? null,
-      invoiceNumber: dto.invoiceNumber,
-      invoicePrefix: dto.invoicePrefix,
-      notes: dto.notes,
+    // Numeración oficial (establecimiento-puntoExpedición-secuencial) —
+    // nunca se tipea manualmente, la calcula el servidor. Mismo criterio
+    // "buscar el último e incrementar" que LoansService.createPaymentReceipt().
+    await this.prisma.$transaction(async (tx) => {
+      const establecimiento = invoice.saleOrder.branch?.codigoEstablecimiento || '001';
+      const puntoExpedicion = invoice.saleOrder.branch?.puntoExpedicion || '001';
+
+      const last = await tx.invoice.findFirst({
+        where: { tenantId, establecimiento, puntoExpedicion },
+        orderBy: { sequential: 'desc' },
+        select: { sequential: true },
+      });
+      const sequential = (last?.sequential ?? 0) + 1;
+
+      await this.invoicesRepository.updateStatus(
+        tenantId,
+        id,
+        'ISSUED',
+        {
+          issuedAt: new Date(),
+          dueDate: dto.dueDate ? new Date(dto.dueDate) : undefined,
+          paymentMethod: dto.paymentMethod ?? null,
+          establecimiento,
+          puntoExpedicion,
+          sequential,
+          invoiceNumber: String(sequential).padStart(7, '0'),
+          invoicePrefix: `${establecimiento}-${puntoExpedicion}-`,
+          notes: dto.notes,
+        },
+        tx,
+      );
     });
 
-    this.eventEmitter.emit('invoice.issued', {
+    // Si se eligió un vencimiento distinto al default, Finanzas reprograma
+    // las cuotas del préstamo ANTES de que se genere el PDF de la factura
+    // (que imprime la fecha de la primera cuota) — evento separado y
+    // esperado, para no depender del orden en que corren dos listeners de
+    // 'invoice.issued' en paralelo.
+    if (dto.paymentCondition === 'CREDIT' && dto.dueDate) {
+      await this.eventEmitter.emitAsync('invoice.duedate.selected', {
+        tenantId,
+        saleOrderId: invoice.saleOrderId,
+        dueDate: dto.dueDate,
+      });
+    }
+
+    // emitAsync (no emit): el PDF de la factura se genera de forma síncrona
+    // dentro de un listener del módulo Documentos — esperamos a que termine
+    // para poder devolver pdfFileId ya listo en la misma respuesta.
+    await this.eventEmitter.emitAsync('invoice.issued', {
       tenantId,
       invoiceId: id,
       saleOrderId: invoice.saleOrderId,
       paymentCondition: dto.paymentCondition,
       total: Number(invoice.total),
       dueDate: dto.dueDate ?? null,
+      issuedById: userId,
     });
 
     this.eventEmitter.emit('audit.log', {

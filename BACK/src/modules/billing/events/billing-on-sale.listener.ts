@@ -13,9 +13,26 @@ interface SaleOrderCompletedEvent {
       productId: string;
       quantity: number;
       unitPrice: number | { toNumber(): number };
+      financedUnitPrice?: number | { toNumber(): number } | null;
       product: { name: string };
     }>;
   };
+}
+
+function toNum(value: number | { toNumber(): number }): number {
+  return typeof value === 'object' ? value.toNumber() : value;
+}
+
+// Precio con interés ya aplicado cuando existe (ventas a crédito) — cae al
+// precio contado para ventas al contado o ítems de ventas a crédito creados
+// antes de que este campo existiera.
+function effectiveUnitPrice(item: {
+  unitPrice: number | { toNumber(): number };
+  financedUnitPrice?: number | { toNumber(): number } | null;
+}): number {
+  return item.financedUnitPrice != null
+    ? toNum(item.financedUnitPrice)
+    : toNum(item.unitPrice);
 }
 
 @Injectable()
@@ -35,7 +52,10 @@ export class BillingOnSaleListener {
 
     // Idempotency: skip if an invoice already exists for this order.
     // Prevents duplicate invoices if the event fires more than once.
-    const existing = await this.invoicesRepository.findBySaleOrder(tenantId, saleOrderId);
+    const existing = await this.invoicesRepository.findBySaleOrder(
+      tenantId,
+      saleOrderId,
+    );
     if (existing) return;
 
     // For credit sales, the invoice total is the full financed amount (principal + interest),
@@ -47,20 +67,16 @@ export class BillingOnSaleListener {
         select: { totalAmount: true },
       });
       total = loan
-        ? typeof loan.totalAmount === 'object'
-          ? (loan.totalAmount as { toNumber(): number }).toNumber()
-          : Number(loan.totalAmount)
-        : order.items.reduce((sum, item) => {
-            const price =
-              typeof item.unitPrice === 'object' ? item.unitPrice.toNumber() : item.unitPrice;
-            return sum + price * item.quantity;
-          }, 0);
+        ? toNum(loan.totalAmount)
+        : order.items.reduce(
+            (sum, item) => sum + effectiveUnitPrice(item) * item.quantity,
+            0,
+          );
     } else {
-      total = order.items.reduce((sum, item) => {
-        const price =
-          typeof item.unitPrice === 'object' ? item.unitPrice.toNumber() : item.unitPrice;
-        return sum + price * item.quantity;
-      }, 0);
+      total = order.items.reduce(
+        (sum, item) => sum + effectiveUnitPrice(item) * item.quantity,
+        0,
+      );
     }
 
     const invoice = await this.prisma.$transaction(async (tx) => {
@@ -70,8 +86,7 @@ export class BillingOnSaleListener {
       );
 
       for (const item of order.items) {
-        const unitPrice =
-          typeof item.unitPrice === 'object' ? item.unitPrice.toNumber() : item.unitPrice;
+        const unitPrice = effectiveUnitPrice(item);
         await this.invoicesRepository.createItem(
           {
             invoiceId: inv.id,
@@ -87,6 +102,10 @@ export class BillingOnSaleListener {
       return inv;
     });
 
+    this.eventEmitter.emit('invoice.created', {
+      tenantId,
+      invoiceId: invoice.id,
+    });
     this.eventEmitter.emit('audit.log', {
       tenantId,
       module: 'billing',

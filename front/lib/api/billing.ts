@@ -2,6 +2,7 @@ import { apiClient } from './client';
 
 export type InvoiceStatus = 'PENDING' | 'ISSUED' | 'PAID' | 'CANCELLED';
 export type CreditNoteStatus = 'ISSUED' | 'APPLIED';
+export type PaymentMethod = 'CASH' | 'BANK_TRANSFER' | 'CARD' | 'PAGO_EXPRESS' | 'AQUI_PAGO' | 'CHECK';
 
 export interface InvoiceItem {
   id: string;
@@ -11,6 +12,33 @@ export interface InvoiceItem {
   total: number;
   ivaRate: number | null;
   ivaAmount: number | null;
+  unitPriceWithoutIva: number | null;
+}
+
+export interface InvoiceTenant {
+  razonSocial: string | null;
+  nombreFantasia: string | null;
+  ruc: string | null;
+  address: string | null;
+  numeroCasa: string | null;
+  city: string | null;
+  department: string | null;
+  phone: string | null;
+  logoFileId: string | null;
+  timbradoNumero: string | null;
+  timbradoFecha: string | null;
+  timbradoFechaFin: string | null;
+}
+
+export interface InvoiceBranch {
+  id: string;
+  name: string;
+  address: string | null;
+  numeroCasa: string | null;
+  city: string | null;
+  phone: string | null;
+  codigoEstablecimiento: string | null;
+  puntoExpedicion: string | null;
 }
 
 export interface Invoice {
@@ -26,10 +54,12 @@ export interface Invoice {
   invoicePrefix: string | null;
   // PDF
   pdfUrl: string | null;
+  pdfFileId: string | null;
   // SIFEN
   cdc: string | null;
   qrUrl: string | null;
   electronicAt: string | null;
+  tenant: InvoiceTenant;
   saleOrder: {
     id: string;
     saleType: 'CASH' | 'CREDIT';
@@ -42,6 +72,14 @@ export interface Invoice {
       documentType: string | null;
       documentNumber: string | null;
     };
+    branch: InvoiceBranch | null;
+    downPayment: { amount: number } | null;
+    loan: {
+      totalAmount: number;
+      interestRate: number;
+      totalInstallments: number;
+      installments: { dueDate: string }[];
+    } | null;
   };
   items: InvoiceItem[];
 }
@@ -67,8 +105,7 @@ export interface CreditNote {
 export interface IssueInvoicePayload {
   paymentCondition: 'CASH' | 'CREDIT';
   dueDate?: string;
-  invoiceNumber?: string;
-  invoicePrefix?: string;
+  paymentMethod?: PaymentMethod;
   notes?: string;
 }
 

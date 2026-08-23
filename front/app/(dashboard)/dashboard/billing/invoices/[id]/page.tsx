@@ -4,10 +4,11 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, Printer, Send, AlertTriangle } from 'lucide-react';
-import { billingApi, type Invoice, type InvoiceStatus, type IssueInvoicePayload, type PaymentMethod } from '../../../../../../lib/api/billing';
+import { billingApi, type InvoiceStatus, type IssueInvoicePayload, type PaymentMethod } from '../../../../../../lib/api/billing';
+import { settingsApi } from '../../../../../../lib/api/settings';
+import { openPdf } from '../../../../../../lib/open-pdf';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
 
@@ -19,7 +20,7 @@ function formatPrice(n: number) {
 
 function formatDate(iso: string | null | undefined) {
   if (!iso) return '—';
-  return new Date(iso).toLocaleDateString('es-PY', { day: '2-digit', month: 'short', year: 'numeric' });
+  return new Date(iso).toLocaleDateString('es-PY', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' });
 }
 
 const STATUS_LABEL: Record<InvoiceStatus, string> = {
@@ -43,78 +44,13 @@ function StatusBadge({ status }: { status: InvoiceStatus }) {
   );
 }
 
-// ── Print ──────────────────────────────────────────────────────────────────────
-
-function printInvoice(invoice: Invoice) {
-  const customer = invoice.saleOrder.customer;
-  const customerName = `${customer.firstName} ${customer.lastName}`;
-  const doc = customer.documentNumber ? `${customer.documentType ?? 'CI'}: ${customer.documentNumber}` : '';
-  const invoiceRef = invoice.invoiceNumber
-    ? `${invoice.invoicePrefix ?? ''}${invoice.invoiceNumber}`
-    : `#${invoice.id.slice(0, 8).toUpperCase()}`;
-
-  const isCredit = invoice.saleOrder.saleType === 'CREDIT';
-  const itemsSubtotalPdf = invoice.items.reduce((s, it) => s + Number(it.total), 0);
-  const invoiceTotalPdf  = Number(invoice.total);
-  const itemRows = invoice.items.map((item) => {
-    const displayTotal = isCredit && itemsSubtotalPdf > 0
-      ? invoiceTotalPdf * (Number(item.total) / itemsSubtotalPdf)
-      : Number(item.total);
-    const unitCell = isCredit ? '' : `<td style="padding:6px 8px;border-bottom:1px solid #e2e8f0;text-align:right">${formatPrice(Number(item.unitPrice))}</td>`;
-    return `<tr>
-      <td style="padding:6px 8px;border-bottom:1px solid #e2e8f0">${item.description}</td>
-      <td style="padding:6px 8px;border-bottom:1px solid #e2e8f0;text-align:center">${item.quantity}</td>
-      ${unitCell}
-      <td style="padding:6px 8px;border-bottom:1px solid #e2e8f0;text-align:right">${formatPrice(displayTotal)}</td>
-    </tr>`;
-  }).join('');
-
-  const html = `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>Factura ${invoiceRef}</title>
-  <style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:Arial,sans-serif;font-size:13px;color:#1e293b;padding:32px}
-  h1{font-size:22px;font-weight:700}.header{display:flex;justify-content:space-between;margin-bottom:28px}
-  .label{font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:.05em}
-  table{width:100%;border-collapse:collapse;margin-top:20px}
-  thead th{background:#f8fafc;padding:8px;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.05em;border-bottom:2px solid #e2e8f0}
-  .total-row td{padding:10px 8px;font-weight:700;font-size:15px;border-top:2px solid #1e293b}
-  .footer{margin-top:48px;display:flex;justify-content:space-around}
-  .sig{border-top:1px solid #94a3b8;width:180px;text-align:center;padding-top:6px;font-size:11px;color:#64748b}
-  @media print{body{padding:20px}}</style></head><body>
-  <div class="header"><div><h1>FACTURA</h1><div class="label" style="margin-top:4px">${invoiceRef}</div></div>
-  <div style="text-align:right"><div class="label">Fecha de emisión</div>
-  <div>${formatDate(invoice.issuedAt ?? invoice.createdAt)}</div>
-  ${invoice.dueDate ? `<div class="label" style="margin-top:8px">Vencimiento</div><div>${formatDate(invoice.dueDate)}</div>` : ''}
-  </div></div>
-  <div style="display:flex;gap:40px;margin-bottom:20px">
-  <div><div class="label">Cliente</div><div style="font-weight:600;margin-top:2px">${customerName}</div>
-  ${customer.email ? `<div style="color:#64748b">${customer.email}</div>` : ''}
-  ${doc ? `<div style="color:#64748b">${doc}</div>` : ''}</div>
-  <div><div class="label">Tipo de venta</div>
-  <div style="margin-top:2px">${invoice.saleOrder.saleType === 'CREDIT' ? `Crédito${invoice.saleOrder.installments ? ` — ${invoice.saleOrder.installments} cuotas` : ''}` : 'Contado'}</div>
-  </div></div>
-  <table><thead><tr><th style="text-align:left">Descripción</th><th style="text-align:center">Cant.</th>
-  ${isCredit ? '' : '<th style="text-align:right">Precio unit.</th>'}
-  <th style="text-align:right">Total</th></tr></thead>
-  <tbody>${itemRows}</tbody>
-  <tfoot><tr class="total-row"><td colspan="${isCredit ? 2 : 3}" style="text-align:right">TOTAL</td>
-  <td style="text-align:right">${formatPrice(Number(invoice.total))}</td></tr></tfoot></table>
-  <div class="footer"><div class="sig">Firma del cliente</div><div class="sig">Firma y sello empresa</div></div>
-  </body></html>`;
-
-  const w = window.open('', '_blank');
-  if (!w) return;
-  w.document.write(html);
-  w.document.close();
-  w.focus();
-  setTimeout(() => w.print(), 300);
-}
-
 // ── Row helper ─────────────────────────────────────────────────────────────────
 
-function nextFifth(): string {
+function nextDueDay(dueDayOfMonth: number): string {
   const now = new Date();
-  const target = now.getDate() < 5
-    ? new Date(now.getFullYear(), now.getMonth(), 5)
-    : new Date(now.getFullYear(), now.getMonth() + 1, 5);
+  const target = now.getDate() < dueDayOfMonth
+    ? new Date(now.getFullYear(), now.getMonth(), dueDayOfMonth)
+    : new Date(now.getFullYear(), now.getMonth() + 1, dueDayOfMonth);
   return target.toISOString().split('T')[0];
 }
 
@@ -151,12 +87,16 @@ export default function InvoiceDetailPage() {
     queryFn: () => billingApi.getInvoice(id),
   });
 
+  const { data: creditConfig } = useQuery({
+    queryKey: ['credit-config'],
+    queryFn: settingsApi.getCredit,
+  });
+  const dueDayOfMonth = creditConfig?.dueDayOfMonth ?? 5;
+
   const [form, setForm] = useState<IssueInvoicePayload>({
     paymentCondition: 'CASH',
     dueDate: '',
     paymentMethod: undefined,
-    invoiceNumber: '',
-    invoicePrefix: '',
     notes: '',
   });
   const [formReady, setFormReady] = useState(false);
@@ -167,15 +107,13 @@ export default function InvoiceDetailPage() {
     setForm({
       paymentCondition: isCredit ? 'CREDIT' : 'CASH',
       dueDate: isCredit
-        ? (invoice.dueDate ? new Date(invoice.dueDate).toISOString().split('T')[0] : nextFifth())
+        ? (invoice.dueDate ? new Date(invoice.dueDate).toISOString().split('T')[0] : nextDueDay(dueDayOfMonth))
         : '',
       paymentMethod: undefined,
-      invoiceNumber: invoice.invoiceNumber ?? '',
-      invoicePrefix: invoice.invoicePrefix ?? '',
       notes: invoice.notes ?? '',
     });
     setFormReady(true);
-  }, [invoice, formReady]);
+  }, [invoice, formReady, dueDayOfMonth]);
 
   const [showCancelForm, setShowCancelForm] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
@@ -186,8 +124,6 @@ export default function InvoiceDetailPage() {
         paymentCondition: form.paymentCondition,
         dueDate: form.dueDate || undefined,
         paymentMethod: form.paymentMethod,
-        invoiceNumber: form.invoiceNumber || undefined,
-        invoicePrefix: form.invoicePrefix || undefined,
         notes: form.notes || undefined,
       }),
     onSuccess: () => {
@@ -256,10 +192,17 @@ export default function InvoiceDetailPage() {
             <span className="font-mono">{invoiceRef}</span>
           </p>
         </div>
-        <Button variant="outline" onClick={() => printInvoice(invoice)}>
-          <Printer size={15} />
-          Imprimir
-        </Button>
+        {invoice.status !== 'PENDING' && (
+          <Button
+            variant="outline"
+            disabled={!invoice.pdfFileId}
+            title={invoice.pdfFileId ? undefined : 'El PDF todavía se está generando'}
+            onClick={() => invoice.pdfFileId && void openPdf(invoice.pdfFileId)}
+          >
+            <Printer size={15} />
+            {invoice.pdfFileId ? 'Imprimir' : 'PDF no disponible'}
+          </Button>
+        )}
       </div>
 
       {/* Main grid */}
@@ -364,8 +307,8 @@ export default function InvoiceDetailPage() {
               {isCredit && (
                 <div className="mb-4 space-y-1.5">
                   <Label htmlFor="due-date">
-                    Fecha de vencimiento *
-                    <span className="ml-1 font-normal text-muted-foreground/60">(por conv. día 5 de cada mes)</span>
+                    Fecha de vencimiento de la 1ª cuota *
+                    <span className="ml-1 font-normal text-muted-foreground/60">(por conv. día {dueDayOfMonth} de cada mes)</span>
                   </Label>
                   <input
                     id="due-date"
@@ -375,6 +318,9 @@ export default function InvoiceDetailPage() {
                     onChange={(e) => setForm((f) => ({ ...f, dueDate: e.target.value }))}
                     required
                   />
+                  <p className="text-xs text-muted-foreground/60">
+                    Si la cambiás, se reprograma todo el cronograma de cuotas a partir de esta fecha.
+                  </p>
                 </div>
               )}
 
@@ -400,26 +346,6 @@ export default function InvoiceDetailPage() {
                   </Select>
                 </div>
               )}
-
-              {/* Numbering */}
-              <div className="mb-4 grid grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <Label>Timbrado / Prefijo</Label>
-                  <Input
-                    placeholder="001"
-                    value={form.invoicePrefix ?? ''}
-                    onChange={(e) => setForm((f) => ({ ...f, invoicePrefix: e.target.value }))}
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label>N° de factura</Label>
-                  <Input
-                    placeholder="000001"
-                    value={form.invoiceNumber ?? ''}
-                    onChange={(e) => setForm((f) => ({ ...f, invoiceNumber: e.target.value }))}
-                  />
-                </div>
-              </div>
 
               {/* Notes */}
               <div className="mb-5 space-y-1.5">
@@ -464,9 +390,14 @@ export default function InvoiceDetailPage() {
 
               {invoice.status === 'ISSUED' && (
                 <div className="mt-4">
-                  <Button variant="outline" className="w-full" onClick={() => printInvoice(invoice)}>
+                  <Button
+                    variant="outline"
+                    className="w-full"
+                    disabled={!invoice.pdfFileId}
+                    onClick={() => invoice.pdfFileId && void openPdf(invoice.pdfFileId)}
+                  >
                     <Printer size={15} />
-                    Imprimir / descargar PDF
+                    {invoice.pdfFileId ? 'Imprimir / descargar PDF' : 'PDF no disponible'}
                   </Button>
                 </div>
               )}
