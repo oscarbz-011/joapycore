@@ -1,15 +1,120 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Plus, Trash2 } from 'lucide-react';
+import { Building2, Plus, Trash2 } from 'lucide-react';
 import {
   tenantsApi,
+  type TenantResponse,
   type UpdateTenantPayload,
   type ActividadEconomica,
 } from '../../../../../lib/api/tenants';
+import { filesApi } from '../../../../../lib/api/files';
 import { useAuth } from '../../../../../lib/auth-context';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
+
+// ── Logo de la empresa ────────────────────────────────────────────────────────
+// El endpoint de descarga va autenticado por Bearer token, así que no se puede
+// usar <img src> directo al archivo — se baja el blob y se arma un object URL
+// (mismo criterio que front/lib/blob-file.ts para descargas).
+function LogoUploader({ tenant, canEdit }: { tenant: TenantResponse; canEdit: boolean }) {
+  const queryClient = useQueryClient();
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [loadingPreview, setLoadingPreview] = useState(false);
+
+  useEffect(() => {
+    if (!tenant.logoFileId) {
+      setPreviewUrl(null);
+      return;
+    }
+    let objectUrl: string | null = null;
+    let cancelled = false;
+    setLoadingPreview(true);
+    filesApi
+      .downloadBlob(tenant.logoFileId)
+      .then((blob) => {
+        if (cancelled) return;
+        objectUrl = URL.createObjectURL(blob);
+        setPreviewUrl(objectUrl);
+      })
+      .catch(() => { if (!cancelled) setPreviewUrl(null); })
+      .finally(() => { if (!cancelled) setLoadingPreview(false); });
+    return () => {
+      cancelled = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [tenant.logoFileId]);
+
+  const uploadMutation = useMutation({
+    mutationFn: async (file: File) => {
+      const record = await filesApi.upload(file, {
+        module: 'tenants', entityType: 'tenant', entityId: tenant.id,
+      });
+      return tenantsApi.updateMe({ logoFileId: record.id });
+    },
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['tenant'] }),
+  });
+
+  const removeMutation = useMutation({
+    mutationFn: () => tenantsApi.updateMe({ logoFileId: null }),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['tenant'] }),
+  });
+
+  return (
+    <div>
+      <label className="block text-sm font-medium text-muted-foreground mb-1">Logo de la empresa</label>
+      <div className="flex items-center gap-4">
+        <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-border bg-muted/20">
+          {loadingPreview ? (
+            <span className="text-[11px] text-muted-foreground/60">...</span>
+          ) : previewUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={previewUrl} alt="Logo de la empresa" className="h-full w-full object-contain" />
+          ) : (
+            <Building2 size={20} className="text-muted-foreground/40" />
+          )}
+        </div>
+        {canEdit && (
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => inputRef.current?.click()}
+              disabled={uploadMutation.isPending}
+              className="rounded-lg border border-border bg-card px-3 py-1.5 text-sm font-medium text-foreground hover:bg-muted/20 disabled:opacity-50"
+            >
+              {uploadMutation.isPending ? 'Subiendo...' : previewUrl ? 'Cambiar' : 'Subir logo'}
+            </button>
+            {previewUrl && (
+              <button
+                type="button"
+                onClick={() => removeMutation.mutate()}
+                disabled={removeMutation.isPending}
+                className="text-sm font-medium text-destructive hover:text-destructive/80 disabled:opacity-50"
+              >
+                Quitar
+              </button>
+            )}
+            <input
+              ref={inputRef}
+              type="file"
+              accept="image/png,image/jpeg,image/svg+xml,image/webp"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) uploadMutation.mutate(file);
+                e.target.value = '';
+              }}
+            />
+          </div>
+        )}
+      </div>
+      {uploadMutation.isError && (
+        <p className="mt-1.5 text-xs text-destructive">No se pudo subir el logo. Intentá de nuevo.</p>
+      )}
+    </div>
+  );
+}
 
 const EMPLOYEE_RANGES = [
   { value: 'RANGE_1_5',    label: '1 – 5' },
@@ -60,6 +165,7 @@ type FormState = {
   // SIFEN
   timbradoNumero: string;
   timbradoFecha: string;
+  timbradoFechaFin: string;
   tipoContribuyente: string;
   tipoRegimen: string;
   departamentoCodigo: string;
@@ -88,6 +194,7 @@ function fromTenant(t: Awaited<ReturnType<typeof tenantsApi.getMe>>): FormState 
     currency:          t.currency ?? 'PYG',
     timbradoNumero:    t.timbradoNumero ?? '',
     timbradoFecha:     t.timbradoFecha ? t.timbradoFecha.split('T')[0] : '',
+    timbradoFechaFin:  t.timbradoFechaFin ? t.timbradoFechaFin.split('T')[0] : '',
     tipoContribuyente: t.tipoContribuyente?.toString() ?? '',
     tipoRegimen:       t.tipoRegimen?.toString() ?? '',
     departamentoCodigo: t.departamentoCodigo?.toString() ?? '',
@@ -117,7 +224,7 @@ export default function TenantPage() {
     name: '', razonSocial: '', nombreFantasia: '', ruc: '', email: '', phone: '',
     address: '', numeroCasa: '', postalCode: '', city: '', department: '',
     country: 'Paraguay', employeeCount: 'RANGE_1_5', currency: 'PYG',
-    timbradoNumero: '', timbradoFecha: '', tipoContribuyente: '', tipoRegimen: '',
+    timbradoNumero: '', timbradoFecha: '', timbradoFechaFin: '', tipoContribuyente: '', tipoRegimen: '',
     departamentoCodigo: '', departamentoDesc: '', distritoCodigo: '', distritoDesc: '',
     ciudadCodigo: '', ciudadDesc: '',
   });
@@ -157,6 +264,7 @@ export default function TenantPage() {
         currency:          form.currency || undefined,
         timbradoNumero:    form.timbradoNumero || undefined,
         timbradoFecha:     form.timbradoFecha || undefined,
+        timbradoFechaFin:  form.timbradoFechaFin || undefined,
         tipoContribuyente: form.tipoContribuyente ? Number(form.tipoContribuyente) : undefined,
         tipoRegimen:       form.tipoRegimen ? Number(form.tipoRegimen) : undefined,
         departamentoCodigo: form.departamentoCodigo ? Number(form.departamentoCodigo) : undefined,
@@ -265,6 +373,8 @@ export default function TenantPage() {
               <label className="block text-sm font-medium text-muted-foreground mb-1">Plan</label>
               <input className={inputClass} value={tenant?.plan ?? ''} disabled readOnly />
             </div>
+
+            {tenant && <LogoUploader tenant={tenant} canEdit={canEdit} />}
           </div>
         </section>
 
@@ -440,7 +550,7 @@ export default function TenantPage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-3 gap-4">
               <div>
                 <label className="block text-sm font-medium text-muted-foreground mb-1">
                   Número de timbrado
@@ -455,13 +565,25 @@ export default function TenantPage() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-muted-foreground mb-1">
-                  Fecha de inicio de timbrado
+                  Inicio de vigencia
                 </label>
                 <input
                   type="date"
                   className={inputClass}
                   value={form.timbradoFecha}
                   onChange={set('timbradoFecha')}
+                  disabled={!canEdit}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-muted-foreground mb-1">
+                  Fin de vigencia
+                </label>
+                <input
+                  type="date"
+                  className={inputClass}
+                  value={form.timbradoFechaFin}
+                  onChange={set('timbradoFechaFin')}
                   disabled={!canEdit}
                 />
               </div>

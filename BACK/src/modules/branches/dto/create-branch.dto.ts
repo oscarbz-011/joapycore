@@ -17,6 +17,11 @@ export class CreateBranchDto {
   @IsString()
   numeroCasa?: string;
 
+  @ApiPropertyOptional({ description: 'Ciudad de la sucursal (texto libre)' })
+  @IsOptional()
+  @IsString()
+  city?: string;
+
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
@@ -38,6 +43,11 @@ export class CreateBranchDto {
   @IsOptional()
   @IsString()
   codigoEstablecimiento?: string;
+
+  @ApiPropertyOptional({ description: 'Punto de expedición (ej. "001")', default: '001' })
+  @IsOptional()
+  @IsString()
+  puntoExpedicion?: string;
 
   @ApiPropertyOptional({ description: 'Código de departamento según catálogo SET' })
   @IsOptional()

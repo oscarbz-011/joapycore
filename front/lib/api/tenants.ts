@@ -22,12 +22,13 @@ export interface TenantResponse {
   country: string;
   phone: string | null;
   email: string | null;
-  logoUrl: string | null;
+  logoFileId: string | null;
   employeeCount: 'RANGE_1_5' | 'RANGE_6_20' | 'RANGE_21_50' | 'RANGE_51_200' | 'RANGE_201' | null;
   currency: string;
   // SIFEN — datos fiscales
   timbradoNumero: string | null;
   timbradoFecha: string | null;
+  timbradoFechaFin: string | null;
   tipoContribuyente: number | null;
   tipoRegimen: number | null;
   actividadesEconomicas: ActividadEconomica[] | null;
@@ -62,12 +63,13 @@ export interface UpdateTenantPayload {
   country?: string;
   phone?: string;
   email?: string;
-  logoUrl?: string;
+  logoFileId?: string | null;
   employeeCount?: 'RANGE_1_5' | 'RANGE_6_20' | 'RANGE_21_50' | 'RANGE_51_200' | 'RANGE_201';
   currency?: string;
   // SIFEN — datos fiscales
   timbradoNumero?: string;
   timbradoFecha?: string;
+  timbradoFechaFin?: string;
   tipoContribuyente?: number;
   tipoRegimen?: number;
   actividadesEconomicas?: ActividadEconomica[];

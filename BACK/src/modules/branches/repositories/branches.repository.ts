@@ -4,6 +4,7 @@ import { PrismaService } from '../../../prisma/prisma.service';
 export interface CreateBranchData {
   name: string;
   address?: string;
+  city?: string;
   phone?: string;
   isMain?: boolean;
 }
@@ -11,6 +12,7 @@ export interface CreateBranchData {
 export interface UpdateBranchData {
   name?: string;
   address?: string;
+  city?: string;
   phone?: string;
   isMain?: boolean;
   isActive?: boolean;

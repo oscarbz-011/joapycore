@@ -22,7 +22,7 @@ export class TenantsRepository {
     return this.prisma.tenant.findUnique({ where: { id } });
   }
 
-  update(id: string, data: Prisma.TenantUpdateInput) {
+  update(id: string, data: Prisma.TenantUncheckedUpdateInput) {
     return this.prisma.tenant.update({ where: { id }, data });
   }
 }

@@ -9,8 +9,8 @@ import { Button } from '@/components/ui/button';
 // ── Form state ────────────────────────────────────────────────────────────────
 
 type FormState = {
-  name: string; address: string; numeroCasa: string; phone: string; email: string;
-  isMain: boolean; codigoEstablecimiento: string;
+  name: string; address: string; numeroCasa: string; city: string; phone: string; email: string;
+  isMain: boolean; codigoEstablecimiento: string; puntoExpedicion: string;
   departamentoCodigo: string; departamentoDesc: string;
   distritoCodigo: string; distritoDesc: string;
   ciudadCodigo: string; ciudadDesc: string;
@@ -18,9 +18,10 @@ type FormState = {
 
 function fromBranch(b: Branch): FormState {
   return {
-    name: b.name, address: b.address ?? '', numeroCasa: b.numeroCasa ?? '',
+    name: b.name, address: b.address ?? '', numeroCasa: b.numeroCasa ?? '', city: b.city ?? '',
     phone: b.phone ?? '', email: b.email ?? '', isMain: b.isMain,
     codigoEstablecimiento: b.codigoEstablecimiento ?? '',
+    puntoExpedicion: b.puntoExpedicion ?? '',
     departamentoCodigo: b.departamentoCodigo?.toString() ?? '', departamentoDesc: b.departamentoDesc ?? '',
     distritoCodigo: b.distritoCodigo?.toString() ?? '', distritoDesc: b.distritoDesc ?? '',
     ciudadCodigo: b.ciudadCodigo?.toString() ?? '', ciudadDesc: b.ciudadDesc ?? '',
@@ -29,8 +30,8 @@ function fromBranch(b: Branch): FormState {
 
 function blankForm(): FormState {
   return {
-    name: '', address: '', numeroCasa: '', phone: '', email: '', isMain: false,
-    codigoEstablecimiento: '', departamentoCodigo: '', departamentoDesc: '',
+    name: '', address: '', numeroCasa: '', city: '', phone: '', email: '', isMain: false,
+    codigoEstablecimiento: '', puntoExpedicion: '', departamentoCodigo: '', departamentoDesc: '',
     distritoCodigo: '', distritoDesc: '', ciudadCodigo: '', ciudadDesc: '',
   };
 }
@@ -52,10 +53,12 @@ function BranchForm({ initial, onClose }: { initial?: Branch; onClose: () => voi
         name: form.name.trim(),
         address: form.address.trim() || undefined,
         numeroCasa: form.numeroCasa.trim() || undefined,
+        city: form.city.trim() || undefined,
         phone: form.phone.trim() || undefined,
         email: form.email.trim() || undefined,
         isMain: form.isMain,
         codigoEstablecimiento: form.codigoEstablecimiento.trim() || undefined,
+        puntoExpedicion: form.puntoExpedicion.trim() || undefined,
         departamentoCodigo: form.departamentoCodigo ? Number(form.departamentoCodigo) : undefined,
         departamentoDesc: form.departamentoDesc.trim() || undefined,
         distritoCodigo: form.distritoCodigo ? Number(form.distritoCodigo) : undefined,
@@ -107,6 +110,11 @@ function BranchForm({ initial, onClose }: { initial?: Branch; onClose: () => voi
           </div>
         </div>
 
+        <div>
+          <label className={lbl}>Ciudad</label>
+          <input className={inp} value={form.city} onChange={set('city')} placeholder="Asunción" />
+        </div>
+
         <div className="grid grid-cols-2 gap-2">
           <div>
             <label className={lbl}>Teléfono</label>
@@ -126,9 +134,15 @@ function BranchForm({ initial, onClose }: { initial?: Branch; onClose: () => voi
         <div className="pt-2 border-t border-border">
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">SIFEN — Establecimiento</p>
           <div className="space-y-3">
-            <div>
-              <label className={lbl}>Código de establecimiento (SET)</label>
-              <input className={inp} value={form.codigoEstablecimiento} onChange={set('codigoEstablecimiento')} placeholder="001" maxLength={3} />
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className={lbl}>Código de establecimiento (SET)</label>
+                <input className={inp} value={form.codigoEstablecimiento} onChange={set('codigoEstablecimiento')} placeholder="001" maxLength={3} />
+              </div>
+              <div>
+                <label className={lbl}>Punto de expedición</label>
+                <input className={inp} value={form.puntoExpedicion} onChange={set('puntoExpedicion')} placeholder="001" maxLength={3} />
+              </div>
             </div>
             <div className="grid grid-cols-3 gap-2">
               <div>

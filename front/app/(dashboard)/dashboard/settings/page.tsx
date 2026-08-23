@@ -5,10 +5,12 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   User, Shield, Bell, Puzzle, Camera, CheckCircle2, AlertTriangle,
   FileKey, Upload, X, RefreshCw, Trash2, Receipt, KeyRound, ArrowRight,
+  ShieldCheck,
 } from 'lucide-react';
 import { usersApi } from '../../../../lib/api/users';
 import { useAuth } from '../../../../lib/auth-context';
 import { sifenApi, type SifenEnvironment } from '../../../../lib/api/sifen';
+import { creditBureauApi, type CreditBureauCheckFrequency } from '../../../../lib/api/credit-bureau';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -494,23 +496,81 @@ function NotificationsTab() {
 
 // ── Tab: Integrations ──────────────────────────────────────────────────────────
 
+function CreditBureauIntegrationCard() {
+  const queryClient = useQueryClient();
+  const { data: cfg } = useQuery({ queryKey: ['credit-bureau-config'], queryFn: creditBureauApi.getConfig });
+
+  const mutation = useMutation({
+    mutationFn: (dto: { isEnabled: boolean; checkFrequency: CreditBureauCheckFrequency }) =>
+      creditBureauApi.updateConfig(dto),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['credit-bureau-config'] }),
+  });
+
+  const isEnabled = cfg?.isEnabled ?? false;
+  const frequency = cfg?.checkFrequency ?? 'EVERY_REQUEST';
+
+  return (
+    <div className="rounded-xl border border-border bg-card px-6 py-5">
+      <div className="flex items-center gap-4">
+        <div className="h-10 w-10 shrink-0 flex items-center justify-center rounded-lg bg-muted/30">
+          <ShieldCheck size={18} className="text-muted-foreground" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-medium text-foreground">Buró de crédito</p>
+          <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
+            Verificación de morosidad de clientes (registro manual — integración con proveedores como Equifax preparada para el futuro).
+          </p>
+        </div>
+        <Toggle checked={isEnabled} onChange={(v) => mutation.mutate({ isEnabled: v, checkFrequency: frequency })} />
+      </div>
+
+      {isEnabled && (
+        <div className="mt-4 pl-14">
+          <p className="mb-2 text-xs text-muted-foreground">¿Cuándo pedir la verificación?</p>
+          <div className="flex gap-2">
+            {(['FIRST_PURCHASE_ONLY', 'EVERY_REQUEST'] as const).map((freq) => (
+              <button
+                key={freq}
+                type="button"
+                onClick={() => mutation.mutate({ isEnabled: true, checkFrequency: freq })}
+                className={cn(
+                  'rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors',
+                  frequency === freq
+                    ? 'border-primary bg-primary/10 text-primary'
+                    : 'border-border text-muted-foreground hover:border-ring/50',
+                )}
+              >
+                {freq === 'FIRST_PURCHASE_ONLY' ? 'Solo primera compra a crédito' : 'Cada solicitud de crédito'}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function IntegrationsTab() {
   const [enabled, setEnabled] = useState<Record<string, boolean>>(
     Object.fromEntries(INTEGRATIONS.map((i) => [i.id, i.on])),
   );
 
   return (
-    <div className="rounded-xl border border-border bg-card divide-y divide-border overflow-hidden">
-      {INTEGRATIONS.map((int) => (
-        <div key={int.id} className="flex items-center gap-4 px-6 py-5">
-          <div className="h-10 w-10 shrink-0 flex items-center justify-center">{int.icon}</div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-foreground">{int.name}</p>
-            <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">{int.description}</p>
+    <div className="space-y-4">
+      <CreditBureauIntegrationCard />
+
+      <div className="rounded-xl border border-border bg-card divide-y divide-border overflow-hidden">
+        {INTEGRATIONS.map((int) => (
+          <div key={int.id} className="flex items-center gap-4 px-6 py-5">
+            <div className="h-10 w-10 shrink-0 flex items-center justify-center">{int.icon}</div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-foreground">{int.name}</p>
+              <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">{int.description}</p>
+            </div>
+            <Toggle checked={enabled[int.id]} onChange={(v) => setEnabled((e) => ({ ...e, [int.id]: v }))} />
           </div>
-          <Toggle checked={enabled[int.id]} onChange={(v) => setEnabled((e) => ({ ...e, [int.id]: v }))} />
-        </div>
-      ))}
+        ))}
+      </div>
     </div>
   );
 }
@@ -693,13 +753,13 @@ function CertificatesTab() {
             <div className="rounded-lg bg-muted/30 px-3 py-2">
               <p className="text-muted-foreground/60">Válido desde</p>
               <p className="mt-0.5 font-medium text-foreground">
-                {new Date(cfg.certValidFrom).toLocaleDateString('es-PY', { day: '2-digit', month: 'short', year: 'numeric' })}
+                {new Date(cfg.certValidFrom).toLocaleDateString('es-PY', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' })}
               </p>
             </div>
             <div className="rounded-lg bg-muted/30 px-3 py-2">
               <p className="text-muted-foreground/60">Vence el</p>
               <p className={cn('mt-0.5 font-medium', certOk ? 'text-foreground' : 'text-destructive')}>
-                {new Date(cfg.certValidUntil!).toLocaleDateString('es-PY', { day: '2-digit', month: 'short', year: 'numeric' })}
+                {new Date(cfg.certValidUntil!).toLocaleDateString('es-PY', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' })}
               </p>
             </div>
             {cfg.certSubject && (
@@ -806,7 +866,7 @@ function BillingTab({ onGoToCerts }: { onGoToCerts: () => void }) {
                 <p className="text-sm font-medium text-foreground">{cfg.certFilename}</p>
                 {cfg.certValidUntil && (
                   <p className="text-xs text-muted-foreground/60 mt-0.5">
-                    Vence: {new Date(cfg.certValidUntil).toLocaleDateString('es-PY', { day: '2-digit', month: 'short', year: 'numeric' })}
+                    Vence: {new Date(cfg.certValidUntil).toLocaleDateString('es-PY', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' })}
                   </p>
                 )}
               </div>

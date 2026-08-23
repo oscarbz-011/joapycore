@@ -8,7 +8,6 @@ import {
   IsInt,
   IsOptional,
   IsString,
-  IsUrl,
   Min,
   MinLength,
   ValidateNested,
@@ -87,12 +86,19 @@ export class UpdateTenantDto {
   @IsEmail()
   email?: string;
 
-  @ApiPropertyOptional({ description: 'URL del logo (subido via /files)' })
+  @ApiPropertyOptional({
+    description:
+      'ID del FileRecord del logo (subido vía POST /files/upload). Enviar null para quitar el logo actual.',
+    nullable: true,
+  })
   @IsOptional()
-  @IsUrl()
-  logoUrl?: string;
+  @IsString()
+  logoFileId?: string | null;
 
-  @ApiPropertyOptional({ enum: EmployeeCount, description: 'Rango aproximado de empleados' })
+  @ApiPropertyOptional({
+    enum: EmployeeCount,
+    description: 'Rango aproximado de empleados',
+  })
   @IsOptional()
   @IsEnum(EmployeeCount)
   employeeCount?: EmployeeCount;
@@ -109,24 +115,40 @@ export class UpdateTenantDto {
   @IsString()
   timbradoNumero?: string;
 
-  @ApiPropertyOptional({ description: 'Fecha de inicio de vigencia del timbrado (ISO 8601)' })
+  @ApiPropertyOptional({
+    description: 'Fecha de inicio de vigencia del timbrado (ISO 8601)',
+  })
   @IsOptional()
   @IsDateString()
   timbradoFecha?: string;
 
-  @ApiPropertyOptional({ description: '1 = Persona Física, 2 = Persona Jurídica' })
+  @ApiPropertyOptional({
+    description: 'Fecha de fin de vigencia del timbrado (ISO 8601)',
+  })
+  @IsOptional()
+  @IsDateString()
+  timbradoFechaFin?: string;
+
+  @ApiPropertyOptional({
+    description: '1 = Persona Física, 2 = Persona Jurídica',
+  })
   @IsOptional()
   @IsInt()
   @Min(1)
   tipoContribuyente?: number;
 
-  @ApiPropertyOptional({ description: '8 = IVA General, 1 = Simplificado, etc.' })
+  @ApiPropertyOptional({
+    description: '8 = IVA General, 1 = Simplificado, etc.',
+  })
   @IsOptional()
   @IsInt()
   @Min(1)
   tipoRegimen?: number;
 
-  @ApiPropertyOptional({ type: [ActividadEconomicaDto], description: 'Actividades económicas declaradas ante SET' })
+  @ApiPropertyOptional({
+    type: [ActividadEconomicaDto],
+    description: 'Actividades económicas declaradas ante SET',
+  })
   @IsOptional()
   @IsArray()
   @ValidateNested({ each: true })
@@ -135,7 +157,9 @@ export class UpdateTenantDto {
 
   // ── SIFEN — dirección estructurada (códigos SET) ──────────────────────────
 
-  @ApiPropertyOptional({ description: 'Código de departamento según catálogo SET' })
+  @ApiPropertyOptional({
+    description: 'Código de departamento según catálogo SET',
+  })
   @IsOptional()
   @IsInt()
   departamentoCodigo?: number;
