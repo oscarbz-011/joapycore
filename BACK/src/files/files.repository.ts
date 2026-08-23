@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { FileVisibility } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
 interface CreateFileData {
@@ -6,12 +7,15 @@ interface CreateFileData {
   module: string;
   entityType: string;
   entityId?: string;
+  bucket: string;
   key: string;
   originalName: string;
   mimeType: string;
   sizeBytes: number;
   uploadedBy?: string;
   url?: string;
+  checksum: string;
+  visibility?: FileVisibility;
 }
 
 @Injectable()
@@ -19,7 +23,7 @@ export class FilesRepository {
   constructor(private readonly prisma: PrismaService) {}
 
   create(data: CreateFileData) {
-    return this.prisma.fileRecord.create({ data: { bucket: 'local', ...data } });
+    return this.prisma.fileRecord.create({ data });
   }
 
   findById(tenantId: string, id: string) {

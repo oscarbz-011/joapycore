@@ -41,8 +41,11 @@ export const filesApi = {
   getByEntity: (entityType: string, entityId: string): Promise<FileRecord[]> =>
     apiClient.get(`/files`, { params: { entityType, entityId } }).then((r) => r.data),
 
-  downloadUrl: (id: string): string =>
-    `${process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000'}/files/${id}/download`,
+  // La descarga va autenticada (Bearer token) — el backend responde el buffer
+  // directo (driver local) o un 302 a una URL prefirmada (driver s3), y axios
+  // sigue el redirect de forma transparente en ambos casos.
+  downloadBlob: (id: string): Promise<Blob> =>
+    apiClient.get(`/files/${id}/download`, { responseType: 'blob' }).then((r) => r.data),
 
   delete: (id: string): Promise<void> =>
     apiClient.delete(`/files/${id}`).then((r) => r.data),
