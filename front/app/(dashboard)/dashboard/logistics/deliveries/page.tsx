@@ -23,7 +23,7 @@ const TEXTAREA_CLS = 'w-full min-w-0 rounded-2xl border border-transparent bg-in
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString('es-PY', {
-    day: '2-digit', month: '2-digit', year: 'numeric',
+    day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'UTC',
   });
 }
 
@@ -155,7 +155,9 @@ function DeliveryCard({ note }: { note: DeliveryNote }) {
 
           <div className="flex-1 min-w-0">
             <p className="text-sm font-semibold text-foreground truncate">{fullName}</p>
-            <p className="text-xs text-muted-foreground/60">{note.saleOrder.code} · {formatDate(note.issuedAt)}</p>
+            <p className="text-xs text-muted-foreground/60">
+              #{note.saleOrder.id.slice(0, 8).toUpperCase()} · {formatDate(note.issuedAt)}
+            </p>
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
@@ -219,16 +221,24 @@ function DeliveryCard({ note }: { note: DeliveryNote }) {
                 </tr>
               </thead>
               <tbody>
-                {note.saleOrder.items.map((item) => (
-                  <tr key={item.id} className="border-b border-border/50">
-                    <td className="py-1.5 text-foreground">{item.product.name}</td>
-                    <td className="py-1.5 text-right text-muted-foreground">{item.quantity}</td>
-                    <td className="py-1.5 text-right text-muted-foreground">{formatPrice(item.unitPrice)}</td>
-                    <td className="py-1.5 text-right text-foreground font-medium">
-                      {formatPrice(item.quantity * item.unitPrice)}
-                    </td>
-                  </tr>
-                ))}
+                {note.saleOrder.items.map((item) => {
+                  // Ventas a crédito: el precio contado no es el que paga el
+                  // cliente — usar financedUnitPrice (ya incluye el interés)
+                  // cuando esté presente.
+                  const price = note.saleOrder.saleType === 'CREDIT' && item.financedUnitPrice != null
+                    ? item.financedUnitPrice
+                    : item.unitPrice;
+                  return (
+                    <tr key={item.id} className="border-b border-border/50">
+                      <td className="py-1.5 text-foreground">{item.product.name}</td>
+                      <td className="py-1.5 text-right text-muted-foreground">{item.quantity}</td>
+                      <td className="py-1.5 text-right text-muted-foreground">{formatPrice(price)}</td>
+                      <td className="py-1.5 text-right text-foreground font-medium">
+                        {formatPrice(item.quantity * price)}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
 

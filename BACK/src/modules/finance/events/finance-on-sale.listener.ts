@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
 import { LoansService } from '../services/loans.service';
 
@@ -7,12 +7,40 @@ interface SaleCreditApprovedEvent {
   saleOrderId: string;
 }
 
+interface InvoiceDueDateSelectedEvent {
+  tenantId: string;
+  saleOrderId: string;
+  dueDate: string;
+}
+
 @Injectable()
 export class FinanceOnSaleListener {
+  private readonly logger = new Logger(FinanceOnSaleListener.name);
+
   constructor(private readonly loansService: LoansService) {}
 
   @OnEvent('sale.credit.approved')
   async handle(event: SaleCreditApprovedEvent) {
     await this.loansService.createFromOrder(event.tenantId, event.saleOrderId);
+  }
+
+  // Si al emitir la factura se eligió un vencimiento distinto al default del
+  // tenant, reprograma el cronograma de cuotas para que coincida — corre
+  // ANTES de que Documentos genere el PDF de la factura (invoices.service.ts
+  // espera este evento antes de emitir 'invoice.issued'), así el PDF ya
+  // imprime la fecha correcta de la primera cuota.
+  @OnEvent('invoice.duedate.selected')
+  async handleDueDateSelected(event: InvoiceDueDateSelectedEvent) {
+    try {
+      await this.loansService.rescheduleInstallments(
+        event.tenantId,
+        event.saleOrderId,
+        new Date(event.dueDate),
+      );
+    } catch (error) {
+      this.logger.error(
+        `No se pudo reprogramar las cuotas del pedido ${event.saleOrderId}: ${(error as Error).message}`,
+      );
+    }
   }
 }

@@ -6,6 +6,10 @@ export interface DeliveryNoteItem {
   id: string;
   quantity: number;
   unitPrice: number;
+  // Precio con interés de crédito ya aplicado — presente solo en ítems de
+  // ventas a crédito. Usar este valor en vez de unitPrice cuando esté
+  // presente (ver saleOrder.saleType).
+  financedUnitPrice: number | null;
   product: { id: string; name: string; isSerialized: boolean };
 }
 
@@ -20,7 +24,6 @@ export interface DeliveryNote {
   createdAt: string;
   saleOrder: {
     id: string;
-    code: string;
     saleType: 'CASH' | 'CREDIT';
     deliveryAddress: string | null;
     customer: {
