@@ -33,6 +33,7 @@ const DEFAULT_CATEGORIES: Record<string, string[]> = {
     'Cuidado Personal',
     'Congelados',
   ],
+  default: ['General', 'Otros'],
 };
 
 @Injectable()
@@ -44,7 +45,9 @@ export class CategoriesRepository {
     industry: string | null | undefined,
     client: PrismaClientOrTx = this.prisma,
   ) {
-    const names = (industry ? DEFAULT_CATEGORIES[industry] : null) ?? [];
+    const names =
+      (industry ? DEFAULT_CATEGORIES[industry] : null) ??
+      DEFAULT_CATEGORIES.default;
     if (names.length === 0) return Promise.resolve();
     return client.category.createMany({
       data: names.map((name) => ({ tenantId, name })),
