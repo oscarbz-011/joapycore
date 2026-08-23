@@ -29,8 +29,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="es" className={cn("h-full", hanken.variable, jetbrains.variable, "font-sans", figtree.variable)} suppressHydrationWarning>
       <head>
-        {/* Runs before hydration — sets data-theme from localStorage to avoid flash */}
-        <script dangerouslySetInnerHTML={{ __html: `(function(){var t=localStorage.getItem('joappy-theme');var d=t||(window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');document.documentElement.setAttribute('data-theme',d);})()` }} />
+        {/* Runs before hydration — sets data-theme (+ .dark class, para las
+            utilidades dark: de Tailwind) desde localStorage, resolviendo
+            'system' o la ausencia de preferencia contra el tema del SO,
+            para evitar un flash del tema incorrecto. */}
+        <script dangerouslySetInnerHTML={{ __html: `(function(){var t=localStorage.getItem('joappy-theme');var d=(t==='light'||t==='dark')?t:(window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');document.documentElement.setAttribute('data-theme',d);document.documentElement.classList.toggle('dark',d==='dark');})()` }} />
       </head>
       <body className="h-full font-sans antialiased" style={{ background: 'var(--bg)', color: 'var(--ink)' }}>
         <Providers>{children}</Providers>

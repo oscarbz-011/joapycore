@@ -2,35 +2,75 @@
 
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 
-type Theme = 'light' | 'dark';
+// La preferencia que elige el usuario — 'system' no es un tema en sí, es un
+// modo que sigue el del sistema operativo en vivo (ver el listener de
+// matchMedia más abajo).
+export type ThemePreference = 'light' | 'dark' | 'system';
+type ResolvedTheme = 'light' | 'dark';
 
-const Ctx = createContext<{ theme: Theme; toggle: () => void }>({
-  theme: 'light',
-  toggle: () => {},
+function systemTheme(): ResolvedTheme {
+  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+}
+
+function resolve(pref: ThemePreference): ResolvedTheme {
+  return pref === 'system' ? systemTheme() : pref;
+}
+
+function apply(resolved: ResolvedTheme) {
+  document.documentElement.setAttribute('data-theme', resolved);
+  document.documentElement.classList.toggle('dark', resolved === 'dark');
+}
+
+const Ctx = createContext<{
+  theme: ThemePreference;
+  resolvedTheme: ResolvedTheme;
+  setTheme: (t: ThemePreference) => void;
+}>({
+  theme: 'system',
+  resolvedTheme: 'light',
+  setTheme: () => {},
 });
 
+// Lee la preferencia guardada — el mismo cálculo que ya hizo el script
+// inline en app/layout.tsx antes de la hidratación (evita el flash). Se usa
+// como inicializador perezoso de useState (corre una vez, sincrónico, antes
+// del primer render en el cliente) en vez de un efecto, porque acá no hace
+// falta un setState adicional después de montar.
+function initialTheme(): ThemePreference {
+  if (typeof window === 'undefined') return 'system';
+  return (localStorage.getItem('joappy-theme') as ThemePreference | null) ?? 'system';
+}
+
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  // Read what the inline script already set on <html data-theme="...">
-  // to avoid a hydration mismatch / flash.
-  const [theme, setTheme] = useState<Theme>('light');
+  const [theme, setThemeState] = useState<ThemePreference>(initialTheme);
+  const [resolvedTheme, setResolvedTheme] = useState<ResolvedTheme>(() =>
+    typeof window === 'undefined' ? 'light' : resolve(initialTheme()),
+  );
 
+  // Mientras la preferencia sea "system", sigue el tema del SO en vivo —
+  // si el usuario lo cambia (Windows/macOS) con la pestaña abierta, la app
+  // se actualiza sola sin recargar.
   useEffect(() => {
-    const current = (document.documentElement.getAttribute('data-theme') as Theme) ?? 'light';
-    setTheme(current);
-    document.documentElement.classList.toggle('dark', current === 'dark');
-  }, []);
+    if (theme !== 'system') return;
+    const mql = window.matchMedia('(prefers-color-scheme: dark)');
+    function handle() {
+      const resolved = systemTheme();
+      setResolvedTheme(resolved);
+      apply(resolved);
+    }
+    mql.addEventListener('change', handle);
+    return () => mql.removeEventListener('change', handle);
+  }, [theme]);
 
-  const toggle = () => {
-    setTheme((prev) => {
-      const next: Theme = prev === 'light' ? 'dark' : 'light';
-      document.documentElement.setAttribute('data-theme', next);
-      document.documentElement.classList.toggle('dark', next === 'dark');
-      localStorage.setItem('joappy-theme', next);
-      return next;
-    });
+  const setTheme = (next: ThemePreference) => {
+    setThemeState(next);
+    localStorage.setItem('joappy-theme', next);
+    const resolved = resolve(next);
+    setResolvedTheme(resolved);
+    apply(resolved);
   };
 
-  return <Ctx.Provider value={{ theme, toggle }}>{children}</Ctx.Provider>;
+  return <Ctx.Provider value={{ theme, resolvedTheme, setTheme }}>{children}</Ctx.Provider>;
 }
 
 export const useTheme = () => useContext(Ctx);

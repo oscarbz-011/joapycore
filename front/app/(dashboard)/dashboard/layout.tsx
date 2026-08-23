@@ -2,20 +2,20 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Search, Moon, Sun, Mail } from 'lucide-react';
+import { Search, Mail } from 'lucide-react';
 import { useAuth } from '../../../lib/auth-context';
-import { useTheme } from '../../../lib/theme-context';
 import { useWsConnection } from '../../../lib/use-ws-connection';
 import { Button } from '@/components/ui/button';
 import { Sidebar } from './components/sidebar';
 import { AlertsDropdown } from './components/alerts-dropdown';
 import { SearchModal } from './components/search-modal';
 import { UserMenu } from './components/user-menu';
+import { ThemeToggle } from './components/theme-toggle';
 import { ForcePasswordModal } from './components/force-password-modal';
+import { PendingItemToasts } from './components/pending-item-toasts';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isLoading, mustChangePassword } = useAuth();
-  const { theme, toggle: toggleTheme } = useTheme();
   useWsConnection();
   const router = useRouter();
   const [searchOpen, setSearchOpen] = useState(false);
@@ -65,15 +65,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <Search size={15} />
           </Button>
 
-          <Button
-            variant="outline"
-            size="icon-sm"
-            onClick={toggleTheme}
-            title={theme === 'dark' ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
-            className="text-muted-foreground"
-          >
-            {theme === 'dark' ? <Sun size={15} /> : <Moon size={15} />}
-          </Button>
+          <ThemeToggle />
 
           <Button
             variant="outline"
@@ -99,6 +91,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
       {searchOpen && <SearchModal onClose={() => setSearchOpen(false)} />}
       {mustChangePassword && <ForcePasswordModal />}
+      <PendingItemToasts />
     </div>
   );
 }
