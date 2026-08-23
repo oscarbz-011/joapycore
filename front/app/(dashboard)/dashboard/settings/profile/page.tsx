@@ -80,7 +80,7 @@ export default function ProfilePage() {
   // ── Derived display values ──────────────────────────────────────────────────
   const fullName   = [me?.firstName, me?.lastName].filter(Boolean).join(' ') || '—';
   const joinedDate = me?.createdAt
-    ? new Date(me.createdAt).toLocaleDateString('es-PY', { day: '2-digit', month: 'short', year: 'numeric' })
+    ? new Date(me.createdAt).toLocaleDateString('es-PY', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' })
     : null;
 
   if (isLoading) {

@@ -33,7 +33,7 @@ function fmtGs(n: number) {
 }
 
 function fmtDate(s: string) {
-  return new Date(s).toLocaleDateString('es-PY', { day: '2-digit', month: '2-digit', year: '2-digit' });
+  return new Date(s).toLocaleDateString('es-PY', { day: '2-digit', month: '2-digit', year: '2-digit', timeZone: 'UTC' });
 }
 
 // ── Status maps ────────────────────────────────────────────────────────────────

@@ -19,7 +19,7 @@ function formatPrice(n: number) {
 
 function formatDate(iso: string | null) {
   if (!iso) return '—';
-  return new Date(iso).toLocaleDateString('es-PY', { day: '2-digit', month: 'short', year: 'numeric' });
+  return new Date(iso).toLocaleDateString('es-PY', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' });
 }
 
 // ── Status badge ───────────────────────────────────────────────────────────────
