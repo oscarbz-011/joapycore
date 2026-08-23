@@ -2,8 +2,9 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Plus, Truck, Users, X, Trash2 } from 'lucide-react';
+import { Plus, Truck, Users, X, Trash2, AlertTriangle } from 'lucide-react';
 import {
   procurementApi,
   type CreatePurchaseOrderItem,
@@ -14,6 +15,8 @@ import {
   type Supplier,
 } from '../../../../lib/api/procurement';
 import { inventoryApi, type Product } from '../../../../lib/api/inventory';
+import { daysOverdue } from '../../../../lib/overdue';
+import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -31,11 +34,28 @@ function formatPrice(n: number) {
 
 function formatDate(iso: string | null) {
   if (!iso) return '—';
-  return new Date(iso).toLocaleDateString('es-PY', { day: '2-digit', month: 'short', year: 'numeric' });
+  return new Date(iso).toLocaleDateString('es-PY', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' });
 }
 
 function orderTotal(order: PurchaseOrder) {
   return order.items.reduce((sum, i) => sum + Number(i.quantity) * Number(i.unitCost), 0);
+}
+
+// Mismo diseño de resaltado que Pagos/Financiamiento/Reportes: rojo si la
+// entrega esperada ya pasó y la orden sigue esperando mercadería, ámbar si
+// todavía está dentro de plazo. Una orden en borrador (PENDING, aún no
+// confirmada al proveedor) no cuenta — la fecha ahí es solo un estimado
+// propio, no un compromiso real.
+function deliveryDaysOverdue(order: PurchaseOrder): number {
+  const stillOwed = order.status === 'CONFIRMED' || order.status === 'PARTIALLY_RECEIVED';
+  if (!stillOwed || !order.expectedDate) return 0;
+  return Math.max(0, daysOverdue(order.expectedDate));
+}
+
+function deliveryAccentFor(order: PurchaseOrder): 'destructive' | 'warn' | null {
+  const stillOwed = order.status === 'CONFIRMED' || order.status === 'PARTIALLY_RECEIVED';
+  if (!stillOwed || !order.expectedDate) return null;
+  return deliveryDaysOverdue(order) > 0 ? 'destructive' : 'warn';
 }
 
 const NUM_CLS = 'h-9 w-full min-w-0 rounded-3xl border border-transparent bg-input/50 px-3 text-sm outline-none transition-[color,box-shadow,background-color] focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30';
@@ -74,7 +94,15 @@ const STATUS_MAP: Record<PurchaseOrderStatus, { label: string; className?: strin
   CANCELLED:            { label: 'Cancelada',          destructive: true },
 };
 
-function StatusBadge({ status }: { status: PurchaseOrderStatus }) {
+function StatusBadge({ status, deliveryOverdueDays }: { status: PurchaseOrderStatus; deliveryOverdueDays?: number }) {
+  if (deliveryOverdueDays && deliveryOverdueDays > 0) {
+    return (
+      <Badge variant="destructive" className="gap-1 whitespace-nowrap">
+        <AlertTriangle size={10} />
+        Entrega vencida · {deliveryOverdueDays} {deliveryOverdueDays === 1 ? 'día' : 'días'}
+      </Badge>
+    );
+  }
   const { label, className, destructive } = STATUS_MAP[status];
   return (
     <Badge variant={destructive ? 'destructive' : 'outline'} className={className}>
@@ -623,15 +651,27 @@ function OrderDetailPanel({
 // ── Main page ──────────────────────────────────────────────────────────────────
 
 export default function ProcurementPage() {
+  const searchParams = useSearchParams();
+  const poParam = searchParams.get('po');
+
   const [statusFilter, setStatusFilter] = useState<'' | PurchaseOrderStatus>('');
   const [showCreate, setShowCreate] = useState(false);
   const [panelOrder, setPanelOrder] = useState<PurchaseOrder | null>(null);
   const [panelOpen, setPanelOpen] = useState(false);
+  const [dismissedPoParam, setDismissedPoParam] = useState<string | null>(null);
 
   const { data: orders = [], isLoading } = useQuery({
     queryKey: ['purchase-orders'],
     queryFn: procurementApi.listOrders,
   });
+
+  // Deep link desde el dropdown de Alertas ("Entrega de compra vencida",
+  // ?po=<id>) — abre directo el detalle. Derivado en el render (sin efecto),
+  // mismo patrón que ?ar= en payments/page.tsx.
+  const deepLinkedOrder =
+    poParam && poParam !== dismissedPoParam ? (orders.find((o) => o.id === poParam) ?? null) : null;
+  const effectivePanelOrder = panelOrder ?? deepLinkedOrder;
+  const effectivePanelOpen = panelOpen || !!deepLinkedOrder;
 
   const { data: suppliers = [] } = useQuery({
     queryKey: ['suppliers'],
@@ -652,6 +692,7 @@ export default function ProcurementPage() {
 
   function closePanel(o: boolean) {
     setPanelOpen(o);
+    if (!o && !panelOrder && poParam) setDismissedPoParam(poParam);
     // panelOrder stays for close animation
   }
 
@@ -709,31 +750,52 @@ export default function ProcurementPage() {
                   <th className="px-4 py-3 text-left">Proveedor</th>
                   <th className="px-4 py-3 text-left">Tipo</th>
                   <th className="px-4 py-3 text-left">Fecha</th>
+                  <th className="px-4 py-3 text-left">Entrega est.</th>
                   <th className="px-4 py-3 text-left">Estado</th>
                   <th className="px-4 py-3 text-center">Ítems</th>
                   <th className="px-4 py-3 text-right">Total est.</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {filtered.map((order) => (
-                  <tr
-                    key={order.id}
-                    onClick={() => openPanel(order)}
-                    className="cursor-pointer hover:bg-muted/20 transition-colors"
-                  >
-                    <td className="px-4 py-3">
-                      <div className="font-medium text-foreground">{order.supplier.name}</div>
-                      {order.supplier.email && <div className="text-xs text-muted-foreground/60">{order.supplier.email}</div>}
-                    </td>
-                    <td className="px-4 py-3"><TypeBadge type={order.purchaseType} /></td>
-                    <td className="px-4 py-3 text-muted-foreground">{formatDate(order.orderDate)}</td>
-                    <td className="px-4 py-3"><StatusBadge status={order.status} /></td>
-                    <td className="px-4 py-3 text-center text-muted-foreground">{order.items.length}</td>
-                    <td className="px-4 py-3 text-right font-mono font-medium text-foreground tabular-nums">
-                      {formatPrice(orderTotal(order))}
-                    </td>
-                  </tr>
-                ))}
+                {filtered.map((order) => {
+                  const deliveryOverdueDays = deliveryDaysOverdue(order);
+                  const accent = deliveryAccentFor(order);
+                  return (
+                    <tr
+                      key={order.id}
+                      onClick={() => openPanel(order)}
+                      className="cursor-pointer hover:bg-muted/20 transition-colors"
+                    >
+                      <td
+                        className={cn(
+                          'px-4 py-3',
+                          accent === 'destructive' && 'border-l-[3px] border-l-destructive',
+                          accent === 'warn' && 'border-l-[3px] border-l-warn',
+                        )}
+                      >
+                        <div className="font-medium text-foreground">{order.supplier.name}</div>
+                        {order.supplier.email && <div className="text-xs text-muted-foreground/60">{order.supplier.email}</div>}
+                      </td>
+                      <td className="px-4 py-3"><TypeBadge type={order.purchaseType} /></td>
+                      <td className="px-4 py-3 text-muted-foreground">{formatDate(order.orderDate)}</td>
+                      <td
+                        className={cn(
+                          'px-4 py-3',
+                          accent === 'destructive' && 'font-medium text-destructive',
+                          accent === 'warn' && 'font-medium text-warn',
+                          !accent && 'text-muted-foreground',
+                        )}
+                      >
+                        {formatDate(order.expectedDate)}
+                      </td>
+                      <td className="px-4 py-3"><StatusBadge status={order.status} deliveryOverdueDays={deliveryOverdueDays} /></td>
+                      <td className="px-4 py-3 text-center text-muted-foreground">{order.items.length}</td>
+                      <td className="px-4 py-3 text-right font-mono font-medium text-foreground tabular-nums">
+                        {formatPrice(orderTotal(order))}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -749,8 +811,8 @@ export default function ProcurementPage() {
       />
 
       <OrderDetailPanel
-        order={panelOrder}
-        open={panelOpen}
+        order={effectivePanelOrder}
+        open={effectivePanelOpen}
         onOpenChange={closePanel}
       />
     </div>
