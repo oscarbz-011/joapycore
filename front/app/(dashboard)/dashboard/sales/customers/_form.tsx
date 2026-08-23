@@ -7,6 +7,7 @@ import {
   type Customer,
   type CreateCustomerPayload,
   type DocumentType,
+  type EconomicActivity,
 } from '../../../../../lib/api/sales';
 import { NumericInput } from '../../../../../components/numeric-input';
 import { Button } from '@/components/ui/button';
@@ -20,6 +21,8 @@ const EMPTY_FORM: CreateCustomerPayload = {
   firstName: '', secondFirstName: '', lastName: '', secondLastName: '',
   documentType: undefined, documentNumber: '', email: '', phone: '',
   address: '', city: '', profession: '', monthlyIncome: undefined, notes: '',
+  economicActivity: undefined, hasIpsInsurance: undefined,
+  employerName: '', supervisorName: '', workPhone: '', workAddress: '', workSeniority: '',
   homeStreet: '', homeNeighborhood: '', homeReference: '',
   aptBuilding: '', aptFloor: '', aptNumber: '',
 };
@@ -39,6 +42,13 @@ function fromCustomer(c: Customer): CreateCustomerPayload {
     profession:       c.profession ?? '',
     monthlyIncome:    c.monthlyIncome ?? undefined,
     notes:            c.notes ?? '',
+    economicActivity: c.economicActivity ?? undefined,
+    hasIpsInsurance:  c.hasIpsInsurance ?? undefined,
+    employerName:     c.employerName ?? '',
+    supervisorName:   c.supervisorName ?? '',
+    workPhone:        c.workPhone ?? '',
+    workAddress:      c.workAddress ?? '',
+    workSeniority:    c.workSeniority ?? '',
     homeStreet:        c.homeStreet ?? '',
     homeNeighborhood:  c.homeNeighborhood ?? '',
     homeReference:     c.homeReference ?? '',
@@ -52,6 +62,13 @@ function docLabel(type: DocumentType): string {
   return type === 'CI' ? 'C.I.' : type === 'RUC' ? 'RUC' : 'Pasaporte';
 }
 
+const ECONOMIC_ACTIVITY_LABELS: Record<EconomicActivity, string> = {
+  ASALARIADO: 'Asalariado',
+  FUNCIONARIO_PUBLICO: 'Funcionario público',
+  PROFESIONAL_INDEPENDIENTE: 'Profesional independiente',
+  COMERCIANTE: 'Comerciante',
+};
+
 const NUM_CLS = 'h-9 w-full min-w-0 rounded-3xl border border-transparent bg-input/50 px-3 text-sm outline-none transition-[color,box-shadow,background-color] focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30';
 const TEXTAREA_CLS = 'w-full min-w-0 rounded-2xl border border-transparent bg-input/50 px-3 py-2 text-sm outline-none resize-none transition-[color,box-shadow,background-color] focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30';
 const SECTION_LABEL = 'text-xs font-semibold uppercase tracking-wider text-muted-foreground/60';
@@ -60,7 +77,7 @@ const SECTION_LABEL = 'text-xs font-semibold uppercase tracking-wider text-muted
 
 interface Props {
   initial?: Customer;
-  onDone: () => void;
+  onDone: (customer?: Customer) => void;
 }
 
 export function CustomerForm({ initial, onDone }: Props) {
@@ -91,6 +108,13 @@ export function CustomerForm({ initial, onDone }: Props) {
         profession:       form.profession?.trim() || undefined,
         monthlyIncome:    form.monthlyIncome || undefined,
         notes:            form.notes?.trim() || undefined,
+        economicActivity: form.economicActivity || undefined,
+        hasIpsInsurance:  form.hasIpsInsurance,
+        employerName:     form.employerName?.trim() || undefined,
+        supervisorName:   form.supervisorName?.trim() || undefined,
+        workPhone:        form.workPhone?.trim() || undefined,
+        workAddress:      form.workAddress?.trim() || undefined,
+        workSeniority:    form.workSeniority?.trim() || undefined,
         homeStreet:       form.homeStreet?.trim() || undefined,
         homeNeighborhood: form.homeNeighborhood?.trim() || undefined,
         homeReference:    form.homeReference?.trim() || undefined,
@@ -102,9 +126,9 @@ export function CustomerForm({ initial, onDone }: Props) {
         ? salesApi.updateCustomer(initial.id, payload)
         : salesApi.createCustomer(payload);
     },
-    onSuccess: () => {
+    onSuccess: (customer) => {
       void queryClient.invalidateQueries({ queryKey: ['sale-customers'] });
-      onDone();
+      onDone(customer);
     },
     onError: (err: Error & { response?: { data?: { message?: string | string[] } } }) => {
       const msg = err?.response?.data?.message;
@@ -208,6 +232,71 @@ export function CustomerForm({ initial, onDone }: Props) {
             <div className="space-y-1.5">
               <Label>Dirección general</Label>
               <Input value={form.address ?? ''} onChange={(e) => set('address', e.target.value)} placeholder="Av. Mariscal López 1234" />
+            </div>
+          </div>
+        </section>
+
+        {/* Datos laborales */}
+        <section className="p-6 space-y-4 border-t border-border">
+          <p className={SECTION_LABEL}>Datos laborales</p>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <Label>Actividad económica</Label>
+              <Select
+                value={form.economicActivity ?? 'none'}
+                onValueChange={(v) => set('economicActivity', v && v !== 'none' ? v as EconomicActivity : undefined)}
+              >
+                <SelectTrigger className="w-full">
+                  <span className="flex-1 text-left text-sm truncate">
+                    {form.economicActivity ? ECONOMIC_ACTIVITY_LABELS[form.economicActivity] : '— Seleccionar —'}
+                  </span>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">— Seleccionar —</SelectItem>
+                  {Object.entries(ECONOMIC_ACTIVITY_LABELS).map(([value, label]) => (
+                    <SelectItem key={value} value={value}>{label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Seguro IPS</Label>
+              <Select
+                value={form.hasIpsInsurance === true ? 'yes' : form.hasIpsInsurance === false ? 'no' : 'unset'}
+                onValueChange={(v) => set('hasIpsInsurance', v === 'yes' ? true : v === 'no' ? false : undefined)}
+              >
+                <SelectTrigger className="w-full">
+                  <span className="flex-1 text-left text-sm truncate">
+                    {form.hasIpsInsurance === true ? 'Sí' : form.hasIpsInsurance === false ? 'No' : '— Seleccionar —'}
+                  </span>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="unset">— Seleccionar —</SelectItem>
+                  <SelectItem value="yes">Sí</SelectItem>
+                  <SelectItem value="no">No</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Empresa</Label>
+              <Input value={form.employerName ?? ''} onChange={(e) => set('employerName', e.target.value)} placeholder="Nombre de la empresa" />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Jefe/Supervisor</Label>
+              <Input value={form.supervisorName ?? ''} onChange={(e) => set('supervisorName', e.target.value)} placeholder="Nombre del jefe o supervisor" />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Teléfono laboral</Label>
+              <Input value={form.workPhone ?? ''} onChange={(e) => set('workPhone', e.target.value)} placeholder="021 000 000" />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Dirección laboral</Label>
+              <Input value={form.workAddress ?? ''} onChange={(e) => set('workAddress', e.target.value)} placeholder="Av. Mariscal López 1234" />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Antigüedad laboral</Label>
+              <Input value={form.workSeniority ?? ''} onChange={(e) => set('workSeniority', e.target.value)} placeholder="2 años (opcional)" />
             </div>
           </div>
         </section>
