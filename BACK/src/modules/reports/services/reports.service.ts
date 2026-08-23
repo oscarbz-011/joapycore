@@ -142,7 +142,23 @@ export class ReportsService {
       include: {
         invoice: {
           include: {
-            saleOrder: { include: { customer: true } },
+            saleOrder: {
+              include: {
+                customer: true,
+                // Para crédito, AR.dueDate queda fijo en la fecha de la
+                // primera cuota desde que se crea el préstamo y nunca se
+                // actualiza — no sirve para saber si el cliente está al día.
+                // Se recalcula acá con la cuota real más próxima sin pagar.
+                loan: {
+                  select: {
+                    installments: {
+                      select: { dueDate: true, status: true },
+                      orderBy: { number: 'asc' },
+                    },
+                  },
+                },
+              },
+            },
           },
         },
         paymentRecords: { select: { amount: true, paymentDate: true } },
@@ -151,16 +167,50 @@ export class ReportsService {
     });
 
     const now = new Date();
-    const items = ars.map((ar) => ({
-      id: ar.id,
-      customer: `${ar.invoice.saleOrder.customer.firstName} ${ar.invoice.saleOrder.customer.lastName}`,
-      amount: Number(ar.amount),
-      paidAmount: Number(ar.paidAmount),
-      pending: Number(ar.amount) - Number(ar.paidAmount),
-      status: ar.status,
-      dueDate: ar.dueDate,
-      isOverdue: ar.dueDate ? ar.dueDate < now && ar.status !== 'PAID' : false,
-    }));
+    const DUE_SOON_DAYS = 5;
+    const items = ars.map((ar) => {
+      const isCredit = ar.invoice.saleOrder.saleType === 'CREDIT';
+      let dueDate = ar.dueDate;
+      let isOverdue = ar.dueDate ? ar.dueDate < now && ar.status !== 'PAID' : false;
+      let isDueSoon = false;
+
+      if (isCredit && ar.status !== 'PAID' && ar.status !== 'CANCELLED') {
+        const nextUnpaid = ar.invoice.saleOrder.loan?.installments.find(
+          (i) => i.status !== 'PAID',
+        );
+        if (nextUnpaid) {
+          dueDate = nextUnpaid.dueDate;
+          // No alcanza con status === 'OVERDUE' solo — ese campo lo pone el
+          // cron nocturno (installments-scheduler.service.ts), así que una
+          // cuota recién vencida (o cualquier corrida antes de medianoche)
+          // seguiría en PENDING. Se respalda con la fecha directamente para
+          // que la detección sea tan inmediata como siempre fue.
+          isOverdue =
+            nextUnpaid.status === 'OVERDUE' || nextUnpaid.dueDate < now;
+          if (!isOverdue) {
+            const daysUntil = Math.ceil(
+              (nextUnpaid.dueDate.getTime() - now.getTime()) / 86_400_000,
+            );
+            isDueSoon = daysUntil >= 0 && daysUntil <= DUE_SOON_DAYS;
+          }
+        } else {
+          isOverdue = false;
+        }
+      }
+
+      return {
+        id: ar.id,
+        customer: `${ar.invoice.saleOrder.customer.firstName} ${ar.invoice.saleOrder.customer.lastName}`,
+        amount: Number(ar.amount),
+        paidAmount: Number(ar.paidAmount),
+        pending: Number(ar.amount) - Number(ar.paidAmount),
+        status: ar.status,
+        saleType: ar.invoice.saleOrder.saleType,
+        dueDate,
+        isOverdue,
+        isDueSoon,
+      };
+    });
 
     const totalPending = items.reduce((s, i) => s + i.pending, 0);
     const totalOverdue = items

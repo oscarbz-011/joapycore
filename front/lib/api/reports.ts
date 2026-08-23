@@ -40,8 +40,10 @@ export interface ARItem {
   paidAmount: number;
   pending: number;
   status: string;
+  saleType: 'CASH' | 'CREDIT';
   dueDate: string | null;
   isOverdue: boolean;
+  isDueSoon: boolean;
 }
 
 export interface ReceivablesReport {

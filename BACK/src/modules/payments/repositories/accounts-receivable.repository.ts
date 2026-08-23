@@ -19,7 +19,15 @@ export class AccountsReceivableRepository {
                 loan: {
                   select: {
                     totalAmount: true,
-                    installments: { select: { paidAmount: true } },
+                    // number/dueDate/status habilitan calcular la mora en el
+                    // frontend sobre la cuota real más próxima sin pagar, no
+                    // sobre el AR.dueDate — ese campo queda fijo en la fecha
+                    // de la primera cuota desde que se crea el préstamo y
+                    // nunca se actualiza a medida que se van pagando cuotas.
+                    installments: {
+                      select: { number: true, dueDate: true, status: true, amount: true, paidAmount: true },
+                      orderBy: { number: 'asc' },
+                    },
                   },
                 },
               },
