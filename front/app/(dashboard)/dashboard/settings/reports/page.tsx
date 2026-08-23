@@ -4,6 +4,8 @@ import { useQuery } from '@tanstack/react-query';
 import { AlertTriangle, ArrowDown, CheckCircle, Clock, TrendingUp } from 'lucide-react';
 import { useState } from 'react';
 import { reportsApi } from '../../../../../lib/api/reports';
+import { daysOverdue } from '../../../../../lib/overdue';
+import { cn } from '@/lib/utils';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -13,7 +15,7 @@ function fmt(n: number) {
 
 function fmtDate(s: string | null) {
   if (!s) return '—';
-  return new Date(s).toLocaleDateString('es-PY', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  return new Date(s).toLocaleDateString('es-PY', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'UTC' });
 }
 
 // ── Shared components ─────────────────────────────────────────────────────────
@@ -237,7 +239,7 @@ function ReceivablesTab() {
   };
 
   const statusCls: Record<string, string> = {
-    PENDING: 'bg-muted/30 text-muted-foreground',
+    PENDING: 'bg-warn-subtle text-warn',
     PARTIALLY_PAID: 'bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-400',
     PAID: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400',
     OVERDUE: 'bg-destructive/10 text-destructive',
@@ -278,27 +280,78 @@ function ReceivablesTab() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border">
-                    {data.items.map((item) => (
-                      <tr key={item.id} className={`hover:bg-muted/20 ${item.isOverdue ? 'bg-destructive/5' : ''}`}>
-                        <td className="px-5 py-3 text-muted-foreground font-medium">{item.customer}</td>
-                        <td className="px-5 py-3 text-right text-muted-foreground">{fmt(item.amount)}</td>
-                        <td className="px-5 py-3 text-right text-emerald-700 dark:text-emerald-400">{fmt(item.paidAmount)}</td>
-                        <td className="px-5 py-3 text-right font-semibold text-foreground">{fmt(item.pending)}</td>
-                        <td className="px-5 py-3 text-center">
-                          {item.dueDate ? (
-                            <span className={`flex items-center justify-center gap-1 text-xs ${item.isOverdue ? 'text-destructive font-medium' : 'text-muted-foreground'}`}>
-                              {item.isOverdue && <Clock size={11} />}
-                              {fmtDate(item.dueDate)}
-                            </span>
-                          ) : '—'}
-                        </td>
-                        <td className="px-5 py-3 text-center">
-                          <span className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-medium ${statusCls[item.status] ?? 'bg-muted/30 text-muted-foreground'}`}>
-                            {statusLabel[item.status] ?? item.status}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
+                    {data.items.map((item) => {
+                      const overdueDays = item.isOverdue && item.dueDate ? Math.max(0, daysOverdue(item.dueDate)) : 0;
+                      const dueSoonDays = item.isDueSoon && item.dueDate ? Math.max(0, -daysOverdue(item.dueDate)) : 0;
+                      // Mismo diseño de resaltado (barra + fila teñida + fecha
+                      // coloreada) que payments/page.tsx y finance/page.tsx.
+                      // Al contado, "Pendiente" ya es la señal (como
+                      // siempre); a crédito, isOverdue/isDueSoon ya vienen
+                      // calculados por el backend sobre la cuota real más
+                      // próxima sin pagar, no sobre el AR.dueDate estático
+                      // — un crédito "Pendiente" sin fecha próxima no lleva
+                      // acento, evita marcar como urgente una cuenta al día.
+                      const accent = item.isOverdue
+                        ? 'destructive'
+                        : item.isDueSoon || (item.saleType === 'CASH' && item.status === 'PENDING')
+                          ? 'warn'
+                          : null;
+                      return (
+                        <tr
+                          key={item.id}
+                          className={cn(
+                            'hover:bg-muted/20',
+                            accent === 'destructive' && 'bg-destructive/5',
+                            accent === 'warn' && 'bg-warn-subtle/40',
+                          )}
+                        >
+                          <td
+                            className={cn(
+                              'px-5 py-3 text-muted-foreground font-medium',
+                              accent === 'destructive' && 'border-l-[3px] border-l-destructive',
+                              accent === 'warn' && 'border-l-[3px] border-l-warn',
+                            )}
+                          >
+                            {item.customer}
+                          </td>
+                          <td className="px-5 py-3 text-right text-muted-foreground">{fmt(item.amount)}</td>
+                          <td className="px-5 py-3 text-right text-emerald-700 dark:text-emerald-400">{fmt(item.paidAmount)}</td>
+                          <td className="px-5 py-3 text-right font-semibold text-foreground">{fmt(item.pending)}</td>
+                          <td className="px-5 py-3 text-center">
+                            {item.dueDate ? (
+                              <span
+                                className={cn(
+                                  'flex items-center justify-center gap-1 text-xs',
+                                  accent === 'destructive' && 'text-destructive font-medium',
+                                  accent === 'warn' && 'text-warn font-medium',
+                                  !accent && 'text-muted-foreground',
+                                )}
+                              >
+                                {item.isOverdue && <Clock size={11} />}
+                                {fmtDate(item.dueDate)}
+                              </span>
+                            ) : '—'}
+                          </td>
+                          <td className="px-5 py-3 text-center">
+                            {item.isOverdue ? (
+                              <span className="inline-flex items-center gap-1 rounded-full bg-destructive/10 px-2.5 py-0.5 text-xs font-medium text-destructive">
+                                <AlertTriangle size={10} />
+                                Vencida · {overdueDays} {overdueDays === 1 ? 'día' : 'días'}
+                              </span>
+                            ) : item.isDueSoon ? (
+                              <span className="inline-flex items-center gap-1 rounded-full bg-warn-subtle px-2.5 py-0.5 text-xs font-medium text-warn">
+                                <Clock size={10} />
+                                Vence en {dueSoonDays} {dueSoonDays === 1 ? 'día' : 'días'}
+                              </span>
+                            ) : (
+                              <span className={cn('inline-block rounded-full px-2.5 py-0.5 text-xs font-medium', statusCls[item.status] ?? 'bg-muted/30 text-muted-foreground')}>
+                                {statusLabel[item.status] ?? item.status}
+                              </span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
