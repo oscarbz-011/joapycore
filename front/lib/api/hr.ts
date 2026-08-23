@@ -40,6 +40,7 @@ export interface Employee {
   area?: { id: string; name: string } | null;
   position?: { id: string; name: string } | null;
   manager?: { id: string; firstName: string; lastName: string } | null;
+  branch?: { id: string; name: string } | null;
   user?: { id: string; email: string; status: string; mustChangePassword: boolean } | null;
 }
 
@@ -63,6 +64,7 @@ export interface CreateEmployeePayload {
   areaId?: string;
   positionId?: string;
   managerId?: string;
+  branchId?: string;
   email?: string;
   bankName?: string;
   bankAccount?: string;

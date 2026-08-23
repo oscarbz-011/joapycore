@@ -60,4 +60,9 @@ export class UpdateEmployeeDto {
   paymentMethod?: PaymentMethod;
   @ApiPropertyOptional() @IsOptional() @IsString() bankName?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() bankAccount?: string;
+
+  @ApiPropertyOptional({ description: 'ID de la sucursal asignada' })
+  @IsOptional()
+  @IsString()
+  branchId?: string;
 }

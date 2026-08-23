@@ -75,6 +75,7 @@ export class EmployeesService {
         const user = await tx.user.create({
           data: {
             tenantId,
+            branchId: dto.branchId,
             email: dto.email,
             username,
             passwordHash,
@@ -130,6 +131,7 @@ export class EmployeesService {
           areaId: dto.areaId,
           positionId: dto.positionId,
           managerId: dto.managerId,
+          branchId: dto.branchId,
           baseSalary: dto.baseSalary,
           paymentMethod: dto.paymentMethod,
           bankName: dto.bankName,
@@ -147,6 +149,7 @@ export class EmployeesService {
           area: { select: { id: true, name: true } },
           position: { select: { id: true, name: true } },
           manager: { select: { id: true, firstName: true, lastName: true } },
+          branch: { select: { id: true, name: true } },
         },
       });
 
@@ -163,13 +166,25 @@ export class EmployeesService {
   }
 
   async update(tenantId: string, id: string, dto: UpdateEmployeeDto) {
-    await this.getById(tenantId, id);
-    return this.employeesRepository.update(tenantId, id, {
+    const employee = await this.getById(tenantId, id);
+    const updated = await this.employeesRepository.update(tenantId, id, {
       ...dto,
       ...(dto.firstName ? { firstName: toTitleCase(dto.firstName) } : {}),
       ...(dto.lastName ? { lastName: toTitleCase(dto.lastName) } : {}),
       ...(dto.birthDate ? { birthDate: new Date(dto.birthDate) } : {}),
     });
+
+    // Las ventas resuelven la sucursal desde User.branchId, no desde
+    // Employee.branchId — hay que mantenerlos en sincronía si el empleado
+    // tiene una cuenta de usuario vinculada.
+    if (dto.branchId !== undefined && employee.userId) {
+      await this.prisma.user.update({
+        where: { id: employee.userId },
+        data: { branchId: dto.branchId || null },
+      });
+    }
+
+    return updated;
   }
 
   async terminate(tenantId: string, id: string, terminationDate?: string) {

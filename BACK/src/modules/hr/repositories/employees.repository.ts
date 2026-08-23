@@ -9,6 +9,7 @@ const WITH_RELATIONS = {
   area: { select: { id: true, name: true } },
   position: { select: { id: true, name: true } },
   manager: { select: { id: true, firstName: true, lastName: true } },
+  branch: { select: { id: true, name: true } },
 } as const;
 
 @Injectable()

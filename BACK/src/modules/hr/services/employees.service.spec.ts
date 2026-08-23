@@ -62,6 +62,9 @@ describe('EmployeesService', () => {
       create: jest.Mock;
       updateMany: jest.Mock;
     };
+    branch: {
+      findMany: jest.Mock;
+    };
   };
   let eventEmitter: { emit: jest.Mock };
 
@@ -80,6 +83,9 @@ describe('EmployeesService', () => {
       employee: {
         create: jest.fn(),
         updateMany: jest.fn(),
+      },
+      branch: {
+        findMany: jest.fn().mockResolvedValue([{ id: 'branch-1' }]),
       },
     };
     employeesRepository = {
@@ -202,6 +208,92 @@ describe('EmployeesService', () => {
       ).rejects.toBeInstanceOf(ConflictException);
 
       expect(prisma.employee.create).not.toHaveBeenCalled();
+    });
+
+    it('persists branchId on the created employee and returns the branch relation', async () => {
+      prisma.employee.create.mockResolvedValue(makeEmployee({ branchId: 'branch-1' }));
+
+      await service.create('tenant-1', { ...baseDto, branchId: 'branch-1' });
+
+      expect(prisma.employee.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ branchId: 'branch-1' }),
+          include: expect.objectContaining({
+            branch: { select: { id: true, name: true } },
+          }),
+        }),
+      );
+    });
+
+    it('mirrors branchId onto the linked user account when created with an email', async () => {
+      prisma.user.findUnique.mockResolvedValue(null);
+      (bcrypt.hash as jest.Mock).mockResolvedValue('hashed-temp');
+      prisma.user.create.mockResolvedValue({ id: 'user-new' });
+      prisma.employee.create.mockResolvedValue(
+        makeEmployee({ userId: 'user-new', branchId: 'branch-1' }),
+      );
+
+      await service.create('tenant-1', {
+        ...baseDto,
+        email: 'ana@company.com',
+        branchId: 'branch-1',
+      });
+
+      expect(prisma.user.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ branchId: 'branch-1' }),
+        }),
+      );
+    });
+  });
+
+  // ── update ─────────────────────────────────────────────────────────────────
+
+  describe('update', () => {
+    it('updates the employee via the repository', async () => {
+      employeesRepository.findById.mockResolvedValue(makeEmployee());
+      employeesRepository.update.mockResolvedValue(makeEmployee({ firstName: 'Andrea' }));
+
+      const result = await service.update('tenant-1', 'emp-1', { firstName: 'Andrea' });
+
+      expect(employeesRepository.update).toHaveBeenCalledWith(
+        'tenant-1',
+        'emp-1',
+        expect.objectContaining({ firstName: 'Andrea' }),
+      );
+      expect(result?.firstName).toBe('Andrea');
+    });
+
+    it('mirrors branchId onto the linked user when the employee has one', async () => {
+      employeesRepository.findById.mockResolvedValue(makeEmployee({ userId: 'user-1' }));
+      employeesRepository.update.mockResolvedValue(
+        makeEmployee({ userId: 'user-1', branchId: 'branch-2' }),
+      );
+
+      await service.update('tenant-1', 'emp-1', { branchId: 'branch-2' });
+
+      expect(prisma.user.update).toHaveBeenCalledWith({
+        where: { id: 'user-1' },
+        data: { branchId: 'branch-2' },
+      });
+    });
+
+    it('does not touch the user account when the employee has no linked user', async () => {
+      employeesRepository.findById.mockResolvedValue(makeEmployee({ userId: null }));
+      employeesRepository.update.mockResolvedValue(makeEmployee({ branchId: 'branch-2' }));
+
+      await service.update('tenant-1', 'emp-1', { branchId: 'branch-2' });
+
+      expect(prisma.user.update).not.toHaveBeenCalled();
+    });
+
+    it('does not touch the user account when branchId is not part of the update', async () => {
+      employeesRepository.findById.mockResolvedValue(makeEmployee({ userId: 'user-1' }));
+      employeesRepository.update.mockResolvedValue(makeEmployee({ userId: 'user-1' }));
+
+      await service.update('tenant-1', 'emp-1', { firstName: 'Andrea' });
+
+      expect(prisma.user.update).not.toHaveBeenCalled();
     });
   });
 
