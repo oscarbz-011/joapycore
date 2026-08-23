@@ -429,6 +429,7 @@ export default function DashboardPage() {
     const map = new Map<string, { name: string; total: number; qty: number }>();
     orders.filter((o) => ACTIVE_STATUSES.includes(o.status)).forEach((o) =>
       o.items.forEach((item) => {
+        if (!item.productId || !item.product) return; // ítem libre, sin catálogo
         const prev = map.get(item.productId);
         const amt  = item.unitPrice * item.quantity;
         if (prev) { prev.total += amt; prev.qty += item.quantity; }
@@ -530,7 +531,7 @@ export default function DashboardPage() {
                           <td className="px-5 py-2.5"><StatusBadge status={o.status} /></td>
                           <td className="px-5 py-2.5 text-right font-mono font-semibold text-foreground">{fmtGs(orderTotal(o))}</td>
                           <td className="px-5 py-2.5 text-right text-muted-foreground">
-                            {new Date(o.orderDate).toLocaleDateString('es-PY', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                            {new Date(o.orderDate).toLocaleDateString('es-PY', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'UTC' })}
                           </td>
                         </tr>
                       ))}
