@@ -51,7 +51,7 @@ export class SaleTargetsRepository {
         saleType: true,
         sellerId: true,
         createdById: true,
-        seller:    { select: { id: true, firstName: true, lastName: true } },
+        seller: { select: { id: true, firstName: true, lastName: true } },
         createdBy: { select: { id: true, firstName: true, lastName: true } },
         items: { select: { quantity: true, unitPrice: true } },
       },

@@ -78,8 +78,10 @@ export class ProductsRepository {
     const products = await this.findAll(tenantId, filters);
     if (products.length === 0) return [];
 
-    const nonSerialized = products.filter((p) => !p.isSerialized).map((p) => p.id);
-    const serialized    = products.filter((p) =>  p.isSerialized).map((p) => p.id);
+    const nonSerialized = products
+      .filter((p) => !p.isSerialized)
+      .map((p) => p.id);
+    const serialized = products.filter((p) => p.isSerialized).map((p) => p.id);
 
     const [movSums, unitCounts] = await Promise.all([
       nonSerialized.length > 0
@@ -92,18 +94,22 @@ export class ProductsRepository {
       serialized.length > 0
         ? this.prisma.productUnit.groupBy({
             by: ['productId'],
-            where: { tenantId, productId: { in: serialized }, status: 'IN_STOCK' },
+            where: {
+              tenantId,
+              productId: { in: serialized },
+              status: 'IN_STOCK',
+            },
             _count: { id: true },
           })
         : [],
     ]);
 
     const stockMap = new Map<string, number>();
-    (movSums as { productId: string; _sum: { quantity: number | null } }[]).forEach((s) =>
-      stockMap.set(s.productId, s._sum.quantity ?? 0),
-    );
-    (unitCounts as { productId: string; _count: { id: number } }[]).forEach((s) =>
-      stockMap.set(s.productId, s._count.id),
+    (
+      movSums as { productId: string; _sum: { quantity: number | null } }[]
+    ).forEach((s) => stockMap.set(s.productId, s._sum.quantity ?? 0));
+    (unitCounts as { productId: string; _count: { id: number } }[]).forEach(
+      (s) => stockMap.set(s.productId, s._count.id),
     );
 
     return products.map((p) => ({ ...p, stock: stockMap.get(p.id) ?? 0 }));
@@ -172,7 +178,12 @@ export class ProductsRepository {
   createTransferMovements(
     tenantId: string,
     productId: string,
-    data: { quantity: number; fromWarehouseId?: string; toWarehouseId: string; notes?: string },
+    data: {
+      quantity: number;
+      fromWarehouseId?: string;
+      toWarehouseId: string;
+      notes?: string;
+    },
   ) {
     const referenceId = randomUUID();
     return this.prisma.$transaction(async (tx) => {

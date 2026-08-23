@@ -10,7 +10,10 @@ export class PricingConfigRepository {
     return this.prisma.pricingConfig.findUnique({ where: { tenantId } });
   }
 
-  upsert(tenantId: string, data: { markupMethod: MarkupMethod; defaultMarkup: number }) {
+  upsert(
+    tenantId: string,
+    data: { markupMethod: MarkupMethod; defaultMarkup: number },
+  ) {
     return this.prisma.pricingConfig.upsert({
       where: { tenantId },
       create: { tenantId, ...data },

@@ -27,7 +27,9 @@ export class SaleTargetsController {
 
   @Get('performance')
   @Permissions('sales:read')
-  @ApiOperation({ summary: 'Rendimiento de ventas por vendedor para un período' })
+  @ApiOperation({
+    summary: 'Rendimiento de ventas por vendedor para un período',
+  })
   getPerformance(
     @CurrentTenant() tenantId: string,
     @CurrentUser() user: JwtPayload,
@@ -35,7 +37,12 @@ export class SaleTargetsController {
   ) {
     const p = period ?? this.currentPeriod();
     const canManage = user.permissions.includes('sales:manage');
-    return this.saleTargetsService.getPerformance(tenantId, p, user.sub, canManage);
+    return this.saleTargetsService.getPerformance(
+      tenantId,
+      p,
+      user.sub,
+      canManage,
+    );
   }
 
   @Put('targets/company')
@@ -45,7 +52,11 @@ export class SaleTargetsController {
     @CurrentTenant() tenantId: string,
     @Body() dto: UpsertSaleTargetDto,
   ) {
-    return this.saleTargetsService.setCompanyTarget(tenantId, dto.period, dto.targetAmount);
+    return this.saleTargetsService.setCompanyTarget(
+      tenantId,
+      dto.period,
+      dto.targetAmount,
+    );
   }
 
   @Delete('targets/company')
@@ -67,7 +78,12 @@ export class SaleTargetsController {
     @Param('userId') userId: string,
     @Body() dto: UpsertSaleTargetDto,
   ) {
-    return this.saleTargetsService.setSellerTarget(tenantId, userId, dto.period, dto.targetAmount);
+    return this.saleTargetsService.setSellerTarget(
+      tenantId,
+      userId,
+      dto.period,
+      dto.targetAmount,
+    );
   }
 
   @Delete('targets/sellers/:userId')
