@@ -39,3 +39,7 @@ coverage/
 
 # Ignore all other files by default
 .claude/
+AGENTS.md
+CLAUDE.md
+GC_PENDIENTS.md
+ARCHITECTURE.md

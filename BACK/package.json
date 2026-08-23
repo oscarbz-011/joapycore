@@ -20,6 +20,8 @@
     "test:e2e": "jest --config ./test/jest-e2e.json"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1111.0",
+    "@aws-sdk/s3-request-presigner": "^3.1111.0",
     "@nestjs/common": "^11.0.1",
     "@nestjs/config": "^4.0.4",
     "@nestjs/core": "^11.0.1",
@@ -39,11 +41,12 @@
     "class-transformer": "^0.5.1",
     "class-validator": "^0.15.1",
     "multer": "^2.2.0",
+    "nodemailer": "^9.0.5",
     "passport": "^0.7.0",
     "passport-jwt": "^4.0.1",
     "pdf-lib": "^1.17.1",
-    "pdfmake": "^0.3.11",
     "pg": "^8.21.0",
+    "puppeteer": "^25.7.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
     "socket.io": "^4.8.3"
@@ -57,6 +60,7 @@
     "@types/express": "^5.0.0",
     "@types/jest": "^30.0.0",
     "@types/node": "^24.0.0",
+    "@types/nodemailer": "^8.0.1",
     "@types/passport-jwt": "^4.0.1",
     "@types/pg": "^8.20.0",
     "@types/supertest": "^7.0.0",
@@ -82,7 +86,8 @@
       "@prisma/engines",
       "prisma",
       "@scarf/scarf",
-      "unrs-resolver"
+      "unrs-resolver",
+      "puppeteer"
     ]
   },
   "jest": {
