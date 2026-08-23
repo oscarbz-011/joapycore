@@ -6,6 +6,7 @@ import { useAuth } from './auth-context';
 import { tokenStore } from './token-store';
 import { getSocket, disconnectSocket } from './socket';
 import { WS_EVENT_MAP } from './ws-event-map';
+import { publishWsEvent } from './ws-event-bus';
 
 interface WsEvent {
   type: string;
@@ -28,6 +29,7 @@ export function useWsConnection() {
     const socket = getSocket(token);
 
     const handler = (event: WsEvent) => {
+      publishWsEvent(event);
       const keys = WS_EVENT_MAP[event.type];
       if (!keys) return;
       keys.forEach((queryKey) =>

@@ -37,6 +37,7 @@ export class DeliveryNotesService {
       vehicle: dto.vehicle,
       notes: dto.notes,
     });
+    this.eventEmitter.emit('delivery.dispatched', { tenantId, saleOrderId: note.saleOrder.id, deliveryNoteId: id });
     this.eventEmitter.emit('audit.log', {
       tenantId,
       userId,

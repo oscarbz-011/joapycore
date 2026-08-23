@@ -83,6 +83,7 @@ export class PurchaseOrdersService {
       );
     }
     await this.purchaseOrdersRepository.updateStatus(tenantId, id, 'CONFIRMED');
+    this.eventEmitter.emit('purchase.order.confirmed', { tenantId, purchaseOrderId: id });
     this.eventEmitter.emit('audit.log', {
       tenantId,
       userId,
