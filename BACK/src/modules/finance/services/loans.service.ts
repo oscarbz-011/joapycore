@@ -4,17 +4,59 @@ import {
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
+import { PaymentMethod, Prisma } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { InstallmentsRepository } from '../repositories/installments.repository';
 import { LoansRepository } from '../repositories/loans.repository';
 import type { PayInstallmentDto } from '../dto/pay-installment.dto';
+import type { PayInstallmentsDto } from '../dto/pay-installments.dto';
 import type { AdvancePaymentDto } from '../dto/advance-payment.dto';
 import type { AuditLogEvent } from '../../../audit/audit-log.event';
 
+interface ReceiptItemInput {
+  installmentId: string;
+  installmentNumber: number;
+  amountApplied: number;
+}
+
+// Todo esto opera en UTC a propósito, nunca con los getters/setters locales
+// (getMonth/setMonth/getDate) — esas fechas de vencimiento son "fechas de
+// calendario" puras (el día 5, el día 20), no un instante con hora. Un
+// `dueDate` ya se guarda/recibe en UTC (una fecha "YYYY-MM-DD" del frontend
+// se parsea como medianoche UTC per ECMA-262), y el proceso de Node corre
+// sin `TZ` fijado — si alguna vez corre en un host con timezone local
+// distinto de UTC, `setMonth`/`getDate` habrían corrido la fecha guardada
+// un día, exactamente el bug reportado ("día 5" guardado quedaba en "día 4").
 function addMonths(date: Date, months: number): Date {
   const d = new Date(date);
-  d.setMonth(d.getMonth() + months);
+  d.setUTCMonth(d.getUTCMonth() + months);
   return d;
+}
+
+function isSameDay(a: Date, b: Date): boolean {
+  return (
+    a.getUTCFullYear() === b.getUTCFullYear() &&
+    a.getUTCMonth() === b.getUTCMonth() &&
+    a.getUTCDate() === b.getUTCDate()
+  );
+}
+
+// Todas las cuotas vencen el mismo día del mes configurado por el tenant
+// (CreditConfig.dueDayOfMonth), no en el aniversario de la fecha de compra
+// — todos los clientes comparten un único ciclo de facturación. Siempre
+// tiene que haber al menos un mes completo de plazo antes del primer
+// vencimiento: si el día de compra ya pasó el día de corte del próximo mes,
+// se salta un mes más (ej: compra 31/jul con corte día 5 -> primera cuota
+// 05/sep, no 05/ago, que quedaría a solo 5 días).
+function computeFirstDueDate(purchaseDate: Date, dueDayOfMonth: number): Date {
+  const monthsAhead = purchaseDate.getUTCDate() > dueDayOfMonth ? 2 : 1;
+  return new Date(
+    Date.UTC(
+      purchaseDate.getUTCFullYear(),
+      purchaseDate.getUTCMonth() + monthsAhead,
+      dueDayOfMonth,
+    ),
+  );
 }
 
 function toNum(value: unknown): number {
@@ -44,8 +86,12 @@ export class LoansService {
   }
 
   async findByOrder(tenantId: string, saleOrderId: string) {
-    const loan = await this.loansRepository.findBySaleOrder(tenantId, saleOrderId);
-    if (!loan) throw new NotFoundException('No existe un préstamo para este pedido');
+    const loan = await this.loansRepository.findBySaleOrder(
+      tenantId,
+      saleOrderId,
+    );
+    if (!loan)
+      throw new NotFoundException('No existe un préstamo para este pedido');
     return loan;
   }
 
@@ -53,30 +99,170 @@ export class LoansService {
     return this.installmentsRepository.findOverdue(tenantId);
   }
 
+  private get receiptInclude() {
+    return {
+      items: { orderBy: { installmentNumber: 'asc' as const } },
+      loan: { select: { id: true, saleOrderId: true } },
+      customer: {
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          customerCode: true,
+          documentType: true,
+          documentNumber: true,
+        },
+      },
+      branch: { select: { id: true, name: true, city: true } },
+      collectedBy: { select: { id: true, firstName: true, lastName: true } },
+      tenant: {
+        select: {
+          razonSocial: true,
+          nombreFantasia: true,
+          ruc: true,
+          address: true,
+          numeroCasa: true,
+          city: true,
+          phone: true,
+          logoFileId: true,
+        },
+      },
+    };
+  }
+
+  async findReceiptById(tenantId: string, id: string) {
+    const receipt = await this.prisma.paymentReceipt.findFirst({
+      where: { id, tenantId },
+      include: this.receiptInclude,
+    });
+    if (!receipt) throw new NotFoundException('Recibo no encontrado');
+    return receipt;
+  }
+
+  // Una cuota puede haberse cobrado sola (payInstallment) o como parte de un
+  // pago que también tocó otras cuotas (payByAmount) — en ambos casos hay
+  // exactamente un recibo con un PaymentReceiptItem para esta cuota.
+  async findReceiptByInstallment(tenantId: string, installmentId: string) {
+    const receipt = await this.prisma.paymentReceipt.findFirst({
+      where: { tenantId, items: { some: { installmentId } } },
+      include: this.receiptInclude,
+      orderBy: { issuedAt: 'desc' },
+    });
+    if (!receipt)
+      throw new NotFoundException('No hay recibo generado para esta cuota');
+    return receipt;
+  }
+
+  // Comprobante de dinero recibido — se genera siempre junto con el pago
+  // (misma transacción), nunca por separado. Numeración oficial de 13
+  // dígitos (establecimiento-puntoExpedición-secuencial) pero el secuencial
+  // lo autogenera el sistema, no es un documento fiscal SET.
+  private async createPaymentReceipt(
+    tx: Prisma.TransactionClient,
+    tenantId: string,
+    params: {
+      loanId: string;
+      customerId: string;
+      branchId: string | null;
+      items: ReceiptItemInput[];
+      totalAmount: number;
+      paymentMethod: PaymentMethod;
+      paymentReference?: string | null;
+      collectedById?: string | null;
+    },
+  ) {
+    let establecimiento = '001';
+    let puntoExpedicion = '001';
+    if (params.branchId) {
+      const branch = await tx.branch.findUnique({
+        where: { id: params.branchId },
+        select: { codigoEstablecimiento: true, puntoExpedicion: true },
+      });
+      establecimiento = branch?.codigoEstablecimiento || '001';
+      puntoExpedicion = branch?.puntoExpedicion || '001';
+    }
+
+    const last = await tx.paymentReceipt.findFirst({
+      where: { tenantId, establecimiento, puntoExpedicion },
+      orderBy: { sequential: 'desc' },
+      select: { sequential: true },
+    });
+    const sequential = (last?.sequential ?? 0) + 1;
+    const receiptNumber = `${establecimiento}-${puntoExpedicion}-${String(sequential).padStart(7, '0')}`;
+
+    return tx.paymentReceipt.create({
+      data: {
+        tenantId,
+        loanId: params.loanId,
+        customerId: params.customerId,
+        branchId: params.branchId,
+        establecimiento,
+        puntoExpedicion,
+        sequential,
+        receiptNumber,
+        totalAmount: params.totalAmount,
+        paymentMethod: params.paymentMethod,
+        paymentReference: params.paymentReference ?? null,
+        collectedById: params.collectedById ?? null,
+        items: {
+          create: params.items.map((i) => ({
+            installmentId: i.installmentId,
+            installmentNumber: i.installmentNumber,
+            amountApplied: i.amountApplied,
+          })),
+        },
+      },
+      include: this.receiptInclude,
+    });
+  }
+
   async createFromOrder(tenantId: string, saleOrderId: string) {
     // Idempotent: skip if loan already exists for this order
-    const existing = await this.loansRepository.findBySaleOrder(tenantId, saleOrderId);
+    const existing = await this.loansRepository.findBySaleOrder(
+      tenantId,
+      saleOrderId,
+    );
     if (existing) return existing;
 
     const order = await this.prisma.saleOrder.findFirst({
       where: { id: saleOrderId, tenantId },
       include: { items: true },
     });
-    if (!order) throw new NotFoundException(`Sale order ${saleOrderId} not found`);
+    if (!order)
+      throw new NotFoundException(`Sale order ${saleOrderId} not found`);
     if (!order.installments || order.installments < 1) {
       throw new UnprocessableEntityException(
         'El pedido no tiene cuotas configuradas para generar un préstamo',
       );
     }
 
-    const principal = order.items.reduce((sum, item) => {
+    const itemsTotal = order.items.reduce((sum, item) => {
       return sum + toNum(item.unitPrice) * item.quantity;
     }, 0);
+
+    // El recargo de entrega/zona también se financia — el preview del
+    // frontend en el modal "Nuevo pedido" ya lo incluye en su estimado, el
+    // préstamo real tiene que coincidir con eso.
+    const surcharge = order.surchargeAmount
+      ? order.surchargeType === 'FIXED'
+        ? toNum(order.surchargeAmount)
+        : itemsTotal * (toNum(order.surchargeAmount) / 100)
+      : 0;
+    const principal = itemsTotal + surcharge;
 
     const interestRate = order.interestRate ? toNum(order.interestRate) : 0;
     const totalAmount = principal * (1 + interestRate / 100);
     const amountPerInstallment = Math.round(totalAmount / order.installments);
     const now = new Date();
+
+    const creditConfig = await this.prisma.creditConfig.findUnique({
+      where: { tenantId },
+      select: { dueDayOfMonth: true },
+    });
+    const firstDueDate = computeFirstDueDate(
+      now,
+      creditConfig?.dueDayOfMonth ?? 5,
+    );
 
     return this.prisma.$transaction(async (tx) => {
       const loan = await tx.loan.create({
@@ -97,7 +283,7 @@ export class LoansService {
             tenantId,
             loanId: loan.id,
             number: i,
-            dueDate: addMonths(now, i),
+            dueDate: addMonths(firstDueDate, i - 1),
             amount: amountPerInstallment,
           },
         });
@@ -114,12 +300,48 @@ export class LoansService {
     });
   }
 
+  // Al emitir la factura de una venta a crédito, el vendedor puede elegir un
+  // vencimiento distinto al día default del tenant — pero el préstamo y sus
+  // cuotas ya se crearon antes, al aprobar el crédito (createFromOrder). Acá
+  // se corre la reprogramación completa del cronograma a partir de esa fecha,
+  // preservando el mismo patrón mensual. Nunca toca una cuota ya pagada —
+  // en la práctica esto siempre corre con todo pendiente, porque la factura
+  // se emite una única vez, justo después de la aprobación.
+  async rescheduleInstallments(
+    tenantId: string,
+    saleOrderId: string,
+    newFirstDueDate: Date,
+  ) {
+    const loan = await this.prisma.loan.findFirst({
+      where: { tenantId, saleOrderId },
+      include: { installments: { orderBy: { number: 'asc' } } },
+    });
+    if (!loan) return; // venta al contado, no hay préstamo que reprogramar
+
+    const current = loan.installments[0];
+    if (!current || isSameDay(current.dueDate, newFirstDueDate)) return;
+    if (loan.installments.some((i) => i.status === 'PAID')) return;
+
+    await this.prisma.$transaction(async (tx) => {
+      for (const inst of loan.installments) {
+        await tx.installment.update({
+          where: { id: inst.id },
+          data: { dueDate: addMonths(newFirstDueDate, inst.number - 1) },
+        });
+      }
+    });
+  }
+
   async payInstallment(
     tenantId: string,
     installmentId: string,
     dto: PayInstallmentDto,
+    userId?: string,
   ) {
-    const installment = await this.installmentsRepository.findById(tenantId, installmentId);
+    const installment = await this.installmentsRepository.findById(
+      tenantId,
+      installmentId,
+    );
     if (!installment) throw new NotFoundException('Cuota no encontrada');
     if (installment.status === 'PAID') {
       throw new UnprocessableEntityException('Esta cuota ya fue pagada');
@@ -140,14 +362,39 @@ export class LoansService {
 
     const isPaid = newPaid >= installmentAmount;
 
-    const updated = await this.installmentsRepository.update(installmentId, {
-      paidAmount: newPaid,
-      paidAt: isPaid ? new Date() : undefined,
-      paymentMethod: dto.paymentMethod,
-      paymentReference: dto.paymentReference,
-      paymentDate: dto.paymentDate ? new Date(dto.paymentDate) : new Date(),
-      status: isPaid ? 'PAID' : 'PARTIAL',
-      notes: dto.notes,
+    const { updated, receipt } = await this.prisma.$transaction(async (tx) => {
+      const updated = await this.installmentsRepository.update(
+        installmentId,
+        {
+          paidAmount: newPaid,
+          paidAt: isPaid ? new Date() : undefined,
+          paymentMethod: dto.paymentMethod,
+          paymentReference: dto.paymentReference,
+          paymentDate: dto.paymentDate ? new Date(dto.paymentDate) : new Date(),
+          status: isPaid ? 'PAID' : 'PARTIAL',
+          notes: dto.notes,
+        },
+        tx,
+      );
+
+      const receipt = await this.createPaymentReceipt(tx, tenantId, {
+        loanId: installment.loanId,
+        customerId: installment.loan.customerId,
+        branchId: installment.loan.saleOrder.branchId,
+        items: [
+          {
+            installmentId,
+            installmentNumber: installment.number,
+            amountApplied: dto.amount,
+          },
+        ],
+        totalAmount: dto.amount,
+        paymentMethod: dto.paymentMethod,
+        paymentReference: dto.paymentReference,
+        collectedById: userId,
+      });
+
+      return { updated, receipt };
     });
 
     this.eventEmitter.emit('installment.paid', {
@@ -162,7 +409,25 @@ export class LoansService {
       await this.checkAndCloseLoan(tenantId, installment.loanId);
     }
 
-    return updated;
+    const finalReceipt = await this.emitReceiptCreatedAndRefetch(
+      tenantId,
+      receipt,
+    );
+    return { installment: updated, receipt: finalReceipt };
+  }
+
+  // Genera el PDF del recibo fuera de la transacción (Puppeteer no debe correr
+  // con una transacción de Postgres abierta) y espera a que termine
+  // (emitAsync) para poder devolver pdfFileId ya listo en la misma respuesta.
+  private async emitReceiptCreatedAndRefetch(
+    tenantId: string,
+    receipt: Awaited<ReturnType<LoansService['createPaymentReceipt']>>,
+  ) {
+    await this.eventEmitter.emitAsync('payment.receipt.created', {
+      tenantId,
+      receiptId: receipt.id,
+    });
+    return this.findReceiptById(tenantId, receipt.id);
   }
 
   // Distributes amount across oldest-first pending installments (regular payment)
@@ -173,17 +438,26 @@ export class LoansService {
       amount: number;
       paymentMethod: string;
       paymentDate?: string;
+      paymentReference?: string;
       notes?: string;
     },
+    userId?: string,
   ) {
     const loan = await this.findOne(tenantId, loanId);
     if (loan.status === 'PAID') {
-      throw new UnprocessableEntityException('El préstamo ya está completamente pagado');
+      throw new UnprocessableEntityException(
+        'El préstamo ya está completamente pagado',
+      );
     }
 
-    const pending = await this.installmentsRepository.findPendingByLoan(tenantId, loanId);
+    const pending = await this.installmentsRepository.findPendingByLoan(
+      tenantId,
+      loanId,
+    );
     if (!pending.length) {
-      throw new UnprocessableEntityException('No hay cuotas pendientes para imputar');
+      throw new UnprocessableEntityException(
+        'No hay cuotas pendientes para imputar',
+      );
     }
 
     const totalOutstanding = pending.reduce(
@@ -196,10 +470,13 @@ export class LoansService {
       );
     }
 
-    const paymentDate = dto.paymentDate ? new Date(dto.paymentDate) : new Date();
+    const paymentDate = dto.paymentDate
+      ? new Date(dto.paymentDate)
+      : new Date();
 
-    await this.prisma.$transaction(async (tx) => {
+    const receipt = await this.prisma.$transaction(async (tx) => {
       let remaining = dto.amount;
+      const items: ReceiptItemInput[] = [];
       for (const inst of pending) {
         if (remaining <= 0) break;
         const currentPaid = toNum(inst.paidAmount);
@@ -214,14 +491,30 @@ export class LoansService {
           data: {
             paidAmount: newPaid,
             paidAt: isPaid ? paymentDate : undefined,
-            paymentMethod: dto.paymentMethod as never,
+            paymentMethod: dto.paymentMethod as PaymentMethod,
             paymentDate,
             status: isPaid ? 'PAID' : 'PARTIAL',
             notes: dto.notes,
           },
         });
+        items.push({
+          installmentId: inst.id,
+          installmentNumber: inst.number,
+          amountApplied: payment,
+        });
         remaining -= payment;
       }
+
+      return this.createPaymentReceipt(tx, tenantId, {
+        loanId,
+        customerId: loan.customerId,
+        branchId: loan.saleOrder.branchId,
+        items,
+        totalAmount: dto.amount,
+        paymentMethod: dto.paymentMethod as PaymentMethod,
+        paymentReference: dto.paymentReference,
+        collectedById: userId,
+      });
     });
 
     this.eventEmitter.emit('audit.log', {
@@ -232,17 +525,129 @@ export class LoansService {
     } satisfies AuditLogEvent);
 
     await this.checkAndCloseLoan(tenantId, loanId);
-    return this.loansRepository.findById(tenantId, loanId);
+    const updatedLoan = await this.loansRepository.findById(tenantId, loanId);
+    const finalReceipt = await this.emitReceiptCreatedAndRefetch(
+      tenantId,
+      receipt,
+    );
+    return { loan: updatedLoan, receipt: finalReceipt };
+  }
+
+  // Cobra una selección explícita de cuotas (elegidas a mano, o calculadas en
+  // el frontend a partir de un monto — ver front/lib/finance-distribute.ts)
+  // en un solo recibo. A diferencia de payByAmount, acá el caller decide
+  // exactamente qué cuotas y cuánto se aplica a cada una — no siempre las
+  // más antiguas primero ni siempre el saldo completo.
+  async payInstallments(
+    tenantId: string,
+    loanId: string,
+    dto: PayInstallmentsDto,
+    userId?: string,
+  ) {
+    const loan = await this.findOne(tenantId, loanId);
+    if (loan.status === 'PAID') {
+      throw new UnprocessableEntityException(
+        'El préstamo ya está completamente pagado',
+      );
+    }
+
+    const pending = await this.installmentsRepository.findPendingByLoan(
+      tenantId,
+      loanId,
+    );
+    const pendingById = new Map(pending.map((i) => [i.id, i]));
+
+    for (const item of dto.items) {
+      const inst = pendingById.get(item.installmentId);
+      if (!inst) {
+        throw new UnprocessableEntityException(
+          `La cuota ${item.installmentId} no pertenece a este préstamo o ya está pagada`,
+        );
+      }
+      const outstanding =
+        Math.ceil(toNum(inst.amount)) - toNum(inst.paidAmount);
+      if (item.amount > outstanding) {
+        throw new UnprocessableEntityException(
+          `El monto para la cuota #${inst.number} (${item.amount}) supera su saldo (${outstanding})`,
+        );
+      }
+    }
+
+    const paymentDate = dto.paymentDate
+      ? new Date(dto.paymentDate)
+      : new Date();
+
+    const receipt = await this.prisma.$transaction(async (tx) => {
+      const items: ReceiptItemInput[] = [];
+      for (const item of dto.items) {
+        const inst = pendingById.get(item.installmentId)!;
+        const newPaid = toNum(inst.paidAmount) + item.amount;
+        const isPaid = newPaid >= toNum(inst.amount);
+
+        await tx.installment.update({
+          where: { id: inst.id },
+          data: {
+            paidAmount: newPaid,
+            paidAt: isPaid ? paymentDate : undefined,
+            paymentMethod: dto.paymentMethod,
+            paymentDate,
+            status: isPaid ? 'PAID' : 'PARTIAL',
+            notes: dto.notes,
+          },
+        });
+        items.push({
+          installmentId: inst.id,
+          installmentNumber: inst.number,
+          amountApplied: item.amount,
+        });
+      }
+
+      return this.createPaymentReceipt(tx, tenantId, {
+        loanId,
+        customerId: loan.customerId,
+        branchId: loan.saleOrder.branchId,
+        items,
+        totalAmount: dto.items.reduce((s, i) => s + i.amount, 0),
+        paymentMethod: dto.paymentMethod,
+        paymentReference: dto.paymentReference,
+        collectedById: userId,
+      });
+    });
+
+    this.eventEmitter.emit('audit.log', {
+      tenantId,
+      module: 'finance',
+      action: 'loan.payment.registered',
+      resourceId: loanId,
+    } satisfies AuditLogEvent);
+
+    await this.checkAndCloseLoan(tenantId, loanId);
+    const updatedLoan = await this.loansRepository.findById(tenantId, loanId);
+    const finalReceipt = await this.emitReceiptCreatedAndRefetch(
+      tenantId,
+      receipt,
+    );
+    return { loan: updatedLoan, receipt: finalReceipt };
   }
 
   // Advance payment: REDUCE_INSTALLMENTS cancels from end; REDUCE_AMOUNT redistributes balance
-  async advancePayment(tenantId: string, loanId: string, dto: AdvancePaymentDto) {
+  async advancePayment(
+    tenantId: string,
+    loanId: string,
+    dto: AdvancePaymentDto,
+    userId?: string,
+  ) {
     const loan = await this.findOne(tenantId, loanId);
     if (loan.status === 'PAID') {
-      throw new UnprocessableEntityException('El préstamo ya está completamente pagado');
+      throw new UnprocessableEntityException(
+        'El préstamo ya está completamente pagado',
+      );
     }
 
-    const pending = await this.installmentsRepository.findPendingByLoan(tenantId, loanId);
+    const pending = await this.installmentsRepository.findPendingByLoan(
+      tenantId,
+      loanId,
+    );
     if (!pending.length) {
       throw new UnprocessableEntityException('No hay cuotas pendientes');
     }
@@ -257,13 +662,20 @@ export class LoansService {
       );
     }
 
-    const paymentDate = dto.paymentDate ? new Date(dto.paymentDate) : new Date();
+    const paymentDate = dto.paymentDate
+      ? new Date(dto.paymentDate)
+      : new Date();
+
+    let receipt: Awaited<
+      ReturnType<LoansService['createPaymentReceipt']>
+    > | null = null;
 
     if (dto.mode === 'REDUCE_INSTALLMENTS') {
       // Apply from last installment backwards — cancels end cuotas first
       const reversed = [...pending].reverse();
-      await this.prisma.$transaction(async (tx) => {
+      receipt = await this.prisma.$transaction(async (tx) => {
         let remaining = dto.amount;
+        const items: ReceiptItemInput[] = [];
         for (const inst of reversed) {
           if (remaining <= 0) break;
           const currentPaid = toNum(inst.paidAmount);
@@ -278,16 +690,34 @@ export class LoansService {
             data: {
               paidAmount: newPaid,
               paidAt: isPaid ? paymentDate : undefined,
-              paymentMethod: dto.paymentMethod as never,
+              paymentMethod: dto.paymentMethod,
               paymentDate,
               status: isPaid ? 'PAID' : 'PARTIAL',
               notes: dto.notes,
             },
           });
+          items.push({
+            installmentId: inst.id,
+            installmentNumber: inst.number,
+            amountApplied: payment,
+          });
           remaining -= payment;
         }
+
+        return this.createPaymentReceipt(tx, tenantId, {
+          loanId,
+          customerId: loan.customerId,
+          branchId: loan.saleOrder.branchId,
+          items,
+          totalAmount: dto.amount,
+          paymentMethod: dto.paymentMethod,
+          paymentReference: dto.reference,
+          collectedById: userId,
+        });
       });
     } else {
+      // REDUCE_AMOUNT no genera recibo — no aplica un pago a cuotas
+      // puntuales, recalcula el saldo restante entre todas por igual.
       // REDUCE_AMOUNT: for REDUCE_AMOUNT mode, no PARTIAL installments are allowed beforehand
       // to keep redistribution clean
       const hasPartial = pending.some((i) => i.status === 'PARTIAL');
@@ -323,7 +753,11 @@ export class LoansService {
     } satisfies AuditLogEvent);
 
     await this.checkAndCloseLoan(tenantId, loanId);
-    return this.loansRepository.findById(tenantId, loanId);
+    const updatedLoan = await this.loansRepository.findById(tenantId, loanId);
+    const finalReceipt = receipt
+      ? await this.emitReceiptCreatedAndRefetch(tenantId, receipt)
+      : null;
+    return { loan: updatedLoan, receipt: finalReceipt };
   }
 
   private async checkAndCloseLoan(tenantId: string, loanId: string) {

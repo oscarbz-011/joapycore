@@ -21,7 +21,12 @@ export class CustomersRepository {
 
   findByEmail(tenantId: string, email: string, excludeId?: string) {
     return this.prisma.customer.findFirst({
-      where: { tenantId, email, deletedAt: null, ...(excludeId ? { id: { not: excludeId } } : {}) },
+      where: {
+        tenantId,
+        email,
+        deletedAt: null,
+        ...(excludeId ? { id: { not: excludeId } } : {}),
+      },
       select: { id: true },
     });
   }

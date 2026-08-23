@@ -2,14 +2,20 @@
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ChevronDown, ChevronRight, AlertCircle } from 'lucide-react';
+import { ChevronDown, ChevronRight, AlertCircle, AlertTriangle } from 'lucide-react';
 import { financeApi, Loan, Installment } from '../../../../lib/api/finance';
+import { openPdf } from '../../../../lib/open-pdf';
+import { daysOverdue } from '../../../../lib/overdue';
+import { ContractCard } from '../../../../components/contract-card';
 import { NumericInput } from '../../../../components/numeric-input';
+import { ReceiptButton } from '../../../../components/receipt-button';
+import { RequirePermission } from '../../../../components/require-permission';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
+import { cn } from '@/lib/utils';
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -18,7 +24,7 @@ function formatPrice(v: number) {
 }
 
 function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString('es-PY', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  return new Date(iso).toLocaleDateString('es-PY', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'UTC' });
 }
 
 const NUM_CLS = 'h-9 w-full min-w-0 rounded-3xl border border-transparent bg-input/50 px-3 text-sm outline-none transition-[color,box-shadow,background-color] focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30';
@@ -67,7 +73,15 @@ const INST_STATUS_CLASS: Record<string, string> = {
   OVERDUE: 'bg-destructive/10 text-destructive border-destructive/30',
 };
 
-function InstStatusBadge({ status }: { status: string }) {
+function InstStatusBadge({ status, overdueDays }: { status: string; overdueDays?: number }) {
+  if (status === 'OVERDUE' && overdueDays && overdueDays > 0) {
+    return (
+      <Badge variant="destructive" className="gap-1 whitespace-nowrap">
+        <AlertTriangle size={10} />
+        Vencido · {overdueDays} {overdueDays === 1 ? 'día' : 'días'}
+      </Badge>
+    );
+  }
   return (
     <Badge variant="outline" className={INST_STATUS_CLASS[status] ?? 'bg-muted text-muted-foreground border-border'}>
       {INST_STATUS_LABEL[status] ?? status}
@@ -89,13 +103,15 @@ function PayInstallmentForm({
   const remaining = Math.ceil(Number(installment.amount)) - Number(installment.paidAmount);
   const [amount, setAmount] = useState<number>(remaining);
   const [paymentMethod, setPaymentMethod] = useState('CASH');
+  const [paymentDate, setPaymentDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [notes, setNotes] = useState('');
 
   const mutation = useMutation({
     mutationFn: () =>
-      financeApi.payInstallment(installment.id, { amount, paymentMethod, notes: notes || undefined }),
-    onSuccess: () => {
+      financeApi.payInstallment(installment.id, { amount, paymentMethod, paymentDate, notes: notes || undefined }),
+    onSuccess: (data) => {
       void queryClient.invalidateQueries({ queryKey: ['finance-loans'] });
+      if (data.receipt?.pdfFileId) void openPdf(data.receipt.pdfFileId);
       onDone();
     },
   });
@@ -129,6 +145,12 @@ function PayInstallmentForm({
           </Select>
         </div>
         <div className="flex-1 space-y-1">
+          <Label>Fecha de pago</Label>
+          <Input type="date" value={paymentDate} onChange={(e) => setPaymentDate(e.target.value)} />
+        </div>
+      </div>
+      <div className="flex gap-2">
+        <div className="flex-1 space-y-1">
           <Label>Nota (opcional)</Label>
           <Input value={notes} onChange={(e) => setNotes(e.target.value)} />
         </div>
@@ -160,23 +182,48 @@ function PayInstallmentForm({
 function InstallmentRow({ inst }: { inst: Installment }) {
   const [paying, setPaying] = useState(false);
   const canPay = inst.status === 'PENDING' || inst.status === 'PARTIAL' || inst.status === 'OVERDUE';
+  const overdueDays = inst.status === 'OVERDUE' ? Math.max(0, daysOverdue(inst.dueDate)) : 0;
+  // Mismo diseño de resaltado (barra + texto coloreado) para "Vencido"
+  // (rojo) y "Pendiente" (ámbar) — ver el mismo criterio en payments/page.tsx.
+  const accent = overdueDays > 0 ? 'destructive' : inst.status === 'PENDING' ? 'warn' : null;
 
   return (
     <div>
-      <div className="flex items-center gap-3 py-2 px-3 rounded-lg hover:bg-muted/20">
+      <div
+        className={cn(
+          'flex items-center gap-3 py-2 px-3 rounded-lg hover:bg-muted/20',
+          accent === 'destructive' && 'border-l-[3px] border-l-destructive',
+          accent === 'warn' && 'border-l-[3px] border-l-warn',
+        )}
+      >
         <span className="w-6 text-xs text-muted-foreground/60 text-center">{inst.number}</span>
-        <span className="flex-1 text-xs text-muted-foreground">{formatDate(inst.dueDate)}</span>
+        <span
+          className={cn(
+            'flex-1 text-xs',
+            accent === 'destructive' && 'font-medium text-destructive',
+            accent === 'warn' && 'font-medium text-warn',
+            !accent && 'text-muted-foreground',
+          )}
+        >
+          {formatDate(inst.dueDate)}
+          {inst.status === 'PAID' && inst.paymentDate && (
+            <span className="ml-1.5 text-emerald-600">· pagada {formatDate(inst.paymentDate)}</span>
+          )}
+        </span>
         <span className="text-xs text-foreground font-mono tabular-nums">{formatPrice(Math.ceil(Number(inst.amount)))}</span>
         {Number(inst.paidAmount) > 0 && (
           <span className="text-xs text-emerald-600 font-mono tabular-nums">
             −{formatPrice(Number(inst.paidAmount))}
           </span>
         )}
-        <InstStatusBadge status={inst.status} />
+        <InstStatusBadge status={inst.status} overdueDays={overdueDays} />
+        {Number(inst.paidAmount) > 0 && <ReceiptButton installmentId={inst.id} />}
         {canPay && (
-          <Button size="sm" onClick={() => setPaying((v) => !v)}>
-            Pagar
-          </Button>
+          <RequirePermission permission="finance:installments:pay">
+            <Button size="sm" onClick={() => setPaying((v) => !v)}>
+              Pagar
+            </Button>
+          </RequirePermission>
         )}
       </div>
       {paying && (
@@ -190,12 +237,21 @@ function InstallmentRow({ inst }: { inst: Installment }) {
 
 function LoanRow({ loan }: { loan: Loan }) {
   const [open, setOpen] = useState(false);
+  const productSummary = loan.saleOrder.items
+    .map((i) => i.product?.name ?? i.description ?? 'Ítem')
+    .join(', ');
+  const overdueCount = loan.installments.filter((i) => i.status === 'OVERDUE').length;
+  const pendingCount = loan.installments.filter((i) => i.status === 'PENDING').length;
 
   return (
     <div className="border border-border rounded-xl overflow-hidden">
       <button
         onClick={() => setOpen((v) => !v)}
-        className="w-full flex items-center gap-3 px-4 py-3 bg-card hover:bg-muted/20 text-left transition-colors"
+        className={cn(
+          'w-full flex items-center gap-3 px-4 py-3 bg-card hover:bg-muted/20 text-left transition-colors',
+          overdueCount > 0 && 'border-l-[3px] border-l-destructive',
+          overdueCount === 0 && pendingCount > 0 && 'border-l-[3px] border-l-warn',
+        )}
       >
         {open
           ? <ChevronDown size={14} className="text-muted-foreground/60 shrink-0" />
@@ -205,6 +261,9 @@ function LoanRow({ loan }: { loan: Loan }) {
           <p className="text-sm font-medium text-foreground">
             {loan.customer.firstName} {loan.customer.lastName}
           </p>
+          {productSummary && (
+            <p className="text-xs text-muted-foreground truncate mt-0.5">{productSummary}</p>
+          )}
           <p className="text-xs text-muted-foreground/60 mt-0.5">
             {loan.totalInstallments} cuotas · {loan.interestRate}% interés · {formatDate(loan.createdAt)}
           </p>
@@ -213,17 +272,34 @@ function LoanRow({ loan }: { loan: Loan }) {
           <p className="text-sm font-semibold text-foreground tabular-nums">{formatPrice(loan.totalAmount)}</p>
           <p className="text-xs text-muted-foreground/60">Capital: {formatPrice(loan.principal)}</p>
         </div>
-        <div className="ml-2">
+        <div className="ml-2 flex items-center gap-1.5">
+          {overdueCount > 0 && (
+            <Badge variant="destructive" className="gap-1">
+              <AlertTriangle size={10} />
+              {overdueCount} vencida{overdueCount !== 1 ? 's' : ''}
+            </Badge>
+          )}
+          {pendingCount > 0 && (
+            <Badge variant="outline" className="gap-1 bg-warn-subtle text-warn border-warn/30">
+              {pendingCount} pendiente{pendingCount !== 1 ? 's' : ''}
+            </Badge>
+          )}
           <LoanStatusBadge status={loan.status} />
         </div>
       </button>
 
       {open && (
-        <div className="border-t border-border bg-card px-4 py-3 space-y-0.5">
-          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/60 mb-2">Cuotas</p>
-          {loan.installments.map((inst) => (
-            <InstallmentRow key={inst.id} inst={inst} />
-          ))}
+        <div className="border-t border-border bg-card px-4 py-3 space-y-3">
+          <div className="space-y-0.5">
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/60 mb-2">Cuotas</p>
+            {loan.installments.map((inst) => (
+              <InstallmentRow key={inst.id} inst={inst} />
+            ))}
+          </div>
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/60 mb-2">Contrato</p>
+            <ContractCard entityType="sale_order" entityId={loan.saleOrderId} />
+          </div>
         </div>
       )}
     </div>
@@ -271,11 +347,15 @@ export default function FinancePage() {
             {overdueInstallments.length} cuota{overdueInstallments.length > 1 ? 's' : ''} vencida{overdueInstallments.length > 1 ? 's' : ''}
           </p>
           <div className="space-y-0.5">
-            {overdueInstallments.map((inst) => (
-              <p key={inst.id} className="text-xs text-destructive">
-                {inst.loan.customer.firstName} {inst.loan.customer.lastName} — cuota {inst.number}, vence {formatDate(inst.dueDate)} ({formatPrice(Math.ceil(Number(inst.amount)) - Number(inst.paidAmount))} pendiente)
-              </p>
-            ))}
+            {overdueInstallments.map((inst) => {
+              const days = Math.max(0, daysOverdue(inst.dueDate));
+              return (
+                <p key={inst.id} className="text-xs text-destructive">
+                  {inst.loan.customer.firstName} {inst.loan.customer.lastName} — cuota {inst.number}, vence {formatDate(inst.dueDate)}
+                  {' · '}{days} {days === 1 ? 'día' : 'días'} de mora ({formatPrice(Math.ceil(Number(inst.amount)) - Number(inst.paidAmount))} pendiente)
+                </p>
+              );
+            })}
           </div>
         </div>
       )}

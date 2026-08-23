@@ -234,6 +234,12 @@ function PlanRow({
 export default function CreditSettingsPage() {
   const qc = useQueryClient();
   const [showAddForm, setShowAddForm] = useState(false);
+  const [maxIncomeInput, setMaxIncomeInput] = useState('');
+  const [editingMaxIncome, setEditingMaxIncome] = useState(false);
+  const [dueDayInput, setDueDayInput] = useState('');
+  const [editingDueDay, setEditingDueDay] = useState(false);
+  const [graceDaysInput, setGraceDaysInput] = useState('');
+  const [editingGraceDays, setEditingGraceDays] = useState(false);
 
   const { data: config, isLoading } = useQuery({
     queryKey: ['credit-config'],
@@ -241,8 +247,36 @@ export default function CreditSettingsPage() {
   });
 
   const toggleEnabled = useMutation({
-    mutationFn: (isEnabled: boolean) => settingsApi.setCreditEnabled(isEnabled),
+    mutationFn: (isEnabled: boolean) =>
+      settingsApi.setCreditEnabled(isEnabled, config?.maxIncomePercentage),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['credit-config'] }),
+  });
+
+  const updateMaxIncome = useMutation({
+    mutationFn: (maxIncomePercentage: number | null) =>
+      settingsApi.setCreditEnabled(config?.isEnabled ?? true, maxIncomePercentage),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['credit-config'] });
+      setEditingMaxIncome(false);
+    },
+  });
+
+  const updateDueDay = useMutation({
+    mutationFn: (dueDayOfMonth: number) =>
+      settingsApi.setCreditEnabled(config?.isEnabled ?? true, config?.maxIncomePercentage, dueDayOfMonth, config?.moraGraceDays),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['credit-config'] });
+      setEditingDueDay(false);
+    },
+  });
+
+  const updateGraceDays = useMutation({
+    mutationFn: (moraGraceDays: number) =>
+      settingsApi.setCreditEnabled(config?.isEnabled ?? true, config?.maxIncomePercentage, config?.dueDayOfMonth, moraGraceDays),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['credit-config'] });
+      setEditingGraceDays(false);
+    },
   });
 
   const addPlan = useMutation({
@@ -315,6 +349,179 @@ export default function CreditSettingsPage() {
               />
             </button>
           </div>
+
+          {/* Income-based cap — only visible when enabled */}
+          {enabled && (
+            <div className="flex items-center justify-between rounded-2xl border border-border bg-card px-6 py-4">
+              <div>
+                <p className="text-sm font-medium text-foreground">Tope de cuota por sueldo</p>
+                <p className="text-xs text-muted-foreground/60 mt-0.5">
+                  % máximo del sueldo declarado del cliente que puede ocupar la cuota mensual (sumando otros créditos activos). Vacío = sin tope.
+                </p>
+              </div>
+              {editingMaxIncome ? (
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <div className="relative w-20">
+                    <input
+                      autoFocus
+                      type="number"
+                      min="0"
+                      max="100"
+                      step="1"
+                      value={maxIncomeInput}
+                      onChange={(e) => setMaxIncomeInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') updateMaxIncome.mutate(maxIncomeInput ? Number(maxIncomeInput) : null);
+                        if (e.key === 'Escape') setEditingMaxIncome(false);
+                      }}
+                      className="w-full rounded-md border border-border py-1 pl-2 pr-6 text-sm focus:border-ring focus:outline-none"
+                    />
+                    <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground/60">%</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => updateMaxIncome.mutate(maxIncomeInput ? Number(maxIncomeInput) : null)}
+                    className="text-muted-foreground hover:text-foreground"
+                  >
+                    <Check size={15} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEditingMaxIncome(false)}
+                    className="text-muted-foreground/60 hover:text-muted-foreground"
+                  >
+                    <X size={15} />
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMaxIncomeInput(config?.maxIncomePercentage != null ? String(config.maxIncomePercentage) : '');
+                    setEditingMaxIncome(true);
+                  }}
+                  className="flex items-center gap-1.5 text-sm font-medium text-foreground hover:text-muted-foreground transition-colors"
+                >
+                  {config?.maxIncomePercentage != null ? `${config.maxIncomePercentage}%` : 'Sin tope'}
+                  <Pencil size={12} className="text-muted-foreground/60" />
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Due day — only visible when enabled */}
+          {enabled && (
+            <div className="flex items-center justify-between rounded-2xl border border-border bg-card px-6 py-4">
+              <div>
+                <p className="text-sm font-medium text-foreground">Día de vencimiento de cuotas</p>
+                <p className="text-xs text-muted-foreground/60 mt-0.5">
+                  Día del mes en que vencen todas las cuotas de crédito, sin importar la fecha de compra. Siempre se garantiza al menos un mes de plazo para la primera cuota.
+                </p>
+              </div>
+              {editingDueDay ? (
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <input
+                    autoFocus
+                    type="number"
+                    min="1"
+                    max="28"
+                    step="1"
+                    value={dueDayInput}
+                    onChange={(e) => setDueDayInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && dueDayInput) updateDueDay.mutate(Number(dueDayInput));
+                      if (e.key === 'Escape') setEditingDueDay(false);
+                    }}
+                    className="w-16 rounded-md border border-border py-1 px-2 text-sm focus:border-ring focus:outline-none"
+                  />
+                  <button
+                    type="button"
+                    disabled={!dueDayInput}
+                    onClick={() => updateDueDay.mutate(Number(dueDayInput))}
+                    className="text-muted-foreground hover:text-foreground disabled:opacity-40"
+                  >
+                    <Check size={15} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEditingDueDay(false)}
+                    className="text-muted-foreground/60 hover:text-muted-foreground"
+                  >
+                    <X size={15} />
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDueDayInput(String(config?.dueDayOfMonth ?? 5));
+                    setEditingDueDay(true);
+                  }}
+                  className="flex items-center gap-1.5 text-sm font-medium text-foreground hover:text-muted-foreground transition-colors"
+                >
+                  Día {config?.dueDayOfMonth ?? 5}
+                  <Pencil size={12} className="text-muted-foreground/60" />
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Grace days before mora — only visible when enabled */}
+          {enabled && (
+            <div className="flex items-center justify-between rounded-2xl border border-border bg-card px-6 py-4">
+              <div>
+                <p className="text-sm font-medium text-foreground">Tolerancia antes de cobrar mora</p>
+                <p className="text-xs text-muted-foreground/60 mt-0.5">
+                  Días después del vencimiento antes de empezar a devengar interés moratorio sobre las cuotas atrasadas.
+                </p>
+              </div>
+              {editingGraceDays ? (
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <input
+                    autoFocus
+                    type="number"
+                    min="0"
+                    max="60"
+                    step="1"
+                    value={graceDaysInput}
+                    onChange={(e) => setGraceDaysInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && graceDaysInput) updateGraceDays.mutate(Number(graceDaysInput));
+                      if (e.key === 'Escape') setEditingGraceDays(false);
+                    }}
+                    className="w-16 rounded-md border border-border py-1 px-2 text-sm focus:border-ring focus:outline-none"
+                  />
+                  <button
+                    type="button"
+                    disabled={!graceDaysInput}
+                    onClick={() => updateGraceDays.mutate(Number(graceDaysInput))}
+                    className="text-muted-foreground hover:text-foreground disabled:opacity-40"
+                  >
+                    <Check size={15} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEditingGraceDays(false)}
+                    className="text-muted-foreground/60 hover:text-muted-foreground"
+                  >
+                    <X size={15} />
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setGraceDaysInput(String(config?.moraGraceDays ?? 0));
+                    setEditingGraceDays(true);
+                  }}
+                  className="flex items-center gap-1.5 text-sm font-medium text-foreground hover:text-muted-foreground transition-colors"
+                >
+                  {config?.moraGraceDays ? `${config.moraGraceDays} día${config.moraGraceDays === 1 ? '' : 's'}` : 'Sin tolerancia'}
+                  <Pencil size={12} className="text-muted-foreground/60" />
+                </button>
+              )}
+            </div>
+          )}
 
           {/* Plans section — only visible when enabled */}
           {enabled && (

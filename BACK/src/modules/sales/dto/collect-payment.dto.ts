@@ -38,7 +38,10 @@ export class SalePaymentEntryDto {
 }
 
 export class CollectPaymentDto {
-  @ApiProperty({ type: [SalePaymentEntryDto], description: 'Uno o más métodos de pago' })
+  @ApiProperty({
+    type: [SalePaymentEntryDto],
+    description: 'Uno o más métodos de pago',
+  })
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => SalePaymentEntryDto)

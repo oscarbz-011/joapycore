@@ -1,22 +1,26 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Plus, Search, X, Trash2, UserCheck, UserPlus } from 'lucide-react';
+import { Plus, Search, X, UserCheck, UserPlus } from 'lucide-react';
 
+import { ContractCard } from '../../../../components/contract-card';
 import { NumericInput } from '../../../../components/numeric-input';
+import { NUM_CLS, type LineItem, LineItemRow, CreditOptions } from '../../../../components/sales/order-line-items';
 import {
   salesApi,
+  combosApi,
   type Customer,
   type CreateSaleOrderItem,
-  type DocumentType,
-  type OrderType,
+  type SaleCombo,
   type SaleOrder,
+  type SaleOrderItem,
   type SaleOrderStatus,
   type SaleType,
 } from '../../../../lib/api/sales';
 import { inventoryApi, type Product } from '../../../../lib/api/inventory';
-import { settingsApi, type CreditPlan } from '../../../../lib/api/settings';
+import { settingsApi } from '../../../../lib/api/settings';
 import { usersApi } from '../../../../lib/api/users';
 import { useAuth } from '../../../../lib/auth-context';
 import { SearchSelect } from '../components/search-select';
@@ -39,7 +43,7 @@ function formatPrice(n: number) {
 }
 
 function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString('es-PY', { day: '2-digit', month: 'short', year: 'numeric' });
+  return new Date(iso).toLocaleDateString('es-PY', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' });
 }
 
 function orderSubtotal(order: SaleOrder) {
@@ -49,6 +53,11 @@ function orderSubtotal(order: SaleOrder) {
 function orderSurchargeAmount(order: SaleOrder, subtotal: number): number {
   if (!order.surchargeType || !order.surchargeAmount) return 0;
   return order.surchargeType === 'PERCENTAGE' ? subtotal * (order.surchargeAmount / 100) : order.surchargeAmount;
+}
+
+function itemUnitPrice(order: SaleOrder, item: SaleOrderItem): number {
+  if (order.saleType === 'CREDIT' && item.financedUnitPrice != null) return item.financedUnitPrice;
+  return item.unitPrice;
 }
 
 function orderTotal(order: SaleOrder) {
@@ -70,6 +79,7 @@ const STATUS_LABEL: Record<SaleOrderStatus, string> = {
   PENDING_CREDIT_APPROVAL: 'En evaluación',
   CREDIT_APPROVED:         'Crédito aprobado',
   CREDIT_REJECTED:         'Crédito rechazado',
+  CREDIT_NEEDS_ADJUSTMENT: 'Necesita ajustes',
   CONFIRMED:               'Confirmado',
   DELIVERED:               'Entregado',
   INVOICED:                'Facturado',
@@ -81,6 +91,7 @@ const STATUS_CLASS: Partial<Record<SaleOrderStatus, string>> = {
   PENDING:                 'bg-muted text-muted-foreground border-border',
   PAYMENT_RECEIVED:        'bg-accent-subtle text-accent-on border-accent-on/20',
   PENDING_CREDIT_APPROVAL: 'bg-warn-subtle text-warn border-warn/30',
+  CREDIT_NEEDS_ADJUSTMENT: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800',
   CREDIT_APPROVED:         'bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-950 dark:text-sky-300 dark:border-sky-800',
   CONFIRMED:               'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-800',
   DELIVERED:               'bg-teal-50 text-teal-700 border-teal-200 dark:bg-teal-950 dark:text-teal-300 dark:border-teal-800',
@@ -100,208 +111,6 @@ function StatusBadge({ status }: { status: SaleOrderStatus }) {
   );
 }
 
-const NUM_CLS = 'h-9 w-full min-w-0 rounded-3xl border border-transparent bg-input/50 px-3 text-sm outline-none transition-[color,box-shadow,background-color] focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30';
-
-// ── Line item row ──────────────────────────────────────────────────────────────
-
-interface LineItem {
-  productId: string;
-  product: Product | null;
-  quantity: number;
-  unitPrice: number;
-  serialInput: string;
-}
-
-function LineItemRow({ item, products, onChange, onRemove }: {
-  item: LineItem; products: Product[];
-  onChange: (updated: LineItem) => void;
-  onRemove: () => void;
-}) {
-  const subtotal = item.quantity * item.unitPrice;
-  return (
-    <div className="rounded-2xl border border-border p-3 space-y-2">
-      <div className="flex gap-2 items-start">
-        <div className="flex-1">
-          <SearchSelect<Product>
-            items={products}
-            value={item.productId}
-            onChange={(id, product) => onChange({ ...item, productId: id, product, unitPrice: product ? Number(product.salePrice) : 0, serialInput: '' })}
-            getKey={(p) => p.id}
-            getLabel={(p) => `${p.name}${p.model ? ` (${p.model})` : ''}`}
-            getDescription={(p) => p.category?.name ?? null}
-            filterFn={(p, q) => `${p.name} ${p.model ?? ''} ${p.category?.name ?? ''}`.toLowerCase().includes(q.toLowerCase())}
-            placeholder="Buscar producto..."
-            required
-          />
-        </div>
-        <div className="w-20">
-          <NumericInput
-            value={item.quantity}
-            onChange={(v) => onChange({ ...item, quantity: Math.max(1, Math.round(v)) })}
-            placeholder="Cant."
-            className={NUM_CLS}
-            required
-          />
-        </div>
-        <div className="w-32">
-          <NumericInput
-            value={item.unitPrice}
-            onChange={(v) => onChange({ ...item, unitPrice: v })}
-            placeholder="Precio"
-            className={NUM_CLS}
-            required
-          />
-        </div>
-        <div className="w-28 pt-2 text-right text-sm font-medium text-muted-foreground">
-          {formatPrice(subtotal)}
-        </div>
-        <button type="button" onClick={onRemove} className="pt-2 text-muted-foreground/50 hover:text-destructive">
-          <Trash2 size={15} />
-        </button>
-      </div>
-      {item.product?.isSerialized && (
-        <div>
-          <Label className="mb-1 text-xs">
-            Números de serie (uno por línea, {item.quantity} requerido{item.quantity !== 1 ? 's' : ''})
-          </Label>
-          <Textarea
-            className="font-mono text-xs"
-            rows={Math.min(item.quantity, 4)}
-            placeholder={'SN001\nSN002'}
-            value={item.serialInput}
-            onChange={(e) => onChange({ ...item, serialInput: e.target.value })}
-          />
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ── Credit plan selector ───────────────────────────────────────────────────────
-
-function CreditOptions({ total, installments, onInstallmentsChange, plans }: {
-  total: number; installments: number;
-  onInstallmentsChange: (n: number) => void;
-  plans: CreditPlan[];
-}) {
-  const selectedPlan = plans.find((p) => p.installments === installments);
-  const rate = selectedPlan ? Number(selectedPlan.interestRate) : 0;
-  const monthly = installments > 0 ? (total * (1 + rate / 100)) / installments : 0;
-
-  return (
-    <div className="rounded-2xl border border-warn/30 bg-warn-subtle/50 p-4 space-y-3">
-      <p className="text-xs font-semibold uppercase tracking-wide text-warn">Venta a crédito</p>
-      <div>
-        <Label className="mb-1 text-xs">Plan de cuotas</Label>
-        <div className="flex gap-2 flex-wrap">
-          {plans.map((plan) => (
-            <Button
-              key={plan.installments}
-              type="button"
-              size="sm"
-              variant={installments === plan.installments ? 'default' : 'outline'}
-              onClick={() => onInstallmentsChange(plan.installments)}
-            >
-              {plan.installments}x
-            </Button>
-          ))}
-        </div>
-      </div>
-      {installments > 0 && total > 0 && selectedPlan && (
-        <p className="text-sm text-warn">
-          Cuota estimada: <strong>{formatPrice(Math.ceil(monthly))}</strong> / mes
-          {rate > 0 && <span className="text-xs ml-1 opacity-70">({rate}% interés total)</span>}
-        </p>
-      )}
-      <p className="text-xs text-warn/80">
-        El pedido quedará en estado <strong>En evaluación</strong> hasta que el analista de crédito lo apruebe.
-      </p>
-    </div>
-  );
-}
-
-// ── Quick-create customer form ─────────────────────────────────────────────────
-
-function QuickCreateCustomerForm({ onCreated, onCancel }: {
-  onCreated: (customer: Customer) => void;
-  onCancel: () => void;
-}) {
-  const [firstName, setFirstName] = useState('');
-  const [lastName,  setLastName]  = useState('');
-  const [phone,     setPhone]     = useState('');
-  const [docType,   setDocType]   = useState<DocumentType>('CI');
-  const [docNum,    setDocNum]    = useState('');
-  const qc = useQueryClient();
-
-  const mutation = useMutation({
-    mutationFn: () => salesApi.createCustomer({
-      firstName: firstName.trim(), lastName: lastName.trim(),
-      phone: phone.trim() || undefined,
-      documentType:   docNum.trim() ? docType : undefined,
-      documentNumber: docNum.trim() || undefined,
-    }),
-    onSuccess: (customer) => {
-      void qc.invalidateQueries({ queryKey: ['sale-customers'] });
-      onCreated(customer);
-    },
-  });
-
-  return (
-    <div className="mt-2 rounded-2xl border border-border bg-muted/30 p-4 space-y-3">
-      <div className="flex items-center gap-2">
-        <UserPlus size={14} className="text-muted-foreground shrink-0" />
-        <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Nuevo cliente</span>
-      </div>
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <Label className="mb-1 text-xs">Nombre *</Label>
-          <Input placeholder="Nombre" value={firstName} onChange={(e) => setFirstName(e.target.value)} />
-        </div>
-        <div>
-          <Label className="mb-1 text-xs">Apellido *</Label>
-          <Input placeholder="Apellido" value={lastName} onChange={(e) => setLastName(e.target.value)} />
-        </div>
-        <div>
-          <Label className="mb-1 text-xs">Teléfono</Label>
-          <Input placeholder="09xx xxx xxx" value={phone} onChange={(e) => setPhone(e.target.value)} />
-        </div>
-        <div>
-          <Label className="mb-1 text-xs">Documento</Label>
-          <div className="flex gap-1.5">
-            <Select value={docType} onValueChange={(v) => setDocType(v as DocumentType)}>
-              <SelectTrigger className="w-auto">
-                <span className="text-sm">{docType === 'PASSPORT' ? 'Pasaporte' : docType}</span>
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="CI">CI</SelectItem>
-                <SelectItem value="RUC">RUC</SelectItem>
-                <SelectItem value="PASSPORT">Pasaporte</SelectItem>
-              </SelectContent>
-            </Select>
-            <Input placeholder="Número" value={docNum} onChange={(e) => setDocNum(e.target.value)} />
-          </div>
-        </div>
-      </div>
-      {mutation.isError && (
-        <p className="text-xs text-destructive">
-          {(mutation.error as Error & { response?: { data?: { message?: string } } })?.response?.data?.message ?? 'Error al crear el cliente'}
-        </p>
-      )}
-      <div className="flex gap-2 justify-end">
-        <Button type="button" variant="outline" size="sm" onClick={onCancel}>Cancelar</Button>
-        <Button
-          type="button"
-          size="sm"
-          disabled={!firstName.trim() || !lastName.trim() || mutation.isPending}
-          onClick={() => mutation.mutate()}
-        >
-          {mutation.isPending ? 'Guardando...' : 'Guardar cliente'}
-        </Button>
-      </div>
-    </div>
-  );
-}
-
 // ── Seller role detection ──────────────────────────────────────────────────────
 
 function isSeller(user: { status: string; roles: { name: string }[] }) {
@@ -314,6 +123,24 @@ function isSeller(user: { status: string; roles: { name: string }[] }) {
 
 // ── Create order modal ─────────────────────────────────────────────────────────
 
+// Borrador del pedido en progreso — se guarda antes de navegar a la vista
+// completa de alta de cliente y se restaura al volver, para no perder lo
+// que ya se había cargado (items, vendedor, notas, recargo).
+const ORDER_DRAFT_KEY = 'sales:new-order-draft';
+const ORDER_DRAFT_CUSTOMER_KEY = 'sales:new-order-draft-customer-id';
+
+interface OrderDraft {
+  items: { productId: string; quantity: number; unitPrice: number; serialInput: string; comboGroupId?: string; comboId?: string; comboName?: string }[];
+  sellerId: string;
+  saleType: SaleType;
+  installments: number;
+  notes: string;
+  showSurcharge: boolean;
+  surchargeType: 'PERCENTAGE' | 'FIXED';
+  surchargeAmount: number;
+  surchargeReason: string;
+}
+
 function CreateOrderModal({ open, onOpenChange, customers, products }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -321,13 +148,12 @@ function CreateOrderModal({ open, onOpenChange, customers, products }: {
   products: Product[];
 }) {
   const queryClient = useQueryClient();
+  const router = useRouter();
   const { jwtPayload } = useAuth();
   const canManage = jwtPayload?.permissions.includes('sales:manage') ?? false;
 
   const [customerId,     setCustomerId]     = useState('');
-  const [showQuickCust,  setShowQuickCust]  = useState(false);
   const [sellerId,       setSellerId]       = useState(canManage ? '' : (jwtPayload?.sub ?? ''));
-  const [orderType,      setOrderType]      = useState<OrderType>('STANDARD');
   const [saleType,       setSaleType]       = useState<SaleType>('CASH');
   const [installments,   setInstallments]   = useState(0);
   const [notes,          setNotes]          = useState('');
@@ -339,10 +165,104 @@ function CreateOrderModal({ open, onOpenChange, customers, products }: {
   const [surchargeType,   setSurchargeType]   = useState<'PERCENTAGE' | 'FIXED'>('PERCENTAGE');
   const [surchargeAmount, setSurchargeAmount] = useState(0);
   const [surchargeReason, setSurchargeReason] = useState('');
+  const [addMode, setAddMode] = useState<'ITEM' | 'COMBO'>('ITEM');
 
   const { data: allUsers = [] } = useQuery({ queryKey: ['users'], queryFn: usersApi.list, enabled: canManage });
   const { data: liveCustomers = customers } = useQuery({ queryKey: ['sale-customers'], queryFn: salesApi.listCustomers, initialData: customers });
   const { data: creditConfig } = useQuery({ queryKey: ['credit-config'], queryFn: settingsApi.getCredit });
+  const { data: salesConfig } = useQuery({ queryKey: ['sales-config'], queryFn: settingsApi.getSalesConfig });
+  const combosEnabled = salesConfig?.combosEnabled ?? false;
+  const { data: combos = [] } = useQuery({ queryKey: ['sale-combos'], queryFn: () => combosApi.list(true), enabled: combosEnabled });
+
+  function expandCombo(combo: SaleCombo) {
+    const comboGroupId = crypto.randomUUID();
+    const listTotal = combo.items.reduce((sum, i) => sum + i.product.salePrice * i.quantity, 0);
+    const targetTotal = combo.priceMode === 'FIXED'
+      ? (combo.fixedPrice ?? 0)
+      : listTotal * (1 - (combo.discountPercentage ?? 0) / 100);
+
+    const newLines: LineItem[] = combo.items.map((comboItem, idx) => {
+      const lineListPrice = comboItem.product.salePrice * comboItem.quantity;
+      // Reparte targetTotal proporcionalmente al peso de cada línea en el
+      // precio de lista, así cada línea queda con un precio con sentido y
+      // la suma da exacto — el ajuste de redondeo va en la última línea.
+      const isLast = idx === combo.items.length - 1;
+      const allocated = isLast
+        ? targetTotal - combo.items.slice(0, -1).reduce((s, it) => {
+            const w = (it.product.salePrice * it.quantity) / (listTotal || 1);
+            return s + Math.round(targetTotal * w);
+          }, 0)
+        : Math.round(targetTotal * (lineListPrice / (listTotal || 1)));
+      const product = products.find((p) => p.id === comboItem.productId) ?? null;
+      return {
+        productId: comboItem.productId,
+        product,
+        quantity: comboItem.quantity,
+        unitPrice: comboItem.quantity > 0 ? allocated / comboItem.quantity : 0,
+        serialInput: '',
+        comboGroupId,
+        comboId: combo.id,
+        comboName: combo.name,
+      };
+    });
+
+    setItems((prev) => {
+      const withoutEmpty = prev.filter((it) => it.productId || it.comboGroupId);
+      return [...withoutEmpty, ...newLines];
+    });
+  }
+
+  // A crédito solo se permite "una unidad de compra" — un producto suelto o
+  // un combo completo, nunca varios sueltos ni un combo más algo aparte
+  // (a diferencia de contado, que admite cualquier combinación). Al pasar de
+  // contado a crédito con varias líneas cargadas, se conserva solo la
+  // primera unidad completa (el combo entero si la primera línea viene de
+  // uno, o si no, solo esa primera línea suelta).
+  function keepFirstPurchaseUnit(list: LineItem[]): LineItem[] {
+    if (list.length === 0) return list;
+    const first = list[0];
+    if (first.comboGroupId) {
+      return list.filter((it) => it.comboGroupId === first.comboGroupId);
+    }
+    return list.slice(0, 1);
+  }
+
+  // Al volver de crear un cliente nuevo desde la vista completa, restaura el
+  // pedido en progreso y selecciona el cliente recién creado.
+  useEffect(() => {
+    const rawDraft = sessionStorage.getItem(ORDER_DRAFT_KEY);
+    const newCustomerId = sessionStorage.getItem(ORDER_DRAFT_CUSTOMER_KEY);
+    if (!rawDraft || !newCustomerId) return;
+    sessionStorage.removeItem(ORDER_DRAFT_KEY);
+    sessionStorage.removeItem(ORDER_DRAFT_CUSTOMER_KEY);
+    try {
+      const draft: OrderDraft = JSON.parse(rawDraft);
+      setItems(draft.items.map((it) => ({ ...it, product: products.find((p) => p.id === it.productId) ?? null })));
+      setSellerId(draft.sellerId);
+      setSaleType(draft.saleType);
+      setInstallments(draft.installments);
+      setNotes(draft.notes);
+      setShowSurcharge(draft.showSurcharge);
+      setSurchargeType(draft.surchargeType);
+      setSurchargeAmount(draft.surchargeAmount);
+      setSurchargeReason(draft.surchargeReason);
+      setCustomerId(newCustomerId);
+      onOpenChange(true);
+    } catch {
+      // Borrador corrupto — se ignora, el usuario simplemente empieza de cero.
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function goToNewCustomer() {
+    const draft: OrderDraft = {
+      items: items.map(({ productId, quantity, unitPrice, serialInput, comboGroupId, comboId, comboName }) => ({ productId, quantity, unitPrice, serialInput, comboGroupId, comboId, comboName })),
+      sellerId, saleType, installments, notes,
+      showSurcharge, surchargeType, surchargeAmount, surchargeReason,
+    };
+    sessionStorage.setItem(ORDER_DRAFT_KEY, JSON.stringify(draft));
+    router.push('/dashboard/sales/customers/new?returnTo=/dashboard/sales');
+  }
 
   const activePlans = creditConfig?.isEnabled ? (creditConfig.plans ?? []).filter((p) => p.isActive) : [];
   const creditAvailable = activePlans.length > 0;
@@ -387,8 +307,10 @@ function CreateOrderModal({ open, onOpenChange, customers, products }: {
           serialNumbers: it.product?.isSerialized
             ? it.serialInput.split('\n').map((s) => s.trim()).filter(Boolean)
             : undefined,
+          comboId: it.comboId,
+          comboGroupId: it.comboGroupId,
         })),
-        orderType,
+        orderType: 'STANDARD',
         surchargeType:   showSurcharge && surchargeAmount > 0 ? surchargeType   : undefined,
         surchargeAmount: showSurcharge && surchargeAmount > 0 ? surchargeAmount : undefined,
         surchargeReason: showSurcharge && surchargeReason.trim() ? surchargeReason.trim() : undefined,
@@ -404,6 +326,27 @@ function CreateOrderModal({ open, onOpenChange, customers, products }: {
       setError(Array.isArray(msg) ? msg[0] : (msg ?? 'Error al crear el pedido'));
     },
   });
+
+  // Agrupa las líneas que comparten comboGroupId para renderizarlas juntas
+  // con un único botón "Quitar combo" — las líneas individuales quedan cada
+  // una en su propio grupo, sin cambio visual respecto de antes.
+  const itemGroups: { comboGroupId?: string; comboName?: string; indices: number[] }[] = [];
+  items.forEach((it, idx) => {
+    if (it.comboGroupId) {
+      const existing = itemGroups.find((g) => g.comboGroupId === it.comboGroupId);
+      if (existing) existing.indices.push(idx);
+      else itemGroups.push({ comboGroupId: it.comboGroupId, comboName: it.comboName, indices: [idx] });
+    } else {
+      itemGroups.push({ indices: [idx] });
+    }
+  });
+
+  // A contado se puede seguir agregando líneas/combos libremente. A crédito
+  // se admite una sola "unidad de compra" (un producto suelto o un combo
+  // entero) — una vez que ya hay un producto elegido o un combo cargado, se
+  // esconden los controles de agregar más.
+  const hasAnyRealItem = items.some((it) => it.productId || it.comboGroupId);
+  const canAddMore = saleType === 'CASH' || !hasAnyRealItem;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -429,7 +372,7 @@ function CreateOrderModal({ open, onOpenChange, customers, products }: {
               <SearchSelect<Customer>
                 items={liveCustomers}
                 value={customerId}
-                onChange={(id) => { setCustomerId(id); setShowQuickCust(false); }}
+                onChange={(id) => setCustomerId(id)}
                 getKey={(c) => c.id}
                 getLabel={(c) => `${c.firstName} ${c.lastName}`}
                 getDescription={(c) => [c.documentNumber ?? null, c.phone ?? null].filter(Boolean).join(' · ') || null}
@@ -438,16 +381,10 @@ function CreateOrderModal({ open, onOpenChange, customers, products }: {
                 }
                 placeholder="Buscar cliente..."
                 emptyMessage="No se encontró. Podés crear uno abajo."
-                onCreate={() => setShowQuickCust(true)}
+                onCreate={goToNewCustomer}
                 createLabel=" Crear cliente nuevo"
                 required
               />
-              {showQuickCust && (
-                <QuickCreateCustomerForm
-                  onCreated={(c) => { setCustomerId(c.id); setShowQuickCust(false); }}
-                  onCancel={() => setShowQuickCust(false)}
-                />
-              )}
             </div>
 
             {/* Vendedor */}
@@ -472,29 +409,30 @@ function CreateOrderModal({ open, onOpenChange, customers, products }: {
               </p>
             ) : null}
 
-            {/* Tipo de pedido */}
-            <div>
-              <Label className="mb-1 text-xs">Tipo de pedido</Label>
-              <div className="flex gap-3">
-                {([['STANDARD', 'Pedido'], ['QUOTE', 'Presupuesto']] as [OrderType, string][]).map(([type, label]) => (
-                  <label
-                    key={type}
-                    className={cn(
-                      'flex flex-1 cursor-pointer items-center justify-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-medium transition-colors',
-                      orderType === type ? 'border-foreground bg-foreground text-background' : 'border-border text-muted-foreground hover:border-border-strong',
-                    )}
-                  >
-                    <input type="radio" className="sr-only" value={type} checked={orderType === type} onChange={() => setOrderType(type)} />
-                    {label}
-                  </label>
-                ))}
+            {/* Item / Combo — solo si el tenant tiene combos habilitados. A
+                crédito también se puede elegir un combo (un combo es "una
+                unidad de compra" aunque tenga varias líneas), no solo a
+                contado — pero el selector desaparece en cuanto ya hay una
+                unidad cargada (canAddMore). */}
+            {combosEnabled && canAddMore && (
+              <div>
+                <Label className="mb-1 text-xs">Agregar</Label>
+                <div className="flex gap-3">
+                  {([['ITEM', 'Item'], ['COMBO', 'Combo']] as [typeof addMode, string][]).map(([mode, label]) => (
+                    <label
+                      key={mode}
+                      className={cn(
+                        'flex flex-1 cursor-pointer items-center justify-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-medium transition-colors',
+                        addMode === mode ? 'border-foreground bg-foreground text-background' : 'border-border text-muted-foreground hover:border-border-strong',
+                      )}
+                    >
+                      <input type="radio" className="sr-only" value={mode} checked={addMode === mode} onChange={() => setAddMode(mode)} />
+                      {label}
+                    </label>
+                  ))}
+                </div>
               </div>
-              {orderType === 'QUOTE' && (
-                <p className="mt-1.5 text-xs text-violet-600 dark:text-violet-400">
-                  El presupuesto no compromete stock. Se convierte en pedido cuando el cliente confirme.
-                </p>
-              )}
-            </div>
+            )}
 
             {/* Tipo de venta */}
             <div>
@@ -508,7 +446,7 @@ function CreateOrderModal({ open, onOpenChange, customers, products }: {
                       saleType === type ? 'border-foreground bg-foreground text-background' : 'border-border text-muted-foreground hover:border-border-strong',
                     )}
                   >
-                    <input type="radio" className="sr-only" value={type} checked={saleType === type} onChange={() => { if (type === 'CREDIT') setItems((prev) => prev.slice(0, 1)); setSaleType(type); }} />
+                    <input type="radio" className="sr-only" value={type} checked={saleType === type} onChange={() => { if (type === 'CREDIT') setItems((prev) => keepFirstPurchaseUnit(prev)); setSaleType(type); }} />
                     {type === 'CASH' ? 'Contado' : 'Crédito'}
                   </label>
                 ))}
@@ -530,17 +468,43 @@ function CreateOrderModal({ open, onOpenChange, customers, products }: {
                 </div>
               </div>
               <div className="space-y-2">
-                {items.map((item, idx) => (
-                  <LineItemRow
-                    key={idx}
-                    item={item}
-                    products={products}
-                    onChange={(updated) => setItems((prev) => prev.map((it, i) => (i === idx ? updated : it)))}
-                    onRemove={() => setItems((prev) => prev.filter((_, i) => i !== idx))}
-                  />
-                ))}
+                {itemGroups.map((group) =>
+                  group.comboGroupId ? (
+                    <div key={group.comboGroupId} className="rounded-2xl border border-violet-500/30 bg-violet-500/5 p-2 space-y-2">
+                      <div className="flex items-center justify-between px-1">
+                        <span className="text-xs font-medium text-violet-600 dark:text-violet-400">Combo: {group.comboName}</span>
+                        <button
+                          type="button"
+                          onClick={() => setItems((prev) => prev.filter((it) => it.comboGroupId !== group.comboGroupId))}
+                          className="text-xs text-muted-foreground hover:text-destructive"
+                        >
+                          Quitar combo
+                        </button>
+                      </div>
+                      {group.indices.map((idx) => (
+                        <LineItemRow
+                          key={idx}
+                          item={items[idx]}
+                          products={products}
+                          onChange={(updated) => setItems((prev) => prev.map((it, i) => (i === idx ? updated : it)))}
+                          onRemove={() => setItems((prev) => prev.filter((_, i) => i !== idx))}
+                        />
+                      ))}
+                    </div>
+                  ) : (
+                    group.indices.map((idx) => (
+                      <LineItemRow
+                        key={idx}
+                        item={items[idx]}
+                        products={products}
+                        onChange={(updated) => setItems((prev) => prev.map((it, i) => (i === idx ? updated : it)))}
+                        onRemove={() => setItems((prev) => prev.filter((_, i) => i !== idx))}
+                      />
+                    ))
+                  ),
+                )}
               </div>
-              {saleType === 'CASH' && (
+              {canAddMore && addMode === 'ITEM' && (
                 <button
                   type="button"
                   onClick={() => setItems((prev) => [...prev, { productId: '', product: null, quantity: 1, unitPrice: 0, serialInput: '' }])}
@@ -549,6 +513,21 @@ function CreateOrderModal({ open, onOpenChange, customers, products }: {
                   <Plus size={14} />
                   Agregar producto
                 </button>
+              )}
+              {canAddMore && addMode === 'COMBO' && (
+                <div className="mt-2">
+                  <SearchSelect<SaleCombo>
+                    items={combos}
+                    value=""
+                    onChange={(_id, combo) => { if (combo) expandCombo(combo); }}
+                    getKey={(c) => c.id}
+                    getLabel={(c) => c.name}
+                    getDescription={(c) => `${c.items.length} producto${c.items.length !== 1 ? 's' : ''}`}
+                    filterFn={(c, q) => c.name.toLowerCase().includes(q.toLowerCase())}
+                    placeholder="Buscar combo..."
+                    emptyMessage="No hay combos activos."
+                  />
+                </div>
               )}
             </div>
 
@@ -655,11 +634,18 @@ function CreateOrderModal({ open, onOpenChange, customers, products }: {
 
 // ── Order detail panel ─────────────────────────────────────────────────────────
 
+const ADJUSTMENT_LABELS: Record<string, string> = {
+  LOWER_VALUE_PRODUCT: 'Ofrecer un producto de menor valor',
+  MORE_INSTALLMENTS: 'Aumentar la cantidad de cuotas',
+  ADD_GUARANTOR: 'Agregar uno o más garantes',
+};
+
 function OrderDetailPanel({ open, onOpenChange, order }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   order: SaleOrder;
 }) {
+  const router = useRouter();
   const queryClient = useQueryClient();
   const [confirmAction, setConfirmAction] = useState<'confirm' | 'cancel' | 'convert' | null>(null);
 
@@ -676,7 +662,7 @@ function OrderDetailPanel({ open, onOpenChange, order }: {
   const total = orderTotal(order);
   const canConfirm = order.status === 'PENDING' || order.status === 'CREDIT_APPROVED';
   const canConvert = order.status === 'QUOTED';
-  const canCancel  = ['QUOTED', 'PENDING', 'PENDING_CREDIT_APPROVAL', 'CREDIT_APPROVED', 'CREDIT_REJECTED'].includes(order.status);
+  const canCancel  = ['QUOTED', 'PENDING', 'PENDING_CREDIT_APPROVAL', 'CREDIT_APPROVED', 'CREDIT_REJECTED', 'CREDIT_NEEDS_ADJUSTMENT'].includes(order.status);
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -695,7 +681,11 @@ function OrderDetailPanel({ open, onOpenChange, order }: {
             </div>
             {order.customer.documentNumber && <p className="text-xs text-muted-foreground">{order.customer.documentType}: {order.customer.documentNumber}</p>}
             <p className="text-xs text-muted-foreground">{formatDate(order.orderDate)}</p>
-            {order.createdBy && <p className="text-xs text-muted-foreground">Vendedor: {order.createdBy.firstName} {order.createdBy.lastName}</p>}
+            {(order.seller ?? order.createdBy) && (
+              <p className="text-xs text-muted-foreground">
+                Vendedor: {(order.seller ?? order.createdBy)!.firstName} {(order.seller ?? order.createdBy)!.lastName}
+              </p>
+            )}
           </div>
           <Button variant="ghost" size="icon-sm" onClick={() => onOpenChange(false)}><X size={16} /></Button>
         </SheetHeader>
@@ -718,6 +708,45 @@ function OrderDetailPanel({ open, onOpenChange, order }: {
             {order.rejectionReason && <p className="text-xs text-destructive/80 mt-0.5">{order.rejectionReason}</p>}
           </div>
         )}
+        {order.status === 'CREDIT_NEEDS_ADJUSTMENT' && (
+          <div className="border-b border-border px-5 py-3 bg-amber-50 dark:bg-amber-950/30 space-y-2">
+            <p className="text-xs font-medium text-amber-700 dark:text-amber-300">El analista pidió ajustes en este pedido</p>
+            {order.suggestedAlternatives.length > 0 && (
+              <ul className="text-xs text-amber-700/90 dark:text-amber-300/90 list-disc list-inside">
+                {order.suggestedAlternatives.map((alt) => (
+                  <li key={alt}>{ADJUSTMENT_LABELS[alt] ?? alt}</li>
+                ))}
+              </ul>
+            )}
+            {order.adjustmentNote && <p className="text-xs text-amber-700/80 dark:text-amber-300/80">{order.adjustmentNote}</p>}
+            <Button
+              size="sm"
+              className="w-full"
+              onClick={() => {
+                onOpenChange(false);
+                router.push(`/dashboard/sales/${order.id}/adjust`);
+              }}
+            >
+              <UserPlus size={14} />
+              Ajustar pedido
+            </Button>
+          </div>
+        )}
+
+        {/* Guarantors */}
+        {order.guarantors.length > 0 && (
+          <div className="border-b border-border px-5 py-4">
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground/60">Garantes</p>
+            <div className="space-y-2">
+              {order.guarantors.map((g) => (
+                <div key={g.id} className="text-sm">
+                  <p className="text-foreground">{g.firstName} {g.lastName}</p>
+                  <p className="text-xs text-muted-foreground">{g.documentType}: {g.documentNumber}{g.phone ? ` · ${g.phone}` : ''}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Items */}
         <div className="border-b border-border px-5 py-4">
@@ -726,14 +755,14 @@ function OrderDetailPanel({ open, onOpenChange, order }: {
             {order.items.map((item) => (
               <div key={item.id} className="flex items-start justify-between gap-2">
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm text-foreground truncate">{item.product.name}</p>
-                  {item.product.model && <p className="text-xs text-muted-foreground">{item.product.model}</p>}
+                  <p className="text-sm text-foreground truncate">{item.product?.name ?? item.description ?? 'Ítem'}</p>
+                  {item.product?.model && <p className="text-xs text-muted-foreground">{item.product.model}</p>}
                   {item.productUnits.length > 0 && <p className="text-xs text-muted-foreground font-mono">S/N: {item.productUnits.map((u) => u.serialNumber).join(', ')}</p>}
                   {item.batch && <p className="text-xs text-muted-foreground">Lote: {item.batch.batchNumber}</p>}
                 </div>
                 <div className="text-right shrink-0">
-                  <p className="text-sm text-muted-foreground">{item.quantity} × {formatPrice(item.unitPrice)}</p>
-                  <p className="text-sm font-medium text-foreground">{formatPrice(item.quantity * item.unitPrice)}</p>
+                  <p className="text-sm text-muted-foreground">{item.quantity} × {formatPrice(itemUnitPrice(order, item))}</p>
+                  <p className="text-sm font-medium text-foreground">{formatPrice(item.quantity * itemUnitPrice(order, item))}</p>
                 </div>
               </div>
             ))}
@@ -772,6 +801,13 @@ function OrderDetailPanel({ open, onOpenChange, order }: {
           <div className="border-b border-border px-5 py-4">
             <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground/60">Factura</p>
             <p className="text-sm text-muted-foreground">Estado: {order.invoice.status}</p>
+          </div>
+        )}
+
+        {order.saleType === 'CREDIT' && order.invoice && (
+          <div className="border-b border-border px-5 py-4">
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground/60">Contrato</p>
+            <ContractCard entityType="sale_order" entityId={order.id} />
           </div>
         )}
 

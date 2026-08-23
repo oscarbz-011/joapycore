@@ -10,7 +10,21 @@ export class LoansRepository {
     return {
       installments: { orderBy: { number: 'asc' as const } },
       customer: { select: { id: true, firstName: true, lastName: true } },
-      saleOrder: { select: { id: true, orderDate: true } },
+      saleOrder: {
+        select: {
+          id: true,
+          orderDate: true,
+          branchId: true,
+          items: {
+            select: {
+              id: true,
+              quantity: true,
+              product: { select: { id: true, name: true, model: true } },
+              description: true,
+            },
+          },
+        },
+      },
     };
   }
 
@@ -38,10 +52,6 @@ export class LoansRepository {
 
   create(data: Prisma.LoanUncheckedCreateInput) {
     return this.prisma.loan.create({ data, include: this.include });
-  }
-
-  updateContractUrl(id: string, contractUrl: string) {
-    return this.prisma.loan.update({ where: { id }, data: { contractUrl } });
   }
 
   updateStatus(id: string, status: 'ACTIVE' | 'PAID' | 'CANCELLED') {

@@ -20,7 +20,20 @@ export interface CreditConfig {
   id: string;
   tenantId: string;
   isEnabled: boolean;
+  // % máximo del sueldo del cliente admitido para la cuota de un crédito.
+  // null = sin tope (no se bloquea la aprobación por capacidad de pago).
+  maxIncomePercentage: number | null;
+  // Día del mes (1-28) en que vencen todas las cuotas de crédito del tenant.
+  dueDayOfMonth: number;
+  // Días de tolerancia después del vencimiento antes de empezar a cobrar mora.
+  moraGraceDays: number;
   plans: CreditPlan[];
+}
+
+export interface SalesConfig {
+  id: string;
+  tenantId: string;
+  combosEnabled: boolean;
 }
 
 export const settingsApi = {
@@ -38,8 +51,13 @@ export const settingsApi = {
   getCredit: (): Promise<CreditConfig | null> =>
     apiClient.get('/tenants/me/credit').then((r) => r.data),
 
-  setCreditEnabled: (isEnabled: boolean): Promise<CreditConfig> =>
-    apiClient.put('/tenants/me/credit', { isEnabled }).then((r) => r.data),
+  setCreditEnabled: (
+    isEnabled: boolean,
+    maxIncomePercentage?: number | null,
+    dueDayOfMonth?: number,
+    moraGraceDays?: number,
+  ): Promise<CreditConfig> =>
+    apiClient.put('/tenants/me/credit', { isEnabled, maxIncomePercentage, dueDayOfMonth, moraGraceDays }).then((r) => r.data),
 
   addCreditPlan: (dto: {
     installments: number;
@@ -55,4 +73,11 @@ export const settingsApi = {
 
   removeCreditPlan: (id: string): Promise<void> =>
     apiClient.delete(`/tenants/me/credit/plans/${id}`).then(() => undefined),
+
+  // ── Sales ────────────────────────────────────────────────────────────────────
+  getSalesConfig: (): Promise<SalesConfig | null> =>
+    apiClient.get('/tenants/me/sales-config').then((r) => r.data),
+
+  setCombosEnabled: (combosEnabled: boolean): Promise<SalesConfig> =>
+    apiClient.put('/tenants/me/sales-config', { combosEnabled }).then((r) => r.data),
 };

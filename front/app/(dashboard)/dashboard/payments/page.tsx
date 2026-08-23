@@ -1,9 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { NumericInput } from '../../../../components/numeric-input';
-import { X, Printer, FileText, CreditCard, ChevronRight } from 'lucide-react';
+import { X, Printer, FileText, CreditCard, ChevronRight, AlertTriangle, Clock } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import {
   paymentsApi,
   PAYMENT_METHOD_LABELS,
@@ -19,7 +21,11 @@ import {
   type Installment,
   type InstallmentStatus,
 } from '../../../../lib/api/finance';
-import { billingApi, type Invoice, type InvoiceStatus } from '../../../../lib/api/billing';
+import { billingApi, type InvoiceStatus } from '../../../../lib/api/billing';
+import { openPdf } from '../../../../lib/open-pdf';
+import { distributeAmount, type DistributedItem } from '../../../../lib/finance-distribute';
+import { ReceiptButton } from '../../../../components/receipt-button';
+import { arUrgency, arDisplayDueDate, type ArUrgency, type ArUrgencyLevel } from '../../../../lib/ar-urgency';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -63,6 +69,7 @@ function formatDate(iso: string | null) {
     day: '2-digit',
     month: 'short',
     year: 'numeric',
+    timeZone: 'UTC',
   });
 }
 
@@ -70,6 +77,43 @@ function invoiceRef(ar: AccountsReceivable['invoice']) {
   if (ar.invoiceNumber) return `${ar.invoicePrefix ?? ''}${ar.invoiceNumber}`;
   return `#${ar.id.slice(0, 8).toUpperCase()}`;
 }
+
+// Para crédito, el saldo real vive en las cuotas del préstamo (pueden
+// diferir del AR si hubo reprogramaciones) — para contado, el AR es la
+// única fuente. Mismo cálculo que antes vivía duplicado dentro de la
+// tabla y en el total pendiente del header.
+function effectiveAmounts(ar: AccountsReceivable) {
+  const isCredit = ar.invoice.saleOrder.saleType === 'CREDIT';
+  const loan = ar.invoice.saleOrder.loan;
+  const paid = isCredit && loan
+    ? loan.installments.reduce((s, i) => s + Number(i.paidAmount), 0)
+    : Number(ar.paidAmount);
+  const total = isCredit && loan ? Number(loan.totalAmount) : Number(ar.amount);
+  return { isCredit, paid, total, pending: total - paid };
+}
+
+// Mismo diseño de resaltado (barra izquierda + fecha coloreada) para
+// "Vencida"/"Vence en N días" (rojo/ámbar) y "Pendiente" al contado (ámbar)
+// — "Parcial"/"Pagado"/"Cancelado" no llevan acento, ya se distinguen bien
+// solo con el badge de estado. Ver front/lib/ar-urgency.ts para el porqué
+// crédito y contado se calculan distinto.
+type RowAccent = 'destructive' | 'warn' | null;
+
+function accentFor(level: ArUrgencyLevel): RowAccent {
+  if (level === 'overdue') return 'destructive';
+  if (level === 'due-soon' || level === 'pending') return 'warn';
+  return null;
+}
+
+const ACCENT_BORDER: Record<Exclude<RowAccent, null>, string> = {
+  destructive: 'border-l-destructive',
+  warn: 'border-l-warn',
+};
+
+const ACCENT_TEXT: Record<Exclude<RowAccent, null>, string> = {
+  destructive: 'font-medium text-destructive',
+  warn: 'font-medium text-warn',
+};
 
 // ── Status badges ──────────────────────────────────────────────────────────────
 
@@ -86,7 +130,23 @@ const AR_STATUS_CLASS: Partial<Record<ARStatus, string>> = {
   PAID:    'bg-accent-subtle text-accent-on border-accent-on/20',
 };
 
-function ARStatusBadge({ status }: { status: ARStatus }) {
+function ARStatusBadge({ status, urgency }: { status: ARStatus; urgency?: ArUrgency }) {
+  if (urgency?.level === 'overdue') {
+    return (
+      <Badge variant="destructive" className="gap-1 whitespace-nowrap">
+        <AlertTriangle size={10} />
+        Vencida · {urgency.days} {urgency.days === 1 ? 'día' : 'días'}
+      </Badge>
+    );
+  }
+  if (urgency?.level === 'due-soon') {
+    return (
+      <Badge variant="outline" className="gap-1 whitespace-nowrap bg-warn-subtle text-warn border-warn/30">
+        <Clock size={10} />
+        Cuota {urgency.installmentNumber} vence en {urgency.days} {urgency.days === 1 ? 'día' : 'días'}
+      </Badge>
+    );
+  }
   return (
     <Badge
       variant={status === 'CANCELLED' ? 'destructive' : 'outline'}
@@ -143,105 +203,6 @@ function InstallmentStatusBadge({ status }: { status: InstallmentStatus }) {
       {INST_STATUS_LABEL[status]}
     </Badge>
   );
-}
-
-// ── Print invoice ──────────────────────────────────────────────────────────────
-
-function printInvoice(invoice: Invoice) {
-  const customer = invoice.saleOrder.customer;
-  const customerName = `${customer.firstName} ${customer.lastName}`;
-  const doc = customer.documentNumber
-    ? `${customer.documentType ?? 'CI'}: ${customer.documentNumber}`
-    : '';
-  const ref = invoice.invoiceNumber
-    ? `${invoice.invoicePrefix ?? ''}${invoice.invoiceNumber}`
-    : `#${invoice.id.slice(0, 8).toUpperCase()}`;
-
-  const itemRows = invoice.items
-    .map(
-      (item) =>
-        `<tr>
-          <td style="padding:6px 8px;border-bottom:1px solid #e2e8f0">${item.description}</td>
-          <td style="padding:6px 8px;border-bottom:1px solid #e2e8f0;text-align:center">${item.quantity}</td>
-          <td style="padding:6px 8px;border-bottom:1px solid #e2e8f0;text-align:right">${formatPrice(Number(item.unitPrice))}</td>
-          <td style="padding:6px 8px;border-bottom:1px solid #e2e8f0;text-align:right">${formatPrice(Number(item.total))}</td>
-        </tr>`,
-    )
-    .join('');
-
-  const html = `<!DOCTYPE html>
-<html lang="es">
-<head>
-  <meta charset="UTF-8">
-  <title>Factura ${ref}</title>
-  <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: Arial, sans-serif; font-size: 13px; color: #1e293b; padding: 32px; }
-    h1 { font-size: 22px; font-weight: 700; }
-    .header { display: flex; justify-content: space-between; margin-bottom: 28px; }
-    .label { font-size: 11px; color: #64748b; text-transform: uppercase; letter-spacing: .05em; }
-    table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-    thead th { background: #f8fafc; padding: 8px; text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; border-bottom: 2px solid #e2e8f0; }
-    .total-row td { padding: 10px 8px; font-weight: 700; font-size: 15px; border-top: 2px solid #1e293b; }
-    .footer { margin-top: 48px; display: flex; justify-content: space-around; }
-    .sig { border-top: 1px solid #94a3b8; width: 180px; text-align: center; padding-top: 6px; font-size: 11px; color: #64748b; }
-    @media print { body { padding: 20px; } }
-  </style>
-</head>
-<body>
-  <div class="header">
-    <div>
-      <h1>FACTURA</h1>
-      <div class="label" style="margin-top:4px">${ref}</div>
-    </div>
-    <div style="text-align:right">
-      <div class="label">Fecha de emisión</div>
-      <div>${formatDate(invoice.issuedAt ?? invoice.createdAt)}</div>
-      ${invoice.dueDate ? `<div class="label" style="margin-top:8px">Vencimiento</div><div>${formatDate(invoice.dueDate)}</div>` : ''}
-    </div>
-  </div>
-  <div style="display:flex;gap:40px;margin-bottom:20px">
-    <div>
-      <div class="label">Cliente</div>
-      <div style="font-weight:600;margin-top:2px">${customerName}</div>
-      ${customer.email ? `<div style="color:#64748b">${customer.email}</div>` : ''}
-      ${doc ? `<div style="color:#64748b">${doc}</div>` : ''}
-    </div>
-    <div>
-      <div class="label">Tipo de venta</div>
-      <div style="margin-top:2px">${invoice.saleOrder.saleType === 'CREDIT' ? `Crédito${invoice.saleOrder.installments ? ` — ${invoice.saleOrder.installments} cuotas` : ''}` : 'Contado'}</div>
-    </div>
-  </div>
-  <table>
-    <thead>
-      <tr>
-        <th style="text-align:left">Descripción</th>
-        <th style="text-align:center">Cant.</th>
-        <th style="text-align:right">Precio unit.</th>
-        <th style="text-align:right">Total</th>
-      </tr>
-    </thead>
-    <tbody>${itemRows}</tbody>
-    <tfoot>
-      <tr class="total-row">
-        <td colspan="3" style="text-align:right">TOTAL</td>
-        <td style="text-align:right">${formatPrice(Number(invoice.total))}</td>
-      </tr>
-    </tfoot>
-  </table>
-  <div class="footer">
-    <div class="sig">Firma del cliente</div>
-    <div class="sig">Firma y sello empresa</div>
-  </div>
-</body>
-</html>`;
-
-  const w = window.open('', '_blank');
-  if (!w) return;
-  w.document.write(html);
-  w.document.close();
-  w.focus();
-  w.print();
 }
 
 // ── Invoice detail modal ───────────────────────────────────────────────────────
@@ -381,9 +342,9 @@ function InvoiceDetailModal({
         {invoice && (
           <div className="border-t border-border px-6 py-4 flex justify-between items-center shrink-0">
             <Button variant="outline" onClick={() => onOpenChange(false)}>Cerrar</Button>
-            <Button onClick={() => printInvoice(invoice)}>
+            <Button disabled={!invoice.pdfFileId} onClick={() => invoice.pdfFileId && void openPdf(invoice.pdfFileId)}>
               <Printer size={15} />
-              Imprimir factura
+              {invoice.pdfFileId ? 'Imprimir factura' : 'PDF no disponible'}
             </Button>
           </div>
         )}
@@ -439,7 +400,7 @@ function RegisterPaymentModal({
       <DialogContent showCloseButton={false} className="flex flex-col gap-0 p-0 overflow-hidden sm:max-w-md">
         <div className="flex items-center justify-between border-b border-border px-6 py-4 shrink-0">
           <div>
-            <DialogTitle className="text-base font-semibold">Registrar pago</DialogTitle>
+            <DialogTitle className="text-base font-semibold">Registrar cobro</DialogTitle>
             <p className="text-xs text-muted-foreground/60 mt-0.5">
               {ar.invoice.saleOrder.customer.firstName} {ar.invoice.saleOrder.customer.lastName}
               {' · '}Saldo: {formatPrice(remaining)}
@@ -502,7 +463,7 @@ function RegisterPaymentModal({
           <div className="flex justify-end gap-3 pt-2 border-t border-border">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
             <Button type="submit" disabled={mutation.isPending}>
-              {mutation.isPending ? 'Registrando...' : 'Confirmar pago'}
+              {mutation.isPending ? 'Registrando...' : 'Confirmar cobro'}
             </Button>
           </div>
         </form>
@@ -511,25 +472,26 @@ function RegisterPaymentModal({
   );
 }
 
-// ── Pay installment modal ──────────────────────────────────────────────────────
+// ── Pay installments modal (selección múltiple, un solo recibo) ────────────────
 
-function PayInstallmentModal({
-  installment,
+function PayInstallmentsModal({
+  loanId,
   saleOrderId,
+  items,
   open,
   onOpenChange,
   onSaved,
 }: {
-  installment: Installment;
+  loanId: string;
   saleOrderId: string;
+  items: DistributedItem[];
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSaved: () => void;
 }) {
   const queryClient = useQueryClient();
-  const remaining = Number(installment.amount) - Number(installment.paidAmount);
+  const totalAmount = items.reduce((s, i) => s + i.amount, 0);
 
-  const [amount, setAmount] = useState<number>(Math.ceil(remaining));
   const [method, setMethod] = useState<PaymentMethod>('CASH');
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [reference, setReference] = useState('');
@@ -538,21 +500,22 @@ function PayInstallmentModal({
 
   const mutation = useMutation({
     mutationFn: () =>
-      financeApi.payInstallment(installment.id, {
-        amount,
+      financeApi.payInstallments(loanId, {
+        items: items.map((i) => ({ installmentId: i.installmentId, amount: i.amount })),
         paymentMethod: method,
         paymentReference: reference.trim() || undefined,
         paymentDate: date,
         notes: notes.trim() || undefined,
       }),
-    onSuccess: () => {
+    onSuccess: (data) => {
       void queryClient.invalidateQueries({ queryKey: ['accounts-receivable'] });
       void queryClient.invalidateQueries({ queryKey: ['loan-by-order', saleOrderId] });
+      if (data.receipt?.pdfFileId) void openPdf(data.receipt.pdfFileId);
       onSaved();
     },
     onError: (err: Error & { response?: { data?: { message?: string | string[] } } }) => {
       const msg = err?.response?.data?.message;
-      setError(Array.isArray(msg) ? msg[0] : (msg ?? 'Error al registrar el pago'));
+      setError(Array.isArray(msg) ? msg[0] : (msg ?? 'Error al registrar el cobro'));
     },
   });
 
@@ -562,10 +525,10 @@ function PayInstallmentModal({
         <div className="flex items-center justify-between border-b border-border px-6 py-4 shrink-0">
           <div>
             <DialogTitle className="text-base font-semibold">
-              Pagar cuota #{installment.number}
+              Cobrar {items.length} cuota{items.length !== 1 ? 's' : ''}
             </DialogTitle>
             <p className="text-xs text-muted-foreground/60 mt-0.5">
-              Vence: {formatDate(installment.dueDate)} · Saldo: {formatPrice(remaining)}
+              Total: {formatPrice(totalAmount)}
             </p>
           </div>
           <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => onOpenChange(false)}>
@@ -577,15 +540,20 @@ function PayInstallmentModal({
           onSubmit={(e) => { e.preventDefault(); setError(''); mutation.mutate(); }}
           className="px-6 py-5 space-y-4"
         >
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <Label>Monto (PYG) *</Label>
-              <NumericInput value={amount} onChange={setAmount} className={NUM_CLS} required />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Fecha *</Label>
-              <input type="date" className={NUM_CLS} value={date} onChange={(e) => setDate(e.target.value)} required />
-            </div>
+          <div className="rounded-lg bg-muted/30 px-3 py-2 space-y-1">
+            {items.map((i) => (
+              <div key={i.installmentId} className="flex justify-between text-xs">
+                <span className="text-muted-foreground">
+                  Cuota #{i.number}{!i.isFull && ' (parcial)'}
+                </span>
+                <span className="font-medium text-foreground">{formatPrice(i.amount)}</span>
+              </div>
+            ))}
+          </div>
+
+          <div className="space-y-1.5">
+            <Label>Fecha *</Label>
+            <input type="date" className={NUM_CLS} value={date} onChange={(e) => setDate(e.target.value)} required />
           </div>
 
           <div className="space-y-1.5">
@@ -625,7 +593,7 @@ function PayInstallmentModal({
           <div className="flex justify-end gap-3 pt-2 border-t border-border">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
             <Button type="submit" disabled={mutation.isPending}>
-              {mutation.isPending ? 'Registrando...' : 'Confirmar pago'}
+              {mutation.isPending ? 'Registrando...' : 'Confirmar cobro'}
             </Button>
           </div>
         </form>
@@ -643,8 +611,9 @@ function CreditARDetail({
   saleOrderId: string;
   onInstallmentPaid: () => void;
 }) {
-  const [payingInstallment, setPayingInstallment] = useState<Installment | null>(null);
-  const [instModalOpen, setInstModalOpen] = useState(false);
+  const [selected, setSelected] = useState<Record<string, number>>({});
+  const [amountInput, setAmountInput] = useState<number>(0);
+  const [payModalOpen, setPayModalOpen] = useState(false);
 
   const { data: loan, isLoading, error } = useQuery<Loan>({
     queryKey: ['loan-by-order', saleOrderId],
@@ -652,9 +621,23 @@ function CreditARDetail({
     retry: false,
   });
 
-  function openInstModal(inst: Installment) {
-    setPayingInstallment(inst);
-    setInstModalOpen(true);
+  function toggleInstallment(inst: Installment) {
+    setSelected((prev) => {
+      if (prev[inst.id] != null) {
+        const next = { ...prev };
+        delete next[inst.id];
+        return next;
+      }
+      return { ...prev, [inst.id]: Number(inst.amount) - Number(inst.paidAmount) };
+    });
+  }
+
+  function applyAmountPreview() {
+    if (!loan) return;
+    const { items } = distributeAmount(loan.installments, amountInput);
+    const next: Record<string, number> = {};
+    for (const item of items) next[item.installmentId] = item.amount;
+    setSelected(next);
   }
 
   if (isLoading) {
@@ -676,6 +659,16 @@ function CreditARDetail({
   const paidFromInstallments = loan.installments.reduce((s, i) => s + Number(i.paidAmount), 0);
   const totalCredit          = Number(loan.totalAmount);
   const creditPct            = totalCredit > 0 ? (paidFromInstallments / totalCredit) * 100 : 0;
+  const amountPreview        = amountInput > 0 ? distributeAmount(loan.installments, amountInput) : null;
+  const selectedTotal        = Object.values(selected).reduce((s, a) => s + a, 0);
+  const selectedCount        = Object.keys(selected).length;
+  const selectedItems: DistributedItem[] = loan.installments
+    .filter((i) => selected[i.id] != null)
+    .map((i) => {
+      const outstanding = Number(i.amount) - Number(i.paidAmount);
+      const amount = selected[i.id];
+      return { installmentId: i.id, number: i.number, amount, isFull: amount >= outstanding };
+    });
 
   return (
     <>
@@ -709,18 +702,48 @@ function CreditARDetail({
         </p>
       </div>
 
+      {/* Cobro por monto — autoselecciona las cuotas pendientes más antiguas */}
+      <div className="rounded-xl border border-border px-3 py-2.5 space-y-2">
+        <Label className="text-xs">¿Cuántas cuotas cubre un monto?</Label>
+        <div className="flex gap-2">
+          <NumericInput value={amountInput} onChange={setAmountInput} className={NUM_CLS} placeholder="Monto a pagar" />
+          <Button type="button" size="sm" variant="outline" className="shrink-0" onClick={applyAmountPreview} disabled={amountInput <= 0}>
+            Autoseleccionar
+          </Button>
+        </div>
+        {amountPreview && (
+          <p className="text-xs text-muted-foreground">
+            {amountPreview.items.length === 0
+              ? 'No hay cuotas pendientes para cubrir.'
+              : `Cubre ${amountPreview.items.length} cuota${amountPreview.items.length !== 1 ? 's' : ''}${!amountPreview.items[amountPreview.items.length - 1]?.isFull ? ' (la última, parcial)' : ''}.`}
+            {amountPreview.remaining > 0 && (
+              <span className="text-warn"> Sobran {formatPrice(amountPreview.remaining)} — supera el saldo pendiente total.</span>
+            )}
+          </p>
+        )}
+      </div>
+
       <div className="space-y-1.5">
         {loan.installments.map((inst) => {
           const remaining = Number(inst.amount) - Number(inst.paidAmount);
           const isPayable =
             (inst.status === 'PENDING' || inst.status === 'PARTIAL' || inst.status === 'OVERDUE') &&
             remaining > 0;
+          const isSelected = selected[inst.id] != null;
           return (
             <div
               key={inst.id}
               className="flex items-center justify-between rounded-lg border border-border bg-card px-3 py-2.5 text-sm"
             >
               <div className="flex items-center gap-2 min-w-0">
+                {isPayable && (
+                  <input
+                    type="checkbox"
+                    className="size-4 shrink-0 accent-primary"
+                    checked={isSelected}
+                    onChange={() => toggleInstallment(inst)}
+                  />
+                )}
                 <span className="shrink-0 w-5 text-xs font-mono text-muted-foreground/60">#{inst.number}</span>
                 <div className="min-w-0">
                   <div className="flex items-center gap-1.5 flex-wrap">
@@ -734,18 +757,33 @@ function CreditARDetail({
                         · pagado: {formatPrice(Number(inst.paidAmount))}
                       </span>
                     )}
+                    {isSelected && selected[inst.id] < remaining && (
+                      <span className="ml-1 text-xs font-normal text-sky-600">
+                        · a cobrar (parcial): {formatPrice(selected[inst.id])}
+                      </span>
+                    )}
                   </p>
                 </div>
               </div>
-              {isPayable && (
-                <Button size="sm" className="ml-2 shrink-0" onClick={() => openInstModal(inst)}>
-                  Pagar
-                </Button>
-              )}
+              <div className="ml-2 flex items-center gap-1.5 shrink-0">
+                {Number(inst.paidAmount) > 0 && <ReceiptButton installmentId={inst.id} />}
+              </div>
             </div>
           );
         })}
       </div>
+
+      {selectedCount > 0 && (
+        <div className="flex items-center justify-between rounded-xl border border-primary/30 bg-primary/5 px-4 py-3">
+          <div className="text-sm">
+            <p className="font-semibold text-foreground">{formatPrice(selectedTotal)}</p>
+            <p className="text-xs text-muted-foreground">{selectedCount} cuota{selectedCount !== 1 ? 's' : ''} seleccionada{selectedCount !== 1 ? 's' : ''}</p>
+          </div>
+          <Button size="sm" onClick={() => setPayModalOpen(true)}>
+            Cobrar seleccionadas
+          </Button>
+        </div>
+      )}
 
       <a
         href="/dashboard/finance"
@@ -755,18 +793,19 @@ function CreditARDetail({
         <ChevronRight size={13} />
       </a>
 
-      {payingInstallment && (
-        <PayInstallmentModal
-          installment={payingInstallment}
-          saleOrderId={saleOrderId}
-          open={instModalOpen}
-          onOpenChange={(open) => { if (!open) setInstModalOpen(false); }}
-          onSaved={() => {
-            setInstModalOpen(false);
-            onInstallmentPaid();
-          }}
-        />
-      )}
+      <PayInstallmentsModal
+        loanId={loan.id}
+        saleOrderId={saleOrderId}
+        items={selectedItems}
+        open={payModalOpen}
+        onOpenChange={(open) => { if (!open) setPayModalOpen(false); }}
+        onSaved={() => {
+          setPayModalOpen(false);
+          setSelected({});
+          setAmountInput(0);
+          onInstallmentPaid();
+        }}
+      />
     </>
   );
 }
@@ -787,6 +826,7 @@ function ARDetailPanel({
   const queryClient = useQueryClient();
 
   const isCredit  = ar.invoice.saleOrder.saleType === 'CREDIT';
+  const urgency   = arUrgency(ar);
   const remaining = Number(ar.amount) - Number(ar.paidAmount);
   const pct       = Number(ar.amount) > 0 ? (Number(ar.paidAmount) / Number(ar.amount)) * 100 : 0;
   const ref       = invoiceRef(ar.invoice);
@@ -800,7 +840,7 @@ function ARDetailPanel({
               <SheetTitle>
                 {ar.invoice.saleOrder.customer.firstName} {ar.invoice.saleOrder.customer.lastName}
               </SheetTitle>
-              <ARStatusBadge status={ar.status} />
+              <ARStatusBadge status={ar.status} urgency={urgency} />
               {isCredit && (
                 <Badge
                   variant="outline"
@@ -862,7 +902,10 @@ function ARDetailPanel({
                   </div>
                 </div>
                 {ar.dueDate && (
-                  <p className="text-xs text-muted-foreground/60 mt-2">Vencimiento: {formatDate(ar.dueDate)}</p>
+                  <p className={cn('text-xs mt-2', urgency.level === 'overdue' ? 'font-medium text-destructive' : 'text-muted-foreground/60')}>
+                    Vencimiento: {formatDate(ar.dueDate)}
+                    {urgency.level === 'overdue' && ` · ${urgency.days} ${urgency.days === 1 ? 'día' : 'días'} de mora`}
+                  </p>
                 )}
               </div>
             )}
@@ -1030,18 +1073,93 @@ function CollectionsWidget() {
   );
 }
 
+// ── AR row (una factura — se usa sola o como sub-fila de un grupo por cliente) ──
+
+function ARRow({ ar, onClick, indent }: { ar: AccountsReceivable; onClick: () => void; indent?: boolean }) {
+  const { isCredit, paid, total, pending } = effectiveAmounts(ar);
+  const urgency = arUrgency(ar);
+  const accent = accentFor(urgency.level);
+  return (
+    <tr onClick={onClick} className="cursor-pointer hover:bg-muted/20 transition-colors">
+      <td
+        className={cn(
+          'px-4 py-3',
+          indent && 'pl-11',
+          accent && cn('border-l-[3px]', ACCENT_BORDER[accent]),
+        )}
+      >
+        <div className="font-medium text-foreground">
+          {ar.invoice.saleOrder.customer.firstName}{' '}
+          {ar.invoice.saleOrder.customer.lastName}
+        </div>
+        {ar.invoice.saleOrder.customer.email && (
+          <div className="text-xs text-muted-foreground/60">
+            {ar.invoice.saleOrder.customer.email}
+          </div>
+        )}
+      </td>
+      <td className="px-4 py-3">
+        <span className="font-mono text-xs text-muted-foreground">
+          {invoiceRef(ar.invoice)}
+        </span>
+      </td>
+      <td className="px-4 py-3">
+        {isCredit ? (
+          <Badge
+            variant="outline"
+            className="bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-950 dark:text-violet-300 dark:border-violet-800 gap-1"
+          >
+            <CreditCard size={10} />
+            Crédito{ar.invoice.saleOrder.installments ? ` · ${ar.invoice.saleOrder.installments}c` : ''}
+          </Badge>
+        ) : (
+          <Badge variant="secondary">Contado</Badge>
+        )}
+      </td>
+      <td className={cn('px-4 py-3', accent ? ACCENT_TEXT[accent] : 'text-muted-foreground')}>
+        {formatDate(arDisplayDueDate(ar))}
+      </td>
+      <td className="px-4 py-3"><ARStatusBadge status={ar.status} urgency={urgency} /></td>
+      <td className="px-4 py-3 text-right font-mono text-muted-foreground">
+        {formatPrice(total)}
+      </td>
+      <td className="px-4 py-3 text-right font-mono text-emerald-600">
+        {formatPrice(paid)}
+      </td>
+      <td className="px-4 py-3 text-right font-mono font-medium text-foreground">
+        {formatPrice(pending)}
+      </td>
+    </tr>
+  );
+}
+
 // ── Main page ──────────────────────────────────────────────────────────────────
 
 export default function PaymentsPage() {
+  const searchParams = useSearchParams();
+  const arParam = searchParams.get('ar');
+
   const [statusFilter, setStatusFilter] = useState<'' | ARStatus>('');
   const [typeFilter, setTypeFilter]     = useState<'' | 'CASH' | 'CREDIT'>('');
   const [panelAR, setPanelAR]           = useState<AccountsReceivable | null>(null);
   const [panelOpen, setPanelOpen]       = useState(false);
+  const [dismissedArParam, setDismissedArParam] = useState<string | null>(null);
+  const [expandedCustomers, setExpandedCustomers] = useState<Set<string>>(new Set());
 
   const { data: arList = [], isLoading } = useQuery({
     queryKey: ['accounts-receivable'],
     queryFn: paymentsApi.listAR,
   });
+
+  // Deep link desde el dropdown de Alertas ("Cuenta por cobrar vencida",
+  // ?ar=<id>) — abre directo el detalle en vez de dejar al usuario buscarla
+  // a mano en la lista. Derivado en el render (sin efecto) para no disparar
+  // un setState en cuanto arList termina de cargar; `dismissedArParam`
+  // recuerda si el usuario ya cerró este deep link para no reabrirlo solo.
+  const deepLinkedAR =
+    arParam && arParam !== dismissedArParam ? (arList.find((ar) => ar.id === arParam) ?? null) : null;
+  const effectivePanelAR = panelAR ?? deepLinkedAR;
+  const effectivePanelOpen = panelOpen || !!deepLinkedAR;
 
   const filtered = arList.filter((ar) => {
     if (statusFilter && ar.status !== statusFilter) return false;
@@ -1049,21 +1167,34 @@ export default function PaymentsPage() {
     return true;
   });
 
+  // Agrupa las cuentas por cobrar por cliente — un cliente con varios
+  // productos a crédito activos aparece una sola vez, con un dropdown para
+  // ver cada producto (y su propio recibo) por separado.
+  const groupsByCustomer = new Map<string, AccountsReceivable[]>();
+  for (const ar of filtered) {
+    const key = ar.invoice.saleOrder.customer.id;
+    groupsByCustomer.set(key, [...(groupsByCustomer.get(key) ?? []), ar]);
+  }
+  const groups = Array.from(groupsByCustomer.values());
+
+  function toggleExpanded(customerId: string) {
+    setExpandedCustomers((prev) => {
+      const next = new Set(prev);
+      if (next.has(customerId)) next.delete(customerId); else next.add(customerId);
+      return next;
+    });
+  }
+
   function openPanel(ar: AccountsReceivable) { setPanelAR(ar); setPanelOpen(true); }
-  function closePanel(open: boolean) { if (!open) setPanelOpen(false); }
+  function closePanel(open: boolean) {
+    if (open) return;
+    setPanelOpen(false);
+    if (!panelAR && arParam) setDismissedArParam(arParam);
+  }
 
   const totalPending = arList
     .filter((ar) => ar.status === 'PENDING' || ar.status === 'PARTIAL')
-    .reduce((sum, ar) => {
-      const isCredit = ar.invoice.saleOrder.saleType === 'CREDIT';
-      const paid  = isCredit && ar.invoice.saleOrder.loan
-        ? ar.invoice.saleOrder.loan.installments.reduce((s, i) => s + Number(i.paidAmount), 0)
-        : Number(ar.paidAmount);
-      const total = isCredit && ar.invoice.saleOrder.loan
-        ? Number(ar.invoice.saleOrder.loan.totalAmount)
-        : Number(ar.amount);
-      return sum + (total - paid);
-    }, 0);
+    .reduce((sum, ar) => sum + effectiveAmounts(ar).pending, 0);
 
   return (
     <div>
@@ -1140,62 +1271,76 @@ export default function PaymentsPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {filtered.map((ar) => {
-                  const isCredit = ar.invoice.saleOrder.saleType === 'CREDIT';
-                  const effectivePaid = isCredit && ar.invoice.saleOrder.loan
-                    ? ar.invoice.saleOrder.loan.installments.reduce((s, i) => s + Number(i.paidAmount), 0)
-                    : Number(ar.paidAmount);
-                  const effectiveTotal = isCredit && ar.invoice.saleOrder.loan
-                    ? Number(ar.invoice.saleOrder.loan.totalAmount)
-                    : Number(ar.amount);
-                  const pending = effectiveTotal - effectivePaid;
+                {groups.map((group) => {
+                  if (group.length === 1) {
+                    const ar = group[0];
+                    return <ARRow key={ar.id} ar={ar} onClick={() => openPanel(ar)} />;
+                  }
+
+                  const customer = group[0].invoice.saleOrder.customer;
+                  const isExpanded = expandedCustomers.has(customer.id);
+                  const agg = group.reduce(
+                    (acc, ar) => {
+                      const a = effectiveAmounts(ar);
+                      return { paid: acc.paid + a.paid, total: acc.total + a.total, pending: acc.pending + a.pending };
+                    },
+                    { paid: 0, total: 0, pending: 0 },
+                  );
+                  const overdueCount = group.filter((ar) => arUrgency(ar).level === 'overdue').length;
+                  const pendingCount = group.filter((ar) => accentFor(arUrgency(ar).level) === 'warn').length;
+                  const groupAccent: RowAccent = overdueCount > 0 ? 'destructive' : pendingCount > 0 ? 'warn' : null;
+
                   return (
-                    <tr
-                      key={ar.id}
-                      onClick={() => openPanel(ar)}
-                      className="cursor-pointer hover:bg-muted/20 transition-colors"
-                    >
-                      <td className="px-4 py-3">
-                        <div className="font-medium text-foreground">
-                          {ar.invoice.saleOrder.customer.firstName}{' '}
-                          {ar.invoice.saleOrder.customer.lastName}
-                        </div>
-                        {ar.invoice.saleOrder.customer.email && (
-                          <div className="text-xs text-muted-foreground/60">
-                            {ar.invoice.saleOrder.customer.email}
+                    <Fragment key={customer.id}>
+                      <tr
+                        onClick={() => toggleExpanded(customer.id)}
+                        className="cursor-pointer hover:bg-muted/20 transition-colors bg-muted/10"
+                      >
+                        <td className={cn('px-4 py-3', groupAccent && cn('border-l-[3px]', ACCENT_BORDER[groupAccent]))}>
+                          <div className="flex items-center gap-2">
+                            <ChevronRight
+                              size={14}
+                              className={cn('shrink-0 text-muted-foreground/60 transition-transform', isExpanded && 'rotate-90')}
+                            />
+                            <div>
+                              <div className="font-medium text-foreground">
+                                {customer.firstName} {customer.lastName}
+                              </div>
+                              {customer.email && (
+                                <div className="text-xs text-muted-foreground/60">{customer.email}</div>
+                              )}
+                            </div>
                           </div>
-                        )}
-                      </td>
-                      <td className="px-4 py-3">
-                        <span className="font-mono text-xs text-muted-foreground">
-                          {invoiceRef(ar.invoice)}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3">
-                        {isCredit ? (
-                          <Badge
-                            variant="outline"
-                            className="bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-950 dark:text-violet-300 dark:border-violet-800 gap-1"
-                          >
-                            <CreditCard size={10} />
-                            Crédito{ar.invoice.saleOrder.installments ? ` · ${ar.invoice.saleOrder.installments}c` : ''}
-                          </Badge>
-                        ) : (
-                          <Badge variant="secondary">Contado</Badge>
-                        )}
-                      </td>
-                      <td className="px-4 py-3 text-muted-foreground">{formatDate(ar.dueDate)}</td>
-                      <td className="px-4 py-3"><ARStatusBadge status={ar.status} /></td>
-                      <td className="px-4 py-3 text-right font-mono text-muted-foreground">
-                        {formatPrice(effectiveTotal)}
-                      </td>
-                      <td className="px-4 py-3 text-right font-mono text-emerald-600">
-                        {formatPrice(effectivePaid)}
-                      </td>
-                      <td className="px-4 py-3 text-right font-mono font-medium text-foreground">
-                        {formatPrice(pending)}
-                      </td>
-                    </tr>
+                        </td>
+                        <td className="px-4 py-3 text-xs text-muted-foreground" colSpan={3}>
+                          {group.length} productos activos
+                          {overdueCount > 0 && (
+                            <Badge variant="destructive" className="ml-2 gap-1">
+                              <AlertTriangle size={10} />
+                              {overdueCount} vencida{overdueCount !== 1 ? 's' : ''}
+                            </Badge>
+                          )}
+                          {pendingCount > 0 && (
+                            <Badge variant="outline" className="ml-2 gap-1 bg-warn-subtle text-warn border-warn/30">
+                              {pendingCount} pendiente{pendingCount !== 1 ? 's' : ''}
+                            </Badge>
+                          )}
+                        </td>
+                        <td className="px-4 py-3" />
+                        <td className="px-4 py-3 text-right font-mono text-muted-foreground">
+                          {formatPrice(agg.total)}
+                        </td>
+                        <td className="px-4 py-3 text-right font-mono text-emerald-600">
+                          {formatPrice(agg.paid)}
+                        </td>
+                        <td className="px-4 py-3 text-right font-mono font-medium text-foreground">
+                          {formatPrice(agg.pending)}
+                        </td>
+                      </tr>
+                      {isExpanded && group.map((ar) => (
+                        <ARRow key={ar.id} ar={ar} onClick={() => openPanel(ar)} indent />
+                      ))}
+                    </Fragment>
                   );
                 })}
               </tbody>
@@ -1204,8 +1349,8 @@ export default function PaymentsPage() {
         </Card>
       )}
 
-      {panelAR && (
-        <ARDetailPanel ar={panelAR} open={panelOpen} onOpenChange={closePanel} />
+      {effectivePanelAR && (
+        <ARDetailPanel ar={effectivePanelAR} open={effectivePanelOpen} onOpenChange={closePanel} />
       )}
     </div>
   );

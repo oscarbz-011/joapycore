@@ -19,8 +19,10 @@ import { UpdateCreditPlanDto } from '../dto/update-credit-plan.dto';
 import { UpdateTenantDto } from '../dto/update-tenant.dto';
 import { UpsertCreditConfigDto } from '../dto/upsert-credit-config.dto';
 import { UpsertPricingConfigDto } from '../dto/upsert-pricing-config.dto';
+import { UpsertSalesConfigDto } from '../dto/upsert-sales-config.dto';
 import { CreditConfigService } from '../services/credit-config.service';
 import { PricingConfigService } from '../services/pricing-config.service';
+import { SalesConfigService } from '../services/sales-config.service';
 import { TenantModulesService } from '../services/tenant-modules.service';
 import { TenantsService } from '../services/tenants.service';
 
@@ -33,6 +35,7 @@ export class TenantsController {
     private readonly tenantModulesService: TenantModulesService,
     private readonly pricingConfigService: PricingConfigService,
     private readonly creditConfigService: CreditConfigService,
+    private readonly salesConfigService: SalesConfigService,
   ) {}
 
   // ─── Tenant ───────────────────────────────────────────────────────────────
@@ -58,20 +61,28 @@ export class TenantsController {
 
   @Get('modules')
   @Permissions('tenants:read')
-  @ApiOperation({ summary: 'List modules and their active state for the current tenant' })
+  @ApiOperation({
+    summary: 'List modules and their active state for the current tenant',
+  })
   listModules(@CurrentTenant() tenantId: string) {
     return this.tenantModulesService.list(tenantId);
   }
 
   @Patch('modules/:moduleName')
   @Permissions('tenants:modules:manage')
-  @ApiOperation({ summary: 'Activate or deactivate a module for the current tenant' })
+  @ApiOperation({
+    summary: 'Activate or deactivate a module for the current tenant',
+  })
   toggleModule(
     @CurrentTenant() tenantId: string,
     @Param('moduleName') moduleName: string,
     @Body() dto: ToggleTenantModuleDto,
   ) {
-    return this.tenantModulesService.setActive(tenantId, moduleName, dto.active);
+    return this.tenantModulesService.setActive(
+      tenantId,
+      moduleName,
+      dto.active,
+    );
   }
 
   // ─── Pricing config ───────────────────────────────────────────────────────
@@ -109,7 +120,13 @@ export class TenantsController {
     @CurrentTenant() tenantId: string,
     @Body() dto: UpsertCreditConfigDto,
   ) {
-    return this.creditConfigService.setEnabled(tenantId, dto.isEnabled);
+    return this.creditConfigService.setEnabled(
+      tenantId,
+      dto.isEnabled,
+      dto.maxIncomePercentage,
+      dto.dueDayOfMonth,
+      dto.moraGraceDays,
+    );
   }
 
   @Post('credit/plans')
@@ -137,10 +154,26 @@ export class TenantsController {
   @HttpCode(HttpStatus.NO_CONTENT)
   @Permissions('tenants:update')
   @ApiOperation({ summary: 'Remove a credit plan' })
-  removeCreditPlan(
-    @CurrentTenant() tenantId: string,
-    @Param('id') id: string,
-  ) {
+  removeCreditPlan(@CurrentTenant() tenantId: string, @Param('id') id: string) {
     return this.creditConfigService.removePlan(tenantId, id);
+  }
+
+  // ─── Sales config ─────────────────────────────────────────────────────────
+
+  @Get('sales-config')
+  @Permissions('sales:read')
+  @ApiOperation({ summary: 'Get the sales sub-feature configuration (combos, etc.)' })
+  getSalesConfig(@CurrentTenant() tenantId: string) {
+    return this.salesConfigService.get(tenantId);
+  }
+
+  @Put('sales-config')
+  @Permissions('tenants:update')
+  @ApiOperation({ summary: 'Enable or disable sales sub-features (combos, etc.)' })
+  setSalesConfig(
+    @CurrentTenant() tenantId: string,
+    @Body() dto: UpsertSalesConfigDto,
+  ) {
+    return this.salesConfigService.setCombosEnabled(tenantId, dto.combosEnabled);
   }
 }

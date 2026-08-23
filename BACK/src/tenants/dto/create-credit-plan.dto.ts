@@ -7,7 +7,9 @@ export class CreateCreditPlanDto {
   @Min(1)
   installments: number;
 
-  @ApiProperty({ description: '% de interés total sobre el monto (ej. 15 = 15%)' })
+  @ApiProperty({
+    description: '% de interés total sobre el monto (ej. 15 = 15%)',
+  })
   @IsNumber()
   @IsPositive()
   interestRate: number;

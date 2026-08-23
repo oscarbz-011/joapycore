@@ -14,16 +14,31 @@ export class CreditConfigRepository {
     });
   }
 
-  upsertConfig(tenantId: string, isEnabled: boolean) {
+  upsertConfig(
+    tenantId: string,
+    isEnabled: boolean,
+    maxIncomePercentage?: number | null,
+    dueDayOfMonth?: number,
+    moraGraceDays?: number,
+  ) {
     return this.prisma.creditConfig.upsert({
       where: { tenantId },
-      create: { tenantId, isEnabled },
-      update: { isEnabled },
+      create: { tenantId, isEnabled, maxIncomePercentage, dueDayOfMonth, moraGraceDays },
+      update: {
+        isEnabled,
+        ...(maxIncomePercentage !== undefined ? { maxIncomePercentage } : {}),
+        ...(dueDayOfMonth !== undefined ? { dueDayOfMonth } : {}),
+        ...(moraGraceDays !== undefined ? { moraGraceDays } : {}),
+      },
       include: { plans: this.planOrder },
     });
   }
 
-  createPlan(creditConfigId: string, installments: number, interestRate: number) {
+  createPlan(
+    creditConfigId: string,
+    installments: number,
+    interestRate: number,
+  ) {
     return this.prisma.creditPlan.create({
       data: { creditConfigId, installments, interestRate },
     });

@@ -1,11 +1,20 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { CustomersRepository } from '../repositories/customers.repository';
 import { CreateCustomerDto } from '../dto/create-customer.dto';
 import { toTitleCase } from '../../../common/utils/normalize.util';
+import type { AuditLogEvent } from '../../../audit/audit-log.event';
 
 @Injectable()
 export class CustomersService {
-  constructor(private readonly customersRepository: CustomersRepository) {}
+  constructor(
+    private readonly customersRepository: CustomersRepository,
+    private readonly eventEmitter: EventEmitter2,
+  ) {}
 
   findAll(tenantId: string) {
     return this.customersRepository.findAll(tenantId);
@@ -17,36 +26,93 @@ export class CustomersService {
     return customer;
   }
 
-  async create(tenantId: string, dto: CreateCustomerDto) {
+  async create(tenantId: string, dto: CreateCustomerDto, userId?: string) {
     if (dto.email) {
-      const existing = await this.customersRepository.findByEmail(tenantId, dto.email);
-      if (existing) throw new ConflictException('Ya existe un cliente con ese email');
+      const existing = await this.customersRepository.findByEmail(
+        tenantId,
+        dto.email,
+      );
+      if (existing)
+        throw new ConflictException('Ya existe un cliente con ese email');
     }
     const customerCode = await this.generateCustomerCode(tenantId);
-    return this.customersRepository.create(tenantId, {
+    const customer = await this.customersRepository.create(tenantId, {
       ...dto,
       firstName: toTitleCase(dto.firstName),
       lastName: toTitleCase(dto.lastName),
       customerCode,
     });
+
+    // Sin listeners de negocio propios hoy — existe para que el bridge de
+    // WebSocket (WsBridgeListener, escucha *todo* evento) empuje la
+    // actualización a los clientes conectados sin que cada pantalla tenga
+    // que refrescar sola. Ver front/lib/ws-event-map.ts.
+    this.eventEmitter.emit('customer.created', {
+      tenantId,
+      customerId: customer.id,
+    });
+    this.eventEmitter.emit('audit.log', {
+      tenantId,
+      userId,
+      module: 'sales',
+      action: 'customer.created',
+      resourceId: customer.id,
+      after: customer,
+    } satisfies AuditLogEvent);
+
+    return customer;
   }
 
-  async update(tenantId: string, id: string, dto: Partial<CreateCustomerDto>) {
-    await this.findOne(tenantId, id);
+  async update(
+    tenantId: string,
+    id: string,
+    dto: Partial<CreateCustomerDto>,
+    userId?: string,
+  ) {
+    const before = await this.findOne(tenantId, id);
     if (dto.email) {
-      const existing = await this.customersRepository.findByEmail(tenantId, dto.email, id);
-      if (existing) throw new ConflictException('Ya existe un cliente con ese email');
+      const existing = await this.customersRepository.findByEmail(
+        tenantId,
+        dto.email,
+        id,
+      );
+      if (existing)
+        throw new ConflictException('Ya existe un cliente con ese email');
     }
-    return this.customersRepository.update(tenantId, id, {
+    const customer = await this.customersRepository.update(tenantId, id, {
       ...dto,
       ...(dto.firstName ? { firstName: toTitleCase(dto.firstName) } : {}),
       ...(dto.lastName ? { lastName: toTitleCase(dto.lastName) } : {}),
     });
+
+    this.eventEmitter.emit('customer.updated', { tenantId, customerId: id });
+    this.eventEmitter.emit('audit.log', {
+      tenantId,
+      userId,
+      module: 'sales',
+      action: 'customer.updated',
+      resourceId: id,
+      before,
+      after: customer,
+    } satisfies AuditLogEvent);
+
+    return customer;
   }
 
-  async delete(tenantId: string, id: string) {
+  async delete(tenantId: string, id: string, userId?: string) {
     await this.findOne(tenantId, id);
-    return this.customersRepository.softDelete(tenantId, id);
+    const customer = await this.customersRepository.softDelete(tenantId, id);
+
+    this.eventEmitter.emit('customer.deleted', { tenantId, customerId: id });
+    this.eventEmitter.emit('audit.log', {
+      tenantId,
+      userId,
+      module: 'sales',
+      action: 'customer.deleted',
+      resourceId: id,
+    } satisfies AuditLogEvent);
+
+    return customer;
   }
 
   private async generateCustomerCode(tenantId: string): Promise<string> {

@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InstallmentStatus, PaymentMethod } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
+import { PrismaClientOrTx } from '../../../prisma/types';
 
 @Injectable()
 export class InstallmentsRepository {
@@ -16,13 +17,26 @@ export class InstallmentsRepository {
   findById(tenantId: string, id: string) {
     return this.prisma.installment.findFirst({
       where: { id, tenantId },
-      include: { loan: { select: { id: true, saleOrderId: true } } },
+      include: {
+        loan: {
+          select: {
+            id: true,
+            saleOrderId: true,
+            customerId: true,
+            saleOrder: { select: { branchId: true } },
+          },
+        },
+      },
     });
   }
 
   findPendingByLoan(tenantId: string, loanId: string) {
     return this.prisma.installment.findMany({
-      where: { tenantId, loanId, status: { in: ['PENDING', 'PARTIAL', 'OVERDUE'] } },
+      where: {
+        tenantId,
+        loanId,
+        status: { in: ['PENDING', 'PARTIAL', 'OVERDUE'] },
+      },
       orderBy: { number: 'asc' },
     });
   }
@@ -34,7 +48,13 @@ export class InstallmentsRepository {
         status: { in: ['PENDING', 'PARTIAL'] },
         dueDate: { lt: new Date() },
       },
-      include: { loan: { include: { customer: { select: { id: true, firstName: true, lastName: true } } } } },
+      include: {
+        loan: {
+          include: {
+            customer: { select: { id: true, firstName: true, lastName: true } },
+          },
+        },
+      },
       orderBy: { dueDate: 'asc' },
     });
   }
@@ -82,7 +102,8 @@ export class InstallmentsRepository {
       status: InstallmentStatus;
       notes?: string;
     },
+    client: PrismaClientOrTx = this.prisma,
   ) {
-    return this.prisma.installment.update({ where: { id }, data });
+    return client.installment.update({ where: { id }, data });
   }
 }

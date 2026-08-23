@@ -15,8 +15,20 @@ export class CreditConfigService {
     return this.repo.findByTenant(tenantId);
   }
 
-  setEnabled(tenantId: string, isEnabled: boolean) {
-    return this.repo.upsertConfig(tenantId, isEnabled);
+  setEnabled(
+    tenantId: string,
+    isEnabled: boolean,
+    maxIncomePercentage?: number | null,
+    dueDayOfMonth?: number,
+    moraGraceDays?: number,
+  ) {
+    return this.repo.upsertConfig(
+      tenantId,
+      isEnabled,
+      maxIncomePercentage,
+      dueDayOfMonth,
+      moraGraceDays,
+    );
   }
 
   async addPlan(tenantId: string, dto: CreateCreditPlanDto) {

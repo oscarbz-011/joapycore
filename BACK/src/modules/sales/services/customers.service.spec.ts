@@ -33,6 +33,7 @@ describe('CustomersService', () => {
     update: jest.Mock;
     softDelete: jest.Mock;
   };
+  let eventEmitter: { emit: jest.Mock };
 
   beforeEach(() => {
     customersRepository = {
@@ -43,8 +44,12 @@ describe('CustomersService', () => {
       update: jest.fn(),
       softDelete: jest.fn(),
     };
+    eventEmitter = { emit: jest.fn() };
 
-    service = new CustomersService(customersRepository as any);
+    service = new CustomersService(
+      customersRepository as any,
+      eventEmitter as any,
+    );
   });
 
   // ── findAll ────────────────────────────────────────────────────────────────
@@ -68,7 +73,9 @@ describe('CustomersService', () => {
 
     it('throws NotFoundException when customer does not exist', async () => {
       customersRepository.findById.mockResolvedValue(null);
-      await expect(service.findOne('tenant-1', 'ghost')).rejects.toBeInstanceOf(NotFoundException);
+      await expect(service.findOne('tenant-1', 'ghost')).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
     });
   });
 
@@ -76,7 +83,11 @@ describe('CustomersService', () => {
 
   describe('create', () => {
     it('auto-generates CLI-001 for the first customer and delegates to repository', async () => {
-      const dto = { firstName: 'María', lastName: 'González', email: 'maria@ejemplo.com' };
+      const dto = {
+        firstName: 'María',
+        lastName: 'González',
+        email: 'maria@ejemplo.com',
+      };
       customersRepository.findLastCode.mockResolvedValue(null);
       customersRepository.create.mockResolvedValue(makeCustomer());
 
@@ -84,14 +95,21 @@ describe('CustomersService', () => {
 
       expect(customersRepository.create).toHaveBeenCalledWith(
         'tenant-1',
-        expect.objectContaining({ firstName: 'María', customerCode: 'CLI-001' }),
+        expect.objectContaining({
+          firstName: 'María',
+          customerCode: 'CLI-001',
+        }),
       );
     });
 
     it('increments the customer code when prior customers exist', async () => {
       const dto = { firstName: 'Ana', lastName: 'López' };
-      customersRepository.findLastCode.mockResolvedValue({ customerCode: 'CLI-003' });
-      customersRepository.create.mockResolvedValue(makeCustomer({ customerCode: 'CLI-004' }));
+      customersRepository.findLastCode.mockResolvedValue({
+        customerCode: 'CLI-003',
+      });
+      customersRepository.create.mockResolvedValue(
+        makeCustomer({ customerCode: 'CLI-004' }),
+      );
 
       await service.create('tenant-1', dto);
 
@@ -120,7 +138,9 @@ describe('CustomersService', () => {
       customersRepository.findById.mockResolvedValue(makeCustomer());
       customersRepository.update.mockResolvedValue(updated);
 
-      const result = await service.update('tenant-1', 'cust-1', { firstName: 'Ana' });
+      const result = await service.update('tenant-1', 'cust-1', {
+        firstName: 'Ana',
+      });
 
       expect(customersRepository.update).toHaveBeenCalledWith(
         'tenant-1',
@@ -137,7 +157,9 @@ describe('CustomersService', () => {
     it('throws NotFoundException if customer does not exist', async () => {
       customersRepository.findById.mockResolvedValue(null);
 
-      await expect(service.delete('tenant-1', 'ghost')).rejects.toBeInstanceOf(NotFoundException);
+      await expect(service.delete('tenant-1', 'ghost')).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
 
       expect(customersRepository.softDelete).not.toHaveBeenCalled();
     });
@@ -147,7 +169,10 @@ describe('CustomersService', () => {
 
       await service.delete('tenant-1', 'cust-1');
 
-      expect(customersRepository.softDelete).toHaveBeenCalledWith('tenant-1', 'cust-1');
+      expect(customersRepository.softDelete).toHaveBeenCalledWith(
+        'tenant-1',
+        'cust-1',
+      );
     });
   });
 });

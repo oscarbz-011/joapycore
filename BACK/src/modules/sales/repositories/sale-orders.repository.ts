@@ -8,17 +8,20 @@ export class SaleOrdersRepository {
   constructor(private readonly prisma: PrismaService) {}
 
   private get include() {
-    const userSelect = { select: { id: true, firstName: true, lastName: true } };
+    const userSelect = {
+      select: { id: true, firstName: true, lastName: true },
+    };
     return {
       customer: true,
       items: { include: { product: true, productUnits: true, batch: true } },
       createdBy: userSelect,
-      seller:    userSelect,
+      seller: userSelect,
       approvedBy: userSelect,
       rejectedBy: userSelect,
       invoice: { select: { id: true, status: true } },
       loan: { select: { totalAmount: true, interestRate: true } },
       salePayments: { orderBy: { paymentDate: 'asc' as const } },
+      guarantors: { orderBy: { createdAt: 'asc' as const } },
     };
   }
 
@@ -47,6 +50,14 @@ export class SaleOrdersRepository {
     return this.prisma.saleOrder.findFirst({
       where: { id, tenantId },
       include: this.include,
+    });
+  }
+
+  findLastQuoteNumber(tenantId: string) {
+    return this.prisma.saleOrder.findFirst({
+      where: { tenantId, quoteNumber: { startsWith: 'PRES-' } },
+      orderBy: { quoteNumber: 'desc' },
+      select: { quoteNumber: true },
     });
   }
 
