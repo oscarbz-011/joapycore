@@ -15,14 +15,14 @@ export class MovementsController {
   constructor(private readonly productsService: ProductsService) {}
 
   @Get()
-  @Permissions('inventory:read')
+  @Permissions('inventory:movements:read')
   @ApiOperation({ summary: 'Listar movimientos de stock' })
   findAll(@CurrentTenant() tenantId: string, @Query() filters: FilterStockMovementDto) {
     return this.productsService.listMovements(tenantId, filters);
   }
 
   @Post()
-  @Permissions('inventory:create')
+  @Permissions('inventory:movements:create')
   @ApiOperation({ summary: 'Registrar movimiento de stock manual' })
   create(@CurrentTenant() tenantId: string, @Body() dto: CreateGlobalStockMovementDto) {
     return this.productsService.createGlobalMovement(tenantId, dto);

@@ -15,28 +15,28 @@ export class BrandsController {
   constructor(private readonly brandsService: BrandsService) {}
 
   @Get()
-  @Permissions('inventory:read')
+  @Permissions('inventory:brands:read')
   @ApiOperation({ summary: 'Listar marcas' })
   findAll(@CurrentTenant() tenantId: string) {
     return this.brandsService.findAll(tenantId);
   }
 
   @Get(':id')
-  @Permissions('inventory:read')
+  @Permissions('inventory:brands:read')
   @ApiOperation({ summary: 'Obtener marca por ID' })
   findOne(@CurrentTenant() tenantId: string, @Param('id') id: string) {
     return this.brandsService.findOne(tenantId, id);
   }
 
   @Post()
-  @Permissions('inventory:create')
+  @Permissions('inventory:brands:manage')
   @ApiOperation({ summary: 'Crear marca' })
   create(@CurrentTenant() tenantId: string, @Body() dto: CreateBrandDto) {
     return this.brandsService.create(tenantId, dto);
   }
 
   @Patch(':id')
-  @Permissions('inventory:update')
+  @Permissions('inventory:brands:manage')
   @ApiOperation({ summary: 'Actualizar marca' })
   update(
     @CurrentTenant() tenantId: string,

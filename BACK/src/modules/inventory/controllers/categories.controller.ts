@@ -15,28 +15,28 @@ export class CategoriesController {
   constructor(private readonly categoriesService: CategoriesService) {}
 
   @Get()
-  @Permissions('inventory:read')
+  @Permissions('inventory:categories:read')
   @ApiOperation({ summary: 'Listar categorías' })
   findAll(@CurrentTenant() tenantId: string) {
     return this.categoriesService.findAll(tenantId);
   }
 
   @Get(':id')
-  @Permissions('inventory:read')
+  @Permissions('inventory:categories:read')
   @ApiOperation({ summary: 'Obtener categoría por ID' })
   findOne(@CurrentTenant() tenantId: string, @Param('id') id: string) {
     return this.categoriesService.findOne(tenantId, id);
   }
 
   @Post()
-  @Permissions('inventory:create')
+  @Permissions('inventory:categories:manage')
   @ApiOperation({ summary: 'Crear categoría' })
   create(@CurrentTenant() tenantId: string, @Body() dto: CreateCategoryDto) {
     return this.categoriesService.create(tenantId, dto);
   }
 
   @Patch(':id')
-  @Permissions('inventory:update')
+  @Permissions('inventory:categories:manage')
   @ApiOperation({ summary: 'Actualizar categoría' })
   update(
     @CurrentTenant() tenantId: string,

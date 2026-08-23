@@ -12,6 +12,7 @@ import { useQuery } from '@tanstack/react-query';
 import { cn } from '@/lib/utils';
 import { useAuth } from '../../../../lib/auth-context';
 import { alertsApi } from '../../../../lib/api/alerts';
+import { usePendingNotifications } from '../../../../lib/use-pending-notifications';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -47,7 +48,7 @@ const STATIC_GROUPS: SidebarGroup[] = [
   {
     id: 'inventory', label: 'Inventario', icon: Package,
     modules: ['inventory'],
-    anyPermission: ['inventory:read', 'inventory:create', 'inventory:update'],
+    anyPermission: ['inventory:products:read', 'inventory:categories:read', 'inventory:brands:read', 'inventory:movements:read'],
     items: [
       { label: 'Productos',   href: '/dashboard/inventory' },
       { label: 'Categorías',  href: '/dashboard/inventory', stub: true },
@@ -59,10 +60,11 @@ const STATIC_GROUPS: SidebarGroup[] = [
   },
   {
     id: 'sales', label: 'Ventas', icon: ShoppingCart,
-    modules: ['sales'], anyPermission: ['sales:read', 'customers:read'],
+    modules: ['sales'], anyPermission: ['sales:read', 'customers:read', 'sales:quotes:read'],
     items: [
       { label: 'Clientes',         href: '/dashboard/sales/customers', permission: 'customers:read' },
       { label: 'Órdenes de venta', href: '/dashboard/sales',           permission: 'sales:read' },
+      { label: 'Presupuestos',     href: '/dashboard/sales/quotes',    permission: 'sales:quotes:read' },
       { label: 'Metas',            href: '/dashboard/sales/targets',   permission: 'sales:read' },
       { label: 'Devoluciones',     href: '/dashboard/sales',           stub: true },
     ],
@@ -80,11 +82,11 @@ const STATIC_GROUPS: SidebarGroup[] = [
   {
     id: 'finanzas', label: 'Finanzas', icon: Landmark,
     modules: ['billing', 'payments', 'finance', 'collections'],
-    anyPermission: ['billing:read', 'billing:issue', 'payments:read', 'finance:read', 'collections:read', 'sales:manage'],
+    anyPermission: ['billing:read', 'billing:issue', 'payments:read', 'finance:read', 'collections:read', 'sales:credit:evaluate'],
     items: [
-      { label: 'Facturas',              href: '/dashboard/billing',           permission: 'billing:read',     module: 'billing'     },
-      { label: 'Cuentas por cobrar',    href: '/dashboard/payments',          permission: 'payments:read',    module: 'payments'    },
-      { label: 'Evaluación de crédito', href: '/dashboard/billing/approvals', permission: 'sales:manage',     module: 'finance'     },
+      { label: 'Facturas',              href: '/dashboard/billing',           permission: 'billing:read',           module: 'billing'     },
+      { label: 'Cuentas por cobrar',    href: '/dashboard/payments',          permission: 'payments:read',          module: 'payments'    },
+      { label: 'Evaluación de crédito', href: '/dashboard/billing/approvals', permission: 'sales:credit:evaluate',  module: 'finance'     },
       { label: 'Financiamiento',        href: '/dashboard/finance',           permission: 'finance:read',     module: 'finance'     },
       { label: 'Cobranzas',             href: '/dashboard/cobranzas',         permission: 'collections:read', module: 'collections' },
       { label: 'Contabilidad',          href: '#',                            stub: true },
@@ -139,9 +141,10 @@ const STATIC_GROUPS: SidebarGroup[] = [
   },
   {
     id: 'pos', label: 'POS', icon: Monitor, modules: ['pos'],
+    anyPermission: ['pos:sell', 'pos:session:manage'],
     items: [
-      { label: 'POS',                           href: '/dashboard/pos', stub: true },
-      { label: 'Órdenes POS',                   href: '/dashboard/pos', stub: true },
+      { label: 'POS',                           href: '/dashboard/pos',         permission: 'pos:sell' },
+      { label: 'Órdenes POS',                   href: '/dashboard/pos/history', permission: 'pos:session:manage' },
       { label: 'Impresión de códigos de barra', href: '/dashboard/pos', stub: true },
       { label: 'Impresión de códigos QR',       href: '/dashboard/pos', stub: true },
       { label: 'Configuración de impresión',    href: '/dashboard/pos', stub: true },
@@ -162,13 +165,14 @@ const STATIC_GROUPS: SidebarGroup[] = [
     id: 'empresa', label: 'Empresa', icon: Building2,
     anyPermission: ['tenants:read', 'tenants:update', 'branches:read', 'warehouses:read'],
     items: [
-      { label: 'Mi empresa',  href: '/dashboard/settings/tenant',     permission: 'tenants:read' },
-      { label: 'Sucursales',  href: '/dashboard/settings/branches',   permission: 'branches:read' },
-      { label: 'Precios',     href: '/dashboard/settings/pricing',    permission: 'tenants:update' },
-      { label: 'Crédito',     href: '/dashboard/settings/credit',     permission: 'tenants:update' },
-      { label: 'Intereses',   href: '/dashboard/settings/credit',     stub: true },
-      { label: 'Depósitos',   href: '/dashboard/settings/warehouses', permission: 'warehouses:read' },
+      { label: 'Mi empresa',  href: '/dashboard/settings/tenant',        permission: 'tenants:read' },
+      { label: 'Sucursales',  href: '/dashboard/settings/branches',      permission: 'branches:read' },
+      { label: 'Precios',     href: '/dashboard/settings/pricing',       permission: 'tenants:update' },
+      { label: 'Depósitos',   href: '/dashboard/settings/warehouses',    permission: 'warehouses:read' },
     ],
+    // Crédito y Cajas (POS) se accedan desde la tuerca de sus tarjetas en
+    // Ajustes → Módulos (Financiamiento / Punto de Venta), no desde acá —
+    // evita duplicar rutas de configuración propias de un módulo en este grupo genérico.
   },
   {
     id: 'membership', label: 'Membresía', icon: Crown,
@@ -309,19 +313,29 @@ export function Sidebar() {
     queryFn: alertsApi.getConfigs,
     enabled: permissions.includes('alerts:read') || permissions.includes('alerts:manage'),
   });
-  const alertBadge   = alertConfigs.filter((c) => c.isActive).length || undefined;
+  const alertBadge = alertConfigs.filter((c) => c.isActive).length || undefined;
+
+  const { counts: pendingCounts } = usePendingNotifications(permissions, activeModules, jwtPayload?.sub);
+
+  const badgeByHref: Record<string, number | undefined> = {
+    '/dashboard/settings/alerts':          alertBadge,
+    '/dashboard/billing':                  pendingCounts.invoices,
+    '/dashboard/billing/approvals':        pendingCounts.approvals,
+    '/dashboard/payments':                 pendingCounts.overdueAR,
+    '/dashboard/sales':                    pendingCounts.myAdjustments,
+    '/dashboard/procurement':              pendingCounts.overduePOs,
+    '/dashboard/logistics/deliveries':     pendingCounts.pendingDeliveries,
+  };
+
   const brandInitial = (tenantName?.[0] ?? 'J').toUpperCase();
   const isDashActive = pathname === '/dashboard';
 
-  const groups = STATIC_GROUPS.map((g) => {
-    if (g.id !== 'sistema') return g;
-    return {
-      ...g,
-      items: g.items.map((item) =>
-        item.href === '/dashboard/settings/alerts' ? { ...item, badge: alertBadge } : item,
-      ),
-    };
-  });
+  const groups = STATIC_GROUPS.map((g) => ({
+    ...g,
+    items: g.items.map((item) =>
+      item.href in badgeByHref ? { ...item, badge: badgeByHref[item.href] } : item,
+    ),
+  }));
 
   const BOTTOM_IDS  = new Set(['empresa', 'membership', 'support', 'sistema']);
   const allVisible  = groups.filter((g) => isGroupVisible(g, activeModules, permissions));

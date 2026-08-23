@@ -31,7 +31,7 @@ export class ProductsController {
   constructor(private readonly productsService: ProductsService) {}
 
   @Get()
-  @Permissions('inventory:read')
+  @Permissions('inventory:products:read')
   @ApiOperation({ summary: 'Listar productos' })
   findAll(
     @CurrentTenant() tenantId: string,
@@ -41,7 +41,7 @@ export class ProductsController {
   }
 
   @Get('with-stock')
-  @Permissions('inventory:read')
+  @Permissions('inventory:products:read')
   @ApiOperation({ summary: 'Listar productos con stock actual' })
   findAllWithStock(
     @CurrentTenant() tenantId: string,
@@ -51,21 +51,21 @@ export class ProductsController {
   }
 
   @Get(':id')
-  @Permissions('inventory:read')
+  @Permissions('inventory:products:read')
   @ApiOperation({ summary: 'Obtener producto con stock' })
   findOne(@CurrentTenant() tenantId: string, @Param('id') id: string) {
     return this.productsService.findOneWithStock(tenantId, id);
   }
 
   @Post()
-  @Permissions('inventory:create')
+  @Permissions('inventory:products:create')
   @ApiOperation({ summary: 'Crear producto' })
   create(@CurrentTenant() tenantId: string, @Body() dto: CreateProductDto) {
     return this.productsService.create(tenantId, dto);
   }
 
   @Patch(':id')
-  @Permissions('inventory:update')
+  @Permissions('inventory:products:update')
   @ApiOperation({ summary: 'Actualizar producto' })
   update(
     @CurrentTenant() tenantId: string,
@@ -76,14 +76,14 @@ export class ProductsController {
   }
 
   @Delete(':id')
-  @Permissions('inventory:delete')
+  @Permissions('inventory:products:delete')
   @ApiOperation({ summary: 'Eliminar producto (soft delete)' })
   delete(@CurrentTenant() tenantId: string, @Param('id') id: string) {
     return this.productsService.delete(tenantId, id);
   }
 
   @Post(':id/stock-movements')
-  @Permissions('inventory:create')
+  @Permissions('inventory:movements:create')
   @ApiOperation({ summary: 'Registrar movimiento de stock manual (IN / ADJUSTMENT)' })
   addStockMovement(
     @CurrentTenant() tenantId: string,
@@ -94,14 +94,14 @@ export class ProductsController {
   }
 
   @Get(':id/units')
-  @Permissions('inventory:read')
+  @Permissions('inventory:products:read')
   @ApiOperation({ summary: 'Listar unidades serializadas del producto' })
   findUnits(@CurrentTenant() tenantId: string, @Param('id') id: string) {
     return this.productsService.findUnits(tenantId, id);
   }
 
   @Post(':id/units')
-  @Permissions('inventory:create')
+  @Permissions('inventory:products:create')
   @ApiOperation({ summary: 'Ingresar unidades serializadas manualmente' })
   addUnits(
     @CurrentTenant() tenantId: string,
@@ -114,14 +114,14 @@ export class ProductsController {
   // ── Suppliers ────────────────────────────────────────────────────────────────
 
   @Get(':id/suppliers')
-  @Permissions('inventory:read')
+  @Permissions('inventory:products:read')
   @ApiOperation({ summary: 'Listar proveedores asociados al producto' })
   getProductSuppliers(@CurrentTenant() tenantId: string, @Param('id') id: string) {
     return this.productsService.getProductSuppliers(tenantId, id);
   }
 
   @Post(':id/suppliers')
-  @Permissions('inventory:update')
+  @Permissions('inventory:products:update')
   @ApiOperation({ summary: 'Asociar proveedor al producto' })
   addProductSupplier(
     @CurrentTenant() tenantId: string,
@@ -132,7 +132,7 @@ export class ProductsController {
   }
 
   @Patch(':id/suppliers/:supplierId')
-  @Permissions('inventory:update')
+  @Permissions('inventory:products:update')
   @ApiOperation({ summary: 'Actualizar asociación proveedor-producto' })
   updateProductSupplier(
     @CurrentTenant() tenantId: string,
@@ -145,7 +145,7 @@ export class ProductsController {
 
   @Delete(':id/suppliers/:supplierId')
   @HttpCode(HttpStatus.NO_CONTENT)
-  @Permissions('inventory:delete')
+  @Permissions('inventory:products:delete')
   @ApiOperation({ summary: 'Desasociar proveedor del producto' })
   removeProductSupplier(
     @CurrentTenant() tenantId: string,
