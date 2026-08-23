@@ -10,7 +10,11 @@ export function getSocket(token: string): Socket {
 
   _socket = io(`${API_BASE}/notifications`, {
     auth: { token },
-    transports: ['websocket'],
+    // Sin forzar 'websocket': si el upgrade a WS falla (proxy, firewall,
+    // red poco cooperativa — visto de forma reproducible en este entorno),
+    // Socket.IO cae a long-polling en vez de no conectar nunca. Preferimos
+    // long-polling con latencia un poco mayor a no recibir actualizaciones
+    // en vivo en absoluto.
     reconnection: true,
     reconnectionDelay: 3000,
     reconnectionAttempts: 5,

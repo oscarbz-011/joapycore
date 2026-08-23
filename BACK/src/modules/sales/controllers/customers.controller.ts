@@ -9,8 +9,10 @@ import {
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CurrentTenant } from '../../../common/decorators/current-tenant.decorator';
+import { CurrentUser } from '../../../common/decorators/current-user.decorator';
 import { Permissions } from '../../../common/decorators/permissions.decorator';
 import { RequiredModule } from '../../../common/decorators/required-module.decorator';
+import type { JwtPayload } from '../../../common/types/jwt-payload.interface';
 import { CreateCustomerDto } from '../dto/create-customer.dto';
 import { CustomersService } from '../services/customers.service';
 
@@ -38,8 +40,12 @@ export class CustomersController {
   @Post()
   @Permissions('customers:create')
   @ApiOperation({ summary: 'Crear cliente' })
-  create(@CurrentTenant() tenantId: string, @Body() dto: CreateCustomerDto) {
-    return this.customersService.create(tenantId, dto);
+  create(
+    @CurrentTenant() tenantId: string,
+    @CurrentUser() user: JwtPayload,
+    @Body() dto: CreateCustomerDto,
+  ) {
+    return this.customersService.create(tenantId, dto, user.sub);
   }
 
   @Patch(':id')
@@ -47,16 +53,21 @@ export class CustomersController {
   @ApiOperation({ summary: 'Actualizar cliente' })
   update(
     @CurrentTenant() tenantId: string,
+    @CurrentUser() user: JwtPayload,
     @Param('id') id: string,
     @Body() dto: Partial<CreateCustomerDto>,
   ) {
-    return this.customersService.update(tenantId, id, dto);
+    return this.customersService.update(tenantId, id, dto, user.sub);
   }
 
   @Delete(':id')
   @Permissions('customers:update')
   @ApiOperation({ summary: 'Desactivar cliente' })
-  delete(@CurrentTenant() tenantId: string, @Param('id') id: string) {
-    return this.customersService.delete(tenantId, id);
+  delete(
+    @CurrentTenant() tenantId: string,
+    @CurrentUser() user: JwtPayload,
+    @Param('id') id: string,
+  ) {
+    return this.customersService.delete(tenantId, id, user.sub);
   }
 }

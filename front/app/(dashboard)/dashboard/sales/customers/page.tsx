@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
-import { Plus, Search } from 'lucide-react';
+import { Plus, Search, RotateCw } from 'lucide-react';
 import { salesApi, type Customer, type DocumentType } from '../../../../../lib/api/sales';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -17,7 +17,7 @@ export default function CustomersPage() {
   const router = useRouter();
   const [search, setSearch] = useState('');
 
-  const { data: customers = [], isLoading } = useQuery({
+  const { data: customers = [], isLoading, isError, error, refetch, isFetching } = useQuery({
     queryKey: ['sale-customers'],
     queryFn: salesApi.listCustomers,
   });
@@ -53,6 +53,20 @@ export default function CustomersPage() {
 
       {isLoading ? (
         <div className="py-16 text-center text-sm text-muted-foreground/60">Cargando clientes...</div>
+      ) : isError ? (
+        // Distinto de "sin resultados" a propósito — antes un error acá
+        // (401 durante el refresh de token, timeout, backend reiniciando)
+        // caía silenciosamente al [] por default y se veía igual que una
+        // lista vacía, sin forma de saber que en realidad falló la consulta.
+        <div className="py-16 text-center">
+          <p className="text-sm text-destructive">
+            {(error as Error)?.message ?? 'No se pudo cargar la lista de clientes.'}
+          </p>
+          <Button variant="outline" size="sm" className="mt-3" onClick={() => void refetch()} disabled={isFetching}>
+            <RotateCw size={14} className={isFetching ? 'animate-spin' : ''} />
+            {isFetching ? 'Reintentando...' : 'Reintentar'}
+          </Button>
+        </div>
       ) : filtered.length === 0 ? (
         <div className="py-16 text-center">
           <p className="text-sm text-muted-foreground/60">No se encontraron clientes.</p>

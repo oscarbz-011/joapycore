@@ -3,11 +3,25 @@
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
-import { Bell, Package, CreditCard, FileText, Settings, X, CheckCircle } from 'lucide-react';
+import { Bell, Package, CreditCard, FileText, ShieldAlert, AlertCircle, Settings, X, CheckCircle, Truck, Wrench, Clock } from 'lucide-react';
 import { alertsApi, type AlertConfig, type AlertType } from '../../../../lib/api/alerts';
+import { useAuth } from '../../../../lib/auth-context';
+import { usePendingNotifications, type PendingNotificationType } from '../../../../lib/use-pending-notifications';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
+
+// ── Pending notification type metadata ──────────────────────────────────────────
+
+const PENDING_META: Record<PendingNotificationType, { icon: React.ElementType; color: string }> = {
+  invoice:            { icon: FileText,    color: 'var(--warn)' },
+  'credit-approval':  { icon: ShieldAlert, color: 'var(--info)' },
+  'overdue-ar':       { icon: AlertCircle, color: 'var(--danger)' },
+  'ar-due-soon':      { icon: Clock,       color: 'var(--warn)' },
+  'credit-adjustment':{ icon: Wrench,      color: 'var(--warn)' },
+  'purchase-order':   { icon: Truck,       color: 'var(--danger)' },
+  delivery:           { icon: Package,     color: 'var(--warn)' },
+};
 
 // ── Alert type metadata ────────────────────────────────────────────────────────
 
@@ -37,11 +51,21 @@ const META: Record<AlertType, {
 
 const CHANNEL_LABEL: Record<string, string> = { EMAIL: 'Email', SYSTEM: 'Sistema' };
 
+function headerSubtitle(pendingCount: number, activeRulesCount: number) {
+  const parts: string[] = [];
+  if (pendingCount > 0) parts.push(`${pendingCount} pendiente${pendingCount !== 1 ? 's' : ''}`);
+  if (activeRulesCount > 0) parts.push(`${activeRulesCount} regla${activeRulesCount !== 1 ? 's' : ''} activa${activeRulesCount !== 1 ? 's' : ''}`);
+  return parts.length > 0 ? parts.join(' · ') : 'Sin novedades';
+}
+
 // ── Component ──────────────────────────────────────────────────────────────────
 
 export function AlertsDropdown() {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const { jwtPayload } = useAuth();
+  const permissions = jwtPayload?.permissions ?? [];
+  const activeModules = jwtPayload?.activeModules ?? [];
 
   const { data: configs = [], isLoading } = useQuery({
     queryKey: ['alert-configs'],
@@ -49,7 +73,8 @@ export function AlertsDropdown() {
   });
 
   const active = configs.filter((c) => c.isActive);
-  const count  = active.length;
+  const { items: pending } = usePendingNotifications(permissions, activeModules, jwtPayload?.sub);
+  const count = active.length + pending.length;
 
   useEffect(() => {
     function handle(e: MouseEvent) {
@@ -81,7 +106,7 @@ export function AlertsDropdown() {
             <div>
               <p className="text-[14px] font-semibold text-foreground">Alertas</p>
               <p className="mt-px text-[12px] text-muted-foreground">
-                {count > 0 ? `${count} regla${count !== 1 ? 's' : ''} activa${count !== 1 ? 's' : ''}` : 'Sin alertas activas'}
+                {headerSubtitle(pending.length, active.length)}
               </p>
             </div>
             <Button variant="ghost" size="icon-xs" onClick={() => setOpen(false)}>
@@ -99,46 +124,86 @@ export function AlertsDropdown() {
                   <div key={i} className="h-14 animate-pulse rounded-xl bg-muted" />
                 ))}
               </div>
-            ) : active.length === 0 ? (
+            ) : pending.length === 0 && active.length === 0 ? (
               <div className="flex flex-col items-center py-8 text-center">
                 <CheckCircle size={28} className="mb-2.5 text-muted-foreground/40" />
-                <p className="text-[13.5px] font-medium text-foreground">Sin alertas activas</p>
+                <p className="text-[13.5px] font-medium text-foreground">Sin novedades</p>
                 <p className="mt-1 text-[12.5px] text-muted-foreground">
                   Configurá alertas para recibir notificaciones automáticas
                 </p>
               </div>
             ) : (
-              <div className="flex flex-col gap-1 p-2.5">
-                {active.map((cfg) => {
-                  const meta = META[cfg.type];
-                  if (!meta) return null;
-                  const Icon = meta.icon;
-                  return (
-                    <Link
-                      key={cfg.id}
-                      href={meta.href}
-                      onClick={() => setOpen(false)}
-                      className="flex items-start gap-3 rounded-xl p-3 no-underline transition-colors hover:bg-muted"
-                    >
-                      <div
-                        className="flex size-9 shrink-0 items-center justify-center rounded-[9px]"
-                        style={{ background: `color-mix(in srgb, ${meta.color} 14%, transparent)`, color: meta.color }}
-                      >
-                        <Icon size={16} />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-[13.5px] font-semibold leading-tight text-foreground">{meta.label}</p>
-                        <p className="mt-0.5 text-[12px] leading-snug text-muted-foreground">{meta.desc(cfg)}</p>
-                        {cfg.channel && (
-                          <Badge variant="secondary" className="mt-1.5 text-[10px] font-semibold">
-                            {CHANNEL_LABEL[cfg.channel] ?? cfg.channel}
-                          </Badge>
-                        )}
-                      </div>
-                    </Link>
-                  );
-                })}
-              </div>
+              <>
+                {pending.length > 0 && (
+                  <div className="flex flex-col gap-1 p-2.5">
+                    <p className="px-1 pb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/60">
+                      Pendientes de revisar
+                    </p>
+                    {pending.map((item) => {
+                      const meta = PENDING_META[item.type];
+                      const Icon = meta.icon;
+                      return (
+                        <Link
+                          key={item.id}
+                          href={item.href}
+                          onClick={() => setOpen(false)}
+                          className="flex items-start gap-3 rounded-xl p-3 no-underline transition-colors hover:bg-muted"
+                        >
+                          <div
+                            className="flex size-9 shrink-0 items-center justify-center rounded-[9px]"
+                            style={{ background: `color-mix(in srgb, ${meta.color} 14%, transparent)`, color: meta.color }}
+                          >
+                            <Icon size={16} />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-[13.5px] font-semibold leading-tight text-foreground">{item.title}</p>
+                            <p className="mt-0.5 text-[12px] leading-snug text-muted-foreground">{item.description}</p>
+                          </div>
+                        </Link>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {pending.length > 0 && active.length > 0 && <Separator />}
+
+                {active.length > 0 && (
+                  <div className="flex flex-col gap-1 p-2.5">
+                    <p className="px-1 pb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/60">
+                      Reglas activas
+                    </p>
+                    {active.map((cfg) => {
+                      const meta = META[cfg.type];
+                      if (!meta) return null;
+                      const Icon = meta.icon;
+                      return (
+                        <Link
+                          key={cfg.id}
+                          href={meta.href}
+                          onClick={() => setOpen(false)}
+                          className="flex items-start gap-3 rounded-xl p-3 no-underline transition-colors hover:bg-muted"
+                        >
+                          <div
+                            className="flex size-9 shrink-0 items-center justify-center rounded-[9px]"
+                            style={{ background: `color-mix(in srgb, ${meta.color} 14%, transparent)`, color: meta.color }}
+                          >
+                            <Icon size={16} />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-[13.5px] font-semibold leading-tight text-foreground">{meta.label}</p>
+                            <p className="mt-0.5 text-[12px] leading-snug text-muted-foreground">{meta.desc(cfg)}</p>
+                            {cfg.channel && (
+                              <Badge variant="secondary" className="mt-1.5 text-[10px] font-semibold">
+                                {CHANNEL_LABEL[cfg.channel] ?? cfg.channel}
+                              </Badge>
+                            )}
+                          </div>
+                        </Link>
+                      );
+                    })}
+                  </div>
+                )}
+              </>
             )}
           </div>
 
