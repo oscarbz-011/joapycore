@@ -1,13 +1,11 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { DocType, DocVisibility } from '@prisma/client';
-import { Type } from 'class-transformer';
+import { DocContentFormat, DocType, DocVisibility, TemplateKind } from '@prisma/client';
 import {
   IsArray,
+  IsBoolean,
   IsDateString,
   IsEnum,
-  IsNumber,
   IsOptional,
-  IsPositive,
   IsString,
   MaxLength,
 } from 'class-validator';
@@ -27,11 +25,10 @@ export class CreateDocumentDto {
   @IsString()
   description?: string;
 
-  @ApiPropertyOptional({ description: 'Etiqueta de categoría libre (ej. "Contratos vigentes")' })
+  @ApiPropertyOptional({ description: 'ID de la categoría (DocumentCategory)' })
   @IsOptional()
   @IsString()
-  @MaxLength(100)
-  category?: string;
+  categoryId?: string;
 
   @ApiPropertyOptional({ type: [String] })
   @IsOptional()
@@ -52,29 +49,7 @@ export class CreateDocumentDto {
   @IsString({ each: true })
   allowedRoles?: string[];
 
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsString()
-  fileUrl?: string;
-
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsString()
-  fileName?: string;
-
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsNumber()
-  @IsPositive()
-  @Type(() => Number)
-  fileSizeBytes?: number;
-
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsString()
-  mimeType?: string;
-
-  @ApiPropertyOptional({ description: 'Tipo de entidad vinculada (ej. "customer", "saleOrder")' })
+  @ApiPropertyOptional({ description: 'Tipo de entidad vinculada (ej. "customer", "sale_order")' })
   @IsOptional()
   @IsString()
   entityType?: string;
@@ -89,8 +64,23 @@ export class CreateDocumentDto {
   @IsDateString()
   expiresAt?: string;
 
-  @ApiPropertyOptional({ description: 'Contenido del documento (TipTap JSON serializado)' })
+  @ApiPropertyOptional({ description: 'Contenido del documento (TipTap JSON serializado, o HTML crudo según contentFormat)' })
   @IsOptional()
   @IsString()
   content?: string;
+
+  @ApiPropertyOptional({ enum: DocContentFormat, default: DocContentFormat.TIPTAP })
+  @IsOptional()
+  @IsEnum(DocContentFormat)
+  contentFormat?: DocContentFormat;
+
+  @ApiPropertyOptional({ description: 'Marca este documento como una plantilla reutilizable' })
+  @IsOptional()
+  @IsBoolean()
+  isTemplate?: boolean;
+
+  @ApiPropertyOptional({ enum: TemplateKind, description: 'Requerido cuando isTemplate = true' })
+  @IsOptional()
+  @IsEnum(TemplateKind)
+  templateKind?: TemplateKind;
 }

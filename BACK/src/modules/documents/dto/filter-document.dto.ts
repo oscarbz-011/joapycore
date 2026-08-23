@@ -1,7 +1,7 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { DocType } from '@prisma/client';
-import { Type } from 'class-transformer';
-import { IsEnum, IsNumber, IsOptional, IsPositive, IsString } from 'class-validator';
+import { DocType, TemplateKind } from '@prisma/client';
+import { Transform, Type } from 'class-transformer';
+import { IsBoolean, IsEnum, IsNumber, IsOptional, IsPositive, IsString } from 'class-validator';
 
 export class FilterDocumentDto {
   @ApiPropertyOptional({ enum: DocType })
@@ -12,7 +12,20 @@ export class FilterDocumentDto {
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
-  category?: string;
+  categoryId?: string;
+
+  @ApiPropertyOptional({ description: 'Filtrar solo plantillas (true) o solo documentos normales (false)' })
+  @IsOptional()
+  // @Type(() => Boolean) coacciona con el constructor Boolean() — Boolean('false') da true.
+  // Se interpreta el string de la query manualmente en su lugar.
+  @Transform(({ value }) => (value === undefined ? undefined : value === true || value === 'true'))
+  @IsBoolean()
+  isTemplate?: boolean;
+
+  @ApiPropertyOptional({ enum: TemplateKind })
+  @IsOptional()
+  @IsEnum(TemplateKind)
+  templateKind?: TemplateKind;
 
   @ApiPropertyOptional()
   @IsOptional()

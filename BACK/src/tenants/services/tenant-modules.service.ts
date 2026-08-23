@@ -3,6 +3,7 @@ import {
   Injectable,
   UnprocessableEntityException,
 } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import {
   ALL_TENANT_MODULES,
   MODULE_CATALOG,
@@ -13,6 +14,7 @@ import { TenantModulesRepository } from '../repositories/tenant-modules.reposito
 export class TenantModulesService {
   constructor(
     private readonly tenantModulesRepository: TenantModulesRepository,
+    private readonly eventEmitter: EventEmitter2,
   ) {}
 
   async list(tenantId: string) {
@@ -26,7 +28,8 @@ export class TenantModulesService {
     }
 
     const definition = MODULE_CATALOG[moduleName];
-    const allModules = await this.tenantModulesRepository.findAllForTenant(tenantId);
+    const allModules =
+      await this.tenantModulesRepository.findAllForTenant(tenantId);
     const activeMap = new Map(allModules.map((m) => [m.moduleName, m.active]));
 
     if (active) {
@@ -60,8 +63,18 @@ export class TenantModulesService {
       }
     }
 
+    const wasActive = activeMap.get(moduleName) ?? false;
+
     await this.tenantModulesRepository.backfillMissing(tenantId);
     await this.tenantModulesRepository.setActive(tenantId, moduleName, active);
+
+    if (active && !wasActive) {
+      this.eventEmitter.emit('tenant.module.activated', {
+        tenantId,
+        moduleName,
+      });
+    }
+
     return this.tenantModulesRepository.findAllForTenant(tenantId);
   }
 }

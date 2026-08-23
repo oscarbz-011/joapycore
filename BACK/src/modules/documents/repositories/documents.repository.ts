@@ -1,45 +1,69 @@
-/* eslint-disable @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access */
-// Remove the eslint-disable above after running `npx prisma generate`
 import { Injectable } from '@nestjs/common';
-import { DocType, DocVisibility } from '@prisma/client';
+import { DocContentFormat, DocType, DocVisibility, Prisma, TemplateKind } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
 
-export type { DocType, DocVisibility };
+export type { DocContentFormat, DocType, DocVisibility, TemplateKind };
 
 export interface DocumentFilters {
   type?: DocType;
-  category?: string;
+  categoryId?: string;
+  isTemplate?: boolean;
+  templateKind?: TemplateKind;
   entityType?: string;
   entityId?: string;
   expiringSoonDays?: number;
   search?: string;
 }
 
-interface UpdateDocumentData {
-  type?: DocType;
-  title?: string;
+interface CreateDocumentData {
+  tenantId: string;
+  type: DocType;
+  title: string;
   description?: string;
-  category?: string;
+  categoryId?: string;
   tags?: string[];
-  visibility?: DocVisibility;
+  visibility: DocVisibility;
   allowedRoles?: string[];
-  fileUrl?: string;
-  fileName?: string;
-  fileSizeBytes?: number;
-  mimeType?: string;
   entityType?: string;
   entityId?: string;
   expiresAt?: Date;
   content?: string;
+  contentFormat?: DocContentFormat;
+  isTemplate?: boolean;
+  templateKind?: TemplateKind;
+  variables?: Prisma.InputJsonValue;
+  fileRecordId?: string;
+  uploadedById?: string;
+}
+
+interface UpdateDocumentData {
+  type?: DocType;
+  title?: string;
+  description?: string;
+  categoryId?: string | null;
+  tags?: string[];
+  visibility?: DocVisibility;
+  allowedRoles?: string[];
+  entityType?: string;
+  entityId?: string;
+  expiresAt?: Date;
+  content?: string;
+  contentFormat?: DocContentFormat;
+  isTemplate?: boolean;
+  templateKind?: TemplateKind | null;
+  variables?: Prisma.InputJsonValue;
+  fileRecordId?: string | null;
 }
 
 @Injectable()
 export class DocumentsRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private get db(): any {
-    return (this.prisma as any).document;
+  private get include() {
+    return {
+      category: true,
+      fileRecord: true,
+    } satisfies Prisma.DocumentInclude;
   }
 
   findAll(tenantId: string, filters: DocumentFilters = {}) {
@@ -52,70 +76,56 @@ export class DocumentsRepository {
           })()
         : undefined;
 
-    return this.db.findMany({
+    return this.prisma.document.findMany({
       where: {
         tenantId,
         deletedAt: null,
         ...(filters.type && { type: filters.type }),
-        ...(filters.category && { category: filters.category }),
+        ...(filters.categoryId && { categoryId: filters.categoryId }),
+        ...(filters.isTemplate !== undefined && { isTemplate: filters.isTemplate }),
+        ...(filters.templateKind && { templateKind: filters.templateKind }),
         ...(filters.entityType && { entityType: filters.entityType }),
         ...(filters.entityId && { entityId: filters.entityId }),
         ...(filters.search && {
           OR: [
             { title: { contains: filters.search, mode: 'insensitive' } },
             { description: { contains: filters.search, mode: 'insensitive' } },
-            { category: { contains: filters.search, mode: 'insensitive' } },
+            { category: { name: { contains: filters.search, mode: 'insensitive' } } },
           ],
         }),
         ...(deadline && { expiresAt: { not: null, lte: deadline } }),
       },
+      include: this.include,
       orderBy: { createdAt: 'desc' },
     });
   }
 
   findById(tenantId: string, id: string) {
-    return this.db.findFirst({ where: { id, tenantId, deletedAt: null } });
-  }
-
-  create(data: {
-    tenantId: string;
-    type: DocType;
-    title: string;
-    description?: string;
-    category?: string;
-    tags?: string[];
-    visibility: DocVisibility;
-    allowedRoles?: string[];
-    fileUrl?: string;
-    fileName?: string;
-    fileSizeBytes?: number;
-    mimeType?: string;
-    entityType?: string;
-    entityId?: string;
-    expiresAt?: Date;
-    content?: string;
-    uploadedById?: string;
-  }) {
-    return this.db.create({ data });
-  }
-
-  update(tenantId: string, id: string, data: UpdateDocumentData) {
-    return this.db.updateMany({ where: { id, tenantId, deletedAt: null }, data });
-  }
-
-  softDelete(tenantId: string, id: string) {
-    return this.db.updateMany({
+    return this.prisma.document.findFirst({
       where: { id, tenantId, deletedAt: null },
-      data: { deletedAt: new Date() },
+      include: this.include,
     });
   }
 
-  findCategories(tenantId: string) {
-    return this.db.findMany({
-      where: { tenantId, deletedAt: null, category: { not: null } },
-      select: { category: true },
-      distinct: ['category'],
-      orderBy: { category: 'asc' },
+  findTemplate(tenantId: string, templateKind: TemplateKind) {
+    return this.prisma.document.findFirst({
+      where: { tenantId, templateKind, isTemplate: true, deletedAt: null },
+      include: this.include,
+    });
+  }
+
+  create(data: CreateDocumentData) {
+    return this.prisma.document.create({ data, include: this.include });
+  }
+
+  update(tenantId: string, id: string, data: UpdateDocumentData) {
+    return this.prisma.document.updateMany({ where: { id, tenantId, deletedAt: null }, data });
+  }
+
+  softDelete(tenantId: string, id: string) {
+    return this.prisma.document.updateMany({
+      where: { id, tenantId, deletedAt: null },
+      data: { deletedAt: new Date() },
     });
   }
 }

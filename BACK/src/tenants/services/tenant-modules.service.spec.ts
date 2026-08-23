@@ -1,25 +1,45 @@
-import { BadRequestException, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
+import {
+  BadRequestException,
+  NotFoundException,
+  UnprocessableEntityException,
+} from '@nestjs/common';
 import { TenantModulesService } from './tenant-modules.service';
 
 function makeModule(name: string, active = true) {
-  return { id: `mod-${name}`, tenantId: 'tenant-1', moduleName: name, active, activatedAt: null };
+  return {
+    id: `mod-${name}`,
+    tenantId: 'tenant-1',
+    moduleName: name,
+    active,
+    activatedAt: null,
+  };
 }
 
 describe('TenantModulesService', () => {
   let service: TenantModulesService;
-  let repo: { findAllForTenant: jest.Mock; setActive: jest.Mock };
+  let repo: {
+    findAllForTenant: jest.Mock;
+    setActive: jest.Mock;
+    backfillMissing: jest.Mock;
+  };
+  let eventEmitter: { emit: jest.Mock };
 
   beforeEach(() => {
-    repo = { findAllForTenant: jest.fn(), setActive: jest.fn() };
-    service = new TenantModulesService(repo as any);
+    repo = {
+      findAllForTenant: jest.fn(),
+      setActive: jest.fn(),
+      backfillMissing: jest.fn().mockResolvedValue(undefined),
+    };
+    eventEmitter = { emit: jest.fn() };
+    service = new TenantModulesService(repo as any, eventEmitter as any);
   });
 
   // ── list ───────────────────────────────────────────────────────────────────
 
   describe('list', () => {
-    it('delegates to repository', () => {
+    it('delegates to repository', async () => {
       repo.findAllForTenant.mockResolvedValue([makeModule('inventory')]);
-      service.list('tenant-1');
+      await service.list('tenant-1');
       expect(repo.findAllForTenant).toHaveBeenCalledWith('tenant-1');
     });
   });
@@ -29,21 +49,33 @@ describe('TenantModulesService', () => {
   describe('setActive', () => {
     it('throws BadRequestException for unknown module name', async () => {
       repo.findAllForTenant.mockResolvedValue([]);
-      await expect(service.setActive('tenant-1', 'nonexistent', true)).rejects.toBeInstanceOf(BadRequestException);
+      await expect(
+        service.setActive('tenant-1', 'nonexistent', true),
+      ).rejects.toBeInstanceOf(BadRequestException);
       expect(repo.setActive).not.toHaveBeenCalled();
     });
 
     it('throws NotFoundException when module is not configured for tenant', async () => {
       // sales has no inactive deps when inventory is active
-      repo.findAllForTenant.mockResolvedValue([makeModule('inventory', true), makeModule('sales', false)]);
+      repo.findAllForTenant.mockResolvedValue([
+        makeModule('inventory', true),
+        makeModule('sales', false),
+      ]);
       repo.setActive.mockResolvedValue(0);
-      await expect(service.setActive('tenant-1', 'sales', true)).rejects.toBeInstanceOf(NotFoundException);
+      await expect(
+        service.setActive('tenant-1', 'sales', true),
+      ).rejects.toBeInstanceOf(NotFoundException);
     });
 
     it('throws UnprocessableEntityException when activating a module with inactive dependencies', async () => {
       // inventory is inactive — sales cannot be activated
-      repo.findAllForTenant.mockResolvedValue([makeModule('inventory', false), makeModule('sales', false)]);
-      await expect(service.setActive('tenant-1', 'sales', true)).rejects.toBeInstanceOf(UnprocessableEntityException);
+      repo.findAllForTenant.mockResolvedValue([
+        makeModule('inventory', false),
+        makeModule('sales', false),
+      ]);
+      await expect(
+        service.setActive('tenant-1', 'sales', true),
+      ).rejects.toBeInstanceOf(UnprocessableEntityException);
       expect(repo.setActive).not.toHaveBeenCalled();
     });
 
@@ -54,14 +86,19 @@ describe('TenantModulesService', () => {
         makeModule('sales', true),
         makeModule('billing', true),
       ]);
-      await expect(service.setActive('tenant-1', 'sales', false)).rejects.toBeInstanceOf(UnprocessableEntityException);
+      await expect(
+        service.setActive('tenant-1', 'sales', false),
+      ).rejects.toBeInstanceOf(UnprocessableEntityException);
       expect(repo.setActive).not.toHaveBeenCalled();
     });
 
     it('activates a module when its dependencies are active', async () => {
-      const allModules = [makeModule('inventory', true), makeModule('sales', false)];
+      const allModules = [
+        makeModule('inventory', true),
+        makeModule('sales', false),
+      ];
       repo.findAllForTenant
-        .mockResolvedValueOnce(allModules)            // called in setActive for dep check
+        .mockResolvedValueOnce(allModules) // called in setActive for dep check
         .mockResolvedValueOnce([...allModules, makeModule('sales', true)]); // final list
       repo.setActive.mockResolvedValue(1);
 
@@ -69,6 +106,42 @@ describe('TenantModulesService', () => {
 
       expect(repo.setActive).toHaveBeenCalledWith('tenant-1', 'sales', true);
       expect(result).toBeDefined();
+    });
+
+    it('emits tenant.module.activated when a module transitions from inactive to active', async () => {
+      const allModules = [
+        makeModule('inventory', true),
+        makeModule('documents', false),
+      ];
+      repo.findAllForTenant
+        .mockResolvedValueOnce(allModules)
+        .mockResolvedValueOnce([...allModules, makeModule('documents', true)]);
+      repo.setActive.mockResolvedValue(1);
+
+      await service.setActive('tenant-1', 'documents', true);
+
+      expect(eventEmitter.emit).toHaveBeenCalledWith(
+        'tenant.module.activated',
+        {
+          tenantId: 'tenant-1',
+          moduleName: 'documents',
+        },
+      );
+    });
+
+    it('does not re-emit tenant.module.activated when the module was already active', async () => {
+      const allModules = [
+        makeModule('inventory', true),
+        makeModule('documents', true),
+      ];
+      repo.findAllForTenant
+        .mockResolvedValueOnce(allModules)
+        .mockResolvedValueOnce(allModules);
+      repo.setActive.mockResolvedValue(1);
+
+      await service.setActive('tenant-1', 'documents', true);
+
+      expect(eventEmitter.emit).not.toHaveBeenCalled();
     });
 
     it('deactivates a module without dependents', async () => {

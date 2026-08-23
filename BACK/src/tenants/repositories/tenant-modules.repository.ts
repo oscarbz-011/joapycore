@@ -20,7 +20,9 @@ export class TenantModulesRepository {
     industry: string | null | undefined,
     client: PrismaClientOrTx = this.prisma,
   ) {
-    const template = (industry ? MODULE_TEMPLATES[industry] : null) ?? MODULE_TEMPLATES['default'];
+    const template =
+      (industry ? MODULE_TEMPLATES[industry] : null) ??
+      MODULE_TEMPLATES['default'];
     const rows = ALL_TENANT_MODULES.map((moduleName) => {
       const active = template.includes(moduleName);
       return {
@@ -64,16 +66,25 @@ export class TenantModulesRepository {
    * Inserta filas para módulos del catálogo que aún no existen para el tenant.
    * Útil al agregar nuevos módulos al catálogo en tenants ya existentes.
    */
-  async backfillMissing(tenantId: string, client: PrismaClientOrTx = this.prisma) {
+  async backfillMissing(
+    tenantId: string,
+    client: PrismaClientOrTx = this.prisma,
+  ) {
     const existing = await this.prisma.tenantModule.findMany({
       where: { tenantId },
       select: { moduleName: true },
     });
     const existingNames = new Set(existing.map((m) => m.moduleName));
-    const missing = ALL_TENANT_MODULES.filter((name) => !existingNames.has(name));
+    const missing = ALL_TENANT_MODULES.filter(
+      (name) => !existingNames.has(name),
+    );
     if (missing.length === 0) return;
     await client.tenantModule.createMany({
-      data: missing.map((moduleName) => ({ tenantId, moduleName, active: false })),
+      data: missing.map((moduleName) => ({
+        tenantId,
+        moduleName,
+        active: false,
+      })),
       skipDuplicates: true,
     });
   }

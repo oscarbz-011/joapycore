@@ -1,35 +1,81 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
-import { DocType, DocVisibility } from '@prisma/client';
+import { DocType, DocVisibility, TemplateKind } from '@prisma/client';
 import { DocumentsService } from './services/documents.service';
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 
-function makeDoc(overrides: Partial<ReturnType<typeof makeDoc>> = {}) {
+interface DocFixture {
+  id: string;
+  tenantId: string;
+  type: DocType;
+  title: string;
+  description: string | null;
+  categoryId: string | null;
+  tags: string[];
+  visibility: DocVisibility;
+  allowedRoles: string[];
+  fileRecordId: string | null;
+  fileRecord: { id: string; originalName: string; mimeType: string } | null;
+  entityType: string | null;
+  entityId: string | null;
+  expiresAt: Date | null;
+  content: string | null;
+  isTemplate: boolean;
+  templateKind: TemplateKind | null;
+  variables: unknown;
+  uploadedById: string;
+  createdAt: Date;
+  updatedAt: Date;
+  deletedAt: Date | null;
+}
+
+function makeDoc(overrides: Partial<DocFixture> = {}): DocFixture {
   return {
     id: 'doc-1',
     tenantId: 'tenant-1',
     type: DocType.INTERNAL,
     title: 'Test doc',
     description: null,
-    category: 'Legal',
+    categoryId: null,
     tags: [],
     visibility: DocVisibility.PUBLIC,
-    allowedRoles: [] as string[],
-    fileUrl: null,
-    fileName: null,
-    fileSizeBytes: null,
-    mimeType: null,
+    allowedRoles: [],
+    fileRecordId: null,
+    fileRecord: null,
     entityType: null,
     entityId: null,
     expiresAt: null,
     content: null,
+    isTemplate: false,
+    templateKind: null,
+    variables: null,
     uploadedById: 'user-1',
     createdAt: new Date(),
     updatedAt: new Date(),
+    deletedAt: null,
+    ...overrides,
+  };
+}
+
+interface CategoryFixture {
+  id: string;
+  tenantId: string;
+  name: string;
+  createdAt: Date;
+  deletedAt: Date | null;
+}
+
+function makeCategory(overrides: Partial<CategoryFixture> = {}): CategoryFixture {
+  return {
+    id: 'cat-1',
+    tenantId: 'tenant-1',
+    name: 'Legal',
+    createdAt: new Date(),
     deletedAt: null,
     ...overrides,
   };
@@ -42,24 +88,56 @@ describe('DocumentsService', () => {
   let repo: {
     findAll: jest.Mock;
     findById: jest.Mock;
+    findTemplate: jest.Mock;
     create: jest.Mock;
     update: jest.Mock;
     softDelete: jest.Mock;
-    findCategories: jest.Mock;
   };
+  let categoriesRepo: {
+    findAll: jest.Mock;
+    findById: jest.Mock;
+    findByName: jest.Mock;
+    create: jest.Mock;
+    update: jest.Mock;
+    softDelete: jest.Mock;
+  };
+  let filesService: { upload: jest.Mock; delete: jest.Mock; getFileBuffer: jest.Mock };
+  let emailService: { sendWithAttachment: jest.Mock };
+  let prisma: { customer: { findFirst: jest.Mock }; saleOrder: { findFirst: jest.Mock } };
   let eventEmitter: { emit: jest.Mock };
 
   beforeEach(() => {
     repo = {
       findAll: jest.fn(),
       findById: jest.fn(),
+      findTemplate: jest.fn().mockResolvedValue(null),
       create: jest.fn(),
       update: jest.fn().mockResolvedValue({ count: 1 }),
       softDelete: jest.fn().mockResolvedValue({ count: 1 }),
-      findCategories: jest.fn(),
+    };
+    categoriesRepo = {
+      findAll: jest.fn(),
+      findById: jest.fn().mockResolvedValue(null),
+      findByName: jest.fn().mockResolvedValue(null),
+      create: jest.fn(),
+      update: jest.fn().mockResolvedValue({ count: 1 }),
+      softDelete: jest.fn().mockResolvedValue({ count: 1 }),
+    };
+    filesService = { upload: jest.fn(), delete: jest.fn(), getFileBuffer: jest.fn() };
+    emailService = { sendWithAttachment: jest.fn() };
+    prisma = {
+      customer: { findFirst: jest.fn() },
+      saleOrder: { findFirst: jest.fn() },
     };
     eventEmitter = { emit: jest.fn() };
-    service = new DocumentsService(repo as any, eventEmitter as any);
+    service = new DocumentsService(
+      repo as any,
+      categoriesRepo as any,
+      filesService as any,
+      emailService as any,
+      prisma as any,
+      eventEmitter as any,
+    );
   });
 
   // ── findAll ───────────────────────────────────────────────────────────────
@@ -181,6 +259,7 @@ describe('DocumentsService', () => {
         'tenant-1',
         { type: DocType.INTERNAL, title: 'Test', visibility: DocVisibility.PUBLIC },
         'user-1',
+        ['documents:manage'],
       );
 
       expect(repo.create).toHaveBeenCalledWith(
@@ -201,6 +280,7 @@ describe('DocumentsService', () => {
           'tenant-1',
           { type: DocType.INTERNAL, title: 'Secret', visibility: DocVisibility.ROLE_BASED },
           'user-1',
+          ['documents:manage'],
         ),
       ).rejects.toBeInstanceOf(BadRequestException);
 
@@ -218,6 +298,7 @@ describe('DocumentsService', () => {
             allowedRoles: [],
           },
           'user-1',
+          ['documents:manage'],
         ),
       ).rejects.toBeInstanceOf(BadRequestException);
     });
@@ -235,6 +316,7 @@ describe('DocumentsService', () => {
             allowedRoles: ['Admin'],
           },
           'user-1',
+          ['documents:manage'],
         ),
       ).resolves.toBeDefined();
     });
@@ -247,11 +329,117 @@ describe('DocumentsService', () => {
         'tenant-1',
         { type: DocType.CONTRACT, title: 'Expiring', visibility: DocVisibility.PUBLIC, expiresAt: isoDate },
         'user-1',
+        ['documents:manage'],
       );
 
       expect(repo.create).toHaveBeenCalledWith(
         expect.objectContaining({ expiresAt: new Date(isoDate) }),
       );
+    });
+
+    it('throws BadRequestException when categoryId does not exist for tenant', async () => {
+      categoriesRepo.findById.mockResolvedValue(null);
+
+      await expect(
+        service.create(
+          'tenant-1',
+          { type: DocType.INTERNAL, title: 'Test', visibility: DocVisibility.PUBLIC, categoryId: 'ghost' },
+          'user-1',
+          ['documents:manage'],
+        ),
+      ).rejects.toBeInstanceOf(BadRequestException);
+
+      expect(repo.create).not.toHaveBeenCalled();
+    });
+
+    it('creates a generic template (isTemplate=true) without a templateKind', async () => {
+      repo.create.mockResolvedValue(makeDoc({ isTemplate: true, templateKind: null }));
+
+      await expect(
+        service.create(
+          'tenant-1',
+          { type: DocType.CONTRACT, title: 'Plantilla genérica', visibility: DocVisibility.PRIVATE, isTemplate: true },
+          'user-1',
+          ['documents:templates:manage'],
+        ),
+      ).resolves.toBeDefined();
+
+      expect(repo.findTemplate).not.toHaveBeenCalled();
+    });
+
+    it('throws ConflictException when a template of that kind already exists', async () => {
+      repo.findTemplate.mockResolvedValue(makeDoc({ id: 'existing-template', isTemplate: true }));
+
+      await expect(
+        service.create(
+          'tenant-1',
+          {
+            type: DocType.CONTRACT,
+            title: 'Plantilla 2',
+            visibility: DocVisibility.PRIVATE,
+            isTemplate: true,
+            templateKind: TemplateKind.SALE_CONTRACT,
+          },
+          'user-1',
+          ['documents:templates:manage'],
+        ),
+      ).rejects.toBeInstanceOf(ConflictException);
+
+      expect(repo.create).not.toHaveBeenCalled();
+    });
+
+    it('creates a template doc when no other template of that kind exists', async () => {
+      repo.findTemplate.mockResolvedValue(null);
+      repo.create.mockResolvedValue(
+        makeDoc({ isTemplate: true, templateKind: TemplateKind.SALE_CONTRACT }),
+      );
+
+      await expect(
+        service.create(
+          'tenant-1',
+          {
+            type: DocType.CONTRACT,
+            title: 'Plantilla',
+            visibility: DocVisibility.PRIVATE,
+            isTemplate: true,
+            templateKind: TemplateKind.SALE_CONTRACT,
+          },
+          'user-1',
+          ['documents:templates:manage'],
+        ),
+      ).resolves.toBeDefined();
+    });
+
+    it('throws ForbiddenException when creating a template without documents:templates:manage', async () => {
+      await expect(
+        service.create(
+          'tenant-1',
+          {
+            type: DocType.CONTRACT,
+            title: 'Plantilla',
+            visibility: DocVisibility.PRIVATE,
+            isTemplate: true,
+            templateKind: TemplateKind.SALE_CONTRACT,
+          },
+          'user-1',
+          ['documents:manage'],
+        ),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+
+      expect(repo.create).not.toHaveBeenCalled();
+    });
+
+    it('throws ForbiddenException when creating a regular doc without documents:manage', async () => {
+      await expect(
+        service.create(
+          'tenant-1',
+          { type: DocType.INTERNAL, title: 'Test', visibility: DocVisibility.PUBLIC },
+          'user-1',
+          ['documents:templates:manage'],
+        ),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+
+      expect(repo.create).not.toHaveBeenCalled();
     });
   });
 
@@ -262,7 +450,13 @@ describe('DocumentsService', () => {
       const existing = makeDoc();
       repo.findById.mockResolvedValueOnce(existing).mockResolvedValueOnce({ ...existing, title: 'Updated' });
 
-      const result = await service.update('tenant-1', 'doc-1', { title: 'Updated' }, 'user-1');
+      const result = await service.update(
+        'tenant-1',
+        'doc-1',
+        { title: 'Updated' },
+        'user-1',
+        ['documents:manage'],
+      );
 
       expect(repo.update).toHaveBeenCalledWith('tenant-1', 'doc-1', expect.objectContaining({ title: 'Updated' }));
       expect(eventEmitter.emit).toHaveBeenCalledWith('audit.log', expect.objectContaining({
@@ -276,7 +470,7 @@ describe('DocumentsService', () => {
       repo.findById.mockResolvedValue(null);
 
       await expect(
-        service.update('tenant-1', 'ghost', { title: 'X' }, 'user-1'),
+        service.update('tenant-1', 'ghost', { title: 'X' }, 'user-1', ['documents:manage']),
       ).rejects.toBeInstanceOf(NotFoundException);
 
       expect(repo.update).not.toHaveBeenCalled();
@@ -286,8 +480,47 @@ describe('DocumentsService', () => {
       repo.findById.mockResolvedValue(makeDoc());
 
       await expect(
-        service.update('tenant-1', 'doc-1', { visibility: DocVisibility.ROLE_BASED, allowedRoles: [] }, 'user-1'),
+        service.update(
+          'tenant-1',
+          'doc-1',
+          { visibility: DocVisibility.ROLE_BASED, allowedRoles: [] },
+          'user-1',
+          ['documents:manage'],
+        ),
       ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('allows updating a template to keep its own templateKind (excludes itself from the conflict check)', async () => {
+      const existing = makeDoc({ isTemplate: true, templateKind: TemplateKind.SALE_CONTRACT });
+      repo.findById.mockResolvedValueOnce(existing).mockResolvedValueOnce(existing);
+      repo.findTemplate.mockResolvedValue(existing);
+
+      await expect(
+        service.update(
+          'tenant-1',
+          'doc-1',
+          { templateKind: TemplateKind.SALE_CONTRACT, title: 'Plantilla renombrada' },
+          'user-1',
+          ['documents:templates:manage'],
+        ),
+      ).resolves.toBeDefined();
+    });
+
+    it('throws ForbiddenException when updating a template without documents:templates:manage', async () => {
+      const existing = makeDoc({ isTemplate: true, templateKind: TemplateKind.SALE_CONTRACT });
+      repo.findById.mockResolvedValue(existing);
+
+      await expect(
+        service.update(
+          'tenant-1',
+          'doc-1',
+          { title: 'X' },
+          'user-1',
+          ['documents:manage'],
+        ),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+
+      expect(repo.update).not.toHaveBeenCalled();
     });
   });
 
@@ -297,7 +530,7 @@ describe('DocumentsService', () => {
     it('soft-deletes doc and emits audit.log', async () => {
       repo.findById.mockResolvedValue(makeDoc());
 
-      await service.remove('tenant-1', 'doc-1', 'user-1');
+      await service.remove('tenant-1', 'doc-1', 'user-1', ['documents:manage']);
 
       expect(repo.softDelete).toHaveBeenCalledWith('tenant-1', 'doc-1');
       expect(eventEmitter.emit).toHaveBeenCalledWith('audit.log', expect.objectContaining({
@@ -310,34 +543,181 @@ describe('DocumentsService', () => {
       repo.findById.mockResolvedValue(null);
 
       await expect(
-        service.remove('tenant-1', 'ghost', 'user-1'),
+        service.remove('tenant-1', 'ghost', 'user-1', ['documents:manage']),
       ).rejects.toBeInstanceOf(NotFoundException);
+
+      expect(repo.softDelete).not.toHaveBeenCalled();
+    });
+
+    it('throws ForbiddenException when removing a template without documents:templates:manage', async () => {
+      repo.findById.mockResolvedValue(makeDoc({ isTemplate: true, templateKind: TemplateKind.SALE_CONTRACT }));
+
+      await expect(
+        service.remove('tenant-1', 'doc-1', 'user-1', ['documents:manage']),
+      ).rejects.toBeInstanceOf(ForbiddenException);
 
       expect(repo.softDelete).not.toHaveBeenCalled();
     });
   });
 
-  // ── getCategories ─────────────────────────────────────────────────────────
+  // ── categorías ────────────────────────────────────────────────────────────
 
-  describe('getCategories', () => {
-    it('returns non-null categories from repo', async () => {
-      repo.findCategories.mockResolvedValue([
-        { category: 'Legal' },
-        { category: 'Finanzas' },
-        { category: null },
-      ]);
+  describe('listCategories', () => {
+    it('returns categories from repo', async () => {
+      categoriesRepo.findAll.mockResolvedValue([makeCategory(), makeCategory({ id: 'cat-2', name: 'Finanzas' })]);
 
-      const result = await service.getCategories('tenant-1');
+      const result = await service.listCategories('tenant-1');
 
-      expect(result).toEqual(['Legal', 'Finanzas']);
+      expect(result).toHaveLength(2);
+    });
+  });
+
+  describe('createCategory', () => {
+    it('creates category and emits audit.log', async () => {
+      categoriesRepo.findByName.mockResolvedValue(null);
+      const created = makeCategory();
+      categoriesRepo.create.mockResolvedValue(created);
+
+      const result = await service.createCategory('tenant-1', { name: 'Legal' }, 'user-1');
+
+      expect(categoriesRepo.create).toHaveBeenCalledWith('tenant-1', 'Legal');
+      expect(eventEmitter.emit).toHaveBeenCalledWith('audit.log', expect.objectContaining({
+        action: 'document_category.created',
+      }));
+      expect(result.id).toBe('cat-1');
     });
 
-    it('returns empty array when no categories exist', async () => {
-      repo.findCategories.mockResolvedValue([]);
+    it('throws ConflictException when a category with that name already exists', async () => {
+      categoriesRepo.findByName.mockResolvedValue(makeCategory());
 
-      const result = await service.getCategories('tenant-1');
+      await expect(
+        service.createCategory('tenant-1', { name: 'Legal' }, 'user-1'),
+      ).rejects.toBeInstanceOf(ConflictException);
 
-      expect(result).toEqual([]);
+      expect(categoriesRepo.create).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('updateCategory', () => {
+    it('throws NotFoundException when category does not exist', async () => {
+      categoriesRepo.findById.mockResolvedValue(null);
+
+      await expect(
+        service.updateCategory('tenant-1', 'ghost', { name: 'X' }, 'user-1'),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('throws ConflictException when renaming to an existing name', async () => {
+      categoriesRepo.findById.mockResolvedValue(makeCategory());
+      categoriesRepo.findByName.mockResolvedValue(makeCategory({ id: 'cat-2', name: 'Finanzas' }));
+
+      await expect(
+        service.updateCategory('tenant-1', 'cat-1', { name: 'Finanzas' }, 'user-1'),
+      ).rejects.toBeInstanceOf(ConflictException);
+    });
+  });
+
+  describe('sendEmail', () => {
+    const fileRecord = { id: 'file-1', originalName: 'contrato.pdf', mimeType: 'application/pdf' };
+
+    it('sends to the explicit "to" address when provided', async () => {
+      repo.findById.mockResolvedValue(makeDoc({ fileRecordId: 'file-1', fileRecord }));
+      filesService.getFileBuffer.mockResolvedValue(Buffer.from('pdf'));
+
+      await service.sendEmail('tenant-1', 'doc-1', 'user-1', ['documents:manage'], 'explicit@example.com');
+
+      expect(emailService.sendWithAttachment).toHaveBeenCalledWith(
+        expect.objectContaining({ to: 'explicit@example.com' }),
+      );
+    });
+
+    it('resolves the recipient from a linked customer entity', async () => {
+      repo.findById.mockResolvedValue(
+        makeDoc({ fileRecordId: 'file-1', fileRecord, entityType: 'customer', entityId: 'cust-1' }),
+      );
+      filesService.getFileBuffer.mockResolvedValue(Buffer.from('pdf'));
+      prisma.customer.findFirst.mockResolvedValue({ email: 'cliente@example.com' });
+
+      await service.sendEmail('tenant-1', 'doc-1', 'user-1', ['documents:manage']);
+
+      expect(emailService.sendWithAttachment).toHaveBeenCalledWith(
+        expect.objectContaining({ to: 'cliente@example.com' }),
+      );
+    });
+
+    it('resolves the recipient from a linked sale_order entity via its customer', async () => {
+      repo.findById.mockResolvedValue(
+        makeDoc({ fileRecordId: 'file-1', fileRecord, entityType: 'sale_order', entityId: 'order-1' }),
+      );
+      filesService.getFileBuffer.mockResolvedValue(Buffer.from('pdf'));
+      prisma.saleOrder.findFirst.mockResolvedValue({ customer: { email: 'venta@example.com' } });
+
+      await service.sendEmail('tenant-1', 'doc-1', 'user-1', ['documents:manage']);
+
+      expect(emailService.sendWithAttachment).toHaveBeenCalledWith(
+        expect.objectContaining({ to: 'venta@example.com' }),
+      );
+    });
+
+    it('throws BadRequestException when the document has no file attached', async () => {
+      repo.findById.mockResolvedValue(makeDoc({ fileRecordId: null, fileRecord: null }));
+
+      await expect(
+        service.sendEmail('tenant-1', 'doc-1', 'user-1', ['documents:manage']),
+      ).rejects.toBeInstanceOf(BadRequestException);
+
+      expect(emailService.sendWithAttachment).not.toHaveBeenCalled();
+    });
+
+    it('throws BadRequestException when no recipient can be resolved', async () => {
+      repo.findById.mockResolvedValue(makeDoc({ fileRecordId: 'file-1', fileRecord }));
+
+      await expect(
+        service.sendEmail('tenant-1', 'doc-1', 'user-1', ['documents:manage']),
+      ).rejects.toBeInstanceOf(BadRequestException);
+
+      expect(emailService.sendWithAttachment).not.toHaveBeenCalled();
+    });
+
+    it('throws NotFoundException when the document does not exist', async () => {
+      repo.findById.mockResolvedValue(null);
+
+      await expect(
+        service.sendEmail('tenant-1', 'ghost', 'user-1', ['documents:manage']),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('throws ForbiddenException when emailing a template without documents:templates:manage', async () => {
+      repo.findById.mockResolvedValue(
+        makeDoc({ isTemplate: true, templateKind: TemplateKind.SALE_CONTRACT, fileRecordId: 'file-1', fileRecord }),
+      );
+
+      await expect(
+        service.sendEmail('tenant-1', 'doc-1', 'user-1', ['documents:manage']),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+
+      expect(emailService.sendWithAttachment).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('removeCategory', () => {
+    it('soft-deletes category and emits audit.log', async () => {
+      categoriesRepo.findById.mockResolvedValue(makeCategory());
+
+      await service.removeCategory('tenant-1', 'cat-1', 'user-1');
+
+      expect(categoriesRepo.softDelete).toHaveBeenCalledWith('tenant-1', 'cat-1');
+      expect(eventEmitter.emit).toHaveBeenCalledWith('audit.log', expect.objectContaining({
+        action: 'document_category.deleted',
+      }));
+    });
+
+    it('throws NotFoundException when category does not exist', async () => {
+      categoriesRepo.findById.mockResolvedValue(null);
+
+      await expect(
+        service.removeCategory('tenant-1', 'ghost', 'user-1'),
+      ).rejects.toBeInstanceOf(NotFoundException);
     });
   });
 });

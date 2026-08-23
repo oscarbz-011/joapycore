@@ -1,10 +1,16 @@
 'use client';
 
+import { forwardRef, useImperativeHandle } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
+import { Table } from '@tiptap/extension-table';
+import { TableRow } from '@tiptap/extension-table-row';
+import { TableCell } from '@tiptap/extension-table-cell';
+import { TableHeader } from '@tiptap/extension-table-header';
 import {
   Bold, Italic, Strikethrough, Code, List, ListOrdered,
   Quote, Minus, Undo, Redo, Heading1, Heading2, Heading3,
+  Table as TableIcon, Rows3, Columns3, Trash2,
 } from 'lucide-react';
 
 // ── Toolbar button ─────────────────────────────────────────────────────────────
@@ -53,21 +59,37 @@ interface RichTextEditorProps {
   readOnly?: boolean;
 }
 
-export function RichTextEditor({
+export interface RichTextEditorHandle {
+  insertToken: (token: string) => void;
+}
+
+export const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorProps>(function RichTextEditor({
   content,
   onChange,
   placeholder = 'Escribí el contenido del documento...',
   minHeight = 240,
   readOnly = false,
-}: RichTextEditorProps) {
+}, ref) {
   const editor = useEditor({
-    extensions: [StarterKit],
+    extensions: [
+      StarterKit,
+      Table.configure({ resizable: false }),
+      TableRow,
+      TableHeader,
+      TableCell,
+    ],
     content: content ? JSON.parse(content) : undefined,
     editable: !readOnly,
     onUpdate: ({ editor }) => {
       onChange?.(JSON.stringify(editor.getJSON()));
     },
   });
+
+  useImperativeHandle(ref, () => ({
+    insertToken: (token: string) => {
+      editor?.chain().focus().insertContent(token).run();
+    },
+  }), [editor]);
 
   if (!editor) return null;
 
@@ -173,6 +195,51 @@ export function RichTextEditor({
           >
             <Minus size={14} />
           </ToolbarBtn>
+
+          <Divider />
+
+          <ToolbarBtn
+            title="Insertar tabla"
+            active={editor.isActive('table')}
+            onClick={() => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()}
+          >
+            <TableIcon size={14} />
+          </ToolbarBtn>
+          <ToolbarBtn
+            title="Agregar fila"
+            disabled={!editor.isActive('table')}
+            onClick={() => editor.chain().focus().addRowAfter().run()}
+          >
+            <Rows3 size={14} />
+          </ToolbarBtn>
+          <ToolbarBtn
+            title="Eliminar fila"
+            disabled={!editor.isActive('table')}
+            onClick={() => editor.chain().focus().deleteRow().run()}
+          >
+            <Trash2 size={14} />
+          </ToolbarBtn>
+          <ToolbarBtn
+            title="Agregar columna"
+            disabled={!editor.isActive('table')}
+            onClick={() => editor.chain().focus().addColumnAfter().run()}
+          >
+            <Columns3 size={14} />
+          </ToolbarBtn>
+          <ToolbarBtn
+            title="Eliminar columna"
+            disabled={!editor.isActive('table')}
+            onClick={() => editor.chain().focus().deleteColumn().run()}
+          >
+            <Trash2 size={14} />
+          </ToolbarBtn>
+          <ToolbarBtn
+            title="Eliminar tabla"
+            disabled={!editor.isActive('table')}
+            onClick={() => editor.chain().focus().deleteTable().run()}
+          >
+            <Trash2 size={14} className="opacity-70" />
+          </ToolbarBtn>
         </div>
       )}
 
@@ -196,6 +263,9 @@ export function RichTextEditor({
             [&_.tiptap_blockquote]:border-l-4 [&_.tiptap_blockquote]:border-zinc-300 [&_.tiptap_blockquote]:dark:border-zinc-600 [&_.tiptap_blockquote]:pl-3 [&_.tiptap_blockquote]:text-zinc-500
             [&_.tiptap_code]:bg-zinc-100 [&_.tiptap_code]:dark:bg-zinc-800 [&_.tiptap_code]:px-1 [&_.tiptap_code]:rounded [&_.tiptap_code]:text-xs [&_.tiptap_code]:font-mono
             [&_.tiptap_hr]:border-zinc-200 [&_.tiptap_hr]:dark:border-zinc-700 [&_.tiptap_hr]:my-3
+            [&_.tiptap_table]:w-full [&_.tiptap_table]:my-2 [&_.tiptap_table]:border-collapse
+            [&_.tiptap_th]:border [&_.tiptap_th]:border-zinc-300 [&_.tiptap_th]:dark:border-zinc-600 [&_.tiptap_th]:bg-zinc-100 [&_.tiptap_th]:dark:bg-zinc-800 [&_.tiptap_th]:px-2 [&_.tiptap_th]:py-1 [&_.tiptap_th]:text-left [&_.tiptap_th]:font-semibold
+            [&_.tiptap_td]:border [&_.tiptap_td]:border-zinc-300 [&_.tiptap_td]:dark:border-zinc-600 [&_.tiptap_td]:px-2 [&_.tiptap_td]:py-1
           "
         />
 
@@ -208,7 +278,7 @@ export function RichTextEditor({
       </div>
     </div>
   );
-}
+});
 
 // ── Read-only renderer ─────────────────────────────────────────────────────────
 
