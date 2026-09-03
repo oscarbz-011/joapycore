@@ -126,9 +126,11 @@ export class CreditEvaluationService {
 
     let overdueCount = 0;
     let overdueAmount = 0;
-    // moraAmount nunca se resetea al pagar (ver LoansService.payInstallment) —
-    // una cuota PAID con moraAmount > 0 es una señal confiable de que se pagó
-    // tarde alguna vez, sin necesitar un historial de estados separado.
+    // Comparar paidAt contra dueDate en vez de depender de un cargo de mora
+    // acumulado: es una señal que existe siempre (independiente de si el
+    // tenant configuró algún InterestComponent) y no se resetea al cobrar
+    // el recargo, a diferencia de InstallmentInterestCharge.amount que sí
+    // vuelve a 0 una vez saldado.
     let everLate = false;
     for (const loan of loans) {
       for (const inst of loan.installments) {
@@ -136,7 +138,7 @@ export class CreditEvaluationService {
           overdueCount += 1;
           overdueAmount += toNum(inst.amount) - toNum(inst.paidAmount);
         }
-        if (toNum(inst.moraAmount) > 0) everLate = true;
+        if (inst.paidAt && inst.paidAt > inst.dueDate) everLate = true;
       }
     }
 

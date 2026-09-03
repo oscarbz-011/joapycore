@@ -45,7 +45,12 @@ export class InstallmentsRepository {
     return this.prisma.installment.findMany({
       where: {
         tenantId,
-        status: { in: ['PENDING', 'PARTIAL'] },
+        // PENDING/PARTIAL con dueDate pasada = todavía no la marcó OVERDUE
+        // el cron nocturno (lag ya documentado en v0.25/v0.26); OVERDUE = ya
+        // marcada. Sin este último, la cuota desaparece de este listado en
+        // cuanto el cron corre — justo cuando recalculateInterestCharges()
+        // empieza a generarle cargos de mora, dejándolos invisibles acá.
+        status: { in: ['PENDING', 'PARTIAL', 'OVERDUE'] },
         dueDate: { lt: new Date() },
       },
       include: {
@@ -53,6 +58,10 @@ export class InstallmentsRepository {
           include: {
             customer: { select: { id: true, firstName: true, lastName: true } },
           },
+        },
+        interestCharges: {
+          where: { amount: { gt: 0 } },
+          include: { component: { select: { name: true } } },
         },
       },
       orderBy: { dueDate: 'asc' },
@@ -67,9 +76,7 @@ export class InstallmentsRepository {
         tenantId: true,
         loanId: true,
         amount: true,
-        moraAmount: true,
         dueDate: true,
-        lastMoraCalculatedAt: true,
       },
     });
   }
@@ -84,10 +91,41 @@ export class InstallmentsRepository {
     });
   }
 
-  updateMora(id: string, moraAmount: number) {
-    return this.prisma.installment.update({
+  // Recalculado desde cero cada noche por InstallmentsSchedulerService — ver
+  // interest-calc.service.ts. `amount` es el cargo vigente completo, no un
+  // delta a sumar.
+  upsertInterestCharge(
+    installmentId: string,
+    componentId: string,
+    amount: number,
+    periodsElapsed: number,
+  ) {
+    return this.prisma.installmentInterestCharge.upsert({
+      where: { installmentId_componentId: { installmentId, componentId } },
+      create: { installmentId, componentId, amount, periodsElapsed },
+      update: { amount, periodsElapsed },
+    });
+  }
+
+  // Cargos vigentes (amount > 0) de una o más cuotas, con el nombre del
+  // componente para itemizar el recibo — usado por LoansService al aplicar
+  // un pago.
+  findOpenChargesByInstallments(installmentIds: string[]) {
+    return this.prisma.installmentInterestCharge.findMany({
+      where: { installmentId: { in: installmentIds }, amount: { gt: 0 } },
+      include: { component: { select: { name: true } } },
+      orderBy: { component: { order: 'asc' } },
+    });
+  }
+
+  updateChargeAmount(
+    id: string,
+    amount: number,
+    client: PrismaClientOrTx = this.prisma,
+  ) {
+    return client.installmentInterestCharge.update({
       where: { id },
-      data: { moraAmount, lastMoraCalculatedAt: new Date() },
+      data: { amount },
     });
   }
 

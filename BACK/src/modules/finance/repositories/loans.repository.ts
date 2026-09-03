@@ -8,7 +8,17 @@ export class LoansRepository {
 
   private get include() {
     return {
-      installments: { orderBy: { number: 'asc' as const } },
+      installments: {
+        orderBy: { number: 'asc' as const },
+        include: {
+          // Solo cargos vigentes (todavía no cobrados) — el detalle de lo
+          // ya cobrado vive en PaymentReceiptItem, no acá.
+          interestCharges: {
+            where: { amount: { gt: 0 } },
+            include: { component: { select: { name: true } } },
+          },
+        },
+      },
       customer: { select: { id: true, firstName: true, lastName: true } },
       saleOrder: {
         select: {

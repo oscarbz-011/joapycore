@@ -5,6 +5,7 @@ import { CollectionRoutesRepository } from './repositories/collection-routes.rep
 import { CollectionVisitsRepository } from './repositories/collection-visits.repository';
 import { PaymentAgreementsRepository } from './repositories/payment-agreements.repository';
 import { CollectionNotesRepository } from './repositories/collection-notes.repository';
+import { DelinquencyReportsRepository } from './repositories/delinquency-reports.repository';
 
 @Module({
   controllers: [CobranzasController],
@@ -14,6 +15,7 @@ import { CollectionNotesRepository } from './repositories/collection-notes.repos
     CollectionVisitsRepository,
     PaymentAgreementsRepository,
     CollectionNotesRepository,
+    DelinquencyReportsRepository,
   ],
 })
 export class CobranzasModule {}

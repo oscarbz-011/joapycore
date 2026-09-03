@@ -10,7 +10,12 @@ import {
   Post,
   Query,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBearerAuth,
+  ApiOperation,
+  ApiQuery,
+  ApiTags,
+} from '@nestjs/swagger';
 import { CurrentTenant } from '../../../common/decorators/current-tenant.decorator';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
 import { Permissions } from '../../../common/decorators/permissions.decorator';
@@ -22,6 +27,8 @@ import { AddVisitDto } from '../dto/add-visit.dto';
 import { CreateCollectionRouteDto } from '../dto/create-collection-route.dto';
 import { CreatePaymentAgreementDto } from '../dto/create-payment-agreement.dto';
 import { UpdateVisitResultDto } from '../dto/update-visit-result.dto';
+import { UpdateDelinquencyReportDto } from '../dto/update-delinquency-report.dto';
+import type { DelinquencyReportStatus } from '@prisma/client';
 
 @ApiTags('Collections')
 @ApiBearerAuth()
@@ -45,7 +52,11 @@ export class CobranzasController {
   @Permissions('collections:read')
   @ApiOperation({ summary: 'Listar rutas de cobranza' })
   @ApiQuery({ name: 'collectorId', required: false })
-  @ApiQuery({ name: 'status', required: false, enum: ['OPEN', 'CLOSED', 'CANCELLED'] })
+  @ApiQuery({
+    name: 'status',
+    required: false,
+    enum: ['OPEN', 'CLOSED', 'CANCELLED'],
+  })
   findAllRoutes(
     @CurrentTenant() tenantId: string,
     @CurrentUser() user: JwtPayload,
@@ -53,10 +64,14 @@ export class CobranzasController {
     @Query('status') status?: string,
   ) {
     // Collectors only see their own routes; managers see all
-    const effectiveCollectorId = user.permissions?.includes('collections:manage')
+    const effectiveCollectorId = user.permissions?.includes(
+      'collections:manage',
+    )
       ? collectorId
       : user.sub;
-    return this.cobranzasService.findAllRoutes(tenantId, effectiveCollectorId, { status });
+    return this.cobranzasService.findAllRoutes(tenantId, effectiveCollectorId, {
+      status,
+    });
   }
 
   @Get('routes/:id')
@@ -99,7 +114,12 @@ export class CobranzasController {
     @Param('id') routeId: string,
     @Param('visitId') visitId: string,
   ) {
-    return this.cobranzasService.removeVisit(tenantId, routeId, visitId, user.sub);
+    return this.cobranzasService.removeVisit(
+      tenantId,
+      routeId,
+      visitId,
+      user.sub,
+    );
   }
 
   @Patch('routes/:id/visits/:visitId/result')
@@ -113,7 +133,13 @@ export class CobranzasController {
     @Param('visitId') visitId: string,
     @Body() dto: UpdateVisitResultDto,
   ) {
-    return this.cobranzasService.recordVisitResult(tenantId, routeId, visitId, dto, user.sub);
+    return this.cobranzasService.recordVisitResult(
+      tenantId,
+      routeId,
+      visitId,
+      dto,
+      user.sub,
+    );
   }
 
   @Post('routes/:id/close')
@@ -186,14 +212,21 @@ export class CobranzasController {
   @Patch('agreements/:id/status')
   @HttpCode(HttpStatus.OK)
   @Permissions('collections:manage')
-  @ApiOperation({ summary: 'Actualizar estado del acuerdo (FULFILLED/BROKEN/CANCELLED)' })
+  @ApiOperation({
+    summary: 'Actualizar estado del acuerdo (FULFILLED/BROKEN/CANCELLED)',
+  })
   updateAgreementStatus(
     @CurrentTenant() tenantId: string,
     @CurrentUser() user: JwtPayload,
     @Param('id') id: string,
     @Body('status') status: 'FULFILLED' | 'BROKEN' | 'CANCELLED',
   ) {
-    return this.cobranzasService.updateAgreementStatus(tenantId, id, status, user.sub);
+    return this.cobranzasService.updateAgreementStatus(
+      tenantId,
+      id,
+      status,
+      user.sub,
+    );
   }
 
   // ── Collection Notes ────────────────────────────────────────────────────────
@@ -217,5 +250,55 @@ export class CobranzasController {
     @Body() dto: AddCollectionNoteDto,
   ) {
     return this.cobranzasService.addNote(tenantId, dto, user.sub);
+  }
+
+  // ── Morosos ──────────────────────────────────────────────────────────────
+
+  @Get('delinquency-reports')
+  @Permissions('collections:read')
+  @ApiOperation({
+    summary:
+      'Listar candidatos a moroso — detectados automáticamente al cruzar el umbral de meses de mora configurado',
+  })
+  @ApiQuery({
+    name: 'status',
+    required: false,
+    enum: ['PENDING_REVIEW', 'REPORTED', 'EXCLUDED'],
+  })
+  findAllDelinquencyReports(
+    @CurrentTenant() tenantId: string,
+    @Query('status') status?: DelinquencyReportStatus,
+  ) {
+    return this.cobranzasService.findAllDelinquencyReports(tenantId, status);
+  }
+
+  @Get('delinquency-reports/:id')
+  @Permissions('collections:read')
+  @ApiOperation({ summary: 'Obtener un registro de moroso por ID' })
+  findDelinquencyReport(
+    @CurrentTenant() tenantId: string,
+    @Param('id') id: string,
+  ) {
+    return this.cobranzasService.findDelinquencyReport(tenantId, id);
+  }
+
+  @Patch('delinquency-reports/:id')
+  @HttpCode(HttpStatus.OK)
+  @Permissions('collections:manage')
+  @ApiOperation({
+    summary: 'Marcar un candidato como reportado al buró (manual) o excluirlo',
+  })
+  updateDelinquencyReport(
+    @CurrentTenant() tenantId: string,
+    @CurrentUser() user: JwtPayload,
+    @Param('id') id: string,
+    @Body() dto: UpdateDelinquencyReportDto,
+  ) {
+    return this.cobranzasService.updateDelinquencyReportStatus(
+      tenantId,
+      id,
+      dto,
+      user.sub,
+    );
   }
 }

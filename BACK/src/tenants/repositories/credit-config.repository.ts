@@ -6,11 +6,15 @@ export class CreditConfigRepository {
   constructor(private readonly prisma: PrismaService) {}
 
   private readonly planOrder = { orderBy: { installments: 'asc' } } as const;
+  private readonly componentOrder = { orderBy: { order: 'asc' } } as const;
 
   findByTenant(tenantId: string) {
     return this.prisma.creditConfig.findUnique({
       where: { tenantId },
-      include: { plans: this.planOrder },
+      include: {
+        plans: this.planOrder,
+        interestComponents: this.componentOrder,
+      },
     });
   }
 
@@ -20,17 +24,31 @@ export class CreditConfigRepository {
     maxIncomePercentage?: number | null,
     dueDayOfMonth?: number,
     moraGraceDays?: number,
+    delinquencyThresholdMonths?: number | null,
   ) {
     return this.prisma.creditConfig.upsert({
       where: { tenantId },
-      create: { tenantId, isEnabled, maxIncomePercentage, dueDayOfMonth, moraGraceDays },
+      create: {
+        tenantId,
+        isEnabled,
+        maxIncomePercentage,
+        dueDayOfMonth,
+        moraGraceDays,
+        delinquencyThresholdMonths,
+      },
       update: {
         isEnabled,
         ...(maxIncomePercentage !== undefined ? { maxIncomePercentage } : {}),
         ...(dueDayOfMonth !== undefined ? { dueDayOfMonth } : {}),
         ...(moraGraceDays !== undefined ? { moraGraceDays } : {}),
+        ...(delinquencyThresholdMonths !== undefined
+          ? { delinquencyThresholdMonths }
+          : {}),
       },
-      include: { plans: this.planOrder },
+      include: {
+        plans: this.planOrder,
+        interestComponents: this.componentOrder,
+      },
     });
   }
 
@@ -50,5 +68,39 @@ export class CreditConfigRepository {
 
   deletePlan(id: string) {
     return this.prisma.creditPlan.delete({ where: { id } });
+  }
+
+  createComponent(
+    tenantId: string,
+    creditConfigId: string,
+    data: {
+      name: string;
+      frequency: 'ONE_TIME' | 'DAILY' | 'MONTHLY';
+      percentage: number;
+      cumulative?: boolean;
+      order?: number;
+    },
+  ) {
+    return this.prisma.interestComponent.create({
+      data: { tenantId, creditConfigId, ...data },
+    });
+  }
+
+  updateComponent(
+    id: string,
+    data: {
+      name?: string;
+      frequency?: 'ONE_TIME' | 'DAILY' | 'MONTHLY';
+      percentage?: number;
+      cumulative?: boolean;
+      isActive?: boolean;
+      order?: number;
+    },
+  ) {
+    return this.prisma.interestComponent.update({ where: { id }, data });
+  }
+
+  deleteComponent(id: string) {
+    return this.prisma.interestComponent.delete({ where: { id } });
   }
 }

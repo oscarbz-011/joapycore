@@ -14,8 +14,10 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CurrentTenant } from '../../common/decorators/current-tenant.decorator';
 import { Permissions } from '../../common/decorators/permissions.decorator';
 import { CreateCreditPlanDto } from '../dto/create-credit-plan.dto';
+import { CreateInterestComponentDto } from '../dto/create-interest-component.dto';
 import { ToggleTenantModuleDto } from '../dto/toggle-tenant-module.dto';
 import { UpdateCreditPlanDto } from '../dto/update-credit-plan.dto';
+import { UpdateInterestComponentDto } from '../dto/update-interest-component.dto';
 import { UpdateTenantDto } from '../dto/update-tenant.dto';
 import { UpsertCreditConfigDto } from '../dto/upsert-credit-config.dto';
 import { UpsertPricingConfigDto } from '../dto/upsert-pricing-config.dto';
@@ -126,6 +128,7 @@ export class TenantsController {
       dto.maxIncomePercentage,
       dto.dueDayOfMonth,
       dto.moraGraceDays,
+      dto.delinquencyThresholdMonths,
     );
   }
 
@@ -158,22 +161,66 @@ export class TenantsController {
     return this.creditConfigService.removePlan(tenantId, id);
   }
 
+  // ─── Componentes de interés/mora ─────────────────────────────────────────
+
+  @Post('credit/interest-components')
+  @Permissions('tenants:update')
+  @ApiOperation({
+    summary:
+      'Agregar un componente de interés/mora (gastos administrativos, mora diaria, etc.)',
+  })
+  addInterestComponent(
+    @CurrentTenant() tenantId: string,
+    @Body() dto: CreateInterestComponentDto,
+  ) {
+    return this.creditConfigService.addComponent(tenantId, dto);
+  }
+
+  @Patch('credit/interest-components/:id')
+  @Permissions('tenants:update')
+  @ApiOperation({ summary: 'Actualizar un componente de interés/mora' })
+  updateInterestComponent(
+    @CurrentTenant() tenantId: string,
+    @Param('id') id: string,
+    @Body() dto: UpdateInterestComponentDto,
+  ) {
+    return this.creditConfigService.updateComponent(tenantId, id, dto);
+  }
+
+  @Delete('credit/interest-components/:id')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @Permissions('tenants:update')
+  @ApiOperation({ summary: 'Eliminar un componente de interés/mora' })
+  removeInterestComponent(
+    @CurrentTenant() tenantId: string,
+    @Param('id') id: string,
+  ) {
+    return this.creditConfigService.removeComponent(tenantId, id);
+  }
+
   // ─── Sales config ─────────────────────────────────────────────────────────
 
   @Get('sales-config')
   @Permissions('sales:read')
-  @ApiOperation({ summary: 'Get the sales sub-feature configuration (combos, etc.)' })
+  @ApiOperation({
+    summary: 'Get the sales sub-feature configuration (combos, etc.)',
+  })
   getSalesConfig(@CurrentTenant() tenantId: string) {
     return this.salesConfigService.get(tenantId);
   }
 
   @Put('sales-config')
   @Permissions('tenants:update')
-  @ApiOperation({ summary: 'Enable or disable sales sub-features (combos, etc.)' })
+  @ApiOperation({
+    summary: 'Enable or disable sales sub-features (combos, etc.)',
+  })
   setSalesConfig(
     @CurrentTenant() tenantId: string,
     @Body() dto: UpsertSalesConfigDto,
   ) {
-    return this.salesConfigService.setCombosEnabled(tenantId, dto.combosEnabled);
+    return this.salesConfigService.setCombosEnabled(
+      tenantId,
+      dto.combosEnabled,
+    );
   }
 }

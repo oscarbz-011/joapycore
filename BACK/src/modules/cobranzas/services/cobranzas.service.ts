@@ -10,11 +10,14 @@ import { CollectionRoutesRepository } from '../repositories/collection-routes.re
 import { CollectionVisitsRepository } from '../repositories/collection-visits.repository';
 import { PaymentAgreementsRepository } from '../repositories/payment-agreements.repository';
 import { CollectionNotesRepository } from '../repositories/collection-notes.repository';
+import { DelinquencyReportsRepository } from '../repositories/delinquency-reports.repository';
 import type { CreateCollectionRouteDto } from '../dto/create-collection-route.dto';
 import type { AddVisitDto } from '../dto/add-visit.dto';
 import type { UpdateVisitResultDto } from '../dto/update-visit-result.dto';
 import type { CreatePaymentAgreementDto } from '../dto/create-payment-agreement.dto';
 import type { AddCollectionNoteDto } from '../dto/add-collection-note.dto';
+import type { UpdateDelinquencyReportDto } from '../dto/update-delinquency-report.dto';
+import type { DelinquencyReportStatus } from '@prisma/client';
 
 function toNum(value: unknown): number {
   if (typeof value === 'object' && value !== null && 'toNumber' in value) {
@@ -31,8 +34,50 @@ export class CobranzasService {
     private readonly visitsRepo: CollectionVisitsRepository,
     private readonly agreementsRepo: PaymentAgreementsRepository,
     private readonly notesRepo: CollectionNotesRepository,
+    private readonly delinquencyReportsRepo: DelinquencyReportsRepository,
     private readonly eventEmitter: EventEmitter2,
   ) {}
+
+  // ── Morosos ────────────────────────────────────────────────────────────────
+
+  findAllDelinquencyReports(
+    tenantId: string,
+    status?: DelinquencyReportStatus,
+  ) {
+    return this.delinquencyReportsRepo.findAll(tenantId, status);
+  }
+
+  async findDelinquencyReport(tenantId: string, id: string) {
+    const report = await this.delinquencyReportsRepo.findById(tenantId, id);
+    if (!report)
+      throw new NotFoundException('Registro de moroso no encontrado');
+    return report;
+  }
+
+  async updateDelinquencyReportStatus(
+    tenantId: string,
+    id: string,
+    dto: UpdateDelinquencyReportDto,
+    userId: string,
+  ) {
+    await this.findDelinquencyReport(tenantId, id);
+    const updated = await this.delinquencyReportsRepo.updateStatus(id, {
+      status: dto.status,
+      reference: dto.reference,
+      notes: dto.notes,
+      reviewedById: userId,
+    });
+
+    this.eventEmitter.emit('audit.log', {
+      tenantId,
+      userId,
+      module: 'collections',
+      action: `delinquency.report.${dto.status.toLowerCase()}`,
+      resourceId: id,
+    } satisfies AuditLogEvent);
+
+    return updated;
+  }
 
   // ── Routes ─────────────────────────────────────────────────────────────────
 
@@ -50,7 +95,11 @@ export class CobranzasService {
     return route;
   }
 
-  async createRoute(tenantId: string, dto: CreateCollectionRouteDto, userId: string) {
+  async createRoute(
+    tenantId: string,
+    dto: CreateCollectionRouteDto,
+    userId: string,
+  ) {
     const route = await this.routesRepo.create({
       tenantId,
       routeDate: dto.routeDate,
@@ -68,10 +117,17 @@ export class CobranzasService {
     return route;
   }
 
-  async addVisit(tenantId: string, routeId: string, dto: AddVisitDto, userId: string) {
+  async addVisit(
+    tenantId: string,
+    routeId: string,
+    dto: AddVisitDto,
+    userId: string,
+  ) {
     const route = await this.findRoute(tenantId, routeId);
     if (route.status !== 'OPEN') {
-      throw new UnprocessableEntityException('Solo se pueden agregar visitas a rutas abiertas');
+      throw new UnprocessableEntityException(
+        'Solo se pueden agregar visitas a rutas abiertas',
+      );
     }
     const visit = await this.visitsRepo.create({
       tenantId,
@@ -98,14 +154,21 @@ export class CobranzasService {
     return visit;
   }
 
-  async removeVisit(tenantId: string, routeId: string, visitId: string, userId: string) {
+  async removeVisit(
+    tenantId: string,
+    routeId: string,
+    visitId: string,
+    userId: string,
+  ) {
     const visit = await this.visitsRepo.findById(tenantId, visitId);
     if (!visit || visit.routeId !== routeId) {
       throw new NotFoundException('Visita no encontrada en esta ruta');
     }
     const route = await this.findRoute(tenantId, routeId);
     if (route.status !== 'OPEN') {
-      throw new UnprocessableEntityException('No se puede eliminar una visita de una ruta cerrada');
+      throw new UnprocessableEntityException(
+        'No se puede eliminar una visita de una ruta cerrada',
+      );
     }
     await this.visitsRepo.delete(visitId);
     await this.prisma.collectionRoute.update({
@@ -137,9 +200,9 @@ export class CobranzasService {
     const newCollected = dto.collectedAmount ?? 0;
 
     const updated = await this.visitsRepo.update(visitId, {
-      result: dto.result as any,
+      result: dto.result,
       collectedAmount: newCollected,
-      paymentMethod: dto.paymentMethod as any ?? null,
+      paymentMethod: (dto.paymentMethod as any) ?? null,
       reference: dto.reference ?? null,
       promiseDate: dto.promiseDate ?? null,
       notes: dto.notes ?? null,
@@ -167,7 +230,9 @@ export class CobranzasService {
   async closeRoute(tenantId: string, id: string, userId: string) {
     const route = await this.findRoute(tenantId, id);
     if (route.status !== 'OPEN') {
-      throw new UnprocessableEntityException('La ruta ya fue cerrada o cancelada');
+      throw new UnprocessableEntityException(
+        'La ruta ya fue cerrada o cancelada',
+      );
     }
     const closed = await this.routesRepo.update(id, {
       status: 'CLOSED',
@@ -187,7 +252,9 @@ export class CobranzasService {
   async cancelRoute(tenantId: string, id: string, userId: string) {
     const route = await this.findRoute(tenantId, id);
     if (route.status !== 'OPEN') {
-      throw new UnprocessableEntityException('Solo se pueden cancelar rutas abiertas');
+      throw new UnprocessableEntityException(
+        'Solo se pueden cancelar rutas abiertas',
+      );
     }
     const cancelled = await this.routesRepo.update(id, { status: 'CANCELLED' });
     this.eventEmitter.emit('audit.log', {
@@ -212,7 +279,11 @@ export class CobranzasService {
     return ag;
   }
 
-  async createAgreement(tenantId: string, dto: CreatePaymentAgreementDto, userId: string) {
+  async createAgreement(
+    tenantId: string,
+    dto: CreatePaymentAgreementDto,
+    userId: string,
+  ) {
     const agreement = await this.agreementsRepo.create({
       tenantId,
       customerId: dto.customerId,
@@ -237,9 +308,13 @@ export class CobranzasService {
   async approveAgreement(tenantId: string, id: string, userId: string) {
     const ag = await this.findAgreement(tenantId, id);
     if (ag.status !== 'ACTIVE') {
-      throw new UnprocessableEntityException('Solo se pueden aprobar acuerdos activos');
+      throw new UnprocessableEntityException(
+        'Solo se pueden aprobar acuerdos activos',
+      );
     }
-    const updated = await this.agreementsRepo.update(id, { approvedById: userId });
+    const updated = await this.agreementsRepo.update(id, {
+      approvedById: userId,
+    });
     this.eventEmitter.emit('audit.log', {
       tenantId,
       userId,
@@ -279,7 +354,7 @@ export class CobranzasService {
       tenantId,
       customerId: dto.customerId,
       note: dto.note,
-      type: dto.type as any ?? 'GENERAL',
+      type: (dto.type as any) ?? 'GENERAL',
       createdById: userId,
     });
   }
@@ -287,22 +362,27 @@ export class CobranzasService {
   // ── KPIs ────────────────────────────────────────────────────────────────────
 
   async getKpis(tenantId: string) {
-    const [openRoutes, routesToday, activeAgreements, overdueInstallments] = await Promise.all([
-      this.prisma.collectionRoute.count({ where: { tenantId, status: 'OPEN' } }),
-      this.prisma.collectionRoute.count({
-        where: {
-          tenantId,
-          routeDate: {
-            gte: new Date(new Date().setHours(0, 0, 0, 0)),
-            lt: new Date(new Date().setHours(23, 59, 59, 999)),
+    const [openRoutes, routesToday, activeAgreements, overdueInstallments] =
+      await Promise.all([
+        this.prisma.collectionRoute.count({
+          where: { tenantId, status: 'OPEN' },
+        }),
+        this.prisma.collectionRoute.count({
+          where: {
+            tenantId,
+            routeDate: {
+              gte: new Date(new Date().setHours(0, 0, 0, 0)),
+              lt: new Date(new Date().setHours(23, 59, 59, 999)),
+            },
           },
-        },
-      }),
-      this.prisma.paymentAgreement.count({ where: { tenantId, status: 'ACTIVE' } }),
-      this.prisma.installment.count({
-        where: { tenantId, status: 'OVERDUE' },
-      }),
-    ]);
+        }),
+        this.prisma.paymentAgreement.count({
+          where: { tenantId, status: 'ACTIVE' },
+        }),
+        this.prisma.installment.count({
+          where: { tenantId, status: 'OVERDUE' },
+        }),
+      ]);
 
     const totalCollectedResult = await this.prisma.collectionRoute.aggregate({
       where: { tenantId, status: 'CLOSED' },

@@ -3,6 +3,13 @@ import { apiClient } from './client';
 export type LoanStatus = 'ACTIVE' | 'PAID' | 'CANCELLED';
 export type InstallmentStatus = 'PENDING' | 'PARTIAL' | 'PAID' | 'OVERDUE';
 
+export interface InstallmentInterestCharge {
+  id: string;
+  // Decimal de Prisma serializado como string — convertir con Number() antes de usar.
+  amount: number | string;
+  component: { name: string };
+}
+
 export interface Installment {
   id: string;
   loanId: string;
@@ -16,6 +23,9 @@ export interface Installment {
   paymentDate: string | null;
   status: InstallmentStatus;
   notes: string | null;
+  // Cargos de interés/mora vigentes (todavía no cobrados) — solo presente
+  // cuando el endpoint los incluye (getLoan/getLoanByOrder).
+  interestCharges?: InstallmentInterestCharge[];
 }
 
 export interface LoanOrderItem {
@@ -57,11 +67,15 @@ export interface PayInstallmentsPayload {
   notes?: string;
 }
 
+export type PaymentReceiptItemKind = 'PRINCIPAL' | 'INTEREST_COMPONENT';
+
 export interface PaymentReceiptItem {
   id: string;
   installmentId: string;
   installmentNumber: number;
   amountApplied: number;
+  kind: PaymentReceiptItemKind;
+  componentName: string | null;
 }
 
 export interface PaymentReceiptTenant {
@@ -99,6 +113,14 @@ export interface PaymentReceipt {
   branch: { id: string; name: string; city: string | null } | null;
   collectedBy: { id: string; firstName: string; lastName: string } | null;
   tenant: PaymentReceiptTenant;
+  // Factura aparte generada si el cobro incluyó intereses/mora — null si el
+  // cobro fue solo capital.
+  interestInvoice: {
+    id: string;
+    pdfFileId: string | null;
+    invoiceNumber: string | null;
+    invoicePrefix: string | null;
+  } | null;
 }
 
 export const financeApi = {

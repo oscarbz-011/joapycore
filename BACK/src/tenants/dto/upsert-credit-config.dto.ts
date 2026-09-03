@@ -1,5 +1,12 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsBoolean, IsInt, IsNumber, IsOptional, Max, Min } from 'class-validator';
+import {
+  IsBoolean,
+  IsInt,
+  IsNumber,
+  IsOptional,
+  Max,
+  Min,
+} from 'class-validator';
 
 export class UpsertCreditConfigDto {
   @ApiProperty({
@@ -40,4 +47,14 @@ export class UpsertCreditConfigDto {
   @Min(0)
   @Max(60)
   moraGraceDays?: number;
+
+  @ApiPropertyOptional({
+    description:
+      'Meses de mora (períodos de 30 días) a partir de los cuales un cliente entra a la lista de Morosos para gestionar su reporte a un buró de crédito. Vacío = deshabilitado.',
+    example: 3,
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  delinquencyThresholdMonths?: number | null;
 }

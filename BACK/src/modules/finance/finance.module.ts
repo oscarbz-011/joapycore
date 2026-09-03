@@ -5,6 +5,7 @@ import { FinanceOnSaleListener } from './events/finance-on-sale.listener';
 import { InstallmentsRepository } from './repositories/installments.repository';
 import { LoansRepository } from './repositories/loans.repository';
 import { InstallmentsSchedulerService } from './services/installments-scheduler.service';
+import { InterestCalcService } from './services/interest-calc.service';
 import { LoansService } from './services/loans.service';
 
 @Module({
@@ -16,6 +17,7 @@ import { LoansService } from './services/loans.service';
     FinanceOnSaleListener,
     FinanceOnArPaidListener,
     InstallmentsSchedulerService,
+    InterestCalcService,
   ],
   exports: [LoansService],
 })

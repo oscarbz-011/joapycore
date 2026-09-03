@@ -21,7 +21,7 @@ function makeInstallment(overrides = {}) {
     status: 'PENDING',
     amount: 100_000,
     paidAmount: 0,
-    moraAmount: 0,
+    paidAt: null,
     dueDate: new Date('2026-09-01'),
     ...overrides,
   };
@@ -81,14 +81,15 @@ describe('CreditEvaluationService', () => {
       expect(result.overdueCount).toBe(0);
     });
 
-    it('rates REGULAR when nothing is overdue now but some installment had mora in the past', async () => {
+    it('rates REGULAR when nothing is overdue now but some installment was paid late in the past', async () => {
       prisma.loan.findMany.mockResolvedValue([
         makeLoan({
           installments: [
             makeInstallment({
               status: 'PAID',
               paidAmount: 100_000,
-              moraAmount: 1_500,
+              dueDate: new Date('2026-09-01'),
+              paidAt: new Date('2026-09-05'),
             }),
           ],
         }),
@@ -215,7 +216,13 @@ describe('CreditEvaluationService', () => {
       prisma.loan.findMany.mockResolvedValue([
         makeLoan({
           status: 'PAID',
-          installments: [makeInstallment({ status: 'PAID', moraAmount: 500 })],
+          installments: [
+            makeInstallment({
+              status: 'PAID',
+              dueDate: new Date('2026-09-01'),
+              paidAt: new Date('2026-09-05'),
+            }),
+          ],
         }),
       ]);
 

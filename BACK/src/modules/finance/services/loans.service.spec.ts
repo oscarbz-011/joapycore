@@ -73,7 +73,11 @@ describe('LoansService', () => {
       .mockResolvedValue({ id: 'receipt-1', receiptNumber: '001-001-0000001' });
     const mockPrisma = {
       saleOrder: { findFirst: jest.fn() },
-      loan: { create: jest.fn(), findUniqueOrThrow: jest.fn(), findFirst: jest.fn() },
+      loan: {
+        create: jest.fn(),
+        findUniqueOrThrow: jest.fn(),
+        findFirst: jest.fn(),
+      },
       installment: { create: jest.fn() },
       paymentReceipt: { findFirst: topLevelPaymentReceiptFindFirstMock },
       creditConfig: {
@@ -106,6 +110,7 @@ describe('LoansService', () => {
       findBySaleOrder: jest.fn(),
       create: jest.fn(),
       updateContractUrl: jest.fn(),
+      updateStatus: jest.fn().mockResolvedValue({}),
     };
 
     const mockInstallmentsRepo = {
@@ -114,9 +119,15 @@ describe('LoansService', () => {
       findOverdue: jest.fn(),
       findPendingByLoan: jest.fn(),
       update: jest.fn(),
+      // Sin recargos vigentes por default — los tests de mora los sobrescriben.
+      findOpenChargesByInstallments: jest.fn().mockResolvedValue([]),
+      updateChargeAmount: jest.fn().mockResolvedValue({}),
     };
 
-    const mockEventEmitter = { emit: jest.fn(), emitAsync: jest.fn().mockResolvedValue([]) };
+    const mockEventEmitter = {
+      emit: jest.fn(),
+      emitAsync: jest.fn().mockResolvedValue([]),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -161,7 +172,10 @@ describe('LoansService', () => {
       expect(result).toBe(receipt);
       expect(topLevelPaymentReceiptFindFirstMock).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { tenantId: TENANT, items: { some: { installmentId: INST_ID } } },
+          where: {
+            tenantId: TENANT,
+            items: { some: { installmentId: INST_ID } },
+          },
         }),
       );
     });
@@ -383,20 +397,38 @@ describe('LoansService', () => {
     const scheduledLoan = {
       ...mockLoan,
       installments: [
-        { id: INST_ID, number: 1, dueDate: new Date(2026, 8, 5), status: 'PENDING' },
-        { id: 'inst-2', number: 2, dueDate: new Date(2026, 9, 5), status: 'PENDING' },
+        {
+          id: INST_ID,
+          number: 1,
+          dueDate: new Date(2026, 8, 5),
+          status: 'PENDING',
+        },
+        {
+          id: 'inst-2',
+          number: 2,
+          dueDate: new Date(2026, 9, 5),
+          status: 'PENDING',
+        },
       ],
     };
 
     it('does nothing when there is no loan for the order (cash sale)', async () => {
       (prisma.loan.findFirst as jest.Mock).mockResolvedValue(null);
-      await service.rescheduleInstallments(TENANT, ORDER_ID, new Date(2026, 8, 10));
+      await service.rescheduleInstallments(
+        TENANT,
+        ORDER_ID,
+        new Date(2026, 8, 10),
+      );
       expect(prisma.$transaction).not.toHaveBeenCalled();
     });
 
     it('does nothing when the new date matches the current first due date', async () => {
       (prisma.loan.findFirst as jest.Mock).mockResolvedValue(scheduledLoan);
-      await service.rescheduleInstallments(TENANT, ORDER_ID, new Date(2026, 8, 5));
+      await service.rescheduleInstallments(
+        TENANT,
+        ORDER_ID,
+        new Date(2026, 8, 5),
+      );
       expect(prisma.$transaction).not.toHaveBeenCalled();
     });
 
@@ -408,14 +440,22 @@ describe('LoansService', () => {
           scheduledLoan.installments[1],
         ],
       });
-      await service.rescheduleInstallments(TENANT, ORDER_ID, new Date(2026, 8, 10));
+      await service.rescheduleInstallments(
+        TENANT,
+        ORDER_ID,
+        new Date(2026, 8, 10),
+      );
       expect(prisma.$transaction).not.toHaveBeenCalled();
     });
 
     it('shifts every installment to preserve the monthly pattern from the new first due date', async () => {
       (prisma.loan.findFirst as jest.Mock).mockResolvedValue(scheduledLoan);
 
-      await service.rescheduleInstallments(TENANT, ORDER_ID, new Date(2026, 8, 10));
+      await service.rescheduleInstallments(
+        TENANT,
+        ORDER_ID,
+        new Date(2026, 8, 10),
+      );
 
       expect(installmentUpdateMock).toHaveBeenCalledWith({
         where: { id: INST_ID },
@@ -476,54 +516,59 @@ describe('LoansService', () => {
 
     it('sets status PARTIAL on partial payment', async () => {
       installmentsRepo.findById.mockResolvedValue(mockInstallment as never);
-      installmentsRepo.update.mockResolvedValue({
+      installmentUpdateMock.mockResolvedValue({
         ...mockInstallment,
         paidAmount: 200,
         status: 'PARTIAL',
-      } as never);
+      });
       const result = await service.payInstallment(TENANT, INST_ID, baseDto);
-      expect(installmentsRepo.update).toHaveBeenCalledWith(
-        INST_ID,
+      expect(installmentUpdateMock).toHaveBeenCalledWith(
         expect.objectContaining({
-          paidAmount: 200,
-          status: 'PARTIAL',
-          paidAt: undefined,
+          where: { id: INST_ID },
+          data: expect.objectContaining({
+            paidAmount: 200,
+            status: 'PARTIAL',
+            paidAt: undefined,
+          }),
         }),
-        expect.anything(),
       );
-      expect(result.installment.status).toBe('PARTIAL');
+      expect(result.installment?.status).toBe('PARTIAL');
       expect(result.receipt).toBeDefined();
     });
 
     it('sets status PAID and paidAt when full amount is paid', async () => {
       installmentsRepo.findById.mockResolvedValue(mockInstallment as never);
-      installmentsRepo.update.mockResolvedValue({
+      installmentsRepo.findByLoan.mockResolvedValue([
+        { id: INST_ID, status: 'PAID' },
+      ] as never);
+      installmentUpdateMock.mockResolvedValue({
         ...mockInstallment,
         paidAmount: 550,
         status: 'PAID',
-      } as never);
+      });
       await service.payInstallment(TENANT, INST_ID, {
         ...baseDto,
         amount: 550,
       });
-      expect(installmentsRepo.update).toHaveBeenCalledWith(
-        INST_ID,
+      expect(installmentUpdateMock).toHaveBeenCalledWith(
         expect.objectContaining({
-          paidAmount: 550,
-          status: 'PAID',
-          paidAt: expect.any(Date),
+          where: { id: INST_ID },
+          data: expect.objectContaining({
+            paidAmount: 550,
+            status: 'PAID',
+            paidAt: expect.any(Date),
+          }),
         }),
-        expect.anything(),
       );
     });
 
     it('emits installment.paid event after successful payment', async () => {
       installmentsRepo.findById.mockResolvedValue(mockInstallment as never);
-      installmentsRepo.update.mockResolvedValue({
+      installmentUpdateMock.mockResolvedValue({
         ...mockInstallment,
         paidAmount: 200,
         status: 'PARTIAL',
-      } as never);
+      });
       await service.payInstallment(TENANT, INST_ID, baseDto);
       expect(eventEmitter.emit).toHaveBeenCalledWith(
         'installment.paid',
@@ -539,35 +584,36 @@ describe('LoansService', () => {
 
     it('persists paymentMethod, paymentReference, and paymentDate', async () => {
       installmentsRepo.findById.mockResolvedValue(mockInstallment as never);
-      installmentsRepo.update.mockResolvedValue({
+      installmentUpdateMock.mockResolvedValue({
         ...mockInstallment,
         paidAmount: 200,
         status: 'PARTIAL',
-      } as never);
+      });
       await service.payInstallment(TENANT, INST_ID, {
         amount: 200,
         paymentMethod: PaymentMethod.PAGO_EXPRESS,
         paymentReference: 'REF-001',
         paymentDate: '2026-07-30',
       });
-      expect(installmentsRepo.update).toHaveBeenCalledWith(
-        INST_ID,
+      expect(installmentUpdateMock).toHaveBeenCalledWith(
         expect.objectContaining({
-          paymentMethod: 'PAGO_EXPRESS',
-          paymentReference: 'REF-001',
-          paymentDate: expect.any(Date),
+          where: { id: INST_ID },
+          data: expect.objectContaining({
+            paymentMethod: 'PAGO_EXPRESS',
+            paymentReference: 'REF-001',
+            paymentDate: expect.any(Date),
+          }),
         }),
-        expect.anything(),
       );
     });
 
     it('generates a payment receipt with the paid amount and installment', async () => {
       installmentsRepo.findById.mockResolvedValue(mockInstallment as never);
-      installmentsRepo.update.mockResolvedValue({
+      installmentUpdateMock.mockResolvedValue({
         ...mockInstallment,
         paidAmount: 200,
         status: 'PARTIAL',
-      } as never);
+      });
 
       await service.payInstallment(TENANT, INST_ID, baseDto);
 
@@ -585,6 +631,81 @@ describe('LoansService', () => {
           }),
         }),
       );
+    });
+
+    it('charges open interest/mora charges before principal, itemizing each on the receipt', async () => {
+      installmentsRepo.findById.mockResolvedValue(mockInstallment as never);
+      installmentsRepo.findOpenChargesByInstallments.mockResolvedValue([
+        {
+          id: 'charge-1',
+          installmentId: INST_ID,
+          amount: 50,
+          component: { name: 'Gastos administrativos' },
+        },
+      ] as never);
+      installmentUpdateMock.mockResolvedValue({
+        ...mockInstallment,
+        paidAmount: 150,
+        status: 'PARTIAL',
+      });
+
+      // Paga 200: primero los 50 de gastos administrativos, el resto (150) a capital.
+      await service.payInstallment(TENANT, INST_ID, {
+        ...baseDto,
+        amount: 200,
+      });
+
+      expect(installmentsRepo.updateChargeAmount).toHaveBeenCalledWith(
+        'charge-1',
+        0,
+        expect.anything(),
+      );
+      expect(installmentUpdateMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ paidAmount: 150 }),
+        }),
+      );
+      expect(paymentReceiptCreateMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            items: {
+              create: [
+                {
+                  installmentId: INST_ID,
+                  installmentNumber: 1,
+                  amountApplied: 50,
+                  kind: 'INTEREST_COMPONENT',
+                  componentName: 'Gastos administrativos',
+                },
+                {
+                  installmentId: INST_ID,
+                  installmentNumber: 1,
+                  amountApplied: 150,
+                  kind: 'PRINCIPAL',
+                  componentName: null,
+                },
+              ],
+            },
+          }),
+        }),
+      );
+    });
+
+    it('allows a payment that exactly covers principal + open charges but not more', async () => {
+      installmentsRepo.findById.mockResolvedValue(mockInstallment as never);
+      installmentsRepo.findOpenChargesByInstallments.mockResolvedValue([
+        {
+          id: 'charge-1',
+          installmentId: INST_ID,
+          amount: 50,
+          component: { name: 'Mora' },
+        },
+      ] as never);
+
+      // Cuota de 550 + 50 de mora = 600 de saldo total. 601 se pasa.
+      await expect(
+        service.payInstallment(TENANT, INST_ID, { ...baseDto, amount: 601 }),
+      ).rejects.toThrow(UnprocessableEntityException);
     });
   });
 
@@ -637,11 +758,15 @@ describe('LoansService', () => {
                   installmentId: 'inst-1',
                   installmentNumber: 1,
                   amountApplied: 300,
+                  kind: 'PRINCIPAL',
+                  componentName: null,
                 },
                 {
                   installmentId: 'inst-2',
                   installmentNumber: 2,
                   amountApplied: 100,
+                  kind: 'PRINCIPAL',
+                  componentName: null,
                 },
               ],
             },
@@ -663,6 +788,35 @@ describe('LoansService', () => {
         }),
       ).rejects.toThrow(UnprocessableEntityException);
     });
+
+    it('includes open interest/mora charges in the total outstanding validation', async () => {
+      loansRepo.findById.mockResolvedValue(mockLoanWithBranch as never);
+      installmentsRepo.findPendingByLoan.mockResolvedValue([
+        {
+          id: 'inst-1',
+          number: 1,
+          amount: 300,
+          paidAmount: 0,
+          status: 'PENDING',
+        },
+      ] as never);
+      installmentsRepo.findOpenChargesByInstallments.mockResolvedValue([
+        {
+          id: 'charge-1',
+          installmentId: 'inst-1',
+          amount: 50,
+          component: { name: 'Mora' },
+        },
+      ] as never);
+
+      // Saldo real: 300 capital + 50 mora = 350. 351 debe rechazarse.
+      await expect(
+        service.payByAmount(TENANT, LOAN_ID, {
+          amount: 351,
+          paymentMethod: 'CASH',
+        }),
+      ).rejects.toThrow(UnprocessableEntityException);
+    });
   });
 
   describe('payInstallments', () => {
@@ -677,9 +831,27 @@ describe('LoansService', () => {
     it('pays a specific selection of installments in a single receipt', async () => {
       loansRepo.findById.mockResolvedValue(mockLoanWithBranch as never);
       installmentsRepo.findPendingByLoan.mockResolvedValue([
-        { id: 'inst-1', number: 1, amount: 300, paidAmount: 0, status: 'PENDING' },
-        { id: 'inst-2', number: 2, amount: 300, paidAmount: 0, status: 'PENDING' },
-        { id: 'inst-3', number: 3, amount: 300, paidAmount: 0, status: 'PENDING' },
+        {
+          id: 'inst-1',
+          number: 1,
+          amount: 300,
+          paidAmount: 0,
+          status: 'PENDING',
+        },
+        {
+          id: 'inst-2',
+          number: 2,
+          amount: 300,
+          paidAmount: 0,
+          status: 'PENDING',
+        },
+        {
+          id: 'inst-3',
+          number: 3,
+          amount: 300,
+          paidAmount: 0,
+          status: 'PENDING',
+        },
       ] as never);
       installmentsRepo.findByLoan.mockResolvedValue([
         { id: 'inst-1', status: 'PAID' },
@@ -692,7 +864,7 @@ describe('LoansService', () => {
           { installmentId: 'inst-1', amount: 300 },
           { installmentId: 'inst-2', amount: 150 },
         ],
-        paymentMethod: 'CASH' as PaymentMethod,
+        paymentMethod: 'CASH',
       });
 
       // Selección explícita, no necesariamente contigua desde la más
@@ -703,8 +875,20 @@ describe('LoansService', () => {
             totalAmount: 450,
             items: {
               create: [
-                { installmentId: 'inst-1', installmentNumber: 1, amountApplied: 300 },
-                { installmentId: 'inst-2', installmentNumber: 2, amountApplied: 150 },
+                {
+                  installmentId: 'inst-1',
+                  installmentNumber: 1,
+                  amountApplied: 300,
+                  kind: 'PRINCIPAL',
+                  componentName: null,
+                },
+                {
+                  installmentId: 'inst-2',
+                  installmentNumber: 2,
+                  amountApplied: 150,
+                  kind: 'PRINCIPAL',
+                  componentName: null,
+                },
               ],
             },
           }),
@@ -716,13 +900,19 @@ describe('LoansService', () => {
     it('throws when an installment does not belong to the loan', async () => {
       loansRepo.findById.mockResolvedValue(mockLoanWithBranch as never);
       installmentsRepo.findPendingByLoan.mockResolvedValue([
-        { id: 'inst-1', number: 1, amount: 300, paidAmount: 0, status: 'PENDING' },
+        {
+          id: 'inst-1',
+          number: 1,
+          amount: 300,
+          paidAmount: 0,
+          status: 'PENDING',
+        },
       ] as never);
 
       await expect(
         service.payInstallments(TENANT, LOAN_ID, {
           items: [{ installmentId: 'inst-ajena', amount: 100 }],
-          paymentMethod: 'CASH' as PaymentMethod,
+          paymentMethod: 'CASH',
         }),
       ).rejects.toThrow(UnprocessableEntityException);
       expect(paymentReceiptCreateMock).not.toHaveBeenCalled();
@@ -731,13 +921,19 @@ describe('LoansService', () => {
     it('throws when the amount for an installment exceeds its outstanding balance', async () => {
       loansRepo.findById.mockResolvedValue(mockLoanWithBranch as never);
       installmentsRepo.findPendingByLoan.mockResolvedValue([
-        { id: 'inst-1', number: 1, amount: 300, paidAmount: 200, status: 'PARTIAL' },
+        {
+          id: 'inst-1',
+          number: 1,
+          amount: 300,
+          paidAmount: 200,
+          status: 'PARTIAL',
+        },
       ] as never);
 
       await expect(
         service.payInstallments(TENANT, LOAN_ID, {
           items: [{ installmentId: 'inst-1', amount: 150 }],
-          paymentMethod: 'CASH' as PaymentMethod,
+          paymentMethod: 'CASH',
         }),
       ).rejects.toThrow(UnprocessableEntityException);
       expect(paymentReceiptCreateMock).not.toHaveBeenCalled();
@@ -751,7 +947,7 @@ describe('LoansService', () => {
       await expect(
         service.payInstallments(TENANT, LOAN_ID, {
           items: [{ installmentId: 'inst-1', amount: 100 }],
-          paymentMethod: 'CASH' as PaymentMethod,
+          paymentMethod: 'CASH',
         }),
       ).rejects.toThrow(UnprocessableEntityException);
     });

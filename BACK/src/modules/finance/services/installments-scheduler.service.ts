@@ -2,8 +2,14 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { InstallmentsRepository } from '../repositories/installments.repository';
+import { InterestCalcService } from './interest-calc.service';
 
-const MS_PER_DAY = 1000 * 60 * 60 * 24;
+function toNum(value: unknown): number {
+  if (typeof value === 'object' && value !== null && 'toNumber' in value) {
+    return (value as { toNumber(): number }).toNumber();
+  }
+  return Number(value);
+}
 
 @Injectable()
 export class InstallmentsSchedulerService {
@@ -12,6 +18,7 @@ export class InstallmentsSchedulerService {
   constructor(
     private readonly installmentsRepository: InstallmentsRepository,
     private readonly prisma: PrismaService,
+    private readonly interestCalc: InterestCalcService,
   ) {}
 
   @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
@@ -22,52 +29,144 @@ export class InstallmentsSchedulerService {
     }
   }
 
+  // Recalcula desde cero el cargo vigente de cada InterestComponent activo
+  // sobre cada cuota vencida — no es un acumulador incremental como el
+  // diseño viejo (aplicaba delta día a día), sino que siempre recomputa el
+  // valor correcto a partir de dueDate/graceDays/frequency, así que un
+  // cambio de configuración (activar/desactivar un componente, cambiar el
+  // %) se refleja correctamente la próxima corrida sin arrastrar valores
+  // viejos.
   @Cron(CronExpression.EVERY_DAY_AT_1AM)
-  async applyDailyMora() {
+  async recalculateInterestCharges() {
     const overdue = await this.installmentsRepository.findAllOverdueForMora();
     if (!overdue.length) return;
 
-    // Batch credit config per tenant to avoid N+1
     const tenantIds = [...new Set(overdue.map((i) => i.tenantId))];
     const configs = await this.prisma.creditConfig.findMany({
       where: { tenantId: { in: tenantIds } },
-      select: { tenantId: true, moraRate: true, moraGraceDays: true },
+      select: {
+        tenantId: true,
+        moraGraceDays: true,
+        interestComponents: { where: { isActive: true } },
+      },
     });
-    const moraRateMap = new Map(
-      configs.map((c) => [c.tenantId, typeof c.moraRate === 'object' ? (c.moraRate as { toNumber(): number }).toNumber() : Number(c.moraRate)]),
-    );
-    const graceDaysMap = new Map(configs.map((c) => [c.tenantId, c.moraGraceDays]));
+    const configByTenant = new Map(configs.map((c) => [c.tenantId, c]));
 
     const now = new Date();
     let updated = 0;
 
     for (const inst of overdue) {
-      const moraRate = moraRateMap.get(inst.tenantId) ?? 0;
-      if (moraRate === 0) continue;
+      const config = configByTenant.get(inst.tenantId);
+      if (!config || config.interestComponents.length === 0) continue;
 
-      // Días de tolerancia: la mora no empieza a devengarse hasta pasado
-      // dueDate + graceDays — y el cómputo de los días transcurridos arranca
-      // ahí también, no en dueDate, para no cobrar retroactivamente la
-      // tolerancia la primera vez que se calcula.
-      const graceDays = graceDaysMap.get(inst.tenantId) ?? 0;
-      const graceDeadline = new Date(inst.dueDate.getTime() + graceDays * MS_PER_DAY);
-      if (now <= graceDeadline) continue;
+      const amount = toNum(inst.amount);
+      const days = this.interestCalc.daysOverdue(
+        inst.dueDate,
+        config.moraGraceDays,
+        now,
+      );
+      if (days < 1) continue;
+      const periods = this.interestCalc.periodsElapsed(
+        inst.dueDate,
+        config.moraGraceDays,
+        now,
+      );
 
-      const lastCalc = inst.lastMoraCalculatedAt ?? graceDeadline;
-      const daysDelta = Math.floor((now.getTime() - lastCalc.getTime()) / MS_PER_DAY);
-      if (daysDelta < 1) continue;
+      for (const component of config.interestComponents) {
+        const charge = this.interestCalc.computeComponentCharge(
+          {
+            frequency: component.frequency,
+            percentage: toNum(component.percentage),
+            cumulative: component.cumulative,
+          },
+          amount,
+          days,
+          periods,
+        );
 
-      const amount = typeof inst.amount === 'object' ? (inst.amount as { toNumber(): number }).toNumber() : Number(inst.amount);
-      const currentMora = typeof inst.moraAmount === 'object' ? (inst.moraAmount as { toNumber(): number }).toNumber() : Number(inst.moraAmount);
-      const dailyMora = amount * (moraRate / 100);
-      const newMora = currentMora + dailyMora * daysDelta;
-
-      await this.installmentsRepository.updateMora(inst.id, newMora);
-      updated++;
+        await this.installmentsRepository.upsertInterestCharge(
+          inst.id,
+          component.id,
+          charge,
+          periods,
+        );
+        updated++;
+      }
     }
 
     if (updated > 0) {
-      this.logger.log(`Applied daily mora to ${updated} overdue installment(s)`);
+      this.logger.log(`Recalculated ${updated} interest charge(s)`);
+    }
+  }
+
+  // Detecta candidatos a Morosos: por cada tenant con umbral configurado,
+  // busca préstamos activos cuya cuota impaga más antigua ya cruzó el
+  // umbral de meses de mora, y genera un DelinquencyReport en revisión si
+  // todavía no existe uno para ese préstamo. Nunca pisa uno ya revisado
+  // (REPORTED/EXCLUDED) — la detección automática solo alimenta la cola de
+  // revisión, un analista decide qué hacer con cada caso.
+  @Cron(CronExpression.EVERY_DAY_AT_1AM)
+  async detectDelinquentCustomers() {
+    const configs = await this.prisma.creditConfig.findMany({
+      where: { delinquencyThresholdMonths: { not: null } },
+      select: {
+        tenantId: true,
+        moraGraceDays: true,
+        delinquencyThresholdMonths: true,
+      },
+    });
+    if (!configs.length) return;
+
+    const now = new Date();
+    let created = 0;
+
+    for (const config of configs) {
+      const threshold = config.delinquencyThresholdMonths!;
+      const loans = await this.prisma.loan.findMany({
+        where: { tenantId: config.tenantId, status: 'ACTIVE' },
+        select: {
+          id: true,
+          customerId: true,
+          installments: {
+            where: { status: { in: ['PENDING', 'PARTIAL', 'OVERDUE'] } },
+            orderBy: { dueDate: 'asc' },
+            take: 1,
+            select: { dueDate: true },
+          },
+        },
+      });
+
+      for (const loan of loans) {
+        const oldest = loan.installments[0];
+        if (!oldest) continue;
+        const periods = this.interestCalc.periodsElapsed(
+          oldest.dueDate,
+          config.moraGraceDays,
+          now,
+        );
+        if (periods < threshold) continue;
+
+        const existing = await this.prisma.delinquencyReport.findUnique({
+          where: {
+            tenantId_loanId: { tenantId: config.tenantId, loanId: loan.id },
+          },
+        });
+        if (existing) continue;
+
+        await this.prisma.delinquencyReport.create({
+          data: {
+            tenantId: config.tenantId,
+            customerId: loan.customerId,
+            loanId: loan.id,
+            monthsOverdue: periods,
+          },
+        });
+        created++;
+      }
+    }
+
+    if (created > 0) {
+      this.logger.log(`Detected ${created} new delinquency candidate(s)`);
     }
   }
 }

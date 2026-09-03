@@ -5,6 +5,7 @@ export type CollectionRouteStatus = 'OPEN' | 'CLOSED' | 'CANCELLED';
 export type VisitResult = 'COLLECTED' | 'PARTIAL' | 'ABSENT' | 'REFUSED' | 'PROMISE';
 export type AgreementStatus = 'ACTIVE' | 'FULFILLED' | 'BROKEN' | 'CANCELLED';
 export type CollectionNoteType = 'VISIT' | 'CALL' | 'MESSAGE' | 'GENERAL';
+export type DelinquencyReportStatus = 'PENDING_REVIEW' | 'REPORTED' | 'EXCLUDED';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 export interface CollectionVisit {
@@ -68,6 +69,38 @@ export interface CollectionNote {
   type: CollectionNoteType;
   createdAt: string;
   createdBy?: { id: string; firstName: string; lastName: string } | null;
+}
+
+// Candidato a moroso detectado automáticamente por el scheduler nocturno al
+// cruzar CreditConfig.delinquencyThresholdMonths — no hay integración real
+// con ningún buró de crédito, "reportado" es una confirmación manual del
+// analista (mismo criterio que credit-bureau/CreditBureauCheck).
+export interface DelinquencyReport {
+  id: string;
+  customerId: string;
+  loanId: string;
+  monthsOverdue: number;
+  status: DelinquencyReportStatus;
+  provider: string;
+  reference?: string | null;
+  notes?: string | null;
+  reviewedAt?: string | null;
+  createdAt: string;
+  customer: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    documentType: string | null;
+    documentNumber: string | null;
+  };
+  loan: { id: string; totalAmount: number; saleOrderId: string };
+  reviewedBy?: { id: string; firstName: string; lastName: string } | null;
+}
+
+export interface UpdateDelinquencyReportPayload {
+  status: 'REPORTED' | 'EXCLUDED';
+  reference?: string;
+  notes?: string;
 }
 
 export interface CollectionsKpi {
@@ -172,4 +205,14 @@ export const cobranzasApi = {
 
   addNote: (dto: AddNotePayload): Promise<CollectionNote> =>
     apiClient.post('/collections/customers/notes', dto).then((r) => r.data),
+
+  // Morosos
+  listDelinquencyReports: (status?: DelinquencyReportStatus): Promise<DelinquencyReport[]> =>
+    apiClient.get('/collections/delinquency-reports', { params: status ? { status } : undefined }).then((r) => r.data),
+
+  getDelinquencyReport: (id: string): Promise<DelinquencyReport> =>
+    apiClient.get(`/collections/delinquency-reports/${id}`).then((r) => r.data),
+
+  updateDelinquencyReport: (id: string, dto: UpdateDelinquencyReportPayload): Promise<DelinquencyReport> =>
+    apiClient.patch(`/collections/delinquency-reports/${id}`, dto).then((r) => r.data),
 };
