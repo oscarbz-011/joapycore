@@ -7,12 +7,23 @@ export interface DistributedItem {
   isFull: boolean;
 }
 
+// Cargos de interés/mora todavía abiertos de una cuota (gastos administrativos,
+// mora, etc.) — se suman al saldo pendiente porque el backend los cobra antes
+// que el capital. Ver Installment.interestCharges en lib/api/finance.ts.
+export function chargesTotalOf(inst: Installment): number {
+  return (inst.interestCharges ?? []).reduce((s, c) => s + Number(c.amount), 0);
+}
+
+export function outstandingOf(inst: Installment): number {
+  return inst.amount - inst.paidAmount + chargesTotalOf(inst);
+}
+
 // Mismo algoritmo greedy que LoansService.payByAmount() en el backend
 // (cuotas pendientes ordenadas de la más antigua a la más nueva,
-// Math.min(remaining, outstanding) por cuota) — reimplementado acá porque
-// esto solo genera una vista previa en el cliente antes de confirmar el
-// cobro, y no hay un endpoint de "dry run" en el backend. Si se toca la
-// fórmula de un lado, tocar la del otro.
+// Math.min(remaining, outstanding) por cuota, saldo = capital + recargos
+// vigentes) — reimplementado acá porque esto solo genera una vista previa en
+// el cliente antes de confirmar el cobro, y no hay un endpoint de "dry run"
+// en el backend. Si se toca la fórmula de un lado, tocar la del otro.
 export function distributeAmount(
   installments: Installment[],
   amount: number,
@@ -25,7 +36,7 @@ export function distributeAmount(
   const items: DistributedItem[] = [];
   for (const inst of pending) {
     if (remaining <= 0) break;
-    const outstanding = inst.amount - inst.paidAmount;
+    const outstanding = outstandingOf(inst);
     if (outstanding <= 0) continue;
     const applied = Math.min(remaining, outstanding);
     items.push({

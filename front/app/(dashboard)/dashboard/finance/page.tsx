@@ -6,12 +6,15 @@ import { ChevronDown, ChevronRight, AlertCircle, AlertTriangle } from 'lucide-re
 import { financeApi, Loan, Installment } from '../../../../lib/api/finance';
 import { openPdf } from '../../../../lib/open-pdf';
 import { daysOverdue } from '../../../../lib/overdue';
+import { chargesTotalOf } from '../../../../lib/finance-distribute';
+import { formatDatePY } from '../../../../lib/date';
 import { ContractCard } from '../../../../components/contract-card';
 import { NumericInput } from '../../../../components/numeric-input';
 import { ReceiptButton } from '../../../../components/receipt-button';
 import { RequirePermission } from '../../../../components/require-permission';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { DatePicker } from '@/components/ui/date-picker';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
@@ -21,10 +24,6 @@ import { cn } from '@/lib/utils';
 
 function formatPrice(v: number) {
   return new Intl.NumberFormat('es-PY', { style: 'currency', currency: 'PYG', maximumFractionDigits: 0 }).format(v);
-}
-
-function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString('es-PY', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'UTC' });
 }
 
 const NUM_CLS = 'h-9 w-full min-w-0 rounded-3xl border border-transparent bg-input/50 px-3 text-sm outline-none transition-[color,box-shadow,background-color] focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30';
@@ -99,8 +98,12 @@ function PayInstallmentForm({
   onDone: () => void;
 }) {
   const queryClient = useQueryClient();
-  // Math.ceil aligns with the backend ceiling so a full payment is correctly marked PAID
-  const remaining = Math.ceil(Number(installment.amount)) - Number(installment.paidAmount);
+  // Math.ceil sobre capital + recargos vigentes, igual que el backend
+  // (Math.ceil(principalOutstanding + chargesOutstanding)) — así el pago
+  // sugerido por defecto cubre también la mora/gastos, no solo la cuota.
+  const remaining = Math.ceil(
+    Number(installment.amount) - Number(installment.paidAmount) + chargesTotalOf(installment),
+  );
   const [amount, setAmount] = useState<number>(remaining);
   const [paymentMethod, setPaymentMethod] = useState('CASH');
   const [paymentDate, setPaymentDate] = useState(() => new Date().toISOString().split('T')[0]);
@@ -146,7 +149,7 @@ function PayInstallmentForm({
         </div>
         <div className="flex-1 space-y-1">
           <Label>Fecha de pago</Label>
-          <Input type="date" value={paymentDate} onChange={(e) => setPaymentDate(e.target.value)} />
+          <DatePicker value={paymentDate} onChange={setPaymentDate} />
         </div>
       </div>
       <div className="flex gap-2">
@@ -186,6 +189,8 @@ function InstallmentRow({ inst }: { inst: Installment }) {
   // Mismo diseño de resaltado (barra + texto coloreado) para "Vencido"
   // (rojo) y "Pendiente" (ámbar) — ver el mismo criterio en payments/page.tsx.
   const accent = overdueDays > 0 ? 'destructive' : inst.status === 'PENDING' ? 'warn' : null;
+  const charges = inst.interestCharges ?? [];
+  const chargesTotal = chargesTotalOf(inst);
 
   return (
     <div>
@@ -205,12 +210,17 @@ function InstallmentRow({ inst }: { inst: Installment }) {
             !accent && 'text-muted-foreground',
           )}
         >
-          {formatDate(inst.dueDate)}
+          {formatDatePY(inst.dueDate, 'utc')}
           {inst.status === 'PAID' && inst.paymentDate && (
-            <span className="ml-1.5 text-emerald-600">· pagada {formatDate(inst.paymentDate)}</span>
+            <span className="ml-1.5 text-emerald-600">· pagada {formatDatePY(inst.paymentDate, 'utc')}</span>
           )}
         </span>
-        <span className="text-xs text-foreground font-mono tabular-nums">{formatPrice(Math.ceil(Number(inst.amount)))}</span>
+        <span className="text-xs text-foreground font-mono tabular-nums">
+          {formatPrice(Math.ceil(Number(inst.amount)))}
+          {chargesTotal > 0 && (
+            <span className="ml-1 text-destructive">+{formatPrice(Math.ceil(chargesTotal))} mora</span>
+          )}
+        </span>
         {Number(inst.paidAmount) > 0 && (
           <span className="text-xs text-emerald-600 font-mono tabular-nums">
             −{formatPrice(Number(inst.paidAmount))}
@@ -226,6 +236,22 @@ function InstallmentRow({ inst }: { inst: Installment }) {
           </RequirePermission>
         )}
       </div>
+      {chargesTotal > 0 && (
+        <div className="ml-9 mr-3 mb-1.5 space-y-0.5 rounded-md border border-destructive/25 bg-destructive/5 px-2 py-1.5">
+          {charges.map((c) => (
+            <div key={c.id} className="flex justify-between gap-3 text-xs text-destructive">
+              <span className="truncate">{c.component.name}</span>
+              <span className="shrink-0">+{formatPrice(Number(c.amount))}</span>
+            </div>
+          ))}
+          <div className="flex justify-between gap-3 border-t border-destructive/20 pt-0.5 text-xs font-semibold text-destructive">
+            <span>Total a pagar (cuota + recargos)</span>
+            <span className="shrink-0">
+              {formatPrice(Number(inst.amount) - Number(inst.paidAmount) + chargesTotal)}
+            </span>
+          </div>
+        </div>
+      )}
       {paying && (
         <PayInstallmentForm installment={inst} onDone={() => setPaying(false)} />
       )}
@@ -265,7 +291,7 @@ function LoanRow({ loan }: { loan: Loan }) {
             <p className="text-xs text-muted-foreground truncate mt-0.5">{productSummary}</p>
           )}
           <p className="text-xs text-muted-foreground/60 mt-0.5">
-            {loan.totalInstallments} cuotas · {loan.interestRate}% interés · {formatDate(loan.createdAt)}
+            {loan.totalInstallments} cuotas · {loan.interestRate}% interés · {formatDatePY(loan.createdAt, 'local')}
           </p>
         </div>
         <div className="text-right shrink-0">
@@ -351,8 +377,8 @@ export default function FinancePage() {
               const days = Math.max(0, daysOverdue(inst.dueDate));
               return (
                 <p key={inst.id} className="text-xs text-destructive">
-                  {inst.loan.customer.firstName} {inst.loan.customer.lastName} — cuota {inst.number}, vence {formatDate(inst.dueDate)}
-                  {' · '}{days} {days === 1 ? 'día' : 'días'} de mora ({formatPrice(Math.ceil(Number(inst.amount)) - Number(inst.paidAmount))} pendiente)
+                  {inst.loan.customer.firstName} {inst.loan.customer.lastName} — cuota {inst.number}, vence {formatDatePY(inst.dueDate, 'utc')}
+                  {' · '}{days} {days === 1 ? 'día' : 'días'} de mora ({formatPrice(Math.ceil(Number(inst.amount) - Number(inst.paidAmount) + chargesTotalOf(inst)))} pendiente, incl. recargos)
                 </p>
               );
             })}
