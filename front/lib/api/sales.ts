@@ -135,6 +135,8 @@ export interface Customer {
   aptBuilding: string | null;
   aptFloor: string | null;
   aptNumber: string | null;
+  latitude: number | null;
+  longitude: number | null;
 }
 
 export interface SaleOrderItem {
@@ -293,6 +295,8 @@ export interface CreateCustomerPayload {
   aptBuilding?: string;
   aptFloor?: string;
   aptNumber?: string;
+  latitude?: number;
+  longitude?: number;
 }
 
 export type UpdateCustomerPayload = Partial<CreateCustomerPayload>;

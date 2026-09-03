@@ -64,6 +64,8 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
       { key: 'procurement:create', label: 'Crear órdenes de compra' },
       { key: 'procurement:update', label: 'Editar compras' },
       { key: 'procurement:receive', label: 'Recibir mercadería' },
+      { key: 'procurement:payables:read', label: 'Ver cuentas por pagar' },
+      { key: 'procurement:payables:register', label: 'Registrar pagos a proveedores' },
     ],
   },
   {
@@ -182,6 +184,8 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
     permissions: [
       { key: 'logistics:read', label: 'Ver remitos y entregas' },
       { key: 'logistics:manage', label: 'Gestionar remitos y entregas' },
+      { key: 'logistics:assign', label: 'Asignar entregas a repartidores' },
+      { key: 'logistics:track', label: 'Ver y actualizar mis entregas asignadas (repartidor)' },
     ],
   },
   {

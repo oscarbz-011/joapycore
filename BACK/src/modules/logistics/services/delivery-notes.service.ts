@@ -1,5 +1,11 @@
-import { Injectable, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
+import {
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+  UnprocessableEntityException,
+} from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
+import { PrismaService } from '../../../prisma/prisma.service';
 import { DeliveryNotesRepository } from '../repositories/delivery-notes.repository';
 import { DispatchDeliveryDto } from '../dto/dispatch-delivery.dto';
 import type { AuditLogEvent } from '../../../audit/audit-log.event';
@@ -9,12 +15,20 @@ export class DeliveryNotesService {
   constructor(
     private readonly repo: DeliveryNotesRepository,
     private readonly eventEmitter: EventEmitter2,
+    private readonly prisma: PrismaService,
   ) {}
 
   findAll(tenantId: string, status?: string) {
-    const validStatuses = ['PENDING', 'DISPATCHED', 'DELIVERED', 'CANCELLED'] as const;
+    const validStatuses = [
+      'PENDING',
+      'DISPATCHED',
+      'DELIVERED',
+      'CANCELLED',
+    ] as const;
     type S = (typeof validStatuses)[number];
-    const parsed = validStatuses.includes(status as S) ? (status as S) : undefined;
+    const parsed = validStatuses.includes(status as S)
+      ? (status as S)
+      : undefined;
     return this.repo.findAll(tenantId, parsed);
   }
 
@@ -24,11 +38,44 @@ export class DeliveryNotesService {
     return note;
   }
 
-  async dispatch(tenantId: string, id: string, dto: DispatchDeliveryDto, userId?: string) {
+  // El repartidor asignado también puede despachar su propia entrega
+  // (empezar el viaje) sin depender de que un admin/despachador lo haga
+  // primero — mismo criterio que recordTrackingEvent() en
+  // DeliveryTrackingService: sin @Permissions() en el controller (PermissionsGuard
+  // es AND-only, no sirve para un OR de permisos), la verificación vive acá.
+  async dispatch(
+    tenantId: string,
+    id: string,
+    dto: DispatchDeliveryDto,
+    userId: string | undefined,
+    userPermissions: string[],
+  ) {
     const note = await this.findOne(tenantId, id);
+
+    const hasManage = userPermissions.includes('logistics:manage');
+    const hasTrack = userPermissions.includes('logistics:track');
+    if (!hasManage && !hasTrack) {
+      throw new ForbiddenException(
+        'No tenés permiso para despachar esta entrega',
+      );
+    }
+    if (!hasManage) {
+      const employee = userId
+        ? await this.prisma.employee.findUnique({ where: { userId } })
+        : null;
+      if (!employee || note.assignedEmployeeId !== employee.id) {
+        throw new ForbiddenException('Esta entrega no está asignada a vos');
+      }
+    }
+
     if (note.status !== 'PENDING') {
       throw new UnprocessableEntityException(
         'Solo se puede despachar una entrega en estado pendiente',
+      );
+    }
+    if (!note.assignmentMode) {
+      throw new UnprocessableEntityException(
+        'Debe asignar la entrega antes de despacharla',
       );
     }
     await this.repo.update(tenantId, id, {
@@ -37,7 +84,11 @@ export class DeliveryNotesService {
       vehicle: dto.vehicle,
       notes: dto.notes,
     });
-    this.eventEmitter.emit('delivery.dispatched', { tenantId, saleOrderId: note.saleOrder.id, deliveryNoteId: id });
+    this.eventEmitter.emit('delivery.dispatched', {
+      tenantId,
+      saleOrderId: note.saleOrder.id,
+      deliveryNoteId: id,
+    });
     this.eventEmitter.emit('audit.log', {
       tenantId,
       userId,

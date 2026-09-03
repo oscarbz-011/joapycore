@@ -53,6 +53,8 @@ export const PERMISSIONS = [
   'procurement:create',
   'procurement:update',
   'procurement:receive',
+  'procurement:payables:read',
+  'procurement:payables:register',
   // Sales
   'sales:read',
   'sales:create',
@@ -104,6 +106,8 @@ export const PERMISSIONS = [
   // Logistics
   'logistics:read',
   'logistics:manage',
+  'logistics:assign',
+  'logistics:track',
   // Collections
   'collections:read',
   'collections:manage',

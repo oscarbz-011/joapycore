@@ -1,12 +1,27 @@
 import { Module, OnApplicationBootstrap, Logger } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { DeliveryNotesRepository } from './repositories/delivery-notes.repository';
+import { DeliveryTrackingEventsRepository } from './repositories/delivery-tracking-events.repository';
 import { DeliveryNotesService } from './services/delivery-notes.service';
+import { DeliveryTrackingService } from './services/delivery-tracking.service';
 import { DeliveryNotesController } from './controllers/delivery-notes.controller';
+import { DeliveryTrackingController } from './controllers/delivery-tracking.controller';
 
+// Orden de controllers importa: DeliveryTrackingController declara rutas
+// literales bajo /logistics/deliveries/* (p.ej. GET .../mine) que Express
+// resuelve por orden de registro — si DeliveryNotesController fuera primero,
+// su GET /logistics/deliveries/:id capturaría ".../mine" como id="mine"
+// antes de que la ruta específica llegue a evaluarse (bug real encontrado en
+// vivo: GET /logistics/deliveries/mine devolvía 404 "Nota de entrega no
+// encontrada" en vez de la lista del repartidor).
 @Module({
-  controllers: [DeliveryNotesController],
-  providers: [DeliveryNotesService, DeliveryNotesRepository],
+  controllers: [DeliveryTrackingController, DeliveryNotesController],
+  providers: [
+    DeliveryNotesService,
+    DeliveryTrackingService,
+    DeliveryNotesRepository,
+    DeliveryTrackingEventsRepository,
+  ],
 })
 export class LogisticsModule implements OnApplicationBootstrap {
   private readonly logger = new Logger(LogisticsModule.name);

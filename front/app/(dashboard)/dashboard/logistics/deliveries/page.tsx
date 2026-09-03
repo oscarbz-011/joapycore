@@ -2,17 +2,25 @@
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Package, Truck, CheckCircle2, Clock, ChevronDown, ChevronRight, MapPin, Phone, X } from 'lucide-react';
+import { Package, Truck, CheckCircle2, Clock, ChevronDown, ChevronRight, MapPin, Phone, UserCog, X } from 'lucide-react';
 import {
   logisticsApi,
-  DeliveryNote,
-  DeliveryNoteStatus,
-  DispatchDeliveryPayload,
+  ASSIGNMENT_MODE_LABELS,
+  type AssignDeliveryPayload,
+  type CourierOption,
+  type DeliveryAssignmentMode,
+  type DeliveryNote,
+  type DeliveryNoteStatus,
   STATUS_LABELS,
 } from '../../../../../lib/api/logistics';
+import type { Customer as DeliveryCustomer } from '../../../../../lib/api/sales';
+import { formatDatePY } from '../../../../../lib/date';
+import { DeliveryMap } from '../../../../../components/logistics/delivery-map';
+import { CheckpointTimeline } from '../../../../../components/logistics/checkpoint-timeline';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
 
 // ── Constants ──────────────────────────────────────────────────────────────────
@@ -21,16 +29,23 @@ const TEXTAREA_CLS = 'w-full min-w-0 rounded-2xl border border-transparent bg-in
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
-function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString('es-PY', {
-    day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'UTC',
-  });
-}
 
 function formatPrice(v: number) {
   return new Intl.NumberFormat('es-PY', {
     style: 'currency', currency: 'PYG', maximumFractionDigits: 0,
   }).format(v);
+}
+
+// `saleOrder.deliveryAddress` no existe en el schema (nunca existió — era un
+// tipo del frontend sin backing real, siempre undefined en runtime). La
+// dirección real vive en los campos estructurados del cliente.
+function formatDeliveryAddress(customer: DeliveryCustomer): string | null {
+  const houseParts = [customer.homeStreet, customer.homeNeighborhood].filter(Boolean);
+  const aptParts = [customer.aptBuilding, customer.aptFloor, customer.aptNumber].filter(Boolean);
+  const structured = [...houseParts, ...aptParts].join(', ');
+  if (structured) return structured;
+  if (customer.address) return [customer.address, customer.city].filter(Boolean).join(', ');
+  return null;
 }
 
 const STATUS_ICON: Record<DeliveryNoteStatus, React.ElementType> = {
@@ -51,13 +66,25 @@ const STATUS_BADGE: Record<DeliveryNoteStatus, string> = {
 
 function DispatchModal({ note, onClose }: { note: DeliveryNote; onClose: () => void }) {
   const queryClient = useQueryClient();
-  const [form, setForm] = useState<DispatchDeliveryPayload>({ carrier: '', vehicle: '', notes: '' });
+  // El repartidor/empresa ya se definió al asignar (AssignModal) — este modal
+  // NO vuelve a pedirlo, solo agrega datos que la asignación no captura
+  // (vehículo/patente) y confirma el despacho. Si hace falta cambiar a
+  // quién está asignado, es "Reasignar", no esto.
+  const [form, setForm] = useState<{ vehicle: string; notes: string }>({
+    vehicle: note.vehicle ?? '',
+    notes: note.notes ?? '',
+  });
+
+  const assignedTo = note.assignmentMode === 'EXTERNAL_COMPANY'
+    ? note.carrier
+    : note.assignedEmployee
+      ? `${note.assignedEmployee.firstName} ${note.assignedEmployee.lastName}`
+      : note.carrier;
 
   const mutation = useMutation({
     mutationFn: () => logisticsApi.dispatch(note.id, {
-      carrier: form.carrier || undefined,
-      vehicle: form.vehicle || undefined,
-      notes: form.notes || undefined,
+      vehicle: form.vehicle.trim() || undefined,
+      notes: form.notes.trim() || undefined,
     }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['logistics-deliveries'] });
@@ -79,18 +106,16 @@ function DispatchModal({ note, onClose }: { note: DeliveryNote; onClose: () => v
         </div>
 
         <div className="space-y-3">
-          <div className="space-y-1.5">
-            <Label>Repartidor / Transportista</Label>
-            <Input
-              value={form.carrier ?? ''}
-              onChange={(e) => setForm((p) => ({ ...p, carrier: e.target.value }))}
-              placeholder="Nombre del repartidor"
-            />
+          <div className="rounded-xl bg-muted/20 px-3 py-2.5 text-sm">
+            <p className="text-xs text-muted-foreground/60">
+              {note.assignmentMode ? ASSIGNMENT_MODE_LABELS[note.assignmentMode] : 'Asignado a'}
+            </p>
+            <p className="font-medium text-foreground">{assignedTo || '—'}</p>
           </div>
           <div className="space-y-1.5">
             <Label>Vehículo / Patente</Label>
             <Input
-              value={form.vehicle ?? ''}
+              value={form.vehicle}
               onChange={(e) => setForm((p) => ({ ...p, vehicle: e.target.value }))}
               placeholder="Ej: ABC 123"
             />
@@ -100,7 +125,7 @@ function DispatchModal({ note, onClose }: { note: DeliveryNote; onClose: () => v
             <textarea
               rows={2}
               className={TEXTAREA_CLS}
-              value={form.notes ?? ''}
+              value={form.notes}
               onChange={(e) => setForm((p) => ({ ...p, notes: e.target.value }))}
             />
           </div>
@@ -123,11 +148,147 @@ function DispatchModal({ note, onClose }: { note: DeliveryNote; onClose: () => v
   );
 }
 
+// ── AssignModal ────────────────────────────────────────────────────────────────
+
+const ASSIGNMENT_MODES: DeliveryAssignmentMode[] = ['INTERNAL_EMPLOYEE', 'EXTERNAL_COURIER_USER', 'EXTERNAL_COMPANY'];
+
+function AssignModal({ note, onClose }: { note: DeliveryNote; onClose: () => void }) {
+  const queryClient = useQueryClient();
+  const [mode, setMode] = useState<DeliveryAssignmentMode>(note.assignmentMode ?? 'INTERNAL_EMPLOYEE');
+  const [employeeId, setEmployeeId] = useState(note.assignedEmployee?.id ?? '');
+  const [carrier, setCarrier] = useState(note.assignmentMode === 'EXTERNAL_COMPANY' ? (note.carrier ?? '') : '');
+  const [externalTrackingRef, setExternalTrackingRef] = useState(note.externalTrackingRef ?? '');
+  const [error, setError] = useState('');
+
+  const { data: couriers = [] } = useQuery({
+    queryKey: ['logistics-couriers'],
+    queryFn: logisticsApi.listCouriers,
+    enabled: mode !== 'EXTERNAL_COMPANY',
+  });
+
+  const mutation = useMutation({
+    mutationFn: () => {
+      const dto: AssignDeliveryPayload = {
+        assignmentMode: mode,
+        assignedEmployeeId: mode !== 'EXTERNAL_COMPANY' ? employeeId || undefined : undefined,
+        carrier: mode === 'EXTERNAL_COMPANY' ? carrier || undefined : undefined,
+        externalTrackingRef: externalTrackingRef || undefined,
+      };
+      return logisticsApi.assign(note.id, dto);
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['logistics-deliveries'] });
+      onClose();
+    },
+    onError: (err: Error & { response?: { data?: { message?: string | string[] } } }) => {
+      const msg = err?.response?.data?.message;
+      setError(Array.isArray(msg) ? msg[0] : (msg ?? 'Error al asignar la entrega'));
+    },
+  });
+
+  const canSubmit =
+    mode === 'EXTERNAL_COMPANY' ? carrier.trim().length > 0 : employeeId.length > 0;
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
+      onClick={(e) => e.target === e.currentTarget && onClose()}
+    >
+      <div className="bg-card rounded-2xl border border-border shadow-lg w-full max-w-md p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-sm font-semibold text-foreground">Asignar entrega</h2>
+          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onClose}>
+            <X size={16} />
+          </Button>
+        </div>
+
+        <div className="space-y-4">
+          <div className="space-y-1.5">
+            <Label>Modalidad</Label>
+            <div className="space-y-1.5">
+              {ASSIGNMENT_MODES.map((m) => (
+                <label
+                  key={m}
+                  className={cn(
+                    'flex items-center gap-2.5 rounded-xl border px-3 py-2 text-sm cursor-pointer transition-colors',
+                    mode === m ? 'border-primary bg-primary/5' : 'border-border hover:border-foreground/20',
+                  )}
+                >
+                  <input
+                    type="radio"
+                    className="accent-primary"
+                    checked={mode === m}
+                    onChange={() => setMode(m)}
+                  />
+                  {ASSIGNMENT_MODE_LABELS[m]}
+                </label>
+              ))}
+            </div>
+          </div>
+
+          {mode !== 'EXTERNAL_COMPANY' ? (
+            <div className="space-y-1.5">
+              <Label>Empleado *</Label>
+              <Select value={employeeId || 'none'} onValueChange={(v) => setEmployeeId(v && v !== 'none' ? v : '')}>
+                <SelectTrigger className="w-full">
+                  <span className="flex-1 text-left text-sm truncate">
+                    {(() => {
+                      const c = (couriers as CourierOption[]).find((x) => x.id === employeeId);
+                      return c ? `${c.firstName} ${c.lastName}` : '— Seleccionar —';
+                    })()}
+                  </span>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">— Seleccionar —</SelectItem>
+                  {(couriers as CourierOption[]).map((c) => (
+                    <SelectItem key={c.id} value={c.id}>
+                      {c.firstName} {c.lastName}{c.contractType === 'CONTRACTOR' ? ' (externo)' : ''}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {mode === 'EXTERNAL_COURIER_USER' && (
+                <p className="text-[11px] text-muted-foreground/70">
+                  Debe ser un empleado con usuario propio en el sistema (contrato &quot;Contractor&quot;) para poder ver y actualizar su entrega.
+                </p>
+              )}
+            </div>
+          ) : (
+            <>
+              <div className="space-y-1.5">
+                <Label>Empresa de courier *</Label>
+                <Input value={carrier} onChange={(e) => setCarrier(e.target.value)} placeholder="Ej: Correo Rápido SA" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>N° de guía (opcional)</Label>
+                <Input value={externalTrackingRef} onChange={(e) => setExternalTrackingRef(e.target.value)} />
+              </div>
+              <p className="text-[11px] text-muted-foreground/70">
+                Sin tracking en el sistema — el staff marca &quot;entregado&quot; manualmente cuando el courier confirme por fuera.
+              </p>
+            </>
+          )}
+        </div>
+
+        {error && <p className="text-destructive text-xs mt-3">{error}</p>}
+
+        <div className="flex justify-end gap-2 mt-5">
+          <Button variant="outline" onClick={onClose}>Cancelar</Button>
+          <Button onClick={() => { setError(''); mutation.mutate(); }} disabled={mutation.isPending || !canSubmit}>
+            {mutation.isPending ? 'Asignando…' : 'Confirmar asignación'}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── DeliveryCard ───────────────────────────────────────────────────────────────
 
 function DeliveryCard({ note }: { note: DeliveryNote }) {
   const [expanded, setExpanded] = useState(false);
   const [dispatching, setDispatching] = useState(false);
+  const [assigning, setAssigning] = useState(false);
   const queryClient = useQueryClient();
 
   const Icon = STATUS_ICON[note.status];
@@ -141,10 +302,13 @@ function DeliveryCard({ note }: { note: DeliveryNote }) {
 
   const customer = note.saleOrder.customer;
   const fullName = `${customer.firstName} ${customer.lastName}`;
+  const address = formatDeliveryAddress(customer);
+  const hasCoords = customer.latitude != null && customer.longitude != null;
 
   return (
     <>
       {dispatching && <DispatchModal note={note} onClose={() => setDispatching(false)} />}
+      {assigning && <AssignModal note={note} onClose={() => setAssigning(false)} />}
 
       <div className="bg-card border border-border rounded-xl overflow-hidden">
         <div className="flex items-center gap-3 px-4 py-3">
@@ -156,17 +320,28 @@ function DeliveryCard({ note }: { note: DeliveryNote }) {
           <div className="flex-1 min-w-0">
             <p className="text-sm font-semibold text-foreground truncate">{fullName}</p>
             <p className="text-xs text-muted-foreground/60">
-              #{note.saleOrder.id.slice(0, 8).toUpperCase()} · {formatDate(note.issuedAt)}
+              #{note.saleOrder.id.slice(0, 8).toUpperCase()} · {formatDatePY(note.issuedAt, 'local')}
             </p>
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
-            {note.status === 'PENDING' && (
-              <Button size="sm" onClick={() => setDispatching(true)}>
-                Despachar
+            {note.status === 'PENDING' && !note.assignmentMode && (
+              <Button size="sm" variant="outline" onClick={() => setAssigning(true)}>
+                <UserCog size={13} />
+                Asignar
               </Button>
             )}
-            {note.status === 'DISPATCHED' && (
+            {note.status === 'PENDING' && note.assignmentMode && (
+              <>
+                <Button size="sm" variant="ghost" onClick={() => setAssigning(true)}>
+                  Reasignar
+                </Button>
+                <Button size="sm" onClick={() => setDispatching(true)}>
+                  Despachar
+                </Button>
+              </>
+            )}
+            {note.status === 'DISPATCHED' && note.assignmentMode === 'EXTERNAL_COMPANY' && (
               <Button
                 size="sm"
                 className="bg-emerald-600 hover:bg-emerald-700"
@@ -187,12 +362,12 @@ function DeliveryCard({ note }: { note: DeliveryNote }) {
 
         {expanded && (
           <div className="border-t border-border px-4 py-3 space-y-3">
-            {(note.saleOrder.deliveryAddress || customer.phone) && (
+            {(address || customer.phone) && (
               <div className="flex flex-wrap gap-4 text-xs text-muted-foreground">
-                {note.saleOrder.deliveryAddress && (
+                {address && (
                   <span className="flex items-center gap-1">
                     <MapPin size={11} />
-                    {note.saleOrder.deliveryAddress}
+                    {address}
                   </span>
                 )}
                 {customer.phone && (
@@ -204,11 +379,41 @@ function DeliveryCard({ note }: { note: DeliveryNote }) {
               </div>
             )}
 
-            {note.carrier && (
-              <div className="text-xs text-muted-foreground flex gap-4">
-                <span><span className="font-medium">Repartidor:</span> {note.carrier}</span>
+            {note.assignmentMode && (
+              <div className="text-xs text-muted-foreground flex flex-wrap gap-4">
+                <span>
+                  <span className="font-medium">{ASSIGNMENT_MODE_LABELS[note.assignmentMode]}:</span>{' '}
+                  {note.assignmentMode === 'EXTERNAL_COMPANY' ? note.carrier : note.assignedEmployee ? `${note.assignedEmployee.firstName} ${note.assignedEmployee.lastName}` : note.carrier}
+                </span>
                 {note.vehicle && <span><span className="font-medium">Vehículo:</span> {note.vehicle}</span>}
+                {note.externalTrackingRef && <span><span className="font-medium">Guía:</span> {note.externalTrackingRef}</span>}
               </div>
+            )}
+
+            {note.assignmentMode === 'EXTERNAL_COMPANY' ? (
+              <p className="text-xs text-muted-foreground/60 italic">
+                Sin seguimiento: es un courier externo — no hay checkpoints ni ubicación en el sistema, se marca &quot;Entregado&quot; manualmente cuando el courier confirme por fuera.
+              </p>
+            ) : (
+              <>
+                {note.trackingEvents.length > 0 ? (
+                  <div className="rounded-xl bg-muted/10 p-3">
+                    <CheckpointTimeline events={note.trackingEvents} />
+                  </div>
+                ) : note.assignmentMode && (
+                  <p className="text-xs text-muted-foreground/60 italic">
+                    Sin checkpoints todavía — el repartidor los carga desde &quot;Mis entregas&quot; una vez despachada.
+                  </p>
+                )}
+
+                {hasCoords ? (
+                  <DeliveryMap latitude={customer.latitude!} longitude={customer.longitude!} height={160} />
+                ) : (
+                  <p className="text-xs text-muted-foreground/60 italic">
+                    Sin ubicación del cliente registrada — se completa cuando el repartidor confirma o corrige la ubicación al entregar.
+                  </p>
+                )}
+              </>
             )}
 
             <table className="w-full text-xs">
@@ -248,7 +453,7 @@ function DeliveryCard({ note }: { note: DeliveryNote }) {
 
             {note.deliveredAt && (
               <p className="text-xs text-emerald-600 font-medium">
-                Entregado el {formatDate(note.deliveredAt)}
+                Entregado el {formatDatePY(note.deliveredAt, 'local')}
               </p>
             )}
           </div>
