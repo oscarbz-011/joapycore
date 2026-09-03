@@ -148,6 +148,66 @@ export const DEFAULT_PAYMENT_RECEIPT_TEMPLATE = `<!DOCTYPE html>
 </body>
 </html>`;
 
+export const DEFAULT_INTEREST_INVOICE_TEMPLATE = `<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<style>
+  ${SHARED_STYLES}
+  @page { size: A4; margin: 0; }
+  .data-table td:nth-child(4), .data-table td:nth-child(5), .data-table td:nth-child(6),
+  .data-table th:nth-child(4), .data-table th:nth-child(5), .data-table th:nth-child(6) { text-align: right; }
+  .data-table td:nth-child(2) { text-align: center; }
+</style>
+</head>
+<body>
+  <div class="company-header">
+    <div class="company-block">
+      {{tenant.logo}}
+      <div>
+        <div class="company-name">{{tenant.razonSocial}}</div>
+        <div class="company-meta">{{tenant.direccion}} — {{tenant.ciudad}}</div>
+        <div class="company-meta">Tel: {{tenant.telefono}}</div>
+        <div class="company-meta">RUC: {{tenant.ruc}}</div>
+      </div>
+    </div>
+    <div class="doc-box">
+      <div class="doc-title">FACTURA</div>
+      <div class="doc-number">NRO.: {{factura.numero}}</div>
+      <div class="doc-meta">
+        <div><strong>TIMBRADO NRO.:</strong> {{timbrado.numero}}</div>
+        <div><strong>Inicio Vigencia:</strong> {{timbrado.inicioVigencia}}</div>
+        <div><strong>Fin Vigencia:</strong> {{timbrado.finVigencia}}</div>
+      </div>
+    </div>
+  </div>
+
+  <div style="border:1px solid #1e293b;border-top:none;padding:8px 10px;margin-bottom:12px;font-size:11px">
+    <div><strong>FECHA DE EMISIÓN:</strong> {{factura.fechaEmision}}</div>
+    <div><strong>SEÑOR(ES):</strong> {{cliente.nombre}}</div>
+    <div><strong>RUC/CI:</strong> {{cliente.documento}} &nbsp;&nbsp; <strong>COD. CLIENTE:</strong> {{cliente.codigo}}</div>
+    <div><strong>RECIBO DE ORIGEN:</strong> {{factura.reciboOrigen}}</div>
+  </div>
+
+  {{factura.items}}
+
+  <div style="margin-top:14px;display:flex;justify-content:space-between;gap:16px;font-size:11px">
+    <div style="flex:1">
+      <div class="label">Subtotales</div>
+      <div>Exentas: Gs. {{factura.subtotalExentas}} &nbsp;&nbsp; 5%: Gs. {{factura.subtotal5}} &nbsp;&nbsp; 10%: Gs. {{factura.subtotal10}}</div>
+      <div class="label" style="margin-top:8px">Liquidación del I.V.A.</div>
+      <div>(5%) = Gs. {{factura.iva5}} &nbsp;&nbsp; (10%) = Gs. {{factura.iva10}}</div>
+      <div><strong>TOTAL I.V.A.:</strong> Gs. {{factura.totalIva}}</div>
+    </div>
+    <div style="flex:1;text-align:right">
+      <div class="label">Total a pagar (en letras)</div>
+      <div>GUARANIES: {{factura.totalEnLetras}}.-</div>
+      <div style="font-size:16px;font-weight:700;margin-top:4px">Gs. {{factura.total}}</div>
+    </div>
+  </div>
+</body>
+</html>`;
+
 export const DEFAULT_QUOTE_TEMPLATE = `<!DOCTYPE html>
 <html lang="es">
 <head>

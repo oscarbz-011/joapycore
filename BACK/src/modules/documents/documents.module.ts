@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { EmailModule } from '../../email/email.module';
 import { FilesModule } from '../../files/files.module';
 import { DocumentsController } from './controllers/documents.controller';
+import { InterestInvoiceOnIssueListener } from './events/interest-invoice-on-issue.listener';
 import { InvoiceOnIssueListener } from './events/invoice-on-issue.listener';
 import { QuoteOnCreateListener } from './events/quote-on-create.listener';
 import { ReceiptOnPaymentListener } from './events/receipt-on-payment.listener';
@@ -22,6 +23,7 @@ import { DocumentsService } from './services/documents.service';
     SaleContractOnInvoiceListener,
     SeedDefaultCategoriesOnModuleActivatedListener,
     InvoiceOnIssueListener,
+    InterestInvoiceOnIssueListener,
     ReceiptOnPaymentListener,
     SeedBillingTemplatesOnTenantRegisteredListener,
     QuoteOnCreateListener,

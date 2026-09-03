@@ -60,8 +60,11 @@ export class InvoicesRepository {
   }
 
   findAll(tenantId: string) {
+    // Solo facturas de venta — las de intereses moratorios (invoiceType
+    // INTEREST) no tienen saleOrder y se acceden desde el recibo de pago que
+    // las generó, no desde el listado general de Facturación.
     return this.prisma.invoice.findMany({
-      where: { tenantId },
+      where: { tenantId, invoiceType: 'SALE' },
       include: this.include,
       orderBy: { createdAt: 'desc' },
     });
@@ -93,6 +96,49 @@ export class InvoicesRepository {
     client: PrismaClientOrTx = this.prisma,
   ) {
     return client.invoiceItem.create({ data });
+  }
+
+  createInterestInvoice(
+    tenantId: string,
+    data: {
+      paymentReceiptId: string;
+      establecimiento: string;
+      puntoExpedicion: string;
+      sequential: number;
+      invoiceNumber: string;
+      invoicePrefix: string;
+      total: number;
+      issuedAt: Date;
+      items: {
+        description: string;
+        quantity: number;
+        unitPrice: number;
+        total: number;
+        ivaRate: number;
+        ivaAmount: number;
+        unitPriceWithoutIva: number;
+      }[];
+    },
+    client: PrismaClientOrTx = this.prisma,
+  ) {
+    return client.invoice.create({
+      data: {
+        tenantId,
+        invoiceType: 'INTEREST',
+        status: 'PAID',
+        saleOrderId: null,
+        paymentReceiptId: data.paymentReceiptId,
+        establecimiento: data.establecimiento,
+        puntoExpedicion: data.puntoExpedicion,
+        sequential: data.sequential,
+        invoiceNumber: data.invoiceNumber,
+        invoicePrefix: data.invoicePrefix,
+        total: data.total,
+        issuedAt: data.issuedAt,
+        items: { create: data.items },
+      },
+      include: { items: true },
+    });
   }
 
   updateStatus(

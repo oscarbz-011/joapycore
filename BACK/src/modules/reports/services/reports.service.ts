@@ -168,49 +168,59 @@ export class ReportsService {
 
     const now = new Date();
     const DUE_SOON_DAYS = 5;
-    const items = ars.map((ar) => {
-      const isCredit = ar.invoice.saleOrder.saleType === 'CREDIT';
-      let dueDate = ar.dueDate;
-      let isOverdue = ar.dueDate ? ar.dueDate < now && ar.status !== 'PAID' : false;
-      let isDueSoon = false;
+    // AccountsReceivable solo existe para facturas de venta (invoiceType
+    // SALE) — las de intereses moratorios se crean ya PAID, sin AR — así que
+    // este filtro nunca debería descartar nada en la práctica, es puramente
+    // defensivo ante el nuevo saleOrder opcional.
+    const items = ars
+      .filter((ar) => ar.invoice.saleOrder != null)
+      .map((ar) => {
+        // Ya filtrado arriba — solo llegan acá AR de facturas de venta.
+        const saleOrder = ar.invoice.saleOrder!;
+        const isCredit = saleOrder.saleType === 'CREDIT';
+        let dueDate = ar.dueDate;
+        let isOverdue = ar.dueDate
+          ? ar.dueDate < now && ar.status !== 'PAID'
+          : false;
+        let isDueSoon = false;
 
-      if (isCredit && ar.status !== 'PAID' && ar.status !== 'CANCELLED') {
-        const nextUnpaid = ar.invoice.saleOrder.loan?.installments.find(
-          (i) => i.status !== 'PAID',
-        );
-        if (nextUnpaid) {
-          dueDate = nextUnpaid.dueDate;
-          // No alcanza con status === 'OVERDUE' solo — ese campo lo pone el
-          // cron nocturno (installments-scheduler.service.ts), así que una
-          // cuota recién vencida (o cualquier corrida antes de medianoche)
-          // seguiría en PENDING. Se respalda con la fecha directamente para
-          // que la detección sea tan inmediata como siempre fue.
-          isOverdue =
-            nextUnpaid.status === 'OVERDUE' || nextUnpaid.dueDate < now;
-          if (!isOverdue) {
-            const daysUntil = Math.ceil(
-              (nextUnpaid.dueDate.getTime() - now.getTime()) / 86_400_000,
-            );
-            isDueSoon = daysUntil >= 0 && daysUntil <= DUE_SOON_DAYS;
+        if (isCredit && ar.status !== 'PAID' && ar.status !== 'CANCELLED') {
+          const nextUnpaid = saleOrder.loan?.installments.find(
+            (i) => i.status !== 'PAID',
+          );
+          if (nextUnpaid) {
+            dueDate = nextUnpaid.dueDate;
+            // No alcanza con status === 'OVERDUE' solo — ese campo lo pone el
+            // cron nocturno (installments-scheduler.service.ts), así que una
+            // cuota recién vencida (o cualquier corrida antes de medianoche)
+            // seguiría en PENDING. Se respalda con la fecha directamente para
+            // que la detección sea tan inmediata como siempre fue.
+            isOverdue =
+              nextUnpaid.status === 'OVERDUE' || nextUnpaid.dueDate < now;
+            if (!isOverdue) {
+              const daysUntil = Math.ceil(
+                (nextUnpaid.dueDate.getTime() - now.getTime()) / 86_400_000,
+              );
+              isDueSoon = daysUntil >= 0 && daysUntil <= DUE_SOON_DAYS;
+            }
+          } else {
+            isOverdue = false;
           }
-        } else {
-          isOverdue = false;
         }
-      }
 
-      return {
-        id: ar.id,
-        customer: `${ar.invoice.saleOrder.customer.firstName} ${ar.invoice.saleOrder.customer.lastName}`,
-        amount: Number(ar.amount),
-        paidAmount: Number(ar.paidAmount),
-        pending: Number(ar.amount) - Number(ar.paidAmount),
-        status: ar.status,
-        saleType: ar.invoice.saleOrder.saleType,
-        dueDate,
-        isOverdue,
-        isDueSoon,
-      };
-    });
+        return {
+          id: ar.id,
+          customer: `${saleOrder.customer.firstName} ${saleOrder.customer.lastName}`,
+          amount: Number(ar.amount),
+          paidAmount: Number(ar.paidAmount),
+          pending: Number(ar.amount) - Number(ar.paidAmount),
+          status: ar.status,
+          saleType: saleOrder.saleType,
+          dueDate,
+          isOverdue,
+          isDueSoon,
+        };
+      });
 
     const totalPending = items.reduce((s, i) => s + i.pending, 0);
     const totalOverdue = items

@@ -8,17 +8,14 @@ import { FilesService } from '../../../files/files.service';
 import type { PdfTableVariable } from '../../../files/pdf/tiptap-to-html.converter';
 import { PdfService } from '../../../files/pdf/pdf.service';
 import { PrismaService } from '../../../prisma/prisma.service';
-import { DEFAULT_INVOICE_TEMPLATE } from '../constants/default-templates.constant';
+import { DEFAULT_INTEREST_INVOICE_TEMPLATE } from '../constants/default-templates.constant';
 import { DocumentsRepository } from '../repositories/documents.repository';
 
-interface InvoicePdfRequestedEvent {
+interface InterestInvoiceIssuedEvent {
   tenantId: string;
   invoiceId: string;
-  saleOrderId: string;
-  paymentCondition?: string;
+  paymentReceiptId: string;
   total: number;
-  dueDate: string | null;
-  issuedById?: string;
 }
 
 function formatMoney(value: unknown): string {
@@ -35,10 +32,8 @@ function formatDate(value: Date | null | undefined): string {
   });
 }
 
-// Para instantes reales (issuedAt = new Date() al emitir) — a diferencia de
-// formatDate(), que ancla en UTC para preservar el día calendario de campos
-// elegidos por el usuario (dueDate, timbrado). Si no se usa hora de Paraguay
-// acá, una factura emitida de noche muestra la fecha del día siguiente.
+// Para instantes reales (issuedAt = new Date() al emitir) — ver la misma
+// distinción en invoice-on-issue.listener.ts.
 function formatDateLocal(value: Date | null | undefined): string {
   if (!value) return '—';
   return value.toLocaleDateString('es-PY', {
@@ -58,20 +53,12 @@ function ivaColumn(ivaRate: unknown): IvaColumn {
   return 'exenta';
 }
 
-// Genera el PDF de la factura (A4, formato DNIT) al emitirla. A diferencia
-// del resto de los listeners "best-effort" de este módulo, éste SÍ debe
-// bloquear la emisión: el PDF es el comprobante legal, no un documento
-// secundario — si Puppeteer/LibreOffice/el storage fallan (ej. se corta la
-// conexión con el backend), se relanza el error para que
-// InvoicesService.issue() revierta la factura a borrador en vez de dejarla
-// "emitida" sin comprobante. Por eso escucha 'invoice.pdf.requested' y no
-// 'invoice.issued': ese evento se dispara recién después de que este
-// listener termina con éxito (ver el try/catch en invoices.service.ts), para
-// no competir en paralelo con los listeners de 'invoice.issued' que si son
-// best-effort/irreversibles (cuenta por cobrar, stock, contrato automático).
+// Genera el PDF de la factura de intereses moratorios (mismo formato A4 que
+// la factura de venta, ver invoice-on-issue.listener.ts) — best-effort:
+// nunca debe bloquear el cobro de la cuota que la originó.
 @Injectable()
-export class InvoiceOnIssueListener {
-  private readonly logger = new Logger(InvoiceOnIssueListener.name);
+export class InterestInvoiceOnIssueListener {
+  private readonly logger = new Logger(InterestInvoiceOnIssueListener.name);
 
   constructor(
     private readonly prisma: PrismaService,
@@ -81,76 +68,40 @@ export class InvoiceOnIssueListener {
     private readonly docxTemplateService: DocxTemplateService,
   ) {}
 
-  @OnEvent('invoice.pdf.requested')
-  async handle(event: InvoicePdfRequestedEvent) {
+  @OnEvent('invoice.interest.issued')
+  async handle(event: InterestInvoiceIssuedEvent) {
     try {
       await this.generate(event);
     } catch (error) {
       this.logger.error(
-        `No se pudo generar el PDF de la factura ${event.invoiceId}: ${(error as Error).message}`,
+        `No se pudo generar el PDF de la factura de intereses ${event.invoiceId}: ${(error as Error).message}`,
       );
-      throw error;
     }
   }
 
-  private async generate(event: InvoicePdfRequestedEvent) {
+  private async generate(event: InterestInvoiceIssuedEvent) {
     const invoice = await this.prisma.invoice.findFirst({
       where: { id: event.invoiceId, tenantId: event.tenantId },
       include: {
         tenant: true,
         items: true,
-        saleOrder: {
-          include: {
-            customer: true,
-            branch: true,
-            downPayment: true,
-            loan: {
-              include: {
-                installments: { orderBy: { number: 'asc' }, take: 1 },
-              },
-            },
-          },
-        },
+        paymentReceipt: { include: { customer: true } },
       },
     });
-    // saleOrder es null para facturas de intereses moratorios (invoiceType
-    // INTEREST) — pero esas nunca emiten 'invoice.issued' (ver
-    // interest-invoice-on-issue.listener.ts, evento separado), así que este
-    // guard es puramente defensivo.
-    if (!invoice || !invoice.saleOrder) return;
+    if (!invoice || !invoice.paymentReceipt) return;
 
+    const customer = invoice.paymentReceipt.customer;
     const customerName = [
-      invoice.saleOrder.customer.firstName,
-      invoice.saleOrder.customer.secondFirstName,
-      invoice.saleOrder.customer.lastName,
-      invoice.saleOrder.customer.secondLastName,
+      customer.firstName,
+      customer.secondFirstName,
+      customer.lastName,
+      customer.secondLastName,
     ]
       .filter(Boolean)
       .join(' ');
-    const customerDoc = invoice.saleOrder.customer.documentNumber
-      ? `${invoice.saleOrder.customer.documentType ?? 'CI'}: ${invoice.saleOrder.customer.documentNumber}`
+    const customerDoc = customer.documentNumber
+      ? `${customer.documentType ?? 'CI'}: ${customer.documentNumber}`
       : '—';
-
-    const isCredit = invoice.saleOrder.saleType === 'CREDIT';
-    let condicionVenta = 'CONTADO';
-    if (isCredit) {
-      const downPayment = invoice.saleOrder.downPayment?.amount ?? 0;
-      const firstDue = invoice.saleOrder.loan?.installments[0]?.dueDate;
-      condicionVenta = `CRÉDITO — Entrega Inicial Gs ${formatMoney(downPayment)} Más ${invoice.saleOrder.installments ?? 0} Cuotas${firstDue ? `, la 1era. Vence el ${formatDate(firstDue)}` : ''}`;
-    }
-
-    // Para crédito, cada ítem se prorratea sobre el total financiado (incluye
-    // interés) en vez de su total contado — mismo criterio que ya usaba la
-    // pantalla de impresión anterior a esta plantilla.
-    const itemsSubtotal = invoice.items.reduce(
-      (s, it) => s + Number(it.total),
-      0,
-    );
-    const invoiceTotal = Number(invoice.total);
-    const displayTotal = (total: number) =>
-      isCredit && itemsSubtotal > 0
-        ? invoiceTotal * (total / itemsSubtotal)
-        : total;
 
     const columnTotals: Record<IvaColumn, number> = {
       exenta: 0,
@@ -159,16 +110,11 @@ export class InvoiceOnIssueListener {
     };
     const ivaTotals: Record<'5' | '10', number> = { '5': 0, '10': 0 };
     const rows = invoice.items.map((item) => {
-      const total = displayTotal(Number(item.total));
+      const total = Number(item.total);
       const col = ivaColumn(item.ivaRate);
       columnTotals[col] += total;
-      if (col === '5' || col === '10') {
-        const ivaShare =
-          isCredit && itemsSubtotal > 0
-            ? Number(item.ivaAmount ?? 0) * (invoiceTotal / itemsSubtotal)
-            : Number(item.ivaAmount ?? 0);
-        ivaTotals[col] += ivaShare;
-      }
+      if (col === '5' || col === '10')
+        ivaTotals[col] += Number(item.ivaAmount ?? 0);
       return [
         item.description,
         String(item.quantity),
@@ -179,6 +125,7 @@ export class InvoiceOnIssueListener {
       ];
     });
 
+    const invoiceTotal = Number(invoice.total);
     const variables: Record<string, string> = {
       'tenant.razonSocial': invoice.tenant.razonSocial ?? invoice.tenant.name,
       'tenant.ruc': invoice.tenant.ruc ?? '',
@@ -194,9 +141,8 @@ export class InvoiceOnIssueListener {
       'factura.fechaEmision': formatDateLocal(invoice.issuedAt),
       'cliente.nombre': customerName,
       'cliente.documento': customerDoc,
-      'cliente.direccion': invoice.saleOrder.customer.address ?? '',
-      'cliente.codigo': invoice.saleOrder.customer.customerCode ?? '—',
-      'factura.condicionVenta': condicionVenta,
+      'cliente.codigo': customer.customerCode ?? '—',
+      'factura.reciboOrigen': invoice.paymentReceipt.receiptNumber,
       'factura.subtotalExentas': formatMoney(columnTotals.exenta),
       'factura.subtotal5': formatMoney(columnTotals['5']),
       'factura.subtotal10': formatMoney(columnTotals['10']),
@@ -232,19 +178,17 @@ export class InvoiceOnIssueListener {
         logoDataUri = `data:${logoRecord.mimeType};base64,${logoBuffer.toString('base64')}`;
       } catch (error) {
         this.logger.warn(
-          `No se pudo cargar el logo del tenant ${event.tenantId} para la factura: ${(error as Error).message}`,
+          `No se pudo cargar el logo del tenant ${event.tenantId} para la factura de intereses: ${(error as Error).message}`,
         );
       }
     }
 
     const template = await this.documentsRepository.findTemplate(
       event.tenantId,
-      TemplateKind.INVOICE,
+      TemplateKind.INTEREST_INVOICE,
     );
-    const content = template?.content ?? DEFAULT_INVOICE_TEMPLATE;
+    const content = template?.content ?? DEFAULT_INTEREST_INVOICE_TEMPLATE;
 
-    // El fallback embebido es HTML crudo; una plantilla del tenant puede ser
-    // HTML o TipTap (contentFormat), cada una con su propio pipeline de PdfService.
     const pdfBuffer =
       template?.contentFormat === 'DOCX'
         ? await this.docxTemplateService.convertToPdf(
@@ -278,10 +222,10 @@ export class InvoiceOnIssueListener {
 
     const fileRecord = await this.filesService.upload(
       event.tenantId,
-      event.issuedById,
+      undefined,
       {
         buffer: pdfBuffer,
-        originalname: `factura-${variables['factura.numero'] || invoice.id}.pdf`,
+        originalname: `factura-intereses-${variables['factura.numero'] || invoice.id}.pdf`,
         mimetype: 'application/pdf',
         size: pdfBuffer.length,
       },

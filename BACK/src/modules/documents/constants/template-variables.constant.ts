@@ -4,6 +4,12 @@ export interface TemplateVariableDef {
   key: string;
   label: string;
   type: 'text' | 'table';
+  // Solo para type 'table': una etiqueta por columna, en el mismo orden que
+  // arma el listener correspondiente (PdfTableVariable.headers). Sirve para
+  // que el frontend arme la fila con loop de Word ({{#tag}}{{col1}}...
+  // {{colN}}{{/tag}}, ver DocxTemplateService) con la cantidad exacta de
+  // columnas — si cambian los headers del listener, actualizar acá también.
+  columns?: string[];
 }
 
 export interface TemplateKindDef {
@@ -65,6 +71,7 @@ export const TEMPLATE_KIND_DEFS: Record<TemplateKind, TemplateKindDef> = {
         key: 'venta.items',
         label: 'Detalle de productos vendidos (tabla)',
         type: 'table',
+        columns: ['Producto', 'Cantidad', 'Precio unitario', 'Subtotal'],
       },
       { key: 'venta.total', label: 'Total de la venta', type: 'text' },
       {
@@ -85,6 +92,11 @@ export const TEMPLATE_KIND_DEFS: Record<TemplateKind, TemplateKindDef> = {
       {
         key: 'credito.entrega',
         label: 'Monto de entrega inicial (pie)',
+        type: 'text',
+      },
+      {
+        key: 'credito.entregaEnLetras',
+        label: 'Monto de entrega inicial (pie), en letras',
         type: 'text',
       },
       {
@@ -112,12 +124,21 @@ export const TEMPLATE_KIND_DEFS: Record<TemplateKind, TemplateKindDef> = {
         key: 'credito.cuotas',
         label: 'Plan de cuotas completo, una fila por cuota (tabla)',
         type: 'table',
+        columns: ['Nro. cuota', 'Fecha vencimiento', 'Importe cuota'],
       },
       {
-        key: 'credito.cuotasDosColumnas',
+        key: 'credito.cuotas2col',
         label:
           'Plan de cuotas completo, en dos bloques de columnas lado a lado (tabla)',
         type: 'table',
+        columns: [
+          'Nro.cuota',
+          'Fecha vencimiento',
+          'Importe cuota',
+          'Nro.cuota',
+          'Fecha vencimiento',
+          'Importe cuota',
+        ],
       },
       {
         key: 'garante.nombre',
@@ -194,6 +215,14 @@ export const TEMPLATE_KIND_DEFS: Record<TemplateKind, TemplateKindDef> = {
         key: 'factura.items',
         label: 'Detalle de ítems con IVA discriminado (tabla)',
         type: 'table',
+        columns: [
+          'Descripción',
+          'Cant.',
+          'P. Unit. IVA inc.',
+          'Exentas',
+          '5%',
+          '10%',
+        ],
       },
       {
         key: 'factura.subtotalExentas',
@@ -261,6 +290,7 @@ export const TEMPLATE_KIND_DEFS: Record<TemplateKind, TemplateKindDef> = {
         key: 'recibo.items',
         label: 'Detalle de cuotas cubiertas (tabla)',
         type: 'table',
+        columns: ['Item', 'Concepto', 'Guaraníes'],
       },
       {
         key: 'recibo.formaDePago',
@@ -311,6 +341,7 @@ export const TEMPLATE_KIND_DEFS: Record<TemplateKind, TemplateKindDef> = {
         key: 'presupuesto.items',
         label: 'Detalle de ítems, con especificaciones si las tiene (tabla)',
         type: 'table',
+        columns: ['Descripción', 'Cant.', 'P. Unitario', 'Subtotal'],
       },
       {
         key: 'presupuesto.total',
@@ -320,6 +351,91 @@ export const TEMPLATE_KIND_DEFS: Record<TemplateKind, TemplateKindDef> = {
       {
         key: 'presupuesto.totalEnLetras',
         label: 'Total del presupuesto, en letras',
+        type: 'text',
+      },
+    ],
+  },
+  [TemplateKind.INTEREST_INVOICE]: {
+    key: TemplateKind.INTEREST_INVOICE,
+    label: 'Factura de intereses moratorios',
+    variables: [
+      {
+        key: 'tenant.razonSocial',
+        label: 'Razón social de la empresa',
+        type: 'text',
+      },
+      { key: 'tenant.ruc', label: 'RUC de la empresa', type: 'text' },
+      {
+        key: 'tenant.direccion',
+        label: 'Dirección de la empresa',
+        type: 'text',
+      },
+      { key: 'tenant.ciudad', label: 'Ciudad de la empresa', type: 'text' },
+      { key: 'tenant.telefono', label: 'Teléfono de la empresa', type: 'text' },
+      { key: 'timbrado.numero', label: 'Número de timbrado', type: 'text' },
+      {
+        key: 'timbrado.inicioVigencia',
+        label: 'Inicio de vigencia del timbrado',
+        type: 'text',
+      },
+      {
+        key: 'timbrado.finVigencia',
+        label: 'Fin de vigencia del timbrado',
+        type: 'text',
+      },
+      { key: 'factura.numero', label: 'Número de factura', type: 'text' },
+      { key: 'factura.fechaEmision', label: 'Fecha de emisión', type: 'text' },
+      {
+        key: 'cliente.nombre',
+        label: 'Nombre completo del cliente',
+        type: 'text',
+      },
+      {
+        key: 'cliente.documento',
+        label: 'Documento de identidad del cliente',
+        type: 'text',
+      },
+      { key: 'cliente.codigo', label: 'Código de cliente', type: 'text' },
+      {
+        key: 'factura.reciboOrigen',
+        label: 'Número del recibo de cobro que originó esta factura',
+        type: 'text',
+      },
+      {
+        key: 'factura.items',
+        label: 'Detalle de intereses por cuota, con IVA discriminado (tabla)',
+        type: 'table',
+        columns: [
+          'Descripción',
+          'Cant.',
+          'P. Unit. IVA inc.',
+          'Exentas',
+          '5%',
+          '10%',
+        ],
+      },
+      {
+        key: 'factura.subtotalExentas',
+        label: 'Subtotal de ítems exentos',
+        type: 'text',
+      },
+      {
+        key: 'factura.subtotal5',
+        label: 'Subtotal de ítems con IVA 5%',
+        type: 'text',
+      },
+      {
+        key: 'factura.subtotal10',
+        label: 'Subtotal de ítems con IVA 10%',
+        type: 'text',
+      },
+      { key: 'factura.iva5', label: 'Total IVA 5%', type: 'text' },
+      { key: 'factura.iva10', label: 'Total IVA 10%', type: 'text' },
+      { key: 'factura.totalIva', label: 'Total IVA (5% + 10%)', type: 'text' },
+      { key: 'factura.total', label: 'Total a pagar', type: 'text' },
+      {
+        key: 'factura.totalEnLetras',
+        label: 'Total a pagar, en letras',
         type: 'text',
       },
     ],
