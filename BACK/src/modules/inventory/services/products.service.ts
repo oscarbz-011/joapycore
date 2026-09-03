@@ -13,10 +13,14 @@ import {
 } from '../repositories/products.repository';
 import { ProductUnitsRepository } from '../repositories/product-units.repository';
 import { ProductSuppliersRepository } from '../repositories/product-suppliers.repository';
+import { ProductBatchesRepository } from '../repositories/product-batches.repository';
 import { CreateProductDto } from '../dto/create-product.dto';
 import { UpdateProductDto } from '../dto/update-product.dto';
 import { AddProductUnitsDto } from '../dto/add-product-units.dto';
-import { CreateStockMovementDto, CreateGlobalStockMovementDto } from '../dto/create-stock-movement.dto';
+import {
+  CreateStockMovementDto,
+  CreateGlobalStockMovementDto,
+} from '../dto/create-stock-movement.dto';
 import { FilterStockMovementDto } from '../dto/filter-stock-movement.dto';
 import { CreateProductSupplierDto } from '../dto/create-product-supplier.dto';
 import { UpdateProductSupplierDto } from '../dto/update-product-supplier.dto';
@@ -27,6 +31,7 @@ export class ProductsService {
     private readonly productsRepository: ProductsRepository,
     private readonly productUnitsRepository: ProductUnitsRepository,
     private readonly productSuppliersRepository: ProductSuppliersRepository,
+    private readonly productBatchesRepository: ProductBatchesRepository,
     private readonly eventEmitter: EventEmitter2,
   ) {}
 
@@ -60,6 +65,7 @@ export class ProductsService {
       name: dto.name,
       description: dto.description,
       isSerialized: dto.isSerialized,
+      usesLots: dto.usesLots ?? false,
       unit: dto.unit ?? 'unidad',
       costPrice: dto.costPrice,
       salePrice: dto.salePrice,
@@ -100,6 +106,14 @@ export class ProductsService {
     return this.productUnitsRepository.findByProduct(tenantId, productId);
   }
 
+  listProductBatches(tenantId: string, productId: string) {
+    return this.productBatchesRepository.findByProduct(tenantId, productId);
+  }
+
+  listAllBatches(tenantId: string, filters: { productId?: string } = {}) {
+    return this.productBatchesRepository.findAll(tenantId, filters);
+  }
+
   listMovements(tenantId: string, filters: FilterStockMovementDto) {
     return this.productsRepository.findMovements(tenantId, filters);
   }
@@ -118,20 +132,33 @@ export class ProductsService {
 
     if (dto.reason === MovementReason.TRANSFER) {
       if (!dto.toWarehouseId) {
-        throw new BadRequestException('Se requiere el depósito de destino para transferencias');
+        throw new BadRequestException(
+          'Se requiere el depósito de destino para transferencias',
+        );
       }
-      const movements = await this.productsRepository.createTransferMovements(tenantId, productId, {
+      const movements = await this.productsRepository.createTransferMovements(
+        tenantId,
+        productId,
+        {
+          quantity: dto.quantity,
+          fromWarehouseId: dto.warehouseId,
+          toWarehouseId: dto.toWarehouseId,
+          notes: dto.notes,
+        },
+      );
+      this.eventEmitter.emit('stock.movement.created', {
+        tenantId,
+        productId,
+        type: 'TRANSFER',
         quantity: dto.quantity,
-        fromWarehouseId: dto.warehouseId,
-        toWarehouseId: dto.toWarehouseId,
-        notes: dto.notes,
       });
-      this.eventEmitter.emit('stock.movement.created', { tenantId, productId, type: 'TRANSFER', quantity: dto.quantity });
       return movements;
     }
 
     if (dto.reason === MovementReason.ADJUSTMENT && !dto.direction) {
-      throw new BadRequestException('Se requiere la dirección (IN/OUT) para ajustes de inventario');
+      throw new BadRequestException(
+        'Se requiere la dirección (IN/OUT) para ajustes de inventario',
+      );
     }
 
     let movementType: StockMovementType;
@@ -139,25 +166,40 @@ export class ProductsService {
 
     if (dto.reason === MovementReason.ADJUSTMENT) {
       movementType = StockMovementType.ADJUSTMENT;
-      effectiveQty = dto.direction === 'OUT' ? -Math.abs(dto.quantity) : Math.abs(dto.quantity);
+      effectiveQty =
+        dto.direction === 'OUT'
+          ? -Math.abs(dto.quantity)
+          : Math.abs(dto.quantity);
     } else {
       const isOut = dto.reason === MovementReason.SALE_OUT;
       movementType = isOut ? StockMovementType.OUT : StockMovementType.IN;
       effectiveQty = isOut ? -Math.abs(dto.quantity) : Math.abs(dto.quantity);
     }
 
-    const movement = await this.productsRepository.createStockMovement(tenantId, productId, {
+    const movement = await this.productsRepository.createStockMovement(
+      tenantId,
+      productId,
+      {
+        type: movementType,
+        reason: dto.reason,
+        quantity: effectiveQty,
+        warehouseId: dto.warehouseId,
+        notes: dto.notes,
+      },
+    );
+    this.eventEmitter.emit('stock.movement.created', {
+      tenantId,
+      productId,
       type: movementType,
-      reason: dto.reason,
-      quantity: effectiveQty,
-      warehouseId: dto.warehouseId,
-      notes: dto.notes,
+      quantity: dto.quantity,
     });
-    this.eventEmitter.emit('stock.movement.created', { tenantId, productId, type: movementType, quantity: dto.quantity });
     return movement;
   }
 
-  async createGlobalMovement(tenantId: string, dto: CreateGlobalStockMovementDto) {
+  async createGlobalMovement(
+    tenantId: string,
+    dto: CreateGlobalStockMovementDto,
+  ) {
     const { productId, ...movementDto } = dto;
     return this.addStockMovement(tenantId, productId, movementDto);
   }
@@ -176,10 +218,11 @@ export class ProductsService {
   ) {
     await this.findOne(tenantId, productId);
 
-    const supplier = await this.productSuppliersRepository.supplierExistsForTenant(
-      tenantId,
-      dto.supplierId,
-    );
+    const supplier =
+      await this.productSuppliersRepository.supplierExistsForTenant(
+        tenantId,
+        dto.supplierId,
+      );
     if (!supplier) throw new BadRequestException('Proveedor no encontrado');
 
     const existing = await this.productSuppliersRepository.findOne(
@@ -187,16 +230,24 @@ export class ProductsService {
       productId,
       dto.supplierId,
     );
-    if (existing) throw new ConflictException('El proveedor ya está asociado a este producto');
+    if (existing)
+      throw new ConflictException(
+        'El proveedor ya está asociado a este producto',
+      );
 
     if (dto.isPreferred) {
       await this.productSuppliersRepository.clearPreferred(tenantId, productId);
     }
 
-    return this.productSuppliersRepository.create(tenantId, productId, dto.supplierId, {
-      costPrice: dto.costPrice,
-      isPreferred: dto.isPreferred ?? false,
-    });
+    return this.productSuppliersRepository.create(
+      tenantId,
+      productId,
+      dto.supplierId,
+      {
+        costPrice: dto.costPrice,
+        isPreferred: dto.isPreferred ?? false,
+      },
+    );
   }
 
   async updateProductSupplier(
@@ -206,15 +257,31 @@ export class ProductsService {
     dto: UpdateProductSupplierDto,
   ) {
     await this.findOne(tenantId, productId);
-    const link = await this.productSuppliersRepository.findOne(tenantId, productId, supplierId);
-    if (!link) throw new NotFoundException('Asociación proveedor-producto no encontrada');
+    const link = await this.productSuppliersRepository.findOne(
+      tenantId,
+      productId,
+      supplierId,
+    );
+    if (!link)
+      throw new NotFoundException(
+        'Asociación proveedor-producto no encontrada',
+      );
 
     if (dto.isPreferred) {
       await this.productSuppliersRepository.clearPreferred(tenantId, productId);
     }
 
-    await this.productSuppliersRepository.update(tenantId, productId, supplierId, dto);
-    return this.productSuppliersRepository.findOne(tenantId, productId, supplierId);
+    await this.productSuppliersRepository.update(
+      tenantId,
+      productId,
+      supplierId,
+      dto,
+    );
+    return this.productSuppliersRepository.findOne(
+      tenantId,
+      productId,
+      supplierId,
+    );
   }
 
   async removeProductSupplier(
@@ -223,6 +290,10 @@ export class ProductsService {
     supplierId: string,
   ) {
     await this.findOne(tenantId, productId);
-    await this.productSuppliersRepository.delete(tenantId, productId, supplierId);
+    await this.productSuppliersRepository.delete(
+      tenantId,
+      productId,
+      supplierId,
+    );
   }
 }

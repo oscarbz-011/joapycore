@@ -30,7 +30,7 @@ export class ProductUnitsRepository {
     tenantId: string,
     productId: string,
     serials: string[],
-    purchaseOrderItemId?: string,
+    opts: { purchaseOrderItemId?: string; purchaseReceiptItemId?: string } = {},
     client: PrismaClientOrTx = this.prisma,
   ) {
     return client.productUnit.createMany({
@@ -38,7 +38,8 @@ export class ProductUnitsRepository {
         tenantId,
         productId,
         serialNumber,
-        purchaseOrderItemId,
+        purchaseOrderItemId: opts.purchaseOrderItemId,
+        purchaseReceiptItemId: opts.purchaseReceiptItemId,
       })),
       skipDuplicates: true,
     });

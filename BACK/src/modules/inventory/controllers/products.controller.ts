@@ -84,7 +84,9 @@ export class ProductsController {
 
   @Post(':id/stock-movements')
   @Permissions('inventory:movements:create')
-  @ApiOperation({ summary: 'Registrar movimiento de stock manual (IN / ADJUSTMENT)' })
+  @ApiOperation({
+    summary: 'Registrar movimiento de stock manual (IN / ADJUSTMENT)',
+  })
   addStockMovement(
     @CurrentTenant() tenantId: string,
     @Param('id') id: string,
@@ -98,6 +100,13 @@ export class ProductsController {
   @ApiOperation({ summary: 'Listar unidades serializadas del producto' })
   findUnits(@CurrentTenant() tenantId: string, @Param('id') id: string) {
     return this.productsService.findUnits(tenantId, id);
+  }
+
+  @Get(':id/batches')
+  @Permissions('inventory:products:read')
+  @ApiOperation({ summary: 'Listar lotes del producto' })
+  findBatches(@CurrentTenant() tenantId: string, @Param('id') id: string) {
+    return this.productsService.listProductBatches(tenantId, id);
   }
 
   @Post(':id/units')
@@ -116,7 +125,10 @@ export class ProductsController {
   @Get(':id/suppliers')
   @Permissions('inventory:products:read')
   @ApiOperation({ summary: 'Listar proveedores asociados al producto' })
-  getProductSuppliers(@CurrentTenant() tenantId: string, @Param('id') id: string) {
+  getProductSuppliers(
+    @CurrentTenant() tenantId: string,
+    @Param('id') id: string,
+  ) {
     return this.productsService.getProductSuppliers(tenantId, id);
   }
 
@@ -140,7 +152,12 @@ export class ProductsController {
     @Param('supplierId') supplierId: string,
     @Body() dto: UpdateProductSupplierDto,
   ) {
-    return this.productsService.updateProductSupplier(tenantId, id, supplierId, dto);
+    return this.productsService.updateProductSupplier(
+      tenantId,
+      id,
+      supplierId,
+      dto,
+    );
   }
 
   @Delete(':id/suppliers/:supplierId')

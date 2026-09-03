@@ -1,9 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Plus, Search, Truck, Users, X } from 'lucide-react';
+import { Plus, Search, X } from 'lucide-react';
 import { procurementApi, type CreateSupplierPayload, type Supplier } from '../../../../../lib/api/procurement';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -12,27 +11,6 @@ import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 
 // ── Sub-nav ────────────────────────────────────────────────────────────────────
-
-function ProcurementNav() {
-  return (
-    <div className="flex gap-1 border-b border-border mb-6">
-      <Link
-        href="/dashboard/procurement"
-        className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 border-transparent text-muted-foreground hover:text-foreground -mb-px"
-      >
-        <Truck size={15} />
-        Órdenes de compra
-      </Link>
-      <Link
-        href="/dashboard/procurement/suppliers"
-        className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 border-primary text-foreground -mb-px"
-      >
-        <Users size={15} />
-        Proveedores
-      </Link>
-    </div>
-  );
-}
 
 // ── Supplier form ──────────────────────────────────────────────────────────────
 
@@ -44,6 +22,7 @@ const EMPTY_FORM: CreateSupplierPayload = {
   address: '',
   taxId: '',
   isImporter: false,
+  paymentTermDays: 0,
 };
 
 function fromSupplier(s: Supplier): CreateSupplierPayload {
@@ -55,6 +34,7 @@ function fromSupplier(s: Supplier): CreateSupplierPayload {
     address: s.address ?? '',
     taxId: s.taxId ?? '',
     isImporter: s.isImporter,
+    paymentTermDays: s.paymentTermDays ?? 0,
   };
 }
 
@@ -86,6 +66,7 @@ function SupplierForm({
         address: (form.address as string)?.trim() || undefined,
         taxId: (form.taxId as string)?.trim() || undefined,
         isImporter: form.isImporter,
+        paymentTermDays: form.paymentTermDays ?? 0,
       };
       return initial
         ? procurementApi.updateSupplier(initial.id, payload)
@@ -186,6 +167,20 @@ function SupplierForm({
           </div>
         </div>
 
+        <div className="space-y-1.5">
+          <Label>Plazo de pago (días)</Label>
+          <Input
+            type="number"
+            min={0}
+            value={form.paymentTermDays ?? 0}
+            onChange={(e) => set('paymentTermDays', Number(e.target.value) || 0)}
+            placeholder="0"
+          />
+          <p className="text-xs text-muted-foreground/60">
+            0 = contado. Determina el vencimiento de las cuentas por pagar generadas al recibir mercadería de este proveedor.
+          </p>
+        </div>
+
         <label className="flex items-center gap-2.5 cursor-pointer">
           <input
             type="checkbox"
@@ -275,16 +270,14 @@ export default function SuppliersPage() {
     <div>
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-foreground">Compras</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Órdenes de compra y proveedores</p>
+          <h1 className="text-2xl font-semibold text-foreground">Proveedores</h1>
+          <p className="mt-1 text-sm text-muted-foreground">Proveedores registrados y sus condiciones de pago</p>
         </div>
         <Button onClick={() => { setSelectedSupplier(null); setShowCreate(true); }}>
           <Plus size={16} />
           Nuevo proveedor
         </Button>
       </div>
-
-      <ProcurementNav />
 
       <div className="flex gap-6">
         {/* List */}

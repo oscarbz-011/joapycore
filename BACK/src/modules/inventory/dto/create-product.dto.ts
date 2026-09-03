@@ -42,6 +42,15 @@ export class CreateProductDto {
   @IsBoolean()
   isSerialized: boolean;
 
+  @ApiPropertyOptional({
+    default: false,
+    description:
+      'Gestiona el stock separado por lotes (fecha de ingreso, costo, vencimiento)',
+  })
+  @IsOptional()
+  @IsBoolean()
+  usesLots?: boolean;
+
   @ApiPropertyOptional({ default: 'unidad' })
   @IsOptional()
   @IsString()
@@ -57,7 +66,10 @@ export class CreateProductDto {
   @IsPositive()
   salePrice: number;
 
-  @ApiPropertyOptional({ description: 'Margen adicional sobre el margen global', minimum: 0 })
+  @ApiPropertyOptional({
+    description: 'Margen adicional sobre el margen global',
+    minimum: 0,
+  })
   @IsOptional()
   @IsNumber({ maxDecimalPlaces: 2 })
   @Min(0)

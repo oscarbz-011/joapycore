@@ -20,6 +20,7 @@ export interface Product {
   model: string | null;
   description: string | null;
   isSerialized: boolean;
+  usesLots: boolean;
   unit: string;
   weightKg: number | null;
   heightCm: number | null;
@@ -60,6 +61,7 @@ export interface CreateProductPayload {
   model?: string;
   description?: string;
   isSerialized: boolean;
+  usesLots?: boolean;
   unit?: string;
   costPrice: number;
   salePrice: number;
@@ -121,6 +123,38 @@ export interface MovementFilters {
   skip?: number;
 }
 
+export interface ProductBatch {
+  id: string;
+  productId: string;
+  batchNumber: string;
+  entryDate: string;
+  unitCost: number;
+  quantity: number;
+  remainingQty: number;
+  expiresAt: string | null;
+  product?: { id: string; name: string; model: string | null };
+}
+
+export type StockInitialSourceType =
+  | 'PURCHASE'
+  | 'MIGRATION'
+  | 'PRODUCTION'
+  | 'DONATION'
+  | 'OTHER';
+
+export interface CreateInitialStockPayload {
+  productId: string;
+  quantity: number;
+  warehouseId?: string;
+  branchId?: string;
+  initialSourceType: StockInitialSourceType;
+  batchNumber?: string;
+  unitCost?: number;
+  expiresAt?: string;
+  serialNumbers?: string[];
+  notes?: string;
+}
+
 export interface ProductSupplier {
   id: string;
   supplierId: string;
@@ -175,6 +209,17 @@ export const inventoryApi = {
 
   addProductUnits: (id: string, serialNumbers: string[]): Promise<{ created: number }> =>
     apiClient.post(`/inventory/products/${id}/units`, { serialNumbers }).then((r) => r.data),
+
+  // Batches (lotes)
+  listProductBatches: (id: string): Promise<ProductBatch[]> =>
+    apiClient.get(`/inventory/products/${id}/batches`).then((r) => r.data),
+
+  listAllBatches: (filters?: { productId?: string }): Promise<ProductBatch[]> =>
+    apiClient.get('/inventory/batches', { params: filters }).then((r) => r.data),
+
+  // Carga inicial — flujo propio, no pasa por Compras
+  createInitialStock: (dto: CreateInitialStockPayload): Promise<void> =>
+    apiClient.post('/inventory/stock-entries/initial', dto).then((r) => r.data),
 
   // Product suppliers
   getProductSuppliers: (id: string): Promise<ProductSupplier[]> =>

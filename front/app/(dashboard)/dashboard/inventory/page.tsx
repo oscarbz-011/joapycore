@@ -119,7 +119,7 @@ function computeSuggestedPrice(
 
 const EMPTY_FORM: CreateProductPayload = {
   categoryId: '', brandId: '', name: '', model: '', description: '',
-  isSerialized: false, unit: 'unidad', costPrice: 0, salePrice: 0,
+  isSerialized: false, usesLots: false, unit: 'unidad', costPrice: 0, salePrice: 0,
 };
 
 function ProductModal({
@@ -136,6 +136,7 @@ function ProductModal({
     initial
       ? { categoryId: initial.category?.id ?? '', brandId: initial.brand?.id ?? '', name: initial.name,
           model: initial.model ?? '', description: initial.description ?? '', isSerialized: initial.isSerialized,
+          usesLots: initial.usesLots,
           unit: initial.unit, costPrice: initial.costPrice, salePrice: initial.salePrice }
       : EMPTY_FORM,
   );
@@ -421,6 +422,20 @@ function ProductModal({
               </label>
               <p className="ml-[26px] mt-0.5 text-[12px] text-muted-foreground/70">
                 Activar si cada unidad tiene número de serie (ej: electrodomésticos).
+              </p>
+
+              <label className="mt-3 flex cursor-pointer items-center gap-2.5">
+                <input
+                  type="checkbox"
+                  checked={form.usesLots ?? false}
+                  onChange={(e) => set('usesLots', e.target.checked)}
+                  className="h-4 w-4 rounded border-border accent-primary"
+                />
+                <span className="text-[13.5px] font-medium text-foreground">Maneja lotes</span>
+              </label>
+              <p className="ml-[26px] mt-0.5 text-[12px] text-muted-foreground/70">
+                Activar para separar el stock por lote de ingreso (costo, fecha, vencimiento) —
+                ej: alimentos, insumos con vencimiento, mercadería reposicionada por partidas.
               </p>
             </div>
 

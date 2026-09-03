@@ -32,6 +32,11 @@ interface SidebarGroup {
   items: SubItem[];
   modules?: string[];
   anyPermission?: string[];
+  // Sin dropdown — link directo al único item. Para secciones que ya
+  // administran todo puertas adentro con sus propias pestañas (ver
+  // documents-nav.tsx), donde desplegar un submenú de una sola opción es
+  // un clic extra sin aportar nada.
+  flat?: boolean;
 }
 
 // ── Group definitions ─────────────────────────────────────────────────────────
@@ -54,6 +59,8 @@ const STATIC_GROUPS: SidebarGroup[] = [
       { label: 'Categorías',  href: '/dashboard/inventory', stub: true },
       { label: 'Marcas',      href: '/dashboard/inventory', stub: true },
       { label: 'Movimientos', href: '/dashboard/inventory/movements' },
+      { label: 'Lotes',       href: '/dashboard/inventory/batches', permission: 'inventory:products:read' },
+      { label: 'Carga inicial', href: '/dashboard/inventory/stock-entries/initial', permission: 'inventory:movements:create' },
       { label: 'Inventario',  href: '/dashboard/inventory/config' },
       { label: 'Stock',       href: '/dashboard/inventory', stub: true },
     ],
@@ -73,19 +80,20 @@ const STATIC_GROUPS: SidebarGroup[] = [
     id: 'procurement', label: 'Compras', icon: Truck,
     modules: ['procurement'], anyPermission: ['procurement:read', 'suppliers:read'],
     items: [
-      { label: 'Compras',              href: '/dashboard/procurement', permission: 'procurement:read' },
-      { label: 'Órdenes de compra',    href: '/dashboard/procurement', stub: true },
-      { label: 'Devolución de compra', href: '/dashboard/procurement', stub: true },
+      { label: 'Órdenes de compra',    href: '/dashboard/procurement', permission: 'procurement:read' },
+      { label: 'Comparar precios',     href: '/dashboard/procurement/compare-prices', permission: 'procurement:read' },
       { label: 'Proveedores',          href: '/dashboard/procurement/suppliers', permission: 'suppliers:read' },
+      { label: 'Devolución de compra', href: '/dashboard/procurement', stub: true },
     ],
   },
   {
     id: 'finanzas', label: 'Finanzas', icon: Landmark,
-    modules: ['billing', 'payments', 'finance', 'collections'],
-    anyPermission: ['billing:read', 'billing:issue', 'payments:read', 'finance:read', 'collections:read', 'sales:credit:evaluate'],
+    modules: ['billing', 'payments', 'finance', 'collections', 'procurement'],
+    anyPermission: ['billing:read', 'billing:issue', 'payments:read', 'finance:read', 'collections:read', 'sales:credit:evaluate', 'procurement:payables:read'],
     items: [
       { label: 'Facturas',              href: '/dashboard/billing',           permission: 'billing:read',           module: 'billing'     },
       { label: 'Cuentas por cobrar',    href: '/dashboard/payments',          permission: 'payments:read',          module: 'payments'    },
+      { label: 'Cuentas por pagar',     href: '/dashboard/procurement/payables', permission: 'procurement:payables:read', module: 'procurement' },
       { label: 'Evaluación de crédito', href: '/dashboard/billing/approvals', permission: 'sales:credit:evaluate',  module: 'finance'     },
       { label: 'Financiamiento',        href: '/dashboard/finance',           permission: 'finance:read',     module: 'finance'     },
       { label: 'Cobranzas',             href: '/dashboard/cobranzas',         permission: 'collections:read', module: 'collections' },
@@ -99,9 +107,10 @@ const STATIC_GROUPS: SidebarGroup[] = [
   },
   {
     id: 'logistics', label: 'Logística', icon: Route,
-    modules: ['logistics'], anyPermission: ['logistics:read', 'logistics:manage', 'warehouses:read'],
+    modules: ['logistics'], anyPermission: ['logistics:read', 'logistics:manage', 'logistics:track', 'warehouses:read'],
     items: [
       { label: 'Entregas',       href: '/dashboard/logistics/deliveries', permission: 'logistics:read' },
+      { label: 'Mis entregas',   href: '/dashboard/logistics/mine',       permission: 'logistics:track' },
       { label: 'Entrada',        href: '/dashboard/inventory', stub: true },
       { label: 'Salida',         href: '/dashboard/inventory', stub: true },
       { label: 'Almacenamiento', href: '/dashboard/inventory', stub: true },
@@ -158,8 +167,8 @@ const STATIC_GROUPS: SidebarGroup[] = [
     ],
   },
   {
-    id: 'documents', label: 'Documentos', icon: FolderOpen, modules: ['documents'],
-    items: [{ label: 'Todos los documentos', href: '/dashboard/documents', permission: 'documents:read' }],
+    id: 'documents', label: 'Documentos', icon: FolderOpen, modules: ['documents'], flat: true,
+    items: [{ label: 'Documentos', href: '/dashboard/documents', permission: 'documents:read' }],
   },
   {
     id: 'empresa', label: 'Empresa', icon: Building2,
@@ -229,6 +238,25 @@ function ModuleGroup({ group, permissions, activeModules }: { group: SidebarGrou
   const Icon = group.icon;
 
   if (visibleItems.length === 0) return null;
+
+  if (group.flat) {
+    const item = visibleItems[0];
+    const isActive = !item.stub && item.href !== '#' && pathname === item.href;
+    return (
+      <Link
+        href={item.href}
+        className={cn(
+          'flex w-full items-center gap-2.5 rounded-[9px] px-3 py-[7px] text-[13.5px] font-medium no-underline transition-colors',
+          isActive
+            ? 'bg-sidebar-primary/15 text-sidebar-primary'
+            : 'text-sidebar-foreground/60 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
+        )}
+      >
+        <Icon size={15} className="shrink-0 opacity-75" />
+        <span className="flex-1 text-left">{group.label}</span>
+      </Link>
+    );
+  }
 
   return (
     <div>

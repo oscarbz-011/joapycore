@@ -4,22 +4,25 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Plus, Truck, Users, X, Trash2, AlertTriangle } from 'lucide-react';
+import { Plus, X, Trash2, AlertTriangle } from 'lucide-react';
 import {
   procurementApi,
   type CreatePurchaseOrderItem,
   type PurchaseOrder,
   type PurchaseOrderStatus,
   type PurchaseType,
-  type ReceiveItem,
+  type ReceiptItemPayload,
   type Supplier,
 } from '../../../../lib/api/procurement';
 import { inventoryApi, type Product } from '../../../../lib/api/inventory';
+import { warehousesApi } from '../../../../lib/api/warehouses';
 import { daysOverdue } from '../../../../lib/overdue';
+import { formatDatePY } from '../../../../lib/date';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { DatePicker } from '@/components/ui/date-picker';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -30,11 +33,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/u
 
 function formatPrice(n: number) {
   return new Intl.NumberFormat('es-PY', { style: 'currency', currency: 'PYG', maximumFractionDigits: 0 }).format(n);
-}
-
-function formatDate(iso: string | null) {
-  if (!iso) return '—';
-  return new Date(iso).toLocaleDateString('es-PY', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' });
 }
 
 function orderTotal(order: PurchaseOrder) {
@@ -62,27 +60,6 @@ const NUM_CLS = 'h-9 w-full min-w-0 rounded-3xl border border-transparent bg-inp
 const TEXTAREA_CLS = 'w-full min-w-0 rounded-2xl border border-transparent bg-input/50 px-3 py-2 text-sm outline-none resize-none transition-[color,box-shadow,background-color] focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30';
 
 // ── Sub-nav ────────────────────────────────────────────────────────────────────
-
-function ProcurementNav() {
-  return (
-    <div className="flex gap-1 border-b border-border mb-6">
-      <Link
-        href="/dashboard/procurement"
-        className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 border-primary text-foreground -mb-px"
-      >
-        <Truck size={15} />
-        Órdenes de compra
-      </Link>
-      <Link
-        href="/dashboard/procurement/suppliers"
-        className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 border-transparent text-muted-foreground hover:text-foreground -mb-px"
-      >
-        <Users size={15} />
-        Proveedores
-      </Link>
-    </div>
-  );
-}
 
 // ── Status badge ───────────────────────────────────────────────────────────────
 
@@ -246,11 +223,11 @@ function CreateOrderModal({
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1">
               <Label>Fecha de orden *</Label>
-              <input type="date" className={NUM_CLS} value={orderDate} onChange={(e) => setOrderDate(e.target.value)} required />
+              <DatePicker value={orderDate} onChange={setOrderDate} />
             </div>
             <div className="space-y-1">
               <Label>Fecha esperada de entrega</Label>
-              <input type="date" className={NUM_CLS} value={expectedDate} onChange={(e) => setExpectedDate(e.target.value)} />
+              <DatePicker value={expectedDate} onChange={setExpectedDate} />
             </div>
           </div>
 
@@ -279,7 +256,16 @@ function CreateOrderModal({
 
           {/* Productos */}
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/60 mb-2">Productos</p>
+            <div className="mb-2 flex items-center justify-between">
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/60">Productos</p>
+              <Link
+                href="/dashboard/procurement/compare-prices"
+                target="_blank"
+                className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2"
+              >
+                Comparar precios por proveedor
+              </Link>
+            </div>
             <div className="space-y-2">
               {items.map((item, idx) => (
                 <div key={idx} className="rounded-xl border border-border p-3">
@@ -374,7 +360,14 @@ function CreateOrderModal({
   );
 }
 
-// ── Receive modal ──────────────────────────────────────────────────────────────
+// ── Receive modal (crea una recepción propia — documento separado de la OC) ────
+
+interface ReceiptLineState {
+  quantity: number;
+  serials: string;
+  batchNumber: string;
+  expiresAt: string;
+}
 
 function ReceiveModal({
   order,
@@ -389,23 +382,50 @@ function ReceiveModal({
 }) {
   const queryClient = useQueryClient();
   const pendingItems = order.items.filter((i) => i.receivedQty < i.quantity);
-  const [serialInputs, setSerialInputs] = useState<Record<string, string>>(
-    Object.fromEntries(pendingItems.map((i) => [i.id, ''])),
+  const [warehouseId, setWarehouseId] = useState('');
+  const [notes, setNotes] = useState('');
+  const [lines, setLines] = useState<Record<string, ReceiptLineState>>(
+    Object.fromEntries(
+      pendingItems.map((i) => [
+        i.id,
+        { quantity: i.quantity - i.receivedQty, serials: '', batchNumber: '', expiresAt: '' },
+      ]),
+    ),
   );
   const [error, setError] = useState('');
 
+  const { data: warehouses = [] } = useQuery({
+    queryKey: ['warehouses'],
+    queryFn: warehousesApi.listWarehouses,
+  });
+
+  function updateLine(itemId: string, patch: Partial<ReceiptLineState>) {
+    setLines((prev) => ({ ...prev, [itemId]: { ...prev[itemId], ...patch } }));
+  }
+
   const mutation = useMutation({
     mutationFn: () => {
-      const items: ReceiveItem[] = pendingItems.map((item) => ({
-        itemId: item.id,
-        serialNumbers: item.product.isSerialized
-          ? serialInputs[item.id].split('\n').map((s) => s.trim()).filter(Boolean)
-          : undefined,
-      }));
-      return procurementApi.receiveItems(order.id, { items });
+      const items: ReceiptItemPayload[] = pendingItems.map((item) => {
+        const line = lines[item.id];
+        return {
+          purchaseOrderItemId: item.id,
+          quantity: Number(line.quantity),
+          batchNumber: item.product.usesLots && line.batchNumber.trim() ? line.batchNumber.trim() : undefined,
+          expiresAt: item.product.usesLots && line.expiresAt ? line.expiresAt : undefined,
+          serialNumbers: item.product.isSerialized
+            ? line.serials.split('\n').map((s) => s.trim()).filter(Boolean)
+            : undefined,
+        };
+      });
+      return procurementApi.createReceipt(order.id, {
+        warehouseId: warehouseId || undefined,
+        notes: notes.trim() || undefined,
+        items,
+      });
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['purchase-orders'] });
+      void queryClient.invalidateQueries({ queryKey: ['purchase-receipts', order.id] });
       onSaved();
     },
     onError: (err: Error & { response?: { data?: { message?: string | string[] } } }) => {
@@ -429,38 +449,96 @@ function ReceiveModal({
             Ítems pendientes para <strong className="text-foreground">{order.supplier.name}</strong>:
           </p>
 
+          <div className="space-y-1">
+            <Label>Depósito de ingreso</Label>
+            <Select value={warehouseId || 'none'} onValueChange={(v) => setWarehouseId(v && v !== 'none' ? v : '')}>
+              <SelectTrigger className="w-full">
+                <span className="flex-1 text-left text-sm truncate">
+                  {warehouses.find((w) => w.id === warehouseId)?.name ?? '— Sin especificar —'}
+                </span>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">— Sin especificar —</SelectItem>
+                {warehouses.map((w) => <SelectItem key={w.id} value={w.id}>{w.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+
           {pendingItems.map((item) => {
             const pending = item.quantity - item.receivedQty;
+            const line = lines[item.id];
             return (
-              <div key={item.id} className="rounded-xl border border-border p-4">
-                <div className="flex justify-between items-start mb-2">
+              <div key={item.id} className="rounded-xl border border-border p-4 space-y-3">
+                <div className="flex justify-between items-start">
                   <div>
                     <p className="text-sm font-medium text-foreground">{item.product.name}</p>
                     {item.product.model && <p className="text-xs text-muted-foreground/60">{item.product.model}</p>}
                   </div>
                   <span className="text-xs text-muted-foreground">
-                    Pendiente: <strong>{pending}</strong> {item.product.unit}
+                    Saldo pendiente: <strong>{pending}</strong> {item.product.unit}
                   </span>
                 </div>
+
                 {item.product.isSerialized ? (
                   <div className="space-y-1">
-                    <Label>Números de serie (uno por línea — {pending} requerido{pending !== 1 ? 's' : ''})</Label>
+                    <Label>Números de serie (uno por línea — la cantidad los define)</Label>
                     <textarea
                       className={`${TEXTAREA_CLS} font-mono text-xs`}
                       rows={Math.min(pending, 5)}
                       placeholder={'SN001\nSN002'}
-                      value={serialInputs[item.id] ?? ''}
-                      onChange={(e) => setSerialInputs((prev) => ({ ...prev, [item.id]: e.target.value }))}
+                      value={line.serials}
+                      onChange={(e) => updateLine(item.id, { serials: e.target.value })}
                     />
                   </div>
                 ) : (
-                  <p className="text-xs text-muted-foreground/60">
-                    Se registrará la recepción de {pending} unidad{pending !== 1 ? 'es' : ''} al confirmar.
-                  </p>
+                  <>
+                    <div className="space-y-1">
+                      <Label>Cantidad a recibir ahora</Label>
+                      <input
+                        type="number"
+                        min={1}
+                        max={pending}
+                        className={NUM_CLS}
+                        value={line.quantity || ''}
+                        onChange={(e) =>
+                          updateLine(item.id, { quantity: Math.min(pending, parseInt(e.target.value) || 1) })
+                        }
+                      />
+                    </div>
+                    {item.product.usesLots && (
+                      <div className="grid grid-cols-2 gap-3 rounded-lg bg-muted/20 p-3">
+                        <div className="space-y-1">
+                          <Label>Número de lote</Label>
+                          <Input
+                            placeholder="LOTE-001"
+                            value={line.batchNumber}
+                            onChange={(e) => updateLine(item.id, { batchNumber: e.target.value })}
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <Label>Vencimiento (opcional)</Label>
+                          <DatePicker
+                            value={line.expiresAt}
+                            onChange={(v) => updateLine(item.id, { expiresAt: v })}
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             );
           })}
+
+          <div className="space-y-1">
+            <Label>Notas (opcional)</Label>
+            <textarea
+              className={TEXTAREA_CLS}
+              rows={2}
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+            />
+          </div>
 
           {error && (
             <div className="rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
@@ -495,6 +573,12 @@ function OrderDetailPanel({
   const [showReceive, setShowReceive] = useState(false);
   const [confirmAction, setConfirmAction] = useState<'confirm' | null>(null);
 
+  const { data: receipts = [] } = useQuery({
+    queryKey: ['purchase-receipts', order?.id],
+    queryFn: () => procurementApi.listReceipts(order!.id),
+    enabled: !!order && order.status !== 'PENDING',
+  });
+
   const confirmMutation = useMutation({
     mutationFn: () => procurementApi.confirmOrder(order!.id),
     onSuccess: () => {
@@ -520,8 +604,8 @@ function OrderDetailPanel({
                   <TypeBadge type={order.purchaseType} />
                 </div>
                 <SheetDescription>
-                  Orden: {formatDate(order.orderDate)}
-                  {order.expectedDate ? ` · Entrega est.: ${formatDate(order.expectedDate)}` : ''}
+                  Orden: {formatDatePY(order.orderDate, 'local')}
+                  {order.expectedDate ? ` · Entrega est.: ${formatDatePY(order.expectedDate, 'utc')}` : ''}
                 </SheetDescription>
               </SheetHeader>
 
@@ -587,6 +671,36 @@ function OrderDetailPanel({
                     <span className="text-base font-bold text-foreground">{formatPrice(orderTotal(order))}</span>
                   </div>
                 </div>
+
+                {/* Recepciones */}
+                {receipts.length > 0 && (
+                  <div className="border-b border-border px-5 py-4">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/60 mb-3">
+                      Recepciones
+                    </p>
+                    <div className="space-y-2">
+                      {receipts.map((receipt) => (
+                        <div key={receipt.id} className="rounded-xl border border-border p-3">
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm font-medium text-foreground">Recepción #{receipt.receiptNumber}</span>
+                            <span className="text-xs text-muted-foreground">{formatDatePY(receipt.receivedAt, 'local')}</span>
+                          </div>
+                          {receipt.warehouse && (
+                            <p className="text-xs text-muted-foreground/60 mt-0.5">Depósito: {receipt.warehouse.name}</p>
+                          )}
+                          <ul className="mt-2 space-y-0.5">
+                            {receipt.items.map((item) => (
+                              <li key={item.id} className="text-xs text-muted-foreground flex justify-between">
+                                <span className="truncate">{item.product.name}{item.batchNumber ? ` (lote ${item.batchNumber})` : ''}</span>
+                                <span className="shrink-0 ml-2">{item.quantity} un.</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 {/* Notes */}
                 {order.notes && (
@@ -709,8 +823,6 @@ export default function ProcurementPage() {
         </Button>
       </div>
 
-      <ProcurementNav />
-
       <div className="mb-4 flex items-center gap-3">
         <Select value={statusFilter || 'all'} onValueChange={(v) => setStatusFilter(v === 'all' ? '' : v as PurchaseOrderStatus)}>
           <SelectTrigger>
@@ -777,7 +889,7 @@ export default function ProcurementPage() {
                         {order.supplier.email && <div className="text-xs text-muted-foreground/60">{order.supplier.email}</div>}
                       </td>
                       <td className="px-4 py-3"><TypeBadge type={order.purchaseType} /></td>
-                      <td className="px-4 py-3 text-muted-foreground">{formatDate(order.orderDate)}</td>
+                      <td className="px-4 py-3 text-muted-foreground">{formatDatePY(order.orderDate, 'local')}</td>
                       <td
                         className={cn(
                           'px-4 py-3',
@@ -786,7 +898,7 @@ export default function ProcurementPage() {
                           !accent && 'text-muted-foreground',
                         )}
                       >
-                        {formatDate(order.expectedDate)}
+                        {formatDatePY(order.expectedDate, 'utc')}
                       </td>
                       <td className="px-4 py-3"><StatusBadge status={order.status} deliveryOverdueDays={deliveryOverdueDays} /></td>
                       <td className="px-4 py-3 text-center text-muted-foreground">{order.items.length}</td>

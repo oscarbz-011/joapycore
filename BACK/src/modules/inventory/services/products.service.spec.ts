@@ -1,4 +1,7 @@
-import { NotFoundException, UnprocessableEntityException } from '@nestjs/common';
+import {
+  NotFoundException,
+  UnprocessableEntityException,
+} from '@nestjs/common';
 import { ProductsService } from './products.service';
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
@@ -48,6 +51,10 @@ describe('ProductsService', () => {
     delete: jest.Mock;
     clearPreferred: jest.Mock;
   };
+  let productBatchesRepository: {
+    findByProduct: jest.Mock;
+    findAll: jest.Mock;
+  };
   let eventEmitter: { emit: jest.Mock };
 
   beforeEach(() => {
@@ -73,12 +80,17 @@ describe('ProductsService', () => {
       delete: jest.fn(),
       clearPreferred: jest.fn(),
     };
+    productBatchesRepository = {
+      findByProduct: jest.fn(),
+      findAll: jest.fn(),
+    };
     eventEmitter = { emit: jest.fn() };
 
     service = new ProductsService(
       productsRepository as any,
       productUnitsRepository as any,
       productSuppliersRepository as any,
+      productBatchesRepository as any,
       eventEmitter as any,
     );
   });
@@ -92,7 +104,10 @@ describe('ProductsService', () => {
 
       service.findAll('tenant-1', filters);
 
-      expect(productsRepository.findAll).toHaveBeenCalledWith('tenant-1', filters);
+      expect(productsRepository.findAll).toHaveBeenCalledWith(
+        'tenant-1',
+        filters,
+      );
     });
   });
 
@@ -110,7 +125,9 @@ describe('ProductsService', () => {
     it('throws NotFoundException when product does not exist', async () => {
       productsRepository.findById.mockResolvedValue(null);
 
-      await expect(service.findOne('tenant-1', 'ghost')).rejects.toBeInstanceOf(NotFoundException);
+      await expect(service.findOne('tenant-1', 'ghost')).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
     });
   });
 
@@ -118,21 +135,31 @@ describe('ProductsService', () => {
 
   describe('findOneWithStock', () => {
     it('uses getStock for non-serialized products', async () => {
-      productsRepository.findById.mockResolvedValue(makeProduct({ isSerialized: false }));
+      productsRepository.findById.mockResolvedValue(
+        makeProduct({ isSerialized: false }),
+      );
 
       const result = await service.findOneWithStock('tenant-1', 'prod-1');
 
-      expect(productsRepository.getStock).toHaveBeenCalledWith('tenant-1', 'prod-1');
+      expect(productsRepository.getStock).toHaveBeenCalledWith(
+        'tenant-1',
+        'prod-1',
+      );
       expect(productsRepository.getSerializedStock).not.toHaveBeenCalled();
       expect(result.stock).toBe(10);
     });
 
     it('uses getSerializedStock for serialized products', async () => {
-      productsRepository.findById.mockResolvedValue(makeProduct({ isSerialized: true }));
+      productsRepository.findById.mockResolvedValue(
+        makeProduct({ isSerialized: true }),
+      );
 
       const result = await service.findOneWithStock('tenant-1', 'prod-1');
 
-      expect(productsRepository.getSerializedStock).toHaveBeenCalledWith('tenant-1', 'prod-1');
+      expect(productsRepository.getSerializedStock).toHaveBeenCalledWith(
+        'tenant-1',
+        'prod-1',
+      );
       expect(productsRepository.getStock).not.toHaveBeenCalled();
       expect(result.stock).toBe(3);
     });
@@ -140,9 +167,9 @@ describe('ProductsService', () => {
     it('throws NotFoundException if product does not exist', async () => {
       productsRepository.findById.mockResolvedValue(null);
 
-      await expect(service.findOneWithStock('tenant-1', 'ghost')).rejects.toBeInstanceOf(
-        NotFoundException,
-      );
+      await expect(
+        service.findOneWithStock('tenant-1', 'ghost'),
+      ).rejects.toBeInstanceOf(NotFoundException);
     });
   });
 
@@ -200,7 +227,9 @@ describe('ProductsService', () => {
         .mockResolvedValueOnce(makeProduct())
         .mockResolvedValueOnce(updated);
 
-      const result = await service.update('tenant-1', 'prod-1', { name: 'Heladera LG' });
+      const result = await service.update('tenant-1', 'prod-1', {
+        name: 'Heladera LG',
+      });
 
       expect(productsRepository.update).toHaveBeenCalledWith(
         'tenant-1',
@@ -217,7 +246,9 @@ describe('ProductsService', () => {
     it('throws NotFoundException if product not found', async () => {
       productsRepository.findById.mockResolvedValue(null);
 
-      await expect(service.delete('tenant-1', 'ghost')).rejects.toBeInstanceOf(NotFoundException);
+      await expect(service.delete('tenant-1', 'ghost')).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
 
       expect(productsRepository.softDelete).not.toHaveBeenCalled();
     });
@@ -227,7 +258,10 @@ describe('ProductsService', () => {
 
       await service.delete('tenant-1', 'prod-1');
 
-      expect(productsRepository.softDelete).toHaveBeenCalledWith('tenant-1', 'prod-1');
+      expect(productsRepository.softDelete).toHaveBeenCalledWith(
+        'tenant-1',
+        'prod-1',
+      );
     });
   });
 
@@ -235,7 +269,9 @@ describe('ProductsService', () => {
 
   describe('addUnits', () => {
     it('throws UnprocessableEntityException for non-serialized product', async () => {
-      productsRepository.findById.mockResolvedValue(makeProduct({ isSerialized: false }));
+      productsRepository.findById.mockResolvedValue(
+        makeProduct({ isSerialized: false }),
+      );
 
       await expect(
         service.addUnits('tenant-1', 'prod-1', { serialNumbers: ['SN001'] }),
@@ -245,7 +281,9 @@ describe('ProductsService', () => {
     });
 
     it('creates units and emits stock.movement.created for serialized product', async () => {
-      productsRepository.findById.mockResolvedValue(makeProduct({ isSerialized: true }));
+      productsRepository.findById.mockResolvedValue(
+        makeProduct({ isSerialized: true }),
+      );
       productUnitsRepository.createMany.mockResolvedValue({ count: 2 });
 
       const result = await service.addUnits('tenant-1', 'prod-1', {
@@ -259,7 +297,12 @@ describe('ProductsService', () => {
       );
       expect(eventEmitter.emit).toHaveBeenCalledWith(
         'stock.movement.created',
-        expect.objectContaining({ tenantId: 'tenant-1', productId: 'prod-1', type: 'IN', quantity: 2 }),
+        expect.objectContaining({
+          tenantId: 'tenant-1',
+          productId: 'prod-1',
+          type: 'IN',
+          quantity: 2,
+        }),
       );
       expect(result.created).toBe(2);
     });

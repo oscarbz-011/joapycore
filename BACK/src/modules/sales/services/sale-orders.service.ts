@@ -1107,6 +1107,54 @@ export class SaleOrdersService {
     return confirmed;
   }
 
+  // Bloque de stock-out compartido por handleDeliveryConfirmed() (logística
+  // marca la entrega) y deliver() (ruta directa de ventas) — antes estaba
+  // duplicado casi al carácter entre ambos métodos. Sales sigue sin saber
+  // nada de lotes/ProductBatch: el consumo FIFO es responsabilidad exclusiva
+  // de inventory, disparado por el evento `sale.order.stock_out` que emiten
+  // ambos call sites después de que esta transacción confirma.
+  private async applyDeliveryStockOut(
+    tx: Prisma.TransactionClient,
+    tenantId: string,
+    order: Awaited<ReturnType<SaleOrdersService['findOne']>>,
+    isCashOrder: boolean,
+  ) {
+    for (const item of order.items) {
+      if (!item.productId) continue; // free-text / service lines have no stock
+
+      if (isCashOrder) {
+        // Cash only: release the RESERVED movement created at order creation
+        await tx.stockMovement.create({
+          data: {
+            tenantId,
+            productId: item.productId,
+            warehouseId: item.warehouseId ?? null,
+            type: 'RESERVED',
+            quantity: item.quantity, // positive = reverses the reservation
+            referenceId: item.id,
+          },
+        });
+      }
+
+      // All orders (cash + credit): create the real OUT movement
+      await tx.stockMovement.create({
+        data: {
+          tenantId,
+          productId: item.productId,
+          warehouseId: item.warehouseId ?? null,
+          type: 'OUT',
+          quantity: -item.quantity,
+          referenceId: item.id,
+        },
+      });
+
+      // All orders: mark serialized units as SOLD
+      if (item.product?.isSerialized) {
+        await this.markSerializedUnitsSold(tx, tenantId, item.id);
+      }
+    }
+  }
+
   // Called by SalesOnDeliveryListener when logistics confirms delivery
   async handleDeliveryConfirmed(
     tenantId: string,
@@ -1125,36 +1173,10 @@ export class SaleOrdersService {
     const order = await this.findOne(tenantId, saleOrderId);
     const isCashOrder = order.saleType === 'CASH';
 
-    await this.prisma.$transaction(async (tx) => {
-      for (const item of order.items) {
-        if (!item.productId) continue; // free-text / service lines have no stock
-        if (isCashOrder) {
-          await tx.stockMovement.create({
-            data: {
-              tenantId,
-              productId: item.productId,
-              warehouseId: item.warehouseId ?? null,
-              type: 'RESERVED',
-              quantity: item.quantity,
-              referenceId: item.id,
-            },
-          });
-        }
-        await tx.stockMovement.create({
-          data: {
-            tenantId,
-            productId: item.productId,
-            warehouseId: item.warehouseId ?? null,
-            type: 'OUT',
-            quantity: -item.quantity,
-            referenceId: item.id,
-          },
-        });
-        if (item.product?.isSerialized) {
-          await this.markSerializedUnitsSold(tx, tenantId, item.id);
-        }
-      }
-    });
+    await this.prisma.$transaction((tx) =>
+      this.applyDeliveryStockOut(tx, tenantId, order, isCashOrder),
+    );
+    this.eventEmitter.emit('sale.order.stock_out', { tenantId, saleOrderId });
 
     this.eventEmitter.emit('audit.log', {
       tenantId,
@@ -1183,41 +1205,12 @@ export class SaleOrdersService {
     const order = await this.findOne(tenantId, id);
     const isCashOrder = order.saleType === 'CASH';
 
-    await this.prisma.$transaction(async (tx) => {
-      for (const item of order.items) {
-        if (!item.productId) continue; // free-text / service lines have no stock
-
-        if (isCashOrder) {
-          // Cash only: release the RESERVED movement created at order creation
-          await tx.stockMovement.create({
-            data: {
-              tenantId,
-              productId: item.productId,
-              warehouseId: item.warehouseId ?? null,
-              type: 'RESERVED',
-              quantity: item.quantity, // positive = reverses the reservation
-              referenceId: item.id,
-            },
-          });
-        }
-
-        // All orders (cash + credit): create the real OUT movement
-        await tx.stockMovement.create({
-          data: {
-            tenantId,
-            productId: item.productId,
-            warehouseId: item.warehouseId ?? null,
-            type: 'OUT',
-            quantity: -item.quantity,
-            referenceId: item.id,
-          },
-        });
-
-        // All orders: mark serialized units as SOLD
-        if (item.product?.isSerialized) {
-          await this.markSerializedUnitsSold(tx, tenantId, item.id);
-        }
-      }
+    await this.prisma.$transaction((tx) =>
+      this.applyDeliveryStockOut(tx, tenantId, order, isCashOrder),
+    );
+    this.eventEmitter.emit('sale.order.stock_out', {
+      tenantId,
+      saleOrderId: id,
     });
 
     this.eventEmitter.emit('audit.log', {

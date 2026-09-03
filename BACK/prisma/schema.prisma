@@ -52,6 +52,16 @@ enum MovementReason {
   SALE_REVERSAL
 }
 
+// Origen documentado de una carga inicial de stock (reason=INITIAL) — no
+// finge ser una compra real, solo deja registrado de dónde vino.
+enum StockInitialSourceType {
+  PURCHASE
+  MIGRATION
+  PRODUCTION
+  DONATION
+  OTHER
+}
+
 enum AlertType {
   STOCK_LOW
   PAYMENT_DUE
@@ -113,6 +123,31 @@ enum DeliveryNoteStatus {
   CANCELLED
 }
 
+// Empleado interno; repartidor externo ocasional con usuario propio en el
+// sistema (mismo flujo de tracking que un empleado); empresa de courier
+// externa — sin tracking ni confirmación de ubicación posible, el staff
+// marca "entregado" manualmente una vez que el courier confirma por fuera.
+enum DeliveryAssignmentMode {
+  INTERNAL_EMPLOYEE
+  EXTERNAL_COURIER_USER
+  EXTERNAL_COMPANY
+}
+
+// MANUAL = hito cargado a mano por el repartidor; GPS_AUTO = ping automático
+// futuro (no implementado todavía) — mismo modelo, deja la puerta abierta a
+// migrar a GPS en vivo sin cambiar el schema.
+enum DeliveryEventSource {
+  MANUAL
+  GPS_AUTO
+}
+
+enum DeliveryCheckpoint {
+  LEFT_WAREHOUSE
+  IN_TRANSIT
+  ARRIVED
+  DELIVERED
+}
+
 enum MarkupType {
   PERCENTAGE
   FIXED
@@ -159,12 +194,28 @@ enum InvoiceStatus {
   CANCELLED
 }
 
+// SALE = factura de venta normal (flujo de siempre). INTEREST = factura
+// generada automáticamente por los intereses moratorios cobrados en un pago
+// de cuota — sin saleOrderId (ver Invoice.saleOrderId), referenciada por
+// paymentReceiptId en su lugar.
+enum InvoiceType {
+  SALE
+  INTEREST
+}
+
 enum CreditNoteStatus {
   ISSUED
   APPLIED
 }
 
 enum ARStatus {
+  PENDING
+  PARTIAL
+  PAID
+  CANCELLED
+}
+
+enum APStatus {
   PENDING
   PARTIAL
   PAID
@@ -329,58 +380,64 @@ model Tenant {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  logoFile           FileRecord?        @relation("TenantLogo", fields: [logoFileId], references: [id])
-  users              User[]
-  roles              Role[]
-  tenantModules      TenantModule[]
-  creditNotes        CreditNote[]
-  branches           Branch[]
-  warehouses         Warehouse[]
-  loans              Loan[]
-  installments       Installment[]
-  categories         Category[]
-  brands             Brand[]
-  products           Product[]
-  productSuppliers   ProductSupplier[]
-  productUnits       ProductUnit[]
-  productBatches     ProductBatch[]
-  stockMovements     StockMovement[]
-  posTerminals       PosTerminal[]
-  posSessions        PosSession[]
-  customers          Customer[]
-  suppliers          Supplier[]
-  purchaseOrders     PurchaseOrder[]
-  saleOrders         SaleOrder[]
-  invoices           Invoice[]
-  accountsReceivable AccountsReceivable[]
-  paymentRecords     PaymentRecord[]
-  areas              Area[]
-  positions          Position[]
-  employees          Employee[]
-  payrollConfig      PayrollConfig?
-  payrollRecords     PayrollRecord[]
-  auditLogs          AuditLog[]
-  alertConfigs       AlertConfig[]
-  fileRecords        FileRecord[]
-  documents          Document[]
-  documentCategories DocumentCategory[]
-  creditConfig       CreditConfig?
-  pricingConfig      PricingConfig?
-  salesConfig        SalesConfig?
-  saleCombos         SaleCombo[]
-  saleTargets        SaleTarget[]
-  downPayments       DownPayment[]
-  salePayments       SalePayment[]
-  deliveryNotes      DeliveryNote[]
-  collectionRoutes   CollectionRoute[]
-  collectionVisits   CollectionVisit[]
-  paymentAgreements  PaymentAgreement[]
-  collectionNotes    CollectionNote[]
-  sifenConfig        SifenConfig?
-  guarantors         Guarantor[]
-  creditBureauConfig CreditBureauConfig?
-  creditBureauChecks CreditBureauCheck[]
-  paymentReceipts    PaymentReceipt[]
+  logoFile               FileRecord?             @relation("TenantLogo", fields: [logoFileId], references: [id])
+  users                  User[]
+  roles                  Role[]
+  tenantModules          TenantModule[]
+  creditNotes            CreditNote[]
+  branches               Branch[]
+  warehouses             Warehouse[]
+  loans                  Loan[]
+  installments           Installment[]
+  categories             Category[]
+  brands                 Brand[]
+  products               Product[]
+  productSuppliers       ProductSupplier[]
+  productUnits           ProductUnit[]
+  productBatches         ProductBatch[]
+  stockMovements         StockMovement[]
+  posTerminals           PosTerminal[]
+  posSessions            PosSession[]
+  customers              Customer[]
+  suppliers              Supplier[]
+  purchaseOrders         PurchaseOrder[]
+  purchaseReceipts       PurchaseReceipt[]
+  saleOrders             SaleOrder[]
+  invoices               Invoice[]
+  accountsReceivable     AccountsReceivable[]
+  paymentRecords         PaymentRecord[]
+  accountsPayable        AccountsPayable[]
+  supplierPayments       SupplierPayment[]
+  areas                  Area[]
+  positions              Position[]
+  employees              Employee[]
+  payrollConfig          PayrollConfig?
+  payrollRecords         PayrollRecord[]
+  auditLogs              AuditLog[]
+  alertConfigs           AlertConfig[]
+  fileRecords            FileRecord[]
+  documents              Document[]
+  documentCategories     DocumentCategory[]
+  creditConfig           CreditConfig?
+  pricingConfig          PricingConfig?
+  salesConfig            SalesConfig?
+  saleCombos             SaleCombo[]
+  saleTargets            SaleTarget[]
+  downPayments           DownPayment[]
+  salePayments           SalePayment[]
+  deliveryNotes          DeliveryNote[]
+  deliveryTrackingEvents DeliveryTrackingEvent[]
+  collectionRoutes       CollectionRoute[]
+  collectionVisits       CollectionVisit[]
+  paymentAgreements      PaymentAgreement[]
+  collectionNotes        CollectionNote[]
+  sifenConfig            SifenConfig?
+  guarantors             Guarantor[]
+  creditBureauConfig     CreditBureauConfig?
+  creditBureauChecks     CreditBureauCheck[]
+  paymentReceipts        PaymentReceipt[]
+  interestComponents     InterestComponent[]
+  delinquencyReports     DelinquencyReport[]
 
   @@map("tenants")
 }
@@ -440,14 +497,14 @@ model Branch {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  tenant         Tenant          @relation(fields: [tenantId], references: [id])
-  warehouses     Warehouse[]
-  users          User[]
-  stockMovements StockMovement[]
-  saleOrders     SaleOrder[]
-  purchaseOrders PurchaseOrder[]
-  employees      Employee[]
-  posTerminals   PosTerminal[]
+  tenant          Tenant           @relation(fields: [tenantId], references: [id])
+  warehouses      Warehouse[]
+  users           User[]
+  stockMovements  StockMovement[]
+  saleOrders      SaleOrder[]
+  purchaseOrders  PurchaseOrder[]
+  employees       Employee[]
+  posTerminals    PosTerminal[]
   paymentReceipts PaymentReceipt[]
 
   @@unique([tenantId, name])
@@ -466,10 +523,11 @@ model Warehouse {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  tenant         Tenant          @relation(fields: [tenantId], references: [id])
-  branch         Branch?         @relation(fields: [branchId], references: [id])
-  stockMovements StockMovement[]
-  saleOrderItems SaleOrderItem[]
+  tenant           Tenant            @relation(fields: [tenantId], references: [id])
+  branch           Branch?           @relation(fields: [branchId], references: [id])
+  stockMovements   StockMovement[]
+  saleOrderItems   SaleOrderItem[]
+  purchaseReceipts PurchaseReceipt[]
 
   @@unique([tenantId, name])
   @@map("warehouses")
@@ -507,28 +565,32 @@ model User {
   updatedAt             DateTime   @updatedAt @map("updated_at")
   deletedAt             DateTime?  @map("deleted_at")
 
-  tenant                      Tenant             @relation(fields: [tenantId], references: [id])
-  branch                      Branch?            @relation(fields: [branchId], references: [id])
-  userRoles                   UserRole[]
-  userPermissions             UserPermission[]
-  refreshTokens               RefreshToken[]
-  employee                    Employee?
-  auditLogs                   AuditLog[]
-  createdSaleOrders           SaleOrder[]        @relation("SaleCreator")
-  selledSaleOrders            SaleOrder[]        @relation("SaleSeller")
-  approvedSaleOrders          SaleOrder[]        @relation("CreditApprover")
-  rejectedSaleOrders          SaleOrder[]        @relation("CreditRejecter")
-  registeredDownPayments      DownPayment[]      @relation("DownPaymentRegistrar")
-  collectedSalePayments       SalePayment[]      @relation("SalePaymentCollector")
-  saleTargets                 SaleTarget[]
-  collectionRoutesAsCollector CollectionRoute[]  @relation("RouteCollector")
-  closedCollectionRoutes      CollectionRoute[]  @relation("RouteClosedBy")
-  createdCollectionRoutes     CollectionRoute[]  @relation("RouteCreatedBy")
-  approvedAgreements          PaymentAgreement[] @relation("AgreementApprovedBy")
-  createdAgreements           PaymentAgreement[] @relation("AgreementCreatedBy")
-  createdCollectionNotes      CollectionNote[]   @relation("NoteCreatedBy")
-  posSessionsAsCashier        PosSession[]       @relation("SessionCashier")
-  collectedPaymentReceipts    PaymentReceipt[]
+  tenant                         Tenant                  @relation(fields: [tenantId], references: [id])
+  branch                         Branch?                 @relation(fields: [branchId], references: [id])
+  userRoles                      UserRole[]
+  userPermissions                UserPermission[]
+  refreshTokens                  RefreshToken[]
+  employee                       Employee?
+  auditLogs                      AuditLog[]
+  createdSaleOrders              SaleOrder[]             @relation("SaleCreator")
+  selledSaleOrders               SaleOrder[]             @relation("SaleSeller")
+  approvedSaleOrders             SaleOrder[]             @relation("CreditApprover")
+  rejectedSaleOrders             SaleOrder[]             @relation("CreditRejecter")
+  registeredDownPayments         DownPayment[]           @relation("DownPaymentRegistrar")
+  collectedSalePayments          SalePayment[]           @relation("SalePaymentCollector")
+  saleTargets                    SaleTarget[]
+  collectionRoutesAsCollector    CollectionRoute[]       @relation("RouteCollector")
+  closedCollectionRoutes         CollectionRoute[]       @relation("RouteClosedBy")
+  createdCollectionRoutes        CollectionRoute[]       @relation("RouteCreatedBy")
+  approvedAgreements             PaymentAgreement[]      @relation("AgreementApprovedBy")
+  createdAgreements              PaymentAgreement[]      @relation("AgreementCreatedBy")
+  createdCollectionNotes         CollectionNote[]        @relation("NoteCreatedBy")
+  posSessionsAsCashier           PosSession[]            @relation("SessionCashier")
+  collectedPaymentReceipts       PaymentReceipt[]
+  createdPurchaseReceipts        PurchaseReceipt[]
+  recordedDeliveryTrackingEvents DeliveryTrackingEvent[]
+  createdSupplierPayments        SupplierPayment[]
+  reviewedDelinquencyReports     DelinquencyReport[]     @relation("DelinquencyReportReviewedBy")
 
   @@map("users")
 }
@@ -660,16 +722,17 @@ model Product {
   createdAt            DateTime    @default(now()) @map("created_at")
   updatedAt            DateTime    @updatedAt @map("updated_at")
 
-  tenant             Tenant              @relation(fields: [tenantId], references: [id])
-  category           Category?           @relation(fields: [categoryId], references: [id])
-  brand              Brand?              @relation(fields: [brandId], references: [id])
-  units              ProductUnit[]
-  productBatches     ProductBatch[]
-  stockMovements     StockMovement[]
-  purchaseOrderItems PurchaseOrderItem[]
-  saleOrderItems     SaleOrderItem[]
-  productSuppliers   ProductSupplier[]
-  comboItems         SaleComboItem[]
+  tenant               Tenant                @relation(fields: [tenantId], references: [id])
+  category             Category?             @relation(fields: [categoryId], references: [id])
+  brand                Brand?                @relation(fields: [brandId], references: [id])
+  units                ProductUnit[]
+  productBatches       ProductBatch[]
+  stockMovements       StockMovement[]
+  purchaseOrderItems   PurchaseOrderItem[]
+  purchaseReceiptItems PurchaseReceiptItem[]
+  saleOrderItems       SaleOrderItem[]
+  productSuppliers     ProductSupplier[]
+  comboItems           SaleComboItem[]
 
   @@map("products")
 }
@@ -693,20 +756,22 @@ model ProductSupplier {
 }
 
 model ProductUnit {
-  id                  String            @id @default(uuid())
-  tenantId            String            @map("tenant_id")
-  productId           String            @map("product_id")
-  serialNumber        String            @map("serial_number")
-  status              ProductUnitStatus @default(IN_STOCK)
-  purchaseOrderItemId String?           @map("purchase_order_item_id")
-  saleOrderItemId     String?           @map("sale_order_item_id")
-  createdAt           DateTime          @default(now()) @map("created_at")
-  updatedAt           DateTime          @updatedAt @map("updated_at")
+  id                    String            @id @default(uuid())
+  tenantId              String            @map("tenant_id")
+  productId             String            @map("product_id")
+  serialNumber          String            @map("serial_number")
+  status                ProductUnitStatus @default(IN_STOCK)
+  purchaseOrderItemId   String?           @map("purchase_order_item_id")
+  purchaseReceiptItemId String?           @map("purchase_receipt_item_id")
+  saleOrderItemId       String?           @map("sale_order_item_id")
+  createdAt             DateTime          @default(now()) @map("created_at")
+  updatedAt             DateTime          @updatedAt @map("updated_at")
 
-  tenant            Tenant             @relation(fields: [tenantId], references: [id])
-  product           Product            @relation(fields: [productId], references: [id])
-  purchaseOrderItem PurchaseOrderItem? @relation(fields: [purchaseOrderItemId], references: [id])
-  saleOrderItem     SaleOrderItem?     @relation(fields: [saleOrderItemId], references: [id])
+  tenant              Tenant               @relation(fields: [tenantId], references: [id])
+  product             Product              @relation(fields: [productId], references: [id])
+  purchaseOrderItem   PurchaseOrderItem?   @relation(fields: [purchaseOrderItemId], references: [id])
+  purchaseReceiptItem PurchaseReceiptItem? @relation(fields: [purchaseReceiptItemId], references: [id])
+  saleOrderItem       SaleOrderItem?       @relation(fields: [saleOrderItemId], references: [id])
 
   @@unique([tenantId, productId, serialNumber])
   @@map("product_units")
@@ -730,6 +795,7 @@ model ProductBatch {
   product           Product            @relation(fields: [productId], references: [id])
   purchaseOrderItem PurchaseOrderItem? @relation(fields: [purchaseOrderItemId], references: [id])
   saleOrderItems    SaleOrderItem[]
+  stockMovements    StockMovement[]
 
   @@unique([tenantId, productId, batchNumber])
   @@index([tenantId, productId, remainingQty])
@@ -737,22 +803,25 @@ model ProductBatch {
 }
 
 model StockMovement {
-  id          String            @id @default(uuid())
-  tenantId    String            @map("tenant_id")
-  productId   String            @map("product_id")
-  branchId    String?           @map("branch_id")
-  warehouseId String?           @map("warehouse_id")
-  type        StockMovementType
-  reason      MovementReason?   @map("reason")
-  quantity    Int
-  referenceId String?           @map("reference_id")
-  notes       String?
-  createdAt   DateTime          @default(now()) @map("created_at")
+  id                String                  @id @default(uuid())
+  tenantId          String                  @map("tenant_id")
+  productId         String                  @map("product_id")
+  branchId          String?                 @map("branch_id")
+  warehouseId       String?                 @map("warehouse_id")
+  batchId           String?                 @map("batch_id")
+  type              StockMovementType
+  reason            MovementReason?         @map("reason")
+  quantity          Int
+  referenceId       String?                 @map("reference_id")
+  initialSourceType StockInitialSourceType? @map("initial_source_type")
+  notes             String?
+  createdAt         DateTime                @default(now()) @map("created_at")
 
-  tenant    Tenant     @relation(fields: [tenantId], references: [id])
-  product   Product    @relation(fields: [productId], references: [id])
-  branch    Branch?    @relation(fields: [branchId], references: [id])
-  warehouse Warehouse? @relation(fields: [warehouseId], references: [id])
+  tenant    Tenant        @relation(fields: [tenantId], references: [id])
+  product   Product       @relation(fields: [productId], references: [id])
+  branch    Branch?       @relation(fields: [branchId], references: [id])
+  warehouse Warehouse?    @relation(fields: [warehouseId], references: [id])
+  batch     ProductBatch? @relation(fields: [batchId], references: [id])
 
   @@map("stock_movements")
 }
@@ -769,6 +838,10 @@ model Supplier {
   address     String?
   taxId       String?   @map("tax_id")
   isImporter  Boolean   @default(false) @map("is_importer")
+  // Plazo de pago en días — 0 (default) es contado. Cada AccountsPayable
+  // generada al recibir mercadería de este proveedor calcula su dueDate
+  // como receivedAt + paymentTermDays.
+  paymentTermDays Int?  @default(0) @map("payment_term_days")
   isActive    Boolean   @default(true) @map("is_active")
   deletedAt   DateTime? @map("deleted_at")
   createdAt   DateTime  @default(now()) @map("created_at")
@@ -777,6 +850,7 @@ model Supplier {
   tenant           Tenant            @relation(fields: [tenantId], references: [id])
   purchaseOrders   PurchaseOrder[]
   productSuppliers ProductSupplier[]
+  accountsPayable  AccountsPayable[]
 
   @@map("suppliers")
 }
@@ -801,6 +875,7 @@ model PurchaseOrder {
   supplier Supplier            @relation(fields: [supplierId], references: [id])
   branch   Branch?             @relation(fields: [branchId], references: [id])
   items    PurchaseOrderItem[]
+  receipts PurchaseReceipt[]
 
   @@map("purchase_orders")
 }
@@ -813,12 +888,61 @@ model PurchaseOrderItem {
   receivedQty     Int     @default(0) @map("received_qty")
   unitCost        Decimal @map("unit_cost") @db.Decimal(12, 2)
 
-  purchaseOrder  PurchaseOrder  @relation(fields: [purchaseOrderId], references: [id])
-  product        Product        @relation(fields: [productId], references: [id])
-  productUnits   ProductUnit[]
-  productBatches ProductBatch[]
+  purchaseOrder        PurchaseOrder         @relation(fields: [purchaseOrderId], references: [id])
+  product              Product               @relation(fields: [productId], references: [id])
+  productUnits         ProductUnit[]
+  productBatches       ProductBatch[]
+  purchaseReceiptItems PurchaseReceiptItem[]
 
   @@map("purchase_order_items")
+}
+
+// Documento de recepción propio, separado de la OC — permite recepciones
+// parciales reimprimibles/listables por separado en vez de solo acumular
+// PurchaseOrderItem.receivedQty como un contador sin historial propio.
+model PurchaseReceipt {
+  id              String   @id @default(uuid())
+  tenantId        String   @map("tenant_id")
+  purchaseOrderId String   @map("purchase_order_id")
+  receiptNumber   Int      @map("receipt_number")
+  warehouseId     String?  @map("warehouse_id")
+  receivedAt      DateTime @default(now()) @map("received_at")
+  notes           String?
+  createdById     String?  @map("created_by_id")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  tenant          Tenant                @relation(fields: [tenantId], references: [id])
+  purchaseOrder   PurchaseOrder         @relation(fields: [purchaseOrderId], references: [id])
+  warehouse       Warehouse?            @relation(fields: [warehouseId], references: [id])
+  createdBy       User?                 @relation(fields: [createdById], references: [id])
+  items           PurchaseReceiptItem[]
+  accountsPayable AccountsPayable?
+
+  @@unique([tenantId, receiptNumber])
+  @@index([tenantId, purchaseOrderId])
+  @@map("purchase_receipts")
+}
+
+model PurchaseReceiptItem {
+  id                  String    @id @default(uuid())
+  purchaseReceiptId   String    @map("purchase_receipt_id")
+  purchaseOrderItemId String    @map("purchase_order_item_id")
+  productId           String    @map("product_id")
+  quantity            Int
+  unitCost            Decimal   @map("unit_cost") @db.Decimal(12, 2)
+  batchNumber         String?   @map("batch_number")
+  expiresAt           DateTime? @map("expires_at")
+  // N/S ingresados en esta línea (solo productos serializados) — el listener
+  // de inventory los lee de acá para crear los ProductUnit, nunca del
+  // payload del evento (mismo criterio defensivo que el resto del proyecto).
+  serialNumbers       String[]  @default([]) @map("serial_numbers")
+
+  purchaseReceipt   PurchaseReceipt   @relation(fields: [purchaseReceiptId], references: [id])
+  purchaseOrderItem PurchaseOrderItem @relation(fields: [purchaseOrderItemId], references: [id])
+  product           Product           @relation(fields: [productId], references: [id])
+  productUnits      ProductUnit[]
+
+  @@map("purchase_receipt_items")
 }
 
 // ─── Sales ────────────────────────────────────────────────────────────────────
@@ -862,12 +986,19 @@ model Customer {
   aptFloor    String? @map("apt_floor")
   aptNumber   String? @map("apt_number")
 
+  // Última coordenada conocida — "mejor estimación" para el pin por defecto
+  // del mapa. La fuente de verdad de qué pasó en una entrega puntual es
+  // DeliveryTrackingEvent, no esto; se sincroniza acá solo cuando el
+  // repartidor confirma que corrigió la ubicación.
+  latitude  Decimal? @db.Decimal(9, 6)
+  longitude Decimal? @db.Decimal(9, 6)
+
   isActive  Boolean   @default(true) @map("is_active")
   deletedAt DateTime? @map("deleted_at")
   createdAt DateTime  @default(now()) @map("created_at")
   updatedAt DateTime  @updatedAt @map("updated_at")
 
-  tenant            Tenant             @relation(fields: [tenantId], references: [id])
+  tenant            Tenant              @relation(fields: [tenantId], references: [id])
   saleOrders        SaleOrder[]
   loans             Loan[]
   collectionVisits  CollectionVisit[]
@@ -875,6 +1006,7 @@ model Customer {
   collectionNotes   CollectionNote[]
   bureauChecks      CreditBureauCheck[]
   paymentReceipts   PaymentReceipt[]
+  delinquencyReports DelinquencyReport[]
 
   @@unique([tenantId, customerCode])
   @@map("customers")
@@ -923,25 +1055,25 @@ model SaleOrder {
   // Devuelto al vendedor para ajustar (sin rechazar) — ej. sugerir bajar el
   // valor del pedido, sumar cuotas, o agregar un garante.
   adjustmentNote        String?                      @map("adjustment_note")
-  suggestedAlternatives CreditAdjustmentSuggestion[]  @map("suggested_alternatives")
+  suggestedAlternatives CreditAdjustmentSuggestion[] @map("suggested_alternatives")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  tenant       Tenant          @relation(fields: [tenantId], references: [id])
-  customer     Customer        @relation(fields: [customerId], references: [id])
-  branch       Branch?         @relation(fields: [branchId], references: [id])
-  createdBy    User?           @relation("SaleCreator", fields: [createdById], references: [id])
-  seller       User?           @relation("SaleSeller", fields: [sellerId], references: [id])
-  approvedBy   User?           @relation("CreditApprover", fields: [approvedById], references: [id])
-  rejectedBy   User?           @relation("CreditRejecter", fields: [rejectedById], references: [id])
+  tenant       Tenant              @relation(fields: [tenantId], references: [id])
+  customer     Customer            @relation(fields: [customerId], references: [id])
+  branch       Branch?             @relation(fields: [branchId], references: [id])
+  createdBy    User?               @relation("SaleCreator", fields: [createdById], references: [id])
+  seller       User?               @relation("SaleSeller", fields: [sellerId], references: [id])
+  approvedBy   User?               @relation("CreditApprover", fields: [approvedById], references: [id])
+  rejectedBy   User?               @relation("CreditRejecter", fields: [rejectedById], references: [id])
   items        SaleOrderItem[]
   invoice      Invoice?
   loan         Loan?
   downPayment  DownPayment?
   salePayments SalePayment[]
   deliveryNote DeliveryNote?
-  posSession   PosSession?     @relation(fields: [posSessionId], references: [id])
+  posSession   PosSession?         @relation(fields: [posSessionId], references: [id])
   guarantors   Guarantor[]
   bureauChecks CreditBureauCheck[]
 
@@ -993,23 +1125,54 @@ model SalePayment {
 }
 
 model DeliveryNote {
-  id          String             @id @default(uuid())
-  tenantId    String             @map("tenant_id")
-  saleOrderId String             @unique @map("sale_order_id")
-  noteNumber  String?            @map("note_number")
-  carrier     String?
-  vehicle     String?
-  status      DeliveryNoteStatus @default(PENDING)
-  issuedAt    DateTime?          @map("issued_at")
-  deliveredAt DateTime?          @map("delivered_at")
-  notes       String?
-  createdAt   DateTime           @default(now()) @map("created_at")
-  updatedAt   DateTime           @updatedAt @map("updated_at")
+  id                  String                  @id @default(uuid())
+  tenantId            String                  @map("tenant_id")
+  saleOrderId         String                  @unique @map("sale_order_id")
+  noteNumber          String?                 @map("note_number")
+  carrier             String?
+  vehicle             String?
+  status              DeliveryNoteStatus      @default(PENDING)
+  assignmentMode      DeliveryAssignmentMode? @map("assignment_mode")
+  assignedEmployeeId  String?                 @map("assigned_employee_id")
+  externalTrackingRef String?                 @map("external_tracking_ref")
+  issuedAt            DateTime?               @map("issued_at")
+  deliveredAt         DateTime?               @map("delivered_at")
+  notes               String?
+  createdAt           DateTime                @default(now()) @map("created_at")
+  updatedAt           DateTime                @updatedAt @map("updated_at")
 
-  tenant    Tenant    @relation(fields: [tenantId], references: [id])
-  saleOrder SaleOrder @relation(fields: [saleOrderId], references: [id])
+  tenant           Tenant                  @relation(fields: [tenantId], references: [id])
+  saleOrder        SaleOrder               @relation(fields: [saleOrderId], references: [id])
+  assignedEmployee Employee?               @relation(fields: [assignedEmployeeId], references: [id])
+  trackingEvents   DeliveryTrackingEvent[]
 
   @@map("delivery_notes")
+}
+
+// Checkpoints manuales del recorrido (salió del depósito → en camino →
+// llegó → entregado), cada uno con coordenada opcional. `source` deja la
+// puerta abierta a GPS en vivo más adelante sin migración nueva: un ping
+// automático futuro solo inserta más filas con source=GPS_AUTO,
+// checkpoint=null, más seguido — misma tabla.
+model DeliveryTrackingEvent {
+  id                String              @id @default(uuid())
+  tenantId          String              @map("tenant_id")
+  deliveryNoteId    String              @map("delivery_note_id")
+  source            DeliveryEventSource @default(MANUAL)
+  checkpoint        DeliveryCheckpoint?
+  latitude          Decimal?            @db.Decimal(9, 6)
+  longitude         Decimal?            @db.Decimal(9, 6)
+  locationConfirmed Boolean?            @map("location_confirmed")
+  notes             String?
+  recordedById      String?             @map("recorded_by_id")
+  recordedAt        DateTime            @default(now()) @map("recorded_at")
+
+  tenant       Tenant       @relation(fields: [tenantId], references: [id])
+  deliveryNote DeliveryNote @relation(fields: [deliveryNoteId], references: [id])
+  recordedBy   User?        @relation(fields: [recordedById], references: [id])
+
+  @@index([tenantId, deliveryNoteId, recordedAt])
+  @@map("delivery_tracking_events")
 }
 
 model DownPayment {
@@ -1114,22 +1277,30 @@ model SaleComboItem {
 model Invoice {
   id          String        @id @default(uuid())
   tenantId    String        @map("tenant_id")
-  saleOrderId String        @unique @map("sale_order_id")
+  // Null para invoiceType=INTEREST (no corresponde a ningún pedido de venta,
+  // se referencia por paymentReceiptId en su lugar) — sigue @unique porque
+  // Postgres permite múltiples NULL bajo un unique, así que la garantía "una
+  // sola factura de venta por pedido" queda intacta.
+  saleOrderId String?       @unique @map("sale_order_id")
+  invoiceType InvoiceType   @default(SALE) @map("invoice_type")
   status      InvoiceStatus @default(PENDING)
   issuedAt    DateTime?     @map("issued_at")
   dueDate     DateTime?     @map("due_date")
   total       Decimal       @db.Decimal(12, 2)
   notes       String?
 
+  // Solo para invoiceType=INTEREST: qué recibo de cobro generó esta factura.
+  paymentReceiptId String? @unique @map("payment_receipt_id")
+
   // Numbering (timbrado / serie) — calculado en el servidor al emitir, nunca
   // aceptado del cliente. establecimiento/puntoExpedicion/sequential son la
   // fuente de verdad; invoiceNumber/invoicePrefix son el string formateado
   // para mostrar/imprimir ("001-002-0000123").
   establecimiento String? @map("establecimiento")
-  puntoExpedicion  String? @map("punto_expedicion")
-  sequential       Int?    @map("sequential")
-  invoiceNumber String? @map("invoice_number")
-  invoicePrefix String? @map("invoice_prefix")
+  puntoExpedicion String? @map("punto_expedicion")
+  sequential      Int?    @map("sequential")
+  invoiceNumber   String? @map("invoice_number")
+  invoicePrefix   String? @map("invoice_prefix")
 
   // Payment details (populated on issue)
   paymentMethod PaymentMethod? @map("payment_method")
@@ -1150,8 +1321,9 @@ model Invoice {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  tenant             Tenant              @relation(fields: [tenantId], references: [id])
-  saleOrder          SaleOrder           @relation(fields: [saleOrderId], references: [id])
+  tenant             Tenant               @relation(fields: [tenantId], references: [id])
+  saleOrder          SaleOrder?           @relation(fields: [saleOrderId], references: [id])
+  paymentReceipt     PaymentReceipt?      @relation(fields: [paymentReceiptId], references: [id])
   items              InvoiceItem[]
   accountsReceivable AccountsReceivable?
   creditNotes        CreditNote[]
@@ -1233,6 +1405,49 @@ model PaymentRecord {
   @@map("payment_records")
 }
 
+// Espejo de AccountsReceivable pero del lado de Compras — se genera al
+// recibir mercadería (purchase.receipt.created, listener dentro del propio
+// módulo procurement), no al confirmar la orden ni con una "factura de
+// proveedor" manual. Ver procurement-on-receipt.listener.ts.
+model AccountsPayable {
+  id                String    @id @default(uuid())
+  tenantId          String    @map("tenant_id")
+  purchaseReceiptId String    @unique @map("purchase_receipt_id")
+  supplierId        String    @map("supplier_id")
+  amount            Decimal   @db.Decimal(12, 2)
+  paidAmount        Decimal   @default(0) @map("paid_amount") @db.Decimal(12, 2)
+  status            APStatus  @default(PENDING)
+  dueDate           DateTime? @map("due_date")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  tenant           Tenant            @relation(fields: [tenantId], references: [id])
+  purchaseReceipt  PurchaseReceipt   @relation(fields: [purchaseReceiptId], references: [id])
+  supplier         Supplier          @relation(fields: [supplierId], references: [id])
+  supplierPayments SupplierPayment[]
+
+  @@map("accounts_payable")
+}
+
+model SupplierPayment {
+  id                String        @id @default(uuid())
+  tenantId          String        @map("tenant_id")
+  accountsPayableId String        @map("accounts_payable_id")
+  amount            Decimal       @db.Decimal(12, 2)
+  paymentMethod     PaymentMethod @map("payment_method")
+  paymentDate       DateTime      @map("payment_date")
+  reference         String?
+  notes             String?
+  createdById       String?       @map("created_by_id")
+  createdAt         DateTime      @default(now()) @map("created_at")
+
+  tenant          Tenant          @relation(fields: [tenantId], references: [id])
+  accountsPayable AccountsPayable @relation(fields: [accountsPayableId], references: [id])
+  createdBy       User?           @relation(fields: [createdById], references: [id])
+
+  @@map("supplier_payments")
+}
+
 // ─── HR ───────────────────────────────────────────────────────────────────────
 
 model Area {
@@ -1306,6 +1521,9 @@ model Employee {
   hireDate        DateTime     @map("hire_date")
   terminationDate DateTime?    @map("termination_date")
   contractType    ContractType @default(PERMANENT) @map("contract_type")
+  // Puede ser asignado como repartidor en Logística — separado de
+  // contractType (que distingue interno/externo, no "hace repartos").
+  isCourier       Boolean      @default(false) @map("is_courier")
 
   // Payroll (PYG — integer, no decimals)
   baseSalary    Int           @map("base_salary")
@@ -1318,17 +1536,18 @@ model Employee {
   createdAt DateTime  @default(now()) @map("created_at")
   updatedAt DateTime  @updatedAt @map("updated_at")
 
-  tenant         Tenant              @relation(fields: [tenantId], references: [id])
-  user           User?               @relation(fields: [userId], references: [id])
-  area           Area?               @relation(fields: [areaId], references: [id])
-  position       Position?           @relation(fields: [positionId], references: [id])
-  branch         Branch?             @relation(fields: [branchId], references: [id])
-  manager        Employee?           @relation("EmployeeHierarchy", fields: [managerId], references: [id])
-  subordinates   Employee[]          @relation("EmployeeHierarchy")
-  leaves         Leave[]
-  leaveBalances  LeaveBalance[]
-  payrollItems   PayrollRecordItem[]
-  approvedLeaves Leave[]             @relation("LeaveApprover")
+  tenant             Tenant              @relation(fields: [tenantId], references: [id])
+  user               User?               @relation(fields: [userId], references: [id])
+  area               Area?               @relation(fields: [areaId], references: [id])
+  position           Position?           @relation(fields: [positionId], references: [id])
+  branch             Branch?             @relation(fields: [branchId], references: [id])
+  manager            Employee?           @relation("EmployeeHierarchy", fields: [managerId], references: [id])
+  subordinates       Employee[]          @relation("EmployeeHierarchy")
+  leaves             Leave[]
+  leaveBalances      LeaveBalance[]
+  payrollItems       PayrollRecordItem[]
+  approvedLeaves     Leave[]             @relation("LeaveApprover")
+  assignedDeliveries DeliveryNote[]
 
   @@unique([tenantId, employeeNumber])
   @@unique([tenantId, documentType, documentNumber])
@@ -1483,14 +1702,16 @@ enum DocVisibility {
 
 enum DocContentFormat {
   TIPTAP // Editor WYSIWYG — contenido en JSON de TipTap
-  HTML   // HTML/CSS crudo — control de layout fino (factura, recibo)
+  HTML // HTML/CSS crudo — control de layout fino (factura, recibo)
+  DOCX // Archivo .docx subido, usado tal cual como plantilla
 }
 
 enum TemplateKind {
-  SALE_CONTRACT   // Contrato de compra-venta, generado automáticamente al emitir factura de venta a crédito
-  INVOICE         // Factura (contado o crédito), generada automáticamente al emitir
+  SALE_CONTRACT // Contrato de compra-venta, generado automáticamente al emitir factura de venta a crédito
+  INVOICE // Factura (contado o crédito), generada automáticamente al emitir
   PAYMENT_RECEIPT // Recibo de dinero, generado automáticamente al cobrar una cuota
-  QUOTE           // Presupuesto, generado automáticamente al crear un pedido orderType=QUOTE
+  QUOTE // Presupuesto, generado automáticamente al crear un pedido orderType=QUOTE
+  INTEREST_INVOICE // Factura de intereses moratorios, generada automáticamente al cobrar una cuota con recargos
 }
 
 model DocumentCategory {
@@ -1574,10 +1795,10 @@ model FileRecord {
   visibility   FileVisibility @default(PRIVATE)
   createdAt    DateTime       @default(now()) @map("created_at")
 
-  tenant     Tenant    @relation(fields: [tenantId], references: [id])
+  tenant     Tenant          @relation(fields: [tenantId], references: [id])
   document   Document?
-  tenantLogo Tenant?   @relation("TenantLogo")
-  invoiceFor Invoice?  @relation("InvoicePdf")
+  tenantLogo Tenant?         @relation("TenantLogo")
+  invoiceFor Invoice?        @relation("InvoicePdf")
   receiptFor PaymentReceipt? @relation("ReceiptPdf")
 
   @@map("file_records")
@@ -1586,25 +1807,29 @@ model FileRecord {
 // ─── Credit ───────────────────────────────────────────────────────────────────
 
 model CreditConfig {
-  id        String   @id @default(uuid())
-  tenantId  String   @unique @map("tenant_id")
-  isEnabled Boolean  @default(false) @map("is_enabled")
-  moraRate  Decimal  @default(0) @map("mora_rate") @db.Decimal(5, 2)
+  id                  String   @id @default(uuid())
+  tenantId            String   @unique @map("tenant_id")
+  isEnabled           Boolean  @default(false) @map("is_enabled")
   // % máximo del sueldo del cliente admitido para cuota mensual de crédito —
   // null = el chequeo de capacidad de pago por sueldo no corre.
   maxIncomePercentage Decimal? @map("max_income_percentage") @db.Decimal(5, 2)
   // Día del mes (1-28, evita problemas de meses cortos) en que vencen todas
   // las cuotas de todos los créditos del tenant — no depende de la fecha de
   // compra de cada cliente.
-  dueDayOfMonth Int      @default(5) @map("due_day_of_month")
+  dueDayOfMonth       Int      @default(5) @map("due_day_of_month")
   // Días de tolerancia después del vencimiento antes de empezar a devengar
   // mora (0 = sin tolerancia, se cobra desde el día siguiente al vencimiento).
-  moraGraceDays Int      @default(0) @map("mora_grace_days")
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  moraGraceDays       Int      @default(0) @map("mora_grace_days")
+  // Meses de mora (períodos de 30 días desde que vence la tolerancia) a
+  // partir de los cuales un cliente entra a la lista de Morosos para
+  // gestionar su reporte a un buró de crédito externo. null = deshabilitado.
+  delinquencyThresholdMonths Int? @map("delinquency_threshold_months")
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
 
-  tenant Tenant       @relation(fields: [tenantId], references: [id])
-  plans  CreditPlan[]
+  tenant             Tenant               @relation(fields: [tenantId], references: [id])
+  plans              CreditPlan[]
+  interestComponents InterestComponent[]
 
   @@map("credit_configs")
 }
@@ -1622,15 +1847,15 @@ model SalesConfig {
 }
 
 model CreditBureauConfig {
-  id             String                      @id @default(uuid())
-  tenantId       String                      @unique @map("tenant_id")
-  isEnabled      Boolean                     @default(false) @map("is_enabled")
-  checkFrequency CreditBureauCheckFrequency  @default(EVERY_REQUEST) @map("check_frequency")
+  id             String                     @id @default(uuid())
+  tenantId       String                     @unique @map("tenant_id")
+  isEnabled      Boolean                    @default(false) @map("is_enabled")
+  checkFrequency CreditBureauCheckFrequency @default(EVERY_REQUEST) @map("check_frequency")
   // Nombre del proveedor activo — hoy solo existe "manual" (registro a mano
   // por el analista). Preparado para que un proveedor real (Equifax u otro)
   // se enchufe más adelante sin cambiar el resto del flujo.
-  providerName String   @default("manual") @map("provider_name")
-  updatedAt    DateTime @updatedAt @map("updated_at")
+  providerName   String                     @default("manual") @map("provider_name")
+  updatedAt      DateTime                   @updatedAt @map("updated_at")
 
   tenant Tenant @relation(fields: [tenantId], references: [id])
 
@@ -1670,6 +1895,61 @@ model CreditPlan {
   @@map("credit_plans")
 }
 
+enum InterestComponentFrequency {
+  ONE_TIME // se cobra una vez, no crece con el tiempo (ej. gastos administrativos)
+  DAILY // se acumula por día de atraso (ej. interés diario)
+  MONTHLY // se acumula por período de 30 días de atraso
+}
+
+// Cada tenant define sus propios recargos por mora — pueden coexistir varios
+// a la vez (ej. gastos administrativos ONE_TIME + interés diario DAILY), tal
+// como lo pidió el usuario. Reemplaza por completo al viejo
+// CreditConfig.moraRate, que nunca se expuso por API/UI y nunca se cobró.
+model InterestComponent {
+  id             String                      @id @default(uuid())
+  tenantId       String                      @map("tenant_id")
+  creditConfigId String                      @map("credit_config_id")
+  name           String
+  frequency      InterestComponentFrequency
+  percentage     Decimal                     @db.Decimal(5, 2)
+  // Solo aplica a MONTHLY: si true, el cargo crece con cada período vencido
+  // (mes 1=10%, mes 2=20%, mes 3=30% — acumulación lineal, no interés
+  // compuesto). Si false, se cobra el % base una sola vez apenas se cruza
+  // el primer período y no vuelve a crecer. DAILY siempre es acumulativo
+  // por diseño (más días = más interés); ONE_TIME nunca lo es.
+  cumulative     Boolean                     @default(false)
+  isActive       Boolean                     @default(true) @map("is_active")
+  order          Int                         @default(0)
+  createdAt      DateTime                    @default(now()) @map("created_at")
+  updatedAt      DateTime                    @updatedAt @map("updated_at")
+
+  tenant       Tenant                      @relation(fields: [tenantId], references: [id])
+  creditConfig CreditConfig                @relation(fields: [creditConfigId], references: [id])
+  charges      InstallmentInterestCharge[]
+
+  @@map("interest_components")
+}
+
+// Cargo VIGENTE de un componente sobre una cuota — el scheduler nocturno lo
+// recalcula cada noche a partir de cero (no es historial acumulativo de
+// escritura, es "cuánto se debe HOY por este componente"). Cuando se cobra
+// (total o parcialmente) se descuenta acá; el detalle efectivamente cobrado
+// queda snapshoteado en PaymentReceiptItem, que sí es historial permanente.
+model InstallmentInterestCharge {
+  id             String   @id @default(uuid())
+  installmentId  String   @map("installment_id")
+  componentId    String   @map("component_id")
+  amount         Decimal  @default(0) @db.Decimal(12, 2)
+  periodsElapsed Int      @default(0) @map("periods_elapsed")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  installment Installment       @relation(fields: [installmentId], references: [id])
+  component   InterestComponent @relation(fields: [componentId], references: [id])
+
+  @@unique([installmentId, componentId])
+  @@map("installment_interest_charges")
+}
+
 // ─── Finance ──────────────────────────────────────────────────────────────────
 
 model Loan {
@@ -1692,6 +1972,7 @@ model Loan {
   collectionVisits  CollectionVisit[]
   paymentAgreements PaymentAgreement[]
   paymentReceipts   PaymentReceipt[]
+  delinquencyReports DelinquencyReport[]
 
   @@map("loans")
 }
@@ -1709,16 +1990,15 @@ model Installment {
   paymentReference     String?           @map("payment_reference")
   paymentDate          DateTime?         @map("payment_date")
   status               InstallmentStatus @default(PENDING)
-  moraAmount           Decimal           @default(0) @map("mora_amount") @db.Decimal(12, 2)
-  lastMoraCalculatedAt DateTime?         @map("last_mora_calculated_at")
   notes                String?
   createdAt            DateTime          @default(now()) @map("created_at")
   updatedAt            DateTime          @updatedAt @map("updated_at")
 
-  loan             Loan              @relation(fields: [loanId], references: [id])
-  tenant           Tenant            @relation(fields: [tenantId], references: [id])
+  loan             Loan                        @relation(fields: [loanId], references: [id])
+  tenant           Tenant                      @relation(fields: [tenantId], references: [id])
   collectionVisits CollectionVisit[]
   receiptItems     PaymentReceiptItem[]
+  interestCharges  InstallmentInterestCharge[]
 
   @@unique([loanId, number])
   @@index([tenantId, dueDate])
@@ -1732,21 +2012,21 @@ model Installment {
 // Numeración oficial de 13 dígitos (establecimiento-puntoExpedicion-secuencial),
 // pero el secuencial lo autogenera el sistema — no es un documento fiscal SET.
 model PaymentReceipt {
-  id               String   @id @default(uuid())
-  tenantId         String   @map("tenant_id")
-  loanId           String   @map("loan_id")
-  customerId       String   @map("customer_id")
-  branchId         String?  @map("branch_id")
-  establecimiento  String   @map("establecimiento")
-  puntoExpedicion  String   @map("punto_expedicion")
-  sequential       Int      @map("sequential")
-  receiptNumber    String   @map("receipt_number") // "001-002-0000001" formateado
-  totalAmount      Decimal  @db.Decimal(12, 2) @map("total_amount")
+  id               String        @id @default(uuid())
+  tenantId         String        @map("tenant_id")
+  loanId           String        @map("loan_id")
+  customerId       String        @map("customer_id")
+  branchId         String?       @map("branch_id")
+  establecimiento  String        @map("establecimiento")
+  puntoExpedicion  String        @map("punto_expedicion")
+  sequential       Int           @map("sequential")
+  receiptNumber    String        @map("receipt_number") // "001-002-0000001" formateado
+  totalAmount      Decimal       @map("total_amount") @db.Decimal(12, 2)
   paymentMethod    PaymentMethod @map("payment_method")
-  paymentReference String?  @map("payment_reference")
-  collectedById    String?  @map("collected_by_id")
-  issuedAt         DateTime @default(now()) @map("issued_at")
-  pdfFileId        String?  @unique @map("pdf_file_id")
+  paymentReference String?       @map("payment_reference")
+  collectedById    String?       @map("collected_by_id")
+  issuedAt         DateTime      @default(now()) @map("issued_at")
+  pdfFileId        String?       @unique @map("pdf_file_id")
 
   tenant      Tenant               @relation(fields: [tenantId], references: [id])
   loan        Loan                 @relation(fields: [loanId], references: [id])
@@ -1755,17 +2035,30 @@ model PaymentReceipt {
   collectedBy User?                @relation(fields: [collectedById], references: [id])
   pdfFile     FileRecord?          @relation("ReceiptPdf", fields: [pdfFileId], references: [id])
   items       PaymentReceiptItem[]
+  // Factura de intereses moratorios generada a partir de este recibo (si el
+  // cobro incluyó algún cargo INTEREST_COMPONENT) — FK vive en Invoice.
+  interestInvoice Invoice?
 
   @@unique([tenantId, establecimiento, puntoExpedicion, sequential])
   @@map("payment_receipts")
 }
 
+enum PaymentReceiptItemKind {
+  PRINCIPAL
+  INTEREST_COMPONENT
+}
+
 model PaymentReceiptItem {
-  id                String  @id @default(uuid())
-  receiptId         String  @map("receipt_id")
-  installmentId     String  @map("installment_id")
-  installmentNumber Int     @map("installment_number")
-  amountApplied     Decimal @db.Decimal(12, 2) @map("amount_applied")
+  id                String                 @id @default(uuid())
+  receiptId         String                 @map("receipt_id")
+  installmentId     String                 @map("installment_id")
+  installmentNumber Int                    @map("installment_number")
+  amountApplied     Decimal                @map("amount_applied") @db.Decimal(12, 2)
+  kind              PaymentReceiptItemKind @default(PRINCIPAL)
+  // Snapshot del nombre del InterestComponent al momento de cobrarlo — solo
+  // se completa para kind=INTEREST_COMPONENT. Sobrevive si el componente se
+  // renombra o desactiva después; el recibo histórico no debe cambiar.
+  componentName     String?                @map("component_name")
 
   receipt     PaymentReceipt @relation(fields: [receiptId], references: [id])
   installment Installment    @relation(fields: [installmentId], references: [id])
@@ -1905,6 +2198,42 @@ model CollectionNote {
 
   @@index([tenantId, customerId])
   @@map("collection_notes")
+}
+
+enum DelinquencyReportStatus {
+  PENDING_REVIEW
+  REPORTED
+  EXCLUDED
+}
+
+// Candidato detectado automáticamente por el scheduler nocturno al cruzar
+// CreditConfig.delinquencyThresholdMonths — un analista lo revisa y decide
+// reportarlo (REPORTED) o excluirlo (EXCLUDED). No hay integración real con
+// ningún buró (Informconf u otro): "provider" es texto libre y "reference"
+// es lo que el analista carga a mano tras reportarlo por fuera del sistema —
+// mismo criterio 100% manual que ya usa credit-bureau/CreditBureauCheck.
+model DelinquencyReport {
+  id            String                  @id @default(uuid())
+  tenantId      String                  @map("tenant_id")
+  customerId    String                  @map("customer_id")
+  loanId        String                  @map("loan_id")
+  monthsOverdue Int                     @map("months_overdue")
+  status        DelinquencyReportStatus @default(PENDING_REVIEW)
+  provider      String                  @default("informconf")
+  reference     String?
+  notes         String?
+  reviewedById  String?                 @map("reviewed_by_id")
+  reviewedAt    DateTime?               @map("reviewed_at")
+  createdAt     DateTime                @default(now()) @map("created_at")
+  updatedAt     DateTime                @updatedAt @map("updated_at")
+
+  tenant     Tenant   @relation(fields: [tenantId], references: [id])
+  customer   Customer @relation(fields: [customerId], references: [id])
+  loan       Loan     @relation(fields: [loanId], references: [id])
+  reviewedBy User?    @relation("DelinquencyReportReviewedBy", fields: [reviewedById], references: [id])
+
+  @@unique([tenantId, loanId])
+  @@map("delinquency_reports")
 }
 
 // ─── POS ──────────────────────────────────────────────────────────────────────

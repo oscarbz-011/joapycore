@@ -59,6 +59,14 @@ export class UpdateProductDto {
   @IsBoolean()
   isActive?: boolean;
 
+  @ApiPropertyOptional({
+    description:
+      'Gestiona el stock separado por lotes (fecha de ingreso, costo, vencimiento)',
+  })
+  @IsOptional()
+  @IsBoolean()
+  usesLots?: boolean;
+
   @ApiPropertyOptional({ description: 'Peso en kilogramos' })
   @IsOptional()
   @IsNumber({ maxDecimalPlaces: 3 })
@@ -83,7 +91,10 @@ export class UpdateProductDto {
   @Min(0)
   depthCm?: number | null;
 
-  @ApiPropertyOptional({ description: 'Margen adicional sobre el margen global', minimum: 0 })
+  @ApiPropertyOptional({
+    description: 'Margen adicional sobre el margen global',
+    minimum: 0,
+  })
   @IsOptional()
   @IsNumber({ maxDecimalPlaces: 2 })
   @Min(0)

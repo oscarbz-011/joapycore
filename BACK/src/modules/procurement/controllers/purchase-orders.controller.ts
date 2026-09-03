@@ -7,7 +7,6 @@ import { RequiredModule } from '../../../common/decorators/required-module.decor
 import type { JwtPayload } from '../../../common/types/jwt-payload.interface';
 import { PurchaseOrdersService } from '../services/purchase-orders.service';
 import { CreatePurchaseOrderDto } from '../dto/create-purchase-order.dto';
-import { ReceiveItemsDto } from '../dto/receive-items.dto';
 
 @ApiTags('Procurement')
 @ApiBearerAuth()
@@ -50,17 +49,5 @@ export class PurchaseOrdersController {
     @Param('id') id: string,
   ) {
     return this.purchaseOrdersService.confirm(tenantId, id, user.sub);
-  }
-
-  @Post(':id/receive')
-  @Permissions('procurement:receive')
-  @ApiOperation({ summary: 'Registrar recepción de mercadería' })
-  receive(
-    @CurrentTenant() tenantId: string,
-    @CurrentUser() user: JwtPayload,
-    @Param('id') id: string,
-    @Body() dto: ReceiveItemsDto,
-  ) {
-    return this.purchaseOrdersService.receive(tenantId, id, dto, user.sub);
   }
 }
