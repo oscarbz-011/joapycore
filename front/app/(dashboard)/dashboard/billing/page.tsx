@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { Search } from 'lucide-react';
 import { billingApi, type CreditNote, type InvoiceStatus } from '../../../../lib/api/billing';
+import { formatDatePY } from '../../../../lib/date';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -17,10 +18,6 @@ function formatPrice(n: number) {
   return new Intl.NumberFormat('es-PY', { style: 'currency', currency: 'PYG', maximumFractionDigits: 0 }).format(n);
 }
 
-function formatDate(iso: string | null) {
-  if (!iso) return '—';
-  return new Date(iso).toLocaleDateString('es-PY', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' });
-}
 
 // ── Status badge ───────────────────────────────────────────────────────────────
 
@@ -74,7 +71,7 @@ function CreditNotesTab() {
                   {note.invoice.saleOrder.customer.email && <div className="text-xs text-muted-foreground">{note.invoice.saleOrder.customer.email}</div>}
                 </td>
                 <td className="px-4 py-3 text-muted-foreground max-w-xs truncate">{note.reason}</td>
-                <td className="px-4 py-3 text-muted-foreground">{formatDate(note.issuedAt)}</td>
+                <td className="px-4 py-3 text-muted-foreground">{formatDatePY(note.issuedAt, 'local')}</td>
                 <td className="px-4 py-3 text-right font-mono font-medium text-foreground">{formatPrice(Number(note.total))}</td>
               </tr>
             ))}
@@ -202,7 +199,7 @@ export default function BillingPage() {
                         <td className="px-4 py-3 hidden sm:table-cell text-muted-foreground text-xs">
                           {invoice.saleOrder.saleType === 'CREDIT' ? `Crédito${invoice.saleOrder.installments ? ` · ${invoice.saleOrder.installments}c` : ''}` : 'Contado'}
                         </td>
-                        <td className="px-4 py-3 text-muted-foreground">{formatDate(invoice.issuedAt ?? invoice.createdAt)}</td>
+                        <td className="px-4 py-3 text-muted-foreground">{formatDatePY(invoice.issuedAt ?? invoice.createdAt, 'local')}</td>
                         <td className="px-4 py-3"><StatusBadge status={invoice.status} /></td>
                         <td className="px-4 py-3 text-right font-mono font-medium text-foreground">{formatPrice(Number(invoice.total))}</td>
                       </tr>

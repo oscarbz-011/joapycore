@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { X, MapPin, CheckCircle2 } from 'lucide-react';
+import { X, MapPin, CheckCircle2, AlertOctagon } from 'lucide-react';
 import {
   cobranzasApi,
   type CollectionRoute,
@@ -10,10 +10,13 @@ import {
   type VisitResult,
   type PaymentAgreement,
   type AgreementStatus,
+  type DelinquencyReport,
+  type DelinquencyReportStatus,
 } from '../../../../lib/api/cobranzas';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { DatePicker } from '@/components/ui/date-picker';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
 import {
@@ -57,6 +60,12 @@ const VISIT_RESULT_LABELS: Record<VisitResult, string> = {
   ABSENT:    'Ausente',
   REFUSED:   'Se negó',
   PROMISE:   'Prometió pago',
+};
+
+const DELINQUENCY_STATUS: Record<DelinquencyReportStatus, { label: string; className: string; destructive?: boolean }> = {
+  PENDING_REVIEW: { label: 'Por revisar', className: 'bg-warn-subtle text-warn border-warn/30' },
+  REPORTED:       { label: 'Reportado',   className: '', destructive: true },
+  EXCLUDED:       { label: 'Excluido',    className: 'bg-muted/30 text-muted-foreground border-border' },
 };
 
 // ── Constants ──────────────────────────────────────────────────────────────────
@@ -322,11 +331,9 @@ function CreateRouteModal({ open, onOpenChange }: { open: boolean; onOpenChange:
         <div className="px-6 py-5 space-y-4">
           <div className="space-y-1.5">
             <Label>Fecha de ruta</Label>
-            <input
-              type="date"
-              className={NUM_CLS}
+            <DatePicker
               value={form.routeDate}
-              onChange={(e) => setForm((f) => ({ ...f, routeDate: e.target.value }))}
+              onChange={(v) => setForm((f) => ({ ...f, routeDate: v }))}
             />
           </div>
 
@@ -459,10 +466,228 @@ function AgreementsTab() {
   );
 }
 
+// ── Delinquency (Morosos) Tab ───────────────────────────────────────────────────
+
+// Confirmar/excluir un candidato a moroso — no hay integración real con
+// ningún buró (Informconf u otro): "Marcar reportado" solo deja constancia
+// en el sistema de que el analista lo reportó por fuera; el N° de
+// referencia/expediente, si lo hay, se carga acá a mano.
+function ReviewDelinquencyModal({
+  report,
+  action,
+  onOpenChange,
+}: {
+  report: DelinquencyReport;
+  action: 'REPORTED' | 'EXCLUDED';
+  onOpenChange: (open: boolean) => void;
+}) {
+  const [reference, setReference] = useState('');
+  const [notes, setNotes] = useState('');
+  const [error, setError] = useState('');
+  const qc = useQueryClient();
+
+  const mutation = useMutation({
+    mutationFn: () =>
+      cobranzasApi.updateDelinquencyReport(report.id, {
+        status: action,
+        reference: reference.trim() || undefined,
+        notes: notes.trim() || undefined,
+      }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['delinquency-reports'] });
+      onOpenChange(false);
+    },
+    onError: (err: Error & { response?: { data?: { message?: string | string[] } } }) => {
+      const msg = err?.response?.data?.message;
+      setError(Array.isArray(msg) ? msg[0] : (msg ?? 'Error al guardar'));
+    },
+  });
+
+  const requiresNotes = action === 'EXCLUDED';
+
+  return (
+    <Dialog open onOpenChange={onOpenChange}>
+      <DialogContent showCloseButton={false} className="sm:max-w-md p-0">
+        <div className="flex items-center justify-between border-b border-border px-6 py-4">
+          <DialogTitle>
+            {action === 'REPORTED' ? 'Marcar como reportado al buró' : 'Excluir de Morosos'}
+          </DialogTitle>
+          <Button variant="ghost" size="icon" onClick={() => onOpenChange(false)}>
+            <X size={18} />
+          </Button>
+        </div>
+
+        <div className="px-6 py-5 space-y-4">
+          <p className="text-sm text-muted-foreground">
+            {report.customer.firstName} {report.customer.lastName} · {report.monthsOverdue} meses de mora
+          </p>
+
+          {action === 'REPORTED' && (
+            <div className="space-y-1.5">
+              <Label>N° de referencia / expediente <span className="text-muted-foreground/60">(opcional)</span></Label>
+              <input
+                type="text"
+                className={NUM_CLS}
+                value={reference}
+                onChange={(e) => setReference(e.target.value)}
+                placeholder="Ej: número de expediente del buró"
+              />
+            </div>
+          )}
+
+          <div className="space-y-1.5">
+            <Label>
+              Notas {requiresNotes ? '' : <span className="text-muted-foreground/60">(opcional)</span>}
+            </Label>
+            <textarea
+              rows={3}
+              className={TEXTAREA_CLS}
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder={requiresNotes ? 'Motivo de la exclusión' : undefined}
+            />
+          </div>
+
+          {error && (
+            <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+              {error}
+            </div>
+          )}
+
+          <div className="flex gap-2 pt-2">
+            <Button variant="outline" className="flex-1" onClick={() => onOpenChange(false)}>
+              Cancelar
+            </Button>
+            <Button
+              className="flex-1"
+              disabled={mutation.isPending || (requiresNotes && !notes.trim())}
+              onClick={() => { setError(''); mutation.mutate(); }}
+            >
+              {mutation.isPending ? 'Guardando...' : 'Confirmar'}
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function DelinquencyTab() {
+  const [statusFilter, setStatusFilter] = useState<DelinquencyReportStatus | ''>('PENDING_REVIEW');
+  const [reviewing, setReviewing] = useState<{ report: DelinquencyReport; action: 'REPORTED' | 'EXCLUDED' } | null>(null);
+
+  const { data: reports = [], isLoading } = useQuery({
+    queryKey: ['delinquency-reports', statusFilter],
+    queryFn: () => cobranzasApi.listDelinquencyReports(statusFilter || undefined),
+  });
+
+  return (
+    <>
+      <Card className="overflow-hidden p-0">
+        <div className="px-4 py-3 border-b border-border flex items-center gap-2 flex-wrap">
+          <span className="text-xs text-muted-foreground/60 font-medium">Estado:</span>
+          {(['', 'PENDING_REVIEW', 'REPORTED', 'EXCLUDED'] as const).map((s) => (
+            <button
+              key={s}
+              onClick={() => setStatusFilter(s)}
+              className={cn(
+                'px-3 py-1 rounded-full border text-xs font-semibold transition-colors',
+                statusFilter === s
+                  ? 'bg-primary text-primary-foreground border-primary'
+                  : 'border-border text-muted-foreground hover:text-foreground hover:border-foreground/30',
+              )}
+            >
+              {s === '' ? 'Todos' : DELINQUENCY_STATUS[s].label}
+            </button>
+          ))}
+        </div>
+
+        {isLoading ? (
+          <div className="py-16 text-center text-sm text-muted-foreground/60">Cargando...</div>
+        ) : reports.length === 0 ? (
+          <div className="py-16 text-center">
+            <p className="text-sm text-muted-foreground/60">
+              {statusFilter === 'PENDING_REVIEW'
+                ? 'No hay candidatos por revisar — se detectan automáticamente al cruzar el umbral configurado en Financiamiento.'
+                : 'No hay registros para este filtro.'}
+            </p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="border-b border-border bg-muted/30 text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                <tr>
+                  {['Cliente', 'Meses de mora', 'Estado', 'Detectado', ''].map((h) => (
+                    <th key={h} className="px-4 py-3 text-left">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {reports.map((report) => {
+                  const st = DELINQUENCY_STATUS[report.status];
+                  return (
+                    <tr key={report.id} className="hover:bg-muted/20 transition-colors">
+                      <td className="px-4 py-3">
+                        <p className="font-medium text-foreground">{report.customer.firstName} {report.customer.lastName}</p>
+                        {report.customer.documentNumber && (
+                          <p className="text-xs text-muted-foreground/60">{report.customer.documentType ?? 'CI'}: {report.customer.documentNumber}</p>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-destructive font-semibold tabular-nums">{report.monthsOverdue}</td>
+                      <td className="px-4 py-3">
+                        <Badge variant={st.destructive ? 'destructive' : 'outline'} className={st.className}>
+                          {st.label}
+                        </Badge>
+                      </td>
+                      <td className="px-4 py-3 text-muted-foreground">{fmtDate(report.createdAt)}</td>
+                      <td className="px-4 py-3 text-right">
+                        {report.status === 'PENDING_REVIEW' && (
+                          <div className="flex justify-end gap-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="border-destructive/30 text-destructive hover:bg-destructive/10"
+                              onClick={() => setReviewing({ report, action: 'REPORTED' })}
+                            >
+                              Marcar reportado
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => setReviewing({ report, action: 'EXCLUDED' })}
+                            >
+                              Excluir
+                            </Button>
+                          </div>
+                        )}
+                        {report.reference && (
+                          <p className="text-xs text-muted-foreground/60">Ref: {report.reference}</p>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
+
+      {reviewing && (
+        <ReviewDelinquencyModal
+          report={reviewing.report}
+          action={reviewing.action}
+          onOpenChange={(open) => { if (!open) setReviewing(null); }}
+        />
+      )}
+    </>
+  );
+}
+
 // ── Main Page ──────────────────────────────────────────────────────────────────
 
 export default function CobranzasPage() {
-  const [tab, setTab] = useState<'routes' | 'agreements'>('routes');
+  const [tab, setTab] = useState<'routes' | 'agreements' | 'delinquency'>('routes');
   const [statusFilter, setStatusFilter] = useState<string>('OPEN');
   const [panelRoute, setPanelRoute] = useState<CollectionRoute | null>(null);
   const [panelOpen, setPanelOpen] = useState(false);
@@ -514,16 +739,17 @@ export default function CobranzasPage() {
 
       {/* Tabs */}
       <div className="mb-5 flex border-b border-border gap-1">
-        {(['routes', 'agreements'] as const).map((t) => (
+        {(['routes', 'agreements', 'delinquency'] as const).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
             className={cn(
-              '-mb-px border-b-2 px-4 py-2.5 text-sm font-medium transition-colors',
+              'flex items-center gap-1.5 -mb-px border-b-2 px-4 py-2.5 text-sm font-medium transition-colors',
               tab === t ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground',
             )}
           >
-            {t === 'routes' ? 'Rutas' : 'Acuerdos de pago'}
+            {t === 'delinquency' && <AlertOctagon size={14} />}
+            {t === 'routes' ? 'Rutas' : t === 'agreements' ? 'Acuerdos de pago' : 'Morosos'}
           </button>
         ))}
       </div>
@@ -621,6 +847,9 @@ export default function CobranzasPage() {
 
       {/* Agreements tab */}
       {tab === 'agreements' && <AgreementsTab />}
+
+      {/* Delinquency (Morosos) tab */}
+      {tab === 'delinquency' && <DelinquencyTab />}
 
       {/* Detail panel */}
       {panelRoute && (
