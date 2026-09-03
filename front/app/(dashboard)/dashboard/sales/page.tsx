@@ -23,6 +23,7 @@ import { inventoryApi, type Product } from '../../../../lib/api/inventory';
 import { settingsApi } from '../../../../lib/api/settings';
 import { usersApi } from '../../../../lib/api/users';
 import { useAuth } from '../../../../lib/auth-context';
+import { formatDatePY } from '../../../../lib/date';
 import { SearchSelect } from '../components/search-select';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -42,9 +43,6 @@ function formatPrice(n: number) {
   return new Intl.NumberFormat('es-PY', { style: 'currency', currency: 'PYG', maximumFractionDigits: 0 }).format(n);
 }
 
-function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString('es-PY', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' });
-}
 
 function orderSubtotal(order: SaleOrder) {
   return order.items.reduce((sum, i) => sum + i.quantity * i.unitPrice, 0);
@@ -680,7 +678,7 @@ function OrderDetailPanel({ open, onOpenChange, order }: {
               )}
             </div>
             {order.customer.documentNumber && <p className="text-xs text-muted-foreground">{order.customer.documentType}: {order.customer.documentNumber}</p>}
-            <p className="text-xs text-muted-foreground">{formatDate(order.orderDate)}</p>
+            <p className="text-xs text-muted-foreground">{formatDatePY(order.orderDate, 'local')}</p>
             {(order.seller ?? order.createdBy) && (
               <p className="text-xs text-muted-foreground">
                 Vendedor: {(order.seller ?? order.createdBy)!.firstName} {(order.seller ?? order.createdBy)!.lastName}
@@ -695,7 +693,7 @@ function OrderDetailPanel({ open, onOpenChange, order }: {
           <div className="border-b border-border px-5 py-3 bg-sky-50 dark:bg-sky-950">
             <p className="text-xs text-sky-700 dark:text-sky-300">
               Aprobado por <strong>{order.approvedBy.firstName} {order.approvedBy.lastName}</strong>
-              {order.approvedAt ? ` el ${formatDate(order.approvedAt)}` : ''}
+              {order.approvedAt ? ` el ${formatDatePY(order.approvedAt, 'local')}` : ''}
             </p>
           </div>
         )}
@@ -703,7 +701,7 @@ function OrderDetailPanel({ open, onOpenChange, order }: {
           <div className="border-b border-border px-5 py-3 bg-destructive/10">
             <p className="text-xs text-destructive">
               Rechazado por <strong>{order.rejectedBy.firstName} {order.rejectedBy.lastName}</strong>
-              {order.rejectedAt ? ` el ${formatDate(order.rejectedAt)}` : ''}
+              {order.rejectedAt ? ` el ${formatDatePY(order.rejectedAt, 'local')}` : ''}
             </p>
             {order.rejectionReason && <p className="text-xs text-destructive/80 mt-0.5">{order.rejectionReason}</p>}
           </div>
@@ -973,7 +971,7 @@ export default function SalesPage() {
                       <div className="font-medium text-foreground">{order.customer.firstName} {order.customer.lastName}</div>
                       {order.customer.documentNumber && <div className="text-xs text-muted-foreground">{order.customer.documentNumber}</div>}
                     </td>
-                    <td className="px-4 py-3 text-muted-foreground">{formatDate(order.orderDate)}</td>
+                    <td className="px-4 py-3 text-muted-foreground">{formatDatePY(order.orderDate, 'local')}</td>
                     <td className="px-4 py-3"><StatusBadge status={order.status} /></td>
                     <td className="px-4 py-3 hidden lg:table-cell">
                       {order.saleType === 'CREDIT'

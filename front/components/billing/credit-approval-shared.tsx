@@ -11,6 +11,7 @@ import {
   type CreditRating,
 } from '../../lib/api/sales';
 import { creditBureauApi } from '../../lib/api/credit-bureau';
+import { formatDatePY } from '../../lib/date';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
@@ -26,7 +27,16 @@ export function formatDate(iso: string) {
 }
 
 export function formatDateShort(iso: string) {
-  return new Date(iso).toLocaleDateString('es-PY', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' });
+  return formatDatePY(iso, 'utc');
+}
+
+// Para instantes reales (loan.startDate = loan.createdAt) — a diferencia de
+// formatDateShort(), que ancla en UTC para preservar el día calendario de
+// las fechas de vencimiento de cuotas (elegidas/calculadas como día, no
+// instante). Sin esto, un crédito otorgado de noche en Paraguay mostraba
+// "Compra" del día siguiente.
+export function formatDateShortLocal(iso: string) {
+  return formatDatePY(iso, 'local');
 }
 
 // En estas vistas todos los pedidos son a crédito — el precio contado
@@ -382,7 +392,7 @@ export function CreditHistorySection({ order, collapsible = true }: { order: Sal
                       <div className="flex items-center justify-between text-muted-foreground mt-0.5">
                         <span>{loan.installmentsPaid}/{loan.totalInstallments} cuotas · {formatPrice(loan.monthlyInstallment)}/mes · {formatPrice(loan.outstandingBalance)} pend.</span>
                       </div>
-                      <div className="text-muted-foreground/70 mt-0.5">Compra: {formatDateShort(loan.startDate)}</div>
+                      <div className="text-muted-foreground/70 mt-0.5">Compra: {formatDateShortLocal(loan.startDate)}</div>
                       <div className="text-muted-foreground/70 mt-0.5">
                         1ª cuota: {loan.firstDueDate ? formatDateShort(loan.firstDueDate) : '—'} → última: {loan.finalDueDate ? formatDateShort(loan.finalDueDate) : '—'}
                       </div>

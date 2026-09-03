@@ -2,6 +2,8 @@ import { Injectable, Logger } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
 import { TemplateKind } from '@prisma/client';
 import { numberToWordsEs } from '../../../common/utils/number-to-words.util';
+import { DocxTemplateService } from '../../../files/docx/docx-template.service';
+import { unflattenVariables } from '../../../files/docx/docx-variables.util';
 import { FilesService } from '../../../files/files.service';
 import type { PdfTableVariable } from '../../../files/pdf/tiptap-to-html.converter';
 import { PdfService } from '../../../files/pdf/pdf.service';
@@ -27,8 +29,15 @@ function formatMoney(value: unknown): string {
   return Number(value).toLocaleString('es-PY', { maximumFractionDigits: 0 });
 }
 
-function formatDate(value: Date): string {
-  return value.toLocaleDateString('es-PY', { day: '2-digit', month: 'long', year: 'numeric' });
+// issuedAt es un instante real (new Date() al cobrar) — hora de Paraguay,
+// no UTC (ver la misma distinción en invoice-on-issue.listener.ts).
+function formatDateLocal(value: Date): string {
+  return value.toLocaleDateString('es-PY', {
+    day: '2-digit',
+    month: 'long',
+    year: 'numeric',
+    timeZone: 'America/Asuncion',
+  });
 }
 
 // Genera el PDF del recibo (14x21,5cm, formato DNIT) al cobrar una cuota —
@@ -43,6 +52,7 @@ export class ReceiptOnPaymentListener {
     private readonly documentsRepository: DocumentsRepository,
     private readonly filesService: FilesService,
     private readonly pdfService: PdfService,
+    private readonly docxTemplateService: DocxTemplateService,
   ) {}
 
   @OnEvent('payment.receipt.created')
@@ -82,14 +92,17 @@ export class ReceiptOnPaymentListener {
       'tenant.telefono': receipt.tenant.phone ?? '',
       'recibo.numero': receipt.receiptNumber,
       'recibo.ciudad': city,
-      'recibo.fecha': formatDate(receipt.issuedAt),
+      'recibo.fecha': formatDateLocal(receipt.issuedAt),
       'cliente.nombre': customerName,
       'cliente.documento': customerDoc,
       'cliente.codigo': receipt.customer.customerCode ?? '—',
       'recibo.montoEnLetras': numberToWordsEs(Number(receipt.totalAmount)),
       'recibo.total': formatMoney(receipt.totalAmount),
-      'recibo.formaDePago': PAYMENT_METHOD_LABELS[receipt.paymentMethod] ?? receipt.paymentMethod,
-      'recibo.cobrador': receipt.collectedBy ? `${receipt.collectedBy.firstName} ${receipt.collectedBy.lastName}` : '—',
+      'recibo.formaDePago':
+        PAYMENT_METHOD_LABELS[receipt.paymentMethod] ?? receipt.paymentMethod,
+      'recibo.cobrador': receipt.collectedBy
+        ? `${receipt.collectedBy.firstName} ${receipt.collectedBy.lastName}`
+        : '—',
     };
 
     const tableVariables: Record<string, PdfTableVariable> = {
@@ -106,7 +119,10 @@ export class ReceiptOnPaymentListener {
     let logoDataUri: string | undefined;
     if (receipt.tenant.logoFileId) {
       try {
-        const logoRecord = await this.filesService.getById(event.tenantId, receipt.tenant.logoFileId);
+        const logoRecord = await this.filesService.getById(
+          event.tenantId,
+          receipt.tenant.logoFileId,
+        );
         const logoBuffer = await this.filesService.getFileBuffer(logoRecord);
         logoDataUri = `data:${logoRecord.mimeType};base64,${logoBuffer.toString('base64')}`;
       } catch (error) {
@@ -116,25 +132,43 @@ export class ReceiptOnPaymentListener {
       }
     }
 
-    const template = await this.documentsRepository.findTemplate(event.tenantId, TemplateKind.PAYMENT_RECEIPT);
+    const template = await this.documentsRepository.findTemplate(
+      event.tenantId,
+      TemplateKind.PAYMENT_RECEIPT,
+    );
     const content = template?.content ?? DEFAULT_PAYMENT_RECEIPT_TEMPLATE;
     const pageSize = { width: '21.5cm', height: '14cm' };
 
-    const pdfBuffer = template?.contentFormat === 'TIPTAP'
-      ? await this.pdfService.renderTemplate(
-          content,
-          variables,
-          tableVariables,
-          { logoDataUri, companyName: receipt.tenant.razonSocial ?? receipt.tenant.name },
-          pageSize,
-        )
-      : await this.pdfService.renderHtmlTemplate(
-          content,
-          variables,
-          tableVariables,
-          { 'tenant.logo': logoDataUri ? `<img class="company-logo" src="${logoDataUri}" />` : '' },
-          pageSize,
-        );
+    const pdfBuffer =
+      template?.contentFormat === 'DOCX'
+        ? await this.docxTemplateService.convertToPdf(
+            this.docxTemplateService.fillTemplate(
+              await this.filesService.getFileBuffer(template.fileRecord!),
+              unflattenVariables(variables, tableVariables),
+            ),
+          )
+        : template?.contentFormat === 'TIPTAP'
+          ? await this.pdfService.renderTemplate(
+              content,
+              variables,
+              tableVariables,
+              {
+                logoDataUri,
+                companyName: receipt.tenant.razonSocial ?? receipt.tenant.name,
+              },
+              pageSize,
+            )
+          : await this.pdfService.renderHtmlTemplate(
+              content,
+              variables,
+              tableVariables,
+              {
+                'tenant.logo': logoDataUri
+                  ? `<img class="company-logo" src="${logoDataUri}" />`
+                  : '',
+              },
+              pageSize,
+            );
 
     const fileRecord = await this.filesService.upload(
       event.tenantId,
@@ -145,7 +179,11 @@ export class ReceiptOnPaymentListener {
         mimetype: 'application/pdf',
         size: pdfBuffer.length,
       },
-      { module: 'finance', entityType: 'payment_receipt', entityId: receipt.id },
+      {
+        module: 'finance',
+        entityType: 'payment_receipt',
+        entityId: receipt.id,
+      },
     );
 
     await this.prisma.paymentReceipt.updateMany({

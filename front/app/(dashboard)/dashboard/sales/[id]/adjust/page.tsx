@@ -8,6 +8,7 @@ import { salesApi, type CreateSaleOrderItem } from '../../../../../../lib/api/sa
 import { inventoryApi } from '../../../../../../lib/api/inventory';
 import { settingsApi } from '../../../../../../lib/api/settings';
 import { useAuth } from '../../../../../../lib/auth-context';
+import { formatDatePY } from '../../../../../../lib/date';
 import { formatPrice, type LineItem, LineItemRow, CreditOptions } from '../../../../../../components/sales/order-line-items';
 import { Button } from '@/components/ui/button';
 
@@ -17,9 +18,6 @@ const ADJUSTMENT_LABELS: Record<string, string> = {
   ADD_GUARANTOR: 'Agregar uno o más garantes',
 };
 
-function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString('es-PY', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' });
-}
 
 export default function AdjustOrderPage() {
   const { id } = useParams<{ id: string }>();
@@ -259,7 +257,7 @@ export default function AdjustOrderPage() {
         {resubmitMutation.isPending ? 'Reenviando...' : 'Reenviar a evaluación'}
       </Button>
       <p className="mt-2 text-xs text-muted-foreground text-center">
-        {formatDate(order.orderDate)}
+        {formatDatePY(order.orderDate, 'local')}
       </p>
     </div>
   );

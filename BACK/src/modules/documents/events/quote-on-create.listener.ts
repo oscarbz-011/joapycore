@@ -2,6 +2,8 @@ import { Injectable, Logger } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
 import { TemplateKind } from '@prisma/client';
 import { numberToWordsEs } from '../../../common/utils/number-to-words.util';
+import { DocxTemplateService } from '../../../files/docx/docx-template.service';
+import { unflattenVariables } from '../../../files/docx/docx-variables.util';
 import { FilesService } from '../../../files/files.service';
 import type { PdfTableVariable } from '../../../files/pdf/tiptap-to-html.converter';
 import { PdfService } from '../../../files/pdf/pdf.service';
@@ -19,9 +21,16 @@ function formatMoney(value: unknown): string {
   return Number(value).toLocaleString('es-PY', { maximumFractionDigits: 0 });
 }
 
-function formatDate(value: Date | null | undefined): string {
+// orderDate es un instante real (new Date() al crear el presupuesto) — hora
+// de Paraguay, no UTC (ver la misma distinción en invoice-on-issue.listener.ts).
+function formatDateLocal(value: Date | null | undefined): string {
   if (!value) return '—';
-  return value.toLocaleDateString('es-PY', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  return value.toLocaleDateString('es-PY', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    timeZone: 'America/Asuncion',
+  });
 }
 
 // Genera el PDF del presupuesto al crearlo — nunca debe bloquear la creación
@@ -37,6 +46,7 @@ export class QuoteOnCreateListener {
     private readonly documentsRepository: DocumentsRepository,
     private readonly filesService: FilesService,
     private readonly pdfService: PdfService,
+    private readonly docxTemplateService: DocxTemplateService,
   ) {}
 
   @OnEvent('sale.order.quoted')
@@ -94,7 +104,7 @@ export class QuoteOnCreateListener {
       'tenant.ciudad': order.tenant.city ?? '',
       'tenant.telefono': order.tenant.phone ?? '',
       'presupuesto.numero': order.quoteNumber ?? '—',
-      'presupuesto.fecha': formatDate(order.orderDate),
+      'presupuesto.fecha': formatDateLocal(order.orderDate),
       'cliente.nombre': customerName,
       'cliente.documento': customerDoc,
       'cliente.direccion': order.customer.address ?? '',
@@ -112,7 +122,10 @@ export class QuoteOnCreateListener {
     let logoDataUri: string | undefined;
     if (order.tenant.logoFileId) {
       try {
-        const logoRecord = await this.filesService.getById(event.tenantId, order.tenant.logoFileId);
+        const logoRecord = await this.filesService.getById(
+          event.tenantId,
+          order.tenant.logoFileId,
+        );
         const logoBuffer = await this.filesService.getFileBuffer(logoRecord);
         logoDataUri = `data:${logoRecord.mimeType};base64,${logoBuffer.toString('base64')}`;
       } catch (error) {
@@ -122,24 +135,42 @@ export class QuoteOnCreateListener {
       }
     }
 
-    const template = await this.documentsRepository.findTemplate(event.tenantId, TemplateKind.QUOTE);
+    const template = await this.documentsRepository.findTemplate(
+      event.tenantId,
+      TemplateKind.QUOTE,
+    );
     const content = template?.content ?? DEFAULT_QUOTE_TEMPLATE;
 
-    const pdfBuffer = template?.contentFormat === 'TIPTAP'
-      ? await this.pdfService.renderTemplate(
-          content,
-          variables,
-          tableVariables,
-          { logoDataUri, companyName: order.tenant.razonSocial ?? order.tenant.name },
-          'A4',
-        )
-      : await this.pdfService.renderHtmlTemplate(
-          content,
-          variables,
-          tableVariables,
-          { 'tenant.logo': logoDataUri ? `<img class="company-logo" src="${logoDataUri}" />` : '' },
-          'A4',
-        );
+    const pdfBuffer =
+      template?.contentFormat === 'DOCX'
+        ? await this.docxTemplateService.convertToPdf(
+            this.docxTemplateService.fillTemplate(
+              await this.filesService.getFileBuffer(template.fileRecord!),
+              unflattenVariables(variables, tableVariables),
+            ),
+          )
+        : template?.contentFormat === 'TIPTAP'
+          ? await this.pdfService.renderTemplate(
+              content,
+              variables,
+              tableVariables,
+              {
+                logoDataUri,
+                companyName: order.tenant.razonSocial ?? order.tenant.name,
+              },
+              'A4',
+            )
+          : await this.pdfService.renderHtmlTemplate(
+              content,
+              variables,
+              tableVariables,
+              {
+                'tenant.logo': logoDataUri
+                  ? `<img class="company-logo" src="${logoDataUri}" />`
+                  : '',
+              },
+              'A4',
+            );
 
     const fileRecord = await this.filesService.upload(
       event.tenantId,

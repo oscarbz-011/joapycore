@@ -7,6 +7,7 @@ import { ArrowLeft, Printer, Send, AlertTriangle } from 'lucide-react';
 import { billingApi, type InvoiceStatus, type IssueInvoicePayload, type PaymentMethod } from '../../../../../../lib/api/billing';
 import { settingsApi } from '../../../../../../lib/api/settings';
 import { openPdf } from '../../../../../../lib/open-pdf';
+import { formatDatePY, parseISODate, toISODate } from '../../../../../../lib/date';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -16,11 +17,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/u
 
 function formatPrice(n: number) {
   return new Intl.NumberFormat('es-PY', { style: 'currency', currency: 'PYG', maximumFractionDigits: 0 }).format(n);
-}
-
-function formatDate(iso: string | null | undefined) {
-  if (!iso) return '—';
-  return new Date(iso).toLocaleDateString('es-PY', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' });
 }
 
 const STATUS_LABEL: Record<InvoiceStatus, string> = {
@@ -46,12 +42,16 @@ function StatusBadge({ status }: { status: InvoiceStatus }) {
 
 // ── Row helper ─────────────────────────────────────────────────────────────────
 
-function nextDueDay(dueDayOfMonth: number): string {
-  const now = new Date();
-  const target = now.getDate() < dueDayOfMonth
-    ? new Date(now.getFullYear(), now.getMonth(), dueDayOfMonth)
-    : new Date(now.getFullYear(), now.getMonth() + 1, dueDayOfMonth);
-  return target.toISOString().split('T')[0];
+// Espeja BACK/src/modules/finance/services/loans.service.ts:computeFirstDueDate
+// — mismo algoritmo exacto (UTC, garantiza al menos un mes de plazo antes del
+// primer vencimiento). Si se toca uno, tocar el otro. La versión anterior acá
+// usaba fecha local con la condición invertida (nunca daba 2 meses de salto),
+// por eso una venta cargada el 01/09 con corte día 5 vencía el 05/09 (4 días
+// de plazo) en vez del 05/10.
+function computeFirstDueDateISO(dueDayOfMonth: number): string {
+  const today = new Date();
+  const monthsAhead = today.getUTCDate() > dueDayOfMonth ? 2 : 1;
+  return toISODate(new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth() + monthsAhead, dueDayOfMonth)));
 }
 
 const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
@@ -63,7 +63,6 @@ const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
   CHECK:         'Cheque',
 };
 
-const NUM_CLS = 'h-9 w-full min-w-0 rounded-3xl border border-transparent bg-input/50 px-3 text-sm outline-none transition-[color,box-shadow,background-color] focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30';
 const TEXTAREA_CLS = 'w-full min-w-0 rounded-2xl border border-transparent bg-input/50 px-3 py-2 text-sm outline-none resize-none transition-[color,box-shadow,background-color] focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30';
 
 function InfoRow({ label, value }: { label: string; value: ReactNode }) {
@@ -100,6 +99,11 @@ export default function InvoiceDetailPage() {
     notes: '',
   });
   const [formReady, setFormReady] = useState(false);
+  // Día del mes elegido para el vencimiento de la 1ª cuota — no una fecha de
+  // calendario arbitraria, es "qué día de cada mes" (mismo concepto que
+  // CreditConfig.dueDayOfMonth, capado 1-28). form.dueDate es la fecha
+  // concreta ya resuelta que se manda al backend.
+  const [selectedDay, setSelectedDay] = useState<number>(dueDayOfMonth);
 
   useEffect(() => {
     if (!invoice || formReady) return;
@@ -107,13 +111,24 @@ export default function InvoiceDetailPage() {
     setForm({
       paymentCondition: isCredit ? 'CREDIT' : 'CASH',
       dueDate: isCredit
-        ? (invoice.dueDate ? new Date(invoice.dueDate).toISOString().split('T')[0] : nextDueDay(dueDayOfMonth))
+        ? (invoice.dueDate ? invoice.dueDate.slice(0, 10) : computeFirstDueDateISO(dueDayOfMonth))
         : '',
       paymentMethod: undefined,
       notes: invoice.notes ?? '',
     });
+    if (isCredit) {
+      setSelectedDay(invoice.dueDate ? (parseISODate(invoice.dueDate)?.getUTCDate() ?? dueDayOfMonth) : dueDayOfMonth);
+    }
     setFormReady(true);
   }, [invoice, formReady, dueDayOfMonth]);
+
+  // Solo recalcula la fecha concreta cuando el usuario cambia el día — si ya
+  // había un dueDate real guardado y no lo tocó, se manda tal cual (recalcular
+  // con "hoy" como ancla podría dar un mes distinto al que ya está guardado).
+  function handleDayChange(day: number) {
+    setSelectedDay(day);
+    setForm((f) => ({ ...f, dueDate: computeFirstDueDateISO(day) }));
+  }
 
   const [showCancelForm, setShowCancelForm] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
@@ -275,9 +290,9 @@ export default function InvoiceDetailPage() {
           {/* Timeline */}
           <section className="rounded-xl border border-border bg-card p-5">
             <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/60 mb-3">Historial</h2>
-            <InfoRow label="Creada" value={formatDate(invoice.createdAt)} />
-            <InfoRow label="Emitida" value={formatDate(invoice.issuedAt)} />
-            <InfoRow label="Vencimiento" value={formatDate(invoice.dueDate)} />
+            <InfoRow label="Creada" value={formatDatePY(invoice.createdAt, 'local')} />
+            <InfoRow label="Emitida" value={formatDatePY(invoice.issuedAt, 'local')} />
+            <InfoRow label="Vencimiento" value={formatDatePY(invoice.dueDate, 'utc')} />
           </section>
         </div>
 
@@ -310,16 +325,18 @@ export default function InvoiceDetailPage() {
                     Fecha de vencimiento de la 1ª cuota *
                     <span className="ml-1 font-normal text-muted-foreground/60">(por conv. día {dueDayOfMonth} de cada mes)</span>
                   </Label>
-                  <input
-                    id="due-date"
-                    type="date"
-                    className={NUM_CLS}
-                    value={form.dueDate ?? ''}
-                    onChange={(e) => setForm((f) => ({ ...f, dueDate: e.target.value }))}
-                    required
-                  />
+                  <Select value={String(selectedDay)} onValueChange={(v) => v && handleDayChange(Number(v))}>
+                    <SelectTrigger id="due-date" className="w-full">
+                      <span className="min-w-0 flex-1 truncate text-left text-sm">Día {selectedDay}</span>
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Array.from({ length: 28 }, (_, i) => i + 1).map((day) => (
+                        <SelectItem key={day} value={String(day)}>Día {day}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                   <p className="text-xs text-muted-foreground/60">
-                    Si la cambiás, se reprograma todo el cronograma de cuotas a partir de esta fecha.
+                    Vence el {formatDatePY(form.dueDate, 'utc')}. Si la cambiás, se reprograma todo el cronograma de cuotas a partir de esta fecha.
                   </p>
                 </div>
               )}

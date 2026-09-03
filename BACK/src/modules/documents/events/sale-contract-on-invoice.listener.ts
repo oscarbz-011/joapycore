@@ -1,6 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
 import { DocType, TemplateKind } from '@prisma/client';
+import { DocxTemplateService } from '../../../files/docx/docx-template.service';
+import { unflattenVariables } from '../../../files/docx/docx-variables.util';
 import { FilesService } from '../../../files/files.service';
 import { PdfService } from '../../../files/pdf/pdf.service';
 import type { PdfTableVariable } from '../../../files/pdf/tiptap-to-html.converter';
@@ -28,6 +30,20 @@ function formatDate(value: Date | null | undefined): string {
     day: '2-digit',
     month: '2-digit',
     year: 'numeric',
+    timeZone: 'UTC',
+  });
+}
+
+// Para instantes reales (orderDate/issuedAt = new Date()) — a diferencia de
+// formatDate()/formatDateLong(), que anclan en UTC para preservar el día
+// calendario de campos elegidos por el usuario (dueDate de las cuotas).
+function formatDateLocal(value: Date | null | undefined): string {
+  if (!value) return '';
+  return value.toLocaleDateString('es-PY', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    timeZone: 'America/Asuncion',
   });
 }
 
@@ -48,10 +64,21 @@ const MESES_ES = [
 
 // Formato legal habitual de cierre de contrato: "25 días del mes de julio
 // del año 2026" — separado de formatDate() porque las cláusulas del
-// contrato necesitan el día en formato largo, no dd/mm/aaaa.
-function formatDateLong(value: Date | null | undefined): string {
+// contrato necesitan el día en formato largo, no dd/mm/aaaa. orderDate es
+// un instante real (new Date() al crear la venta), así que usa hora de
+// Paraguay en vez de getUTC*, mismo criterio que formatDateLocal() de arriba.
+function formatDateLongLocal(value: Date | null | undefined): string {
   if (!value) return '';
-  return `${value.getDate()} días del mes de ${MESES_ES[value.getMonth()]} del año ${value.getFullYear()}`;
+  const parts = new Intl.DateTimeFormat('es-PY', {
+    day: 'numeric',
+    month: 'numeric',
+    year: 'numeric',
+    timeZone: 'America/Asuncion',
+  }).formatToParts(value);
+  const day = parts.find((p) => p.type === 'day')!.value;
+  const month = Number(parts.find((p) => p.type === 'month')!.value) - 1;
+  const year = parts.find((p) => p.type === 'year')!.value;
+  return `${day} días del mes de ${MESES_ES[month]} del año ${year}`;
 }
 
 // Arma el plan de cuotas en dos bloques de columnas lado a lado (cuotas
@@ -111,6 +138,7 @@ export class SaleContractOnInvoiceListener {
     private readonly documentsRepository: DocumentsRepository,
     private readonly filesService: FilesService,
     private readonly pdfService: PdfService,
+    private readonly docxTemplateService: DocxTemplateService,
   ) {}
 
   @OnEvent('invoice.issued')
@@ -159,7 +187,9 @@ export class SaleContractOnInvoiceListener {
       event.tenantId,
       TemplateKind.SALE_CONTRACT,
     );
-    if (!template?.content) {
+    // Para una plantilla DOCX, content es null a propósito (el contrato vive
+    // en fileRecordId, no en content) — no tratarla como "no configurada".
+    if (!template || (template.contentFormat !== 'DOCX' && !template.content)) {
       this.logger.warn(
         `Venta ${saleOrder.id} es a crédito pero el tenant ${event.tenantId} no tiene una plantilla de contrato configurada`,
       );
@@ -192,8 +222,8 @@ export class SaleContractOnInvoiceListener {
       'cliente.telefono': saleOrder.customer.phone ?? '',
       'cliente.direccion': saleOrder.customer.address ?? '',
       'sucursal.ciudad': saleOrder.branch?.city ?? '',
-      'venta.fecha': formatDate(saleOrder.orderDate),
-      'venta.fechaLarga': formatDateLong(saleOrder.orderDate),
+      'venta.fecha': formatDateLocal(saleOrder.orderDate),
+      'venta.fechaLarga': formatDateLongLocal(saleOrder.orderDate),
       'venta.total': saleOrder.total ? formatMoney(saleOrder.total) : '',
       'venta.totalEnLetras': saleOrder.total
         ? numberToWordsEs(Number(saleOrder.total))
@@ -204,10 +234,13 @@ export class SaleContractOnInvoiceListener {
       ]
         .filter(Boolean)
         .join('-'),
-      'factura.fecha': formatDate(saleOrder.invoice?.issuedAt),
+      'factura.fecha': formatDateLocal(saleOrder.invoice?.issuedAt),
       'credito.entrega': saleOrder.downPayment
         ? formatMoney(saleOrder.downPayment.amount)
         : '0',
+      'credito.entregaEnLetras': saleOrder.downPayment
+        ? numberToWordsEs(Number(saleOrder.downPayment.amount))
+        : numberToWordsEs(0),
       'credito.montoFinanciado': saleOrder.loan
         ? formatMoney(saleOrder.loan.principal)
         : '',
@@ -255,7 +288,7 @@ export class SaleContractOnInvoiceListener {
           formatMoney(inst.amount),
         ]),
       },
-      'credito.cuotasDosColumnas': buildPairedInstallmentsTable(
+      'credito.cuotas2col': buildPairedInstallmentsTable(
         saleOrder.loan?.installments ?? [],
       ),
     };
@@ -278,15 +311,27 @@ export class SaleContractOnInvoiceListener {
       }
     }
 
-    const pdfBuffer = await this.pdfService.renderTemplate(
-      template.content,
-      variables,
-      tableVariables,
-      {
-        logoDataUri,
-        companyName: saleOrder.tenant.razonSocial ?? saleOrder.tenant.name,
-      },
-    );
+    const pdfBuffer =
+      template.contentFormat === 'DOCX'
+        ? await this.docxTemplateService.convertToPdf(
+            this.docxTemplateService.fillTemplate(
+              await this.filesService.getFileBuffer(template.fileRecord!),
+              unflattenVariables(variables, tableVariables),
+            ),
+          )
+        : await this.pdfService.renderTemplate(
+            // No-nulo garantizado por el guard de arriba (solo se llega acá
+            // cuando contentFormat !== 'DOCX'), TS no puede correlacionar
+            // ambos campos por sí solo.
+            template.content!,
+            variables,
+            tableVariables,
+            {
+              logoDataUri,
+              companyName:
+                saleOrder.tenant.razonSocial ?? saleOrder.tenant.name,
+            },
+          );
 
     const fileRecord = await this.filesService.upload(
       event.tenantId,
@@ -309,7 +354,7 @@ export class SaleContractOnInvoiceListener {
       allowedRoles: template.allowedRoles,
       entityType: 'sale_order',
       entityId: saleOrder.id,
-      content: template.content,
+      content: template.content ?? undefined,
       variables,
       fileRecordId: fileRecord.id,
       uploadedById: event.issuedById,

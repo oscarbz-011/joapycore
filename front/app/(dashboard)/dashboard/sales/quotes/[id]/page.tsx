@@ -6,6 +6,7 @@ import { ArrowLeft, Download, ArrowRightCircle, Ban } from 'lucide-react';
 import { salesApi } from '../../../../../../lib/api/sales';
 import { useAuth } from '../../../../../../lib/auth-context';
 import { openPdf } from '../../../../../../lib/open-pdf';
+import { formatDatePY } from '../../../../../../lib/date';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 
@@ -13,9 +14,6 @@ function formatPrice(n: number) {
   return new Intl.NumberFormat('es-PY', { style: 'currency', currency: 'PYG', maximumFractionDigits: 0 }).format(n);
 }
 
-function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString('es-PY', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' });
-}
 
 export default function QuoteDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -77,7 +75,7 @@ export default function QuoteDetailPage() {
         </Button>
         <div className="flex-1">
           <h1 className="text-2xl font-semibold text-foreground font-mono">{quote.quoteNumber ?? '—'}</h1>
-          <p className="mt-1 text-sm text-muted-foreground">{formatDate(quote.orderDate)}</p>
+          <p className="mt-1 text-sm text-muted-foreground">{formatDatePY(quote.orderDate, 'local')}</p>
         </div>
         <Badge variant="outline" className={isQuoted ? 'bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-950 dark:text-violet-300 dark:border-violet-800' : ''}>
           {isQuoted ? 'Presupuesto' : quote.status === 'CANCELLED' ? 'Cancelado' : quote.status}

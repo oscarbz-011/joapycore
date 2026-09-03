@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import { FileText, Plus } from 'lucide-react';
 import { salesApi, type SaleOrderStatus } from '../../../../../lib/api/sales';
 import { useAuth } from '../../../../../lib/auth-context';
+import { formatDatePY } from '../../../../../lib/date';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 
@@ -12,9 +13,6 @@ function formatPrice(n: number) {
   return new Intl.NumberFormat('es-PY', { style: 'currency', currency: 'PYG', maximumFractionDigits: 0 }).format(n);
 }
 
-function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString('es-PY', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' });
-}
 
 function quoteTotal(items: { unitPrice: number; quantity: number }[]) {
   return items.reduce((sum, i) => sum + i.unitPrice * i.quantity, 0);
@@ -81,7 +79,7 @@ export default function QuotesPage() {
             >
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-foreground font-mono">{q.quoteNumber ?? '—'}</p>
-                <p className="text-xs text-muted-foreground/60 mt-0.5">{q.customer.firstName} {q.customer.lastName} · {formatDate(q.orderDate)}</p>
+                <p className="text-xs text-muted-foreground/60 mt-0.5">{q.customer.firstName} {q.customer.lastName} · {formatDatePY(q.orderDate, 'local')}</p>
               </div>
               <Badge variant="outline" className={q.status === 'CANCELLED' ? '' : 'bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-950 dark:text-violet-300 dark:border-violet-800'}>
                 {STATUS_LABEL[q.status] ?? q.status}
