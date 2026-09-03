@@ -17,7 +17,8 @@
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
-    "test:e2e": "jest --config ./test/jest-e2e.json"
+    "test:e2e": "jest --config ./test/jest-e2e.json",
+    "seed:demo": "ts-node prisma/seeds/index.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1111.0",
@@ -40,12 +41,14 @@
     "bcryptjs": "^3.0.3",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.15.1",
+    "docxtemplater": "^3.69.3",
     "multer": "^2.2.0",
     "nodemailer": "^9.0.5",
     "passport": "^0.7.0",
     "passport-jwt": "^4.0.1",
     "pdf-lib": "^1.17.1",
     "pg": "^8.21.0",
+    "pizzip": "^3.2.0",
     "puppeteer": "^25.7.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
