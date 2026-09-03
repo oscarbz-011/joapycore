@@ -10,6 +10,7 @@ import { usersApi, type CreateUserPayload } from '../../../../../../lib/api/user
 import { hrApi, type CreateEmployeePayload } from '../../../../../../lib/api/hr';
 import { NumericInput } from '../../../../../../components/numeric-input';
 import { Button } from '@/components/ui/button';
+import { DatePicker } from '@/components/ui/date-picker';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
 
 // ── Username preview ──────────────────────────────────────────────────────────
@@ -323,21 +324,11 @@ export function CreateUserModal({ onClose }: Props) {
                   </div>
                   <div>
                     <label className={labelClass}>Fecha de nacimiento *</label>
-                    <input
-                      type="date"
-                      value={employment.birthDate}
-                      onChange={(e) => setEmp('birthDate', e.target.value)}
-                      className={inputClass}
-                    />
+                    <DatePicker value={employment.birthDate} onChange={(v) => setEmp('birthDate', v)} />
                   </div>
                   <div>
                     <label className={labelClass}>Fecha de ingreso *</label>
-                    <input
-                      type="date"
-                      value={employment.hireDate}
-                      onChange={(e) => setEmp('hireDate', e.target.value)}
-                      className={inputClass}
-                    />
+                    <DatePicker value={employment.hireDate} onChange={(v) => setEmp('hireDate', v)} />
                   </div>
                   <div>
                     <label className={labelClass}>Salario base (PYG) *</label>

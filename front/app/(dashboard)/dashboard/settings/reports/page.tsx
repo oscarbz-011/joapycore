@@ -6,6 +6,7 @@ import { useState } from 'react';
 import { reportsApi } from '../../../../../lib/api/reports';
 import { daysOverdue } from '../../../../../lib/overdue';
 import { cn } from '@/lib/utils';
+import { DatePicker } from '@/components/ui/date-picker';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -49,18 +50,16 @@ function SalesTab() {
     queryFn: () => reportsApi.getSales(dateFrom, dateTo),
   });
 
-  const inputCls = 'rounded-lg border border-border bg-card text-foreground px-3 py-1.5 text-sm focus:border-ring focus:outline-none';
-
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex items-center gap-2">
           <span className="text-sm text-muted-foreground">Desde</span>
-          <input type="date" className={inputCls} value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
+          <DatePicker value={dateFrom} onChange={setDateFrom} />
         </div>
         <div className="flex items-center gap-2">
           <span className="text-sm text-muted-foreground">Hasta</span>
-          <input type="date" className={inputCls} value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
+          <DatePicker value={dateTo} onChange={setDateTo} />
         </div>
       </div>
 

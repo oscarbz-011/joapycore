@@ -12,6 +12,7 @@ import {
 import { branchesApi } from '../../../../lib/api/branches';
 import { NumericInput } from '../../../../components/numeric-input';
 import { Button } from '@/components/ui/button';
+import { DatePicker } from '@/components/ui/date-picker';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
@@ -33,7 +34,7 @@ const EMPTY_FORM: CreateEmployeePayload = {
   firstName: '', lastName: '', documentType: 'CI', documentNumber: '',
   birthDate: '', gender: undefined, nationality: '', maritalStatus: undefined,
   phone: '', mobilePhone: '', address: '', city: '',
-  hireDate: '', contractType: 'PERMANENT', areaId: undefined, positionId: undefined,
+  hireDate: '', contractType: 'PERMANENT', isCourier: false, areaId: undefined, positionId: undefined,
   branchId: undefined,
   baseSalary: 0, paymentMethod: 'BANK_TRANSFER', bankName: '', bankAccount: '',
 };
@@ -58,6 +59,7 @@ function fromEmployee(e: Employee): CreateEmployeePayload {
     city: e.city ?? '',
     hireDate: toDateInput(e.hireDate),
     contractType: e.contractType,
+    isCourier: e.isCourier,
     areaId: e.area?.id ?? undefined,
     positionId: e.position?.id ?? undefined,
     branchId: e.branch?.id ?? undefined,
@@ -234,7 +236,7 @@ export function EmployeeForm({ initial, onDone }: Props) {
             </div>
             <div className="space-y-1.5">
               <Label>Fecha de nacimiento <span className="text-destructive">*</span></Label>
-              <input type="date" lang="es-PY" className={NUM_CLS} value={form.birthDate} onChange={(e) => set('birthDate', e.target.value)} required />
+              <DatePicker value={form.birthDate} onChange={(v) => set('birthDate', v)} />
             </div>
             <div className="space-y-1.5">
               <Label>Género</Label>
@@ -297,7 +299,7 @@ export function EmployeeForm({ initial, onDone }: Props) {
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <Label>Fecha de ingreso <span className="text-destructive">*</span></Label>
-              <input type="date" lang="es-PY" className={NUM_CLS} value={form.hireDate} onChange={(e) => set('hireDate', e.target.value)} required />
+              <DatePicker value={form.hireDate} onChange={(v) => set('hireDate', v)} />
             </div>
             <div className="space-y-1.5">
               <Label>Tipo de contrato</Label>
@@ -349,6 +351,19 @@ export function EmployeeForm({ initial, onDone }: Props) {
               </Select>
             </div>
           </div>
+
+          <label className="flex cursor-pointer items-center gap-2.5">
+            <input
+              type="checkbox"
+              checked={form.isCourier ?? false}
+              onChange={(e) => set('isCourier', e.target.checked)}
+              className="h-4 w-4 rounded border-border accent-primary"
+            />
+            <span className="text-sm font-medium text-foreground">Repartidor</span>
+          </label>
+          <p className="ml-[26px] -mt-2 text-xs text-muted-foreground/70">
+            Aparece como opción al asignar entregas en Logística — no marcar para vendedores, analistas u otro personal que no reparte.
+          </p>
         </section>
 
         {/* Nómina */}
@@ -453,7 +468,7 @@ export function EmployeeForm({ initial, onDone }: Props) {
                 <div className="mt-3 flex items-end gap-3">
                   <div className="flex-1 space-y-1.5">
                     <Label>Fecha de baja (opcional)</Label>
-                    <input type="date" className={NUM_CLS} value={terminationDate} onChange={(e) => setTerminationDate(e.target.value)} />
+                    <DatePicker value={terminationDate} onChange={(v) => setTerminationDate(v)} />
                   </div>
                   <Button
                     type="button"

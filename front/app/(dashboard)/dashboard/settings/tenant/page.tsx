@@ -11,6 +11,7 @@ import {
 } from '../../../../../lib/api/tenants';
 import { filesApi } from '../../../../../lib/api/files';
 import { useAuth } from '../../../../../lib/auth-context';
+import { DatePicker } from '@/components/ui/date-picker';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
 
 // ── Logo de la empresa ────────────────────────────────────────────────────────
@@ -291,6 +292,10 @@ export default function TenantPage() {
   const set = (field: keyof FormState) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
     setForm((f) => ({ ...f, [field]: e.target.value }));
 
+  // Para DatePicker, que entrega el valor directo (no un evento) en onChange.
+  const setValue = (field: keyof FormState) => (value: string) =>
+    setForm((f) => ({ ...f, [field]: value }));
+
   const addActividad = () => setActividades((a) => [...a, blankActividad()]);
   const removeActividad = (i: number) => setActividades((a) => a.filter((_, idx) => idx !== i));
   const setActividad = (i: number, field: keyof ActividadEconomica, val: string) =>
@@ -567,11 +572,9 @@ export default function TenantPage() {
                 <label className="block text-sm font-medium text-muted-foreground mb-1">
                   Inicio de vigencia
                 </label>
-                <input
-                  type="date"
-                  className={inputClass}
+                <DatePicker
                   value={form.timbradoFecha}
-                  onChange={set('timbradoFecha')}
+                  onChange={setValue('timbradoFecha')}
                   disabled={!canEdit}
                 />
               </div>
@@ -579,11 +582,9 @@ export default function TenantPage() {
                 <label className="block text-sm font-medium text-muted-foreground mb-1">
                   Fin de vigencia
                 </label>
-                <input
-                  type="date"
-                  className={inputClass}
+                <DatePicker
                   value={form.timbradoFechaFin}
-                  onChange={set('timbradoFechaFin')}
+                  onChange={setValue('timbradoFechaFin')}
                   disabled={!canEdit}
                 />
               </div>

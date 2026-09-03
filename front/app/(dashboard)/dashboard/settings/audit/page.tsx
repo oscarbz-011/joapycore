@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { ChevronLeft, ChevronRight, X, Search } from 'lucide-react';
 import { auditApi, type AuditLog, type AuditFilters } from '../../../../../lib/api/audit';
+import { DatePicker } from '@/components/ui/date-picker';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -122,17 +123,13 @@ function FiltersBar({
         </SelectContent>
       </Select>
 
-      <input
-        type="date"
-        className={inputCls}
+      <DatePicker
         value={filters.dateFrom ?? ''}
-        onChange={(e) => onChange({ ...filters, dateFrom: e.target.value || undefined, page: 1 })}
+        onChange={(v) => onChange({ ...filters, dateFrom: v || undefined, page: 1 })}
       />
-      <input
-        type="date"
-        className={inputCls}
+      <DatePicker
         value={filters.dateTo ?? ''}
-        onChange={(e) => onChange({ ...filters, dateTo: e.target.value || undefined, page: 1 })}
+        onChange={(v) => onChange({ ...filters, dateTo: v || undefined, page: 1 })}
       />
 
       {(filters.module || filters.action || filters.dateFrom || filters.dateTo) && (

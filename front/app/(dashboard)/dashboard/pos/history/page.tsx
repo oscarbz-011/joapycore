@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Receipt } from 'lucide-react';
 import { posApi, type PosPaymentMethod, type PosTerminal } from '../../../../../lib/api/pos';
 import { Card } from '@/components/ui/card';
+import { DatePicker } from '@/components/ui/date-picker';
 
 const PAYMENT_METHOD_LABELS: Record<PosPaymentMethod, string> = {
   CASH: 'Efectivo',
@@ -76,13 +77,8 @@ export default function PosHistoryPage() {
             </option>
           ))}
         </select>
-        <input
-          type="date"
-          value={from}
-          onChange={(e) => setFrom(e.target.value)}
-          className={selectCls}
-        />
-        <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className={selectCls} />
+        <DatePicker value={from} onChange={setFrom} />
+        <DatePicker value={to} onChange={setTo} />
       </div>
 
       {isLoading ? (
