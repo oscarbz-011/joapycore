@@ -23,12 +23,15 @@ import {
 } from '../../../../lib/api/finance';
 import { billingApi, type InvoiceStatus } from '../../../../lib/api/billing';
 import { openPdf } from '../../../../lib/open-pdf';
-import { distributeAmount, type DistributedItem } from '../../../../lib/finance-distribute';
+import { distributeAmount, outstandingOf, chargesTotalOf, type DistributedItem } from '../../../../lib/finance-distribute';
 import { ReceiptButton } from '../../../../components/receipt-button';
-import { arUrgency, arDisplayDueDate, type ArUrgency, type ArUrgencyLevel } from '../../../../lib/ar-urgency';
+import { arUrgency, arDisplayDueDate, DUE_SOON_DAYS, type ArUrgency, type ArUrgencyLevel } from '../../../../lib/ar-urgency';
+import { daysOverdue } from '../../../../lib/overdue';
+import { formatDatePY } from '../../../../lib/date';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { DatePicker } from '@/components/ui/date-picker';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import {
   Sheet,
@@ -63,15 +66,6 @@ function formatPrice(n: number) {
   }).format(n);
 }
 
-function formatDate(iso: string | null) {
-  if (!iso) return '—';
-  return new Date(iso).toLocaleDateString('es-PY', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-    timeZone: 'UTC',
-  });
-}
 
 function invoiceRef(ar: AccountsReceivable['invoice']) {
   if (ar.invoiceNumber) return `${ar.invoicePrefix ?? ''}${ar.invoiceNumber}`;
@@ -189,17 +183,46 @@ const INST_STATUS_LABEL: Record<InstallmentStatus, string> = {
 };
 
 const INST_STATUS_CLASS: Partial<Record<InstallmentStatus, string>> = {
-  PENDING: 'bg-warn-subtle text-warn border-warn/30',
+  // "Pendiente" sin apuro queda deliberadamente neutro (gris) — no hay
+  // necesidad de resaltar una cuota que recién vence dentro de varios meses,
+  // solo la que está vencida o por vencer (ver installmentUrgency abajo).
+  PENDING: 'bg-muted/30 text-muted-foreground border-border',
   PARTIAL: 'bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-950 dark:text-sky-300 dark:border-sky-800',
   PAID:    'bg-accent-subtle text-accent-on border-accent-on/20',
 };
 
-function InstallmentStatusBadge({ status }: { status: InstallmentStatus }) {
+// Mismo criterio que arUrgency() (ver ar-urgency.ts): calcula "vencida"/"por
+// vencer" sobre la fecha real de la cuota, no sobre `status`, que solo lo
+// actualiza el cron nocturno — una cuota recién vencida (o cualquier corrida
+// antes de medianoche) puede seguir en PENDING en la base.
+function installmentUrgency(inst: Installment): { level: ArUrgencyLevel; days: number } {
+  if (inst.status === 'PAID') return { level: null, days: 0 };
+  const overdueDays = daysOverdue(inst.dueDate);
+  if (overdueDays > 0) return { level: 'overdue', days: overdueDays };
+  const daysUntil = -overdueDays;
+  if (daysUntil <= DUE_SOON_DAYS) return { level: 'due-soon', days: daysUntil };
+  return { level: null, days: 0 };
+}
+
+function InstallmentStatusBadge({ status, urgency }: { status: InstallmentStatus; urgency: { level: ArUrgencyLevel; days: number } }) {
+  if (urgency.level === 'overdue') {
+    return (
+      <Badge variant="destructive" className="gap-1 whitespace-nowrap">
+        <AlertTriangle size={10} />
+        Vencida · {urgency.days} {urgency.days === 1 ? 'día' : 'días'}
+      </Badge>
+    );
+  }
+  if (urgency.level === 'due-soon') {
+    return (
+      <Badge variant="outline" className="gap-1 whitespace-nowrap bg-warn-subtle text-warn border-warn/30">
+        <Clock size={10} />
+        Vence en {urgency.days} {urgency.days === 1 ? 'día' : 'días'}
+      </Badge>
+    );
+  }
   return (
-    <Badge
-      variant={status === 'OVERDUE' ? 'destructive' : 'outline'}
-      className={INST_STATUS_CLASS[status]}
-    >
+    <Badge variant="outline" className={INST_STATUS_CLASS[status]}>
       {INST_STATUS_LABEL[status]}
     </Badge>
   );
@@ -239,7 +262,7 @@ function InvoiceDetailModal({
               <DialogTitle className="text-base font-semibold">Factura {ref}</DialogTitle>
               {invoice && (
                 <p className="text-xs text-muted-foreground/60 mt-0.5">
-                  Emitida: {formatDate(invoice.issuedAt ?? invoice.createdAt)}
+                  Emitida: {formatDatePY(invoice.issuedAt ?? invoice.createdAt, 'local')}
                 </p>
               )}
             </div>
@@ -281,7 +304,7 @@ function InvoiceDetailModal({
                   </p>
                   {invoice.dueDate && (
                     <p className="text-muted-foreground text-xs mt-1">
-                      Venc.: {formatDate(invoice.dueDate)}
+                      Venc.: {formatDatePY(invoice.dueDate, 'utc')}
                     </p>
                   )}
                 </div>
@@ -422,7 +445,7 @@ function RegisterPaymentModal({
             </div>
             <div className="space-y-1.5">
               <Label>Fecha *</Label>
-              <input type="date" className={NUM_CLS} value={date} onChange={(e) => setDate(e.target.value)} required />
+              <DatePicker value={date} onChange={setDate} />
             </div>
           </div>
 
@@ -553,7 +576,7 @@ function PayInstallmentsModal({
 
           <div className="space-y-1.5">
             <Label>Fecha *</Label>
-            <input type="date" className={NUM_CLS} value={date} onChange={(e) => setDate(e.target.value)} required />
+            <DatePicker value={date} onChange={setDate} />
           </div>
 
           <div className="space-y-1.5">
@@ -628,7 +651,7 @@ function CreditARDetail({
         delete next[inst.id];
         return next;
       }
-      return { ...prev, [inst.id]: Number(inst.amount) - Number(inst.paidAmount) };
+      return { ...prev, [inst.id]: outstandingOf(inst) };
     });
   }
 
@@ -665,7 +688,7 @@ function CreditARDetail({
   const selectedItems: DistributedItem[] = loan.installments
     .filter((i) => selected[i.id] != null)
     .map((i) => {
-      const outstanding = Number(i.amount) - Number(i.paidAmount);
+      const outstanding = outstandingOf(i);
       const amount = selected[i.id];
       return { installmentId: i.id, number: i.number, amount, isFull: amount >= outstanding };
     });
@@ -725,15 +748,22 @@ function CreditARDetail({
 
       <div className="space-y-1.5">
         {loan.installments.map((inst) => {
-          const remaining = Number(inst.amount) - Number(inst.paidAmount);
+          const charges = inst.interestCharges ?? [];
+          const chargesTotal = chargesTotalOf(inst);
+          const remaining = outstandingOf(inst);
           const isPayable =
             (inst.status === 'PENDING' || inst.status === 'PARTIAL' || inst.status === 'OVERDUE') &&
             remaining > 0;
           const isSelected = selected[inst.id] != null;
+          const urgency = installmentUrgency(inst);
+          const accent = accentFor(urgency.level);
           return (
             <div
               key={inst.id}
-              className="flex items-center justify-between rounded-lg border border-border bg-card px-3 py-2.5 text-sm"
+              className={cn(
+                'flex items-center justify-between rounded-lg border border-border bg-card px-3 py-2.5 text-sm',
+                accent && cn('border-l-[3px]', ACCENT_BORDER[accent]),
+              )}
             >
               <div className="flex items-center gap-2 min-w-0">
                 {isPayable && (
@@ -747,8 +777,8 @@ function CreditARDetail({
                 <span className="shrink-0 w-5 text-xs font-mono text-muted-foreground/60">#{inst.number}</span>
                 <div className="min-w-0">
                   <div className="flex items-center gap-1.5 flex-wrap">
-                    <InstallmentStatusBadge status={inst.status} />
-                    <span className="text-xs text-muted-foreground/60">{formatDate(inst.dueDate)}</span>
+                    <InstallmentStatusBadge status={inst.status} urgency={urgency} />
+                    <span className={cn('text-xs', accent ? ACCENT_TEXT[accent] : 'text-muted-foreground/60')}>{formatDatePY(inst.dueDate, 'utc')}</span>
                   </div>
                   <p className="font-medium text-foreground mt-0.5">
                     {formatPrice(Number(inst.amount))}
@@ -763,6 +793,20 @@ function CreditARDetail({
                       </span>
                     )}
                   </p>
+                  {chargesTotal > 0 && (
+                    <div className="mt-1 space-y-0.5 rounded-md border border-destructive/25 bg-destructive/5 px-2 py-1.5">
+                      {charges.map((c) => (
+                        <div key={c.id} className="flex justify-between gap-3 text-xs text-destructive">
+                          <span className="truncate">{c.component.name}</span>
+                          <span className="shrink-0">+{formatPrice(Number(c.amount))}</span>
+                        </div>
+                      ))}
+                      <div className="flex justify-between gap-3 border-t border-destructive/20 pt-0.5 text-xs font-semibold text-destructive">
+                        <span>Total a pagar (cuota + recargos)</span>
+                        <span className="shrink-0">{formatPrice(remaining)}</span>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
               <div className="ml-2 flex items-center gap-1.5 shrink-0">
@@ -864,7 +908,7 @@ function ARDetailPanel({
                 <div>
                   <p className="text-sm font-semibold text-foreground">{ref}</p>
                   <p className="text-xs text-muted-foreground/60 mt-0.5">
-                    {formatDate(ar.invoice.issuedAt)}
+                    {formatDatePY(ar.invoice.issuedAt, 'local')}
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
@@ -903,7 +947,7 @@ function ARDetailPanel({
                 </div>
                 {ar.dueDate && (
                   <p className={cn('text-xs mt-2', urgency.level === 'overdue' ? 'font-medium text-destructive' : 'text-muted-foreground/60')}>
-                    Vencimiento: {formatDate(ar.dueDate)}
+                    Vencimiento: {formatDatePY(ar.dueDate, 'utc')}
                     {urgency.level === 'overdue' && ` · ${urgency.days} ${urgency.days === 1 ? 'día' : 'días'} de mora`}
                   </p>
                 )}
@@ -938,7 +982,7 @@ function ARDetailPanel({
                         <span className="text-sm font-medium text-foreground">
                           {formatPrice(Number(pr.amount))}
                         </span>
-                        <span className="text-xs text-muted-foreground">{formatDate(pr.paymentDate)}</span>
+                        <span className="text-xs text-muted-foreground">{formatDatePY(pr.paymentDate, 'utc')}</span>
                       </div>
                       <p className="text-xs text-muted-foreground/60 mt-0.5">
                         {PAYMENT_METHOD_LABELS[pr.paymentMethod]}
@@ -1117,7 +1161,7 @@ function ARRow({ ar, onClick, indent }: { ar: AccountsReceivable; onClick: () =>
         )}
       </td>
       <td className={cn('px-4 py-3', accent ? ACCENT_TEXT[accent] : 'text-muted-foreground')}>
-        {formatDate(arDisplayDueDate(ar))}
+        {formatDatePY(arDisplayDueDate(ar), 'utc')}
       </td>
       <td className="px-4 py-3"><ARStatusBadge status={ar.status} urgency={urgency} /></td>
       <td className="px-4 py-3 text-right font-mono text-muted-foreground">
