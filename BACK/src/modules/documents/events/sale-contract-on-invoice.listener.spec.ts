@@ -11,7 +11,12 @@ function makeSaleOrder(overrides: Record<string, unknown> = {}) {
     saleType: 'CREDIT',
     orderDate: new Date('2026-08-01'),
     total: 5000000,
-    tenant: { name: 'Tenant SA', razonSocial: 'Tenant SA', ruc: '80012345-6', address: 'Av. Test 123' },
+    tenant: {
+      name: 'Tenant SA',
+      razonSocial: 'Tenant SA',
+      ruc: '80012345-6',
+      address: 'Av. Test 123',
+    },
     customer: {
       firstName: 'Juan',
       secondFirstName: null,
@@ -23,7 +28,12 @@ function makeSaleOrder(overrides: Record<string, unknown> = {}) {
       address: 'Calle Falsa 123',
     },
     items: [
-      { quantity: 1, unitPrice: 5000000, description: null, product: { name: 'Heladera' } },
+      {
+        quantity: 1,
+        unitPrice: 5000000,
+        description: null,
+        product: { name: 'Heladera' },
+      },
     ],
     loan: {
       principal: 4000000,
@@ -33,8 +43,13 @@ function makeSaleOrder(overrides: Record<string, unknown> = {}) {
       installments: [{ amount: 383333 }],
     },
     downPayment: { amount: 1000000 },
-    invoice: { invoicePrefix: '001-001', invoiceNumber: '0000123', issuedAt: new Date('2026-08-15') },
+    invoice: {
+      invoicePrefix: '001-001',
+      invoiceNumber: '0000123',
+      issuedAt: new Date('2026-08-15'),
+    },
     branch: { city: 'Asunción' },
+    guarantors: [] as Record<string, unknown>[],
     ...overrides,
   };
 }
@@ -47,8 +62,15 @@ function makeTemplate(overrides: Record<string, unknown> = {}) {
     templateKind: TemplateKind.SALE_CONTRACT,
     content: JSON.stringify({
       type: 'doc',
-      content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Cliente: {{cliente.nombre}}' }] }],
+      content: [
+        {
+          type: 'paragraph',
+          content: [{ type: 'text', text: 'Cliente: {{cliente.nombre}}' }],
+        },
+      ],
     }),
+    contentFormat: 'TIPTAP',
+    fileRecord: null as { id: string } | null,
     categoryId: null,
     visibility: DocVisibility.PRIVATE,
     allowedRoles: [] as string[],
@@ -58,9 +80,18 @@ function makeTemplate(overrides: Record<string, unknown> = {}) {
 
 describe('SaleContractOnInvoiceListener', () => {
   let prisma: { saleOrder: { findFirst: jest.Mock } };
-  let documentsRepository: { findAll: jest.Mock; findTemplate: jest.Mock; create: jest.Mock };
-  let filesService: { upload: jest.Mock; getById: jest.Mock; getFileBuffer: jest.Mock };
+  let documentsRepository: {
+    findAll: jest.Mock;
+    findTemplate: jest.Mock;
+    create: jest.Mock;
+  };
+  let filesService: {
+    upload: jest.Mock;
+    getById: jest.Mock;
+    getFileBuffer: jest.Mock;
+  };
   let pdfService: { renderTemplate: jest.Mock };
+  let docxTemplateService: { fillTemplate: jest.Mock; convertToPdf: jest.Mock };
   let listener: SaleContractOnInvoiceListener;
 
   const baseEvent = {
@@ -74,7 +105,9 @@ describe('SaleContractOnInvoiceListener', () => {
   };
 
   beforeEach(() => {
-    prisma = { saleOrder: { findFirst: jest.fn().mockResolvedValue(makeSaleOrder()) } };
+    prisma = {
+      saleOrder: { findFirst: jest.fn().mockResolvedValue(makeSaleOrder()) },
+    };
     documentsRepository = {
       findAll: jest.fn().mockResolvedValue([]),
       findTemplate: jest.fn().mockResolvedValue(makeTemplate()),
@@ -82,16 +115,27 @@ describe('SaleContractOnInvoiceListener', () => {
     };
     filesService = {
       upload: jest.fn().mockResolvedValue({ id: 'file-1' }),
-      getById: jest.fn().mockResolvedValue({ id: 'logo-1', mimeType: 'image/png' }),
-      getFileBuffer: jest.fn().mockResolvedValue(Buffer.from('fake-logo-bytes')),
+      getById: jest
+        .fn()
+        .mockResolvedValue({ id: 'logo-1', mimeType: 'image/png' }),
+      getFileBuffer: jest
+        .fn()
+        .mockResolvedValue(Buffer.from('fake-logo-bytes')),
     };
-    pdfService = { renderTemplate: jest.fn().mockResolvedValue(Buffer.from('%PDF-fake')) };
+    pdfService = {
+      renderTemplate: jest.fn().mockResolvedValue(Buffer.from('%PDF-fake')),
+    };
+    docxTemplateService = {
+      fillTemplate: jest.fn().mockReturnValue(Buffer.from('filled-docx')),
+      convertToPdf: jest.fn().mockResolvedValue(Buffer.from('%PDF-from-docx')),
+    };
 
     listener = new SaleContractOnInvoiceListener(
       prisma as any,
       documentsRepository as any,
       filesService as any,
       pdfService as any,
+      docxTemplateService as any,
     );
   });
 
@@ -103,7 +147,11 @@ describe('SaleContractOnInvoiceListener', () => {
       TENANT,
       'user-1',
       expect.objectContaining({ mimetype: 'application/pdf' }),
-      { module: 'documents', entityType: 'sale_order', entityId: SALE_ORDER_ID },
+      {
+        module: 'documents',
+        entityType: 'sale_order',
+        entityId: SALE_ORDER_ID,
+      },
     );
     expect(documentsRepository.create).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -128,7 +176,13 @@ describe('SaleContractOnInvoiceListener', () => {
     prisma.saleOrder.findFirst.mockResolvedValue(
       makeSaleOrder({
         items: [
-          { quantity: 1, unitPrice: 5000000, financedUnitPrice: 5750000, description: null, product: { name: 'Heladera' } },
+          {
+            quantity: 1,
+            unitPrice: 5000000,
+            financedUnitPrice: 5750000,
+            description: null,
+            product: { name: 'Heladera' },
+          },
         ],
       }),
     );
@@ -158,7 +212,9 @@ describe('SaleContractOnInvoiceListener', () => {
   });
 
   it('resolves sucursal.ciudad to an empty string when the sale has no branch', async () => {
-    prisma.saleOrder.findFirst.mockResolvedValue(makeSaleOrder({ branch: null }));
+    prisma.saleOrder.findFirst.mockResolvedValue(
+      makeSaleOrder({ branch: null }),
+    );
 
     await listener.handle(baseEvent);
 
@@ -168,7 +224,13 @@ describe('SaleContractOnInvoiceListener', () => {
 
   it('resolves the tenant logo to a data URI and passes it to the PDF renderer', async () => {
     prisma.saleOrder.findFirst.mockResolvedValue(
-      makeSaleOrder({ tenant: { name: 'Tenant SA', razonSocial: 'Tenant SA', logoFileId: 'logo-1' } }),
+      makeSaleOrder({
+        tenant: {
+          name: 'Tenant SA',
+          razonSocial: 'Tenant SA',
+          logoFileId: 'logo-1',
+        },
+      }),
     );
 
     await listener.handle(baseEvent);
@@ -199,7 +261,13 @@ describe('SaleContractOnInvoiceListener', () => {
 
   it('generates the contract without a logo (best-effort) when resolving the logo file fails', async () => {
     prisma.saleOrder.findFirst.mockResolvedValue(
-      makeSaleOrder({ tenant: { name: 'Tenant SA', razonSocial: 'Tenant SA', logoFileId: 'logo-1' } }),
+      makeSaleOrder({
+        tenant: {
+          name: 'Tenant SA',
+          razonSocial: 'Tenant SA',
+          logoFileId: 'logo-1',
+        },
+      }),
     );
     filesService.getById.mockRejectedValue(new Error('archivo no encontrado'));
 
@@ -215,7 +283,9 @@ describe('SaleContractOnInvoiceListener', () => {
   });
 
   it('does nothing for a cash sale', async () => {
-    prisma.saleOrder.findFirst.mockResolvedValue(makeSaleOrder({ saleType: 'CASH' }));
+    prisma.saleOrder.findFirst.mockResolvedValue(
+      makeSaleOrder({ saleType: 'CASH' }),
+    );
 
     await listener.handle(baseEvent);
 
@@ -233,7 +303,9 @@ describe('SaleContractOnInvoiceListener', () => {
   });
 
   it('is idempotent — does not regenerate when a contract already exists', async () => {
-    documentsRepository.findAll.mockResolvedValue([{ id: 'existing-contract' }]);
+    documentsRepository.findAll.mockResolvedValue([
+      { id: 'existing-contract' },
+    ]);
 
     await listener.handle(baseEvent);
 
@@ -253,5 +325,40 @@ describe('SaleContractOnInvoiceListener', () => {
     await listener.handle(baseEvent);
 
     expect(pdfService.renderTemplate).not.toHaveBeenCalled();
+  });
+
+  describe('DOCX template', () => {
+    it('fills and converts the DOCX template instead of rendering TIPTAP, even though content is null', async () => {
+      documentsRepository.findTemplate.mockResolvedValue(
+        makeTemplate({
+          contentFormat: 'DOCX',
+          content: null,
+          fileRecord: { id: 'docx-file-1' },
+        }),
+      );
+
+      await listener.handle(baseEvent);
+
+      // El guard de "plantilla no configurada" no debe dispararse por content:null en una plantilla DOCX.
+      expect(documentsRepository.create).toHaveBeenCalled();
+      expect(pdfService.renderTemplate).not.toHaveBeenCalled();
+      expect(filesService.getFileBuffer).toHaveBeenCalledWith({
+        id: 'docx-file-1',
+      });
+      expect(docxTemplateService.fillTemplate).toHaveBeenCalledTimes(1);
+      expect(docxTemplateService.convertToPdf).toHaveBeenCalledWith(
+        Buffer.from('filled-docx'),
+      );
+      expect(filesService.upload).toHaveBeenCalledWith(
+        TENANT,
+        'user-1',
+        expect.objectContaining({ buffer: Buffer.from('%PDF-from-docx') }),
+        {
+          module: 'documents',
+          entityType: 'sale_order',
+          entityId: SALE_ORDER_ID,
+        },
+      );
+    });
   });
 });

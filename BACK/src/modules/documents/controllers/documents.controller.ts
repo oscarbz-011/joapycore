@@ -13,7 +13,12 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { ApiBearerAuth, ApiConsumes, ApiOperation, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBearerAuth,
+  ApiConsumes,
+  ApiOperation,
+  ApiTags,
+} from '@nestjs/swagger';
 import { memoryStorage } from 'multer';
 import { CurrentTenant } from '../../../common/decorators/current-tenant.decorator';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
@@ -22,6 +27,7 @@ import { RequiredModule } from '../../../common/decorators/required-module.decor
 import { CreateDocumentCategoryDto } from '../dto/create-document-category.dto';
 import { CreateDocumentDto } from '../dto/create-document.dto';
 import { FilterDocumentDto } from '../dto/filter-document.dto';
+import { GenerateDocumentDto } from '../dto/generate-document.dto';
 import { SendDocumentEmailDto } from '../dto/send-document-email.dto';
 import { UpdateDocumentCategoryDto } from '../dto/update-document-category.dto';
 import { UpdateDocumentDto } from '../dto/update-document.dto';
@@ -46,7 +52,12 @@ export class DocumentsController {
     @CurrentUser() user: JwtUser,
     @Query() filters: FilterDocumentDto,
   ) {
-    return this.service.findAll(tenantId, filters, user.roles, user.permissions);
+    return this.service.findAll(
+      tenantId,
+      filters,
+      user.roles,
+      user.permissions,
+    );
   }
 
   // ── Categorías ─────────────────────────────────────────────────────────────
@@ -96,7 +107,9 @@ export class DocumentsController {
 
   @Get('template-kinds')
   @Permissions('documents:templates:read')
-  @ApiOperation({ summary: 'Listar tipos de plantilla disponibles y sus variables' })
+  @ApiOperation({
+    summary: 'Listar tipos de plantilla disponibles y sus variables',
+  })
   getTemplateKinds() {
     return this.service.getTemplateKinds();
   }
@@ -158,17 +171,28 @@ export class DocumentsController {
 
   @Post(':id/file')
   @UseInterceptors(
-    FileInterceptor('file', { storage: memoryStorage(), limits: { fileSize: MAX_UPLOAD_BYTES } }),
+    FileInterceptor('file', {
+      storage: memoryStorage(),
+      limits: { fileSize: MAX_UPLOAD_BYTES },
+    }),
   )
   @ApiConsumes('multipart/form-data')
-  @ApiOperation({ summary: 'Adjuntar (o reemplazar) el archivo de un documento' })
+  @ApiOperation({
+    summary: 'Adjuntar (o reemplazar) el archivo de un documento',
+  })
   attachFile(
     @CurrentTenant() tenantId: string,
     @CurrentUser() user: JwtUser,
     @Param('id') id: string,
     @UploadedFile() file: Express.Multer.File,
   ) {
-    return this.service.attachFile(tenantId, id, user.id, user.permissions, file);
+    return this.service.attachFile(
+      tenantId,
+      id,
+      user.id,
+      user.permissions,
+      file,
+    );
   }
 
   @Delete(':id/file')
@@ -190,6 +214,29 @@ export class DocumentsController {
     @Param('id') id: string,
     @Body() dto: SendDocumentEmailDto,
   ) {
-    return this.service.sendEmail(tenantId, id, user.id, user.permissions, dto.to);
+    return this.service.sendEmail(
+      tenantId,
+      id,
+      user.id,
+      user.permissions,
+      dto.to,
+    );
+  }
+
+  @Post(':id/generate')
+  @ApiOperation({ summary: 'Generar un PDF a partir de una plantilla DOCX' })
+  generate(
+    @CurrentTenant() tenantId: string,
+    @CurrentUser() user: JwtUser,
+    @Param('id') id: string,
+    @Body() dto: GenerateDocumentDto,
+  ) {
+    return this.service.generate(
+      tenantId,
+      id,
+      dto.values,
+      user.id,
+      user.permissions,
+    );
   }
 }

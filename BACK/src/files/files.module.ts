@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { FilesController } from './files.controller';
 import { FilesRepository } from './files.repository';
 import { FilesService } from './files.service';
+import { DocxTemplateService } from './docx/docx-template.service';
 import { PdfService } from './pdf/pdf.service';
 import { LocalStorageDriver } from './storage/local-storage.driver';
 import { S3StorageDriver } from './storage/s3-storage.driver';
@@ -13,6 +14,7 @@ import { STORAGE_DRIVERS, type StorageDriverRegistry } from './storage/storage.c
     FilesService,
     FilesRepository,
     PdfService,
+    DocxTemplateService,
     LocalStorageDriver,
     S3StorageDriver,
     {
@@ -26,6 +28,6 @@ import { STORAGE_DRIVERS, type StorageDriverRegistry } from './storage/storage.c
       inject: [LocalStorageDriver, S3StorageDriver],
     },
   ],
-  exports: [FilesService, PdfService],
+  exports: [FilesService, PdfService, DocxTemplateService],
 })
 export class FilesModule {}

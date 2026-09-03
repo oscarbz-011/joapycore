@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   FileText, Braces, Paperclip, ArrowUpRight, Copy, Trash2,
-  MoreVertical, Search, SlidersHorizontal,
+  MoreVertical, Search, SlidersHorizontal, Sparkles,
 } from 'lucide-react';
 import {
   documentsApi,
@@ -15,6 +15,8 @@ import {
   TYPE_LABELS,
 } from '../../lib/api/documents';
 import { writeDuplicateSeed } from '../../lib/document-duplicate-seed';
+import { formatDatePY } from '../../lib/date';
+import { GenerateDocumentDialog } from './generate-document-dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
@@ -23,13 +25,6 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
 
-// timeZone: 'UTC' a propósito — es una fecha de calendario (sin hora), no
-// un instante. Formatearla en la timezone local del navegador corre el
-// día un lugar para atrás con cualquier offset negativo (America/Asuncion
-// incluido), el mismo bug reportado en las fechas de vencimiento.
-function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString('es-PY', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'UTC' });
-}
 
 const DOC_TYPES: DocType[] = ['INTERNAL', 'CONTRACT', 'COMPLIANCE'];
 
@@ -41,14 +36,20 @@ function DocumentCard({
   onOpen,
   onDuplicate,
   onDelete,
+  onGenerate,
 }: {
   doc: Document;
   isTemplate: boolean;
   onOpen: () => void;
   onDuplicate: () => void;
   onDelete: () => void;
+  onGenerate: () => void;
 }) {
-  const variableCount = isTemplate ? countTemplateVariables(doc.content) : 0;
+  const variableCount = isTemplate
+    ? doc.contentFormat === 'DOCX'
+      ? (doc.variables?.length ?? 0)
+      : countTemplateVariables(doc.content)
+    : 0;
   const isExpiringSoon = doc.expiresAt
     ? (new Date(doc.expiresAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24) <= 30
     : false;
@@ -67,6 +68,12 @@ function DocumentCard({
             <MoreVertical size={15} />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
+            {isTemplate && doc.contentFormat === 'DOCX' && (
+              <DropdownMenuItem onClick={onGenerate}>
+                <Sparkles size={14} />
+                Generar
+              </DropdownMenuItem>
+            )}
             {!isTemplate && (
               <DropdownMenuItem onClick={onDuplicate}>
                 <Copy size={14} />
@@ -107,7 +114,7 @@ function DocumentCard({
         )}
         {doc.expiresAt && (
           <span className={cn('font-medium', isExpiringSoon && 'text-warn')}>
-            Vence {formatDate(doc.expiresAt)}
+            Vence {formatDatePY(doc.expiresAt, 'utc')}
           </span>
         )}
       </div>
@@ -139,6 +146,7 @@ export function DocumentGrid({ mode }: { mode: 'document' | 'template' }) {
   const qc = useQueryClient();
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState<DocType | ''>('');
+  const [generateTarget, setGenerateTarget] = useState<Document | null>(null);
 
   const isTemplate = mode === 'template';
   const newHref = isTemplate ? '/dashboard/documents/templates/new' : '/dashboard/documents/new';
@@ -242,9 +250,18 @@ export function DocumentGrid({ mode }: { mode: 'document' | 'template' }) {
               onDelete={() => {
                 if (confirm(`¿Eliminar "${doc.title}"?`)) deleteMutation.mutate(doc.id);
               }}
+              onGenerate={() => setGenerateTarget(doc)}
             />
           ))}
         </div>
+      )}
+
+      {generateTarget && (
+        <GenerateDocumentDialog
+          doc={generateTarget}
+          open={!!generateTarget}
+          onOpenChange={(v) => !v && setGenerateTarget(null)}
+        />
       )}
     </div>
   );

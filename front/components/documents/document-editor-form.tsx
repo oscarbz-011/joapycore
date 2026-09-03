@@ -16,6 +16,7 @@ import {
   type DocType,
   type DocVisibility,
   type TemplateKind,
+  CONTENT_FORMAT_LABELS,
   TEMPLATE_KIND_DEFAULT_CONTENT_FORMAT,
   TEMPLATE_KIND_DEFAULT_DOC_TYPE,
   TEMPLATE_KIND_LABELS,
@@ -27,12 +28,16 @@ import { filesApi } from '../../lib/api/files';
 import { downloadBlob } from '../../lib/blob-file';
 import { consumeDuplicateSeed } from '../../lib/document-duplicate-seed';
 import { RichTextEditor, type RichTextEditorHandle } from '../rich-text-editor';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { DatePicker } from '@/components/ui/date-picker';
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { CategorySelect } from './category-select';
+import { DocxVariablesReference } from './docx-variables-reference';
 import { FileUploadDropzone } from './file-upload-dropzone';
 import { HtmlSourceEditor } from './html-source-editor';
 import { VariablesPanel } from './variables-panel';
@@ -40,6 +45,7 @@ import { VariablesPanel } from './variables-panel';
 const DOC_TYPES: DocType[] = ['INTERNAL', 'CONTRACT', 'COMPLIANCE', 'BILLING'];
 const DOC_VISIBILITIES: DocVisibility[] = ['PUBLIC', 'PRIVATE', 'ROLE_BASED'];
 const TEMPLATE_KINDS: TemplateKind[] = ['SALE_CONTRACT', 'INVOICE', 'PAYMENT_RECEIPT'];
+const CONTENT_FORMATS: DocContentFormat[] = ['TIPTAP', 'HTML', 'DOCX'];
 const NONE = 'none';
 
 const VISIBILITY_ICON: Record<DocVisibility, React.ElementType> = {
@@ -58,9 +64,13 @@ function formatDate(iso: string) {
 export function DocumentEditorForm({
   mode,
   initial,
+  initialContentFormat,
 }: {
   mode: 'document' | 'template';
   initial?: Document;
+  // Solo aplica al crear (initial undefined) — viene del selector previo en
+  // templates/new/page.tsx, para no forzar a elegir dos veces.
+  initialContentFormat?: DocContentFormat;
 }) {
   const router = useRouter();
   const qc = useQueryClient();
@@ -78,7 +88,14 @@ export function DocumentEditorForm({
   const [expiresAt, setExpiresAt] = useState(initial?.expiresAt ? initial.expiresAt.slice(0, 10) : '');
   const [content, setContent] = useState(initial?.content);
   const [templateKind, setTemplateKind] = useState<TemplateKind | undefined>(initial?.templateKind ?? undefined);
-  const [contentFormat, setContentFormat] = useState<DocContentFormat>(initial?.contentFormat ?? 'TIPTAP');
+  const [contentFormat, setContentFormat] = useState<DocContentFormat>(
+    initial?.contentFormat ?? initialContentFormat ?? 'TIPTAP',
+  );
+  // Para DOCX + plantilla nueva: el archivo se guarda en memoria hasta que el
+  // documento exista (necesita un id para el endpoint de adjuntar), en vez de
+  // obligar a un "Guardar" intermedio antes de poder elegir el archivo.
+  const [pendingDocxFile, setPendingDocxFile] = useState<File | null>(null);
+  const [showReplaceConfirm, setShowReplaceConfirm] = useState(false);
 
   const handleContentChange = useCallback((json: string) => setContent(json), []);
 
@@ -141,7 +158,7 @@ export function DocumentEditorForm({
   });
 
   const saveMutation = useMutation({
-    mutationFn: () => {
+    mutationFn: async (opts?: { replaceActiveTemplate?: boolean }) => {
       const payload: CreateDocumentPayload = {
         type,
         title: title.trim(),
@@ -155,8 +172,18 @@ export function DocumentEditorForm({
         contentFormat,
         isTemplate,
         templateKind: isTemplate ? templateKind : undefined,
+        replaceActiveTemplate: opts?.replaceActiveTemplate,
       };
-      return initial ? documentsApi.update(initial.id, payload) : documentsApi.create(payload);
+      if (initial) return documentsApi.update(initial.id, payload);
+
+      const doc = await documentsApi.create(payload);
+      // El .docx elegido antes de guardar recién se puede subir con el id
+      // que devuelve create() — se encadena acá para que quede todo en un
+      // solo "Guardar" en vez de un segundo paso manual.
+      if (contentFormat === 'DOCX' && pendingDocxFile) {
+        return documentsApi.uploadFile(doc.id, pendingDocxFile);
+      }
+      return doc;
     },
     onSuccess: (doc) => {
       qc.invalidateQueries({ queryKey: ['documents'] });
@@ -174,8 +201,14 @@ export function DocumentEditorForm({
   }
 
   const backHref = isTemplate ? '/dashboard/documents/templates' : '/dashboard/documents';
-  const variableCount = extractVariableKeys(content).length;
+  const variableCount = contentFormat === 'DOCX'
+    ? (initial?.variables?.length ?? 0)
+    : extractVariableKeys(content).length;
   const VisIcon = VISIBILITY_ICON[visibility];
+  // Bloquea "Guardar" mientras haya otra plantilla activa para el mismo uso —
+  // guardar así fallaría con 409 igual; obliga a resolverlo acá (con
+  // "Reemplazar" o eligiendo otro uso) en vez de dejar clickear en falso.
+  const hasUnresolvedConflict = isTemplate && !!templateKind && !!conflictingTemplate;
 
   return (
     <div className="flex h-full flex-col">
@@ -198,8 +231,8 @@ export function DocumentEditorForm({
         <div className="flex shrink-0 items-center gap-2">
           <Button
             size="sm"
-            onClick={() => saveMutation.mutate()}
-            disabled={!title.trim() || saveMutation.isPending}
+            onClick={() => saveMutation.mutate(undefined)}
+            disabled={!title.trim() || saveMutation.isPending || hasUnresolvedConflict}
           >
             <Save size={14} />
             {saveMutation.isPending ? 'Guardando...' : 'Guardar'}
@@ -265,7 +298,7 @@ export function DocumentEditorForm({
               <Label className="text-[12px]">Tipo</Label>
               <Select value={type} onValueChange={(v) => v && setType(v as DocType)}>
                 <SelectTrigger className="w-full">
-                  <span className="flex-1 truncate text-left text-sm">{TYPE_LABELS[type]}</span>
+                  <span className="min-w-0 flex-1 truncate text-left text-sm">{TYPE_LABELS[type]}</span>
                 </SelectTrigger>
                 <SelectContent>
                   {DOC_TYPES.map((t) => <SelectItem key={t} value={t}>{TYPE_LABELS[t]}</SelectItem>)}
@@ -276,7 +309,7 @@ export function DocumentEditorForm({
               <Label className="text-[12px]">Visibilidad</Label>
               <Select value={visibility} onValueChange={(v) => v && setVisibility(v as DocVisibility)}>
                 <SelectTrigger className="w-full">
-                  <span className="flex flex-1 items-center gap-1.5 truncate text-left text-sm">
+                  <span className="flex min-w-0 flex-1 items-center gap-1.5 truncate text-left text-sm">
                     <VisIcon size={13} />
                     {VISIBILITY_LABELS[visibility]}
                   </span>
@@ -289,7 +322,7 @@ export function DocumentEditorForm({
             {!isTemplate && (
               <div className="space-y-1.5">
                 <Label className="text-[12px]">Vencimiento</Label>
-                <Input type="date" value={expiresAt} onChange={(e) => setExpiresAt(e.target.value)} />
+                <DatePicker value={expiresAt} onChange={setExpiresAt} />
               </div>
             )}
           </div>
@@ -329,7 +362,59 @@ export function DocumentEditorForm({
             </div>
           </div>
 
-          {contentFormat === 'HTML' ? (
+          {contentFormat === 'DOCX' ? (
+            <div className="space-y-3">
+              {initial ? (
+                <FileUploadDropzone
+                  currentFile={initial.fileRecord}
+                  isUploading={uploadFileMutation.isPending}
+                  onUpload={(file) => uploadFileMutation.mutate(file)}
+                  onRemove={() => {
+                    if (confirm('¿Quitar el archivo .docx?')) removeFileMutation.mutate();
+                  }}
+                  onDownload={() => downloadFileMutation.mutate()}
+                />
+              ) : (
+                <FileUploadDropzone
+                  currentFile={pendingDocxFile ? { originalName: pendingDocxFile.name, sizeBytes: pendingDocxFile.size } : null}
+                  onUpload={(file) => setPendingDocxFile(file)}
+                  onRemove={() => setPendingDocxFile(null)}
+                />
+              )}
+              {!initial && !pendingDocxFile && (
+                <p className="text-[11px] leading-relaxed text-muted-foreground/70">
+                  Se sube al guardar la plantilla — no hace falta guardar antes.
+                </p>
+              )}
+
+              {isTemplate && <DocxVariablesReference templateKind={templateKind} />}
+
+              {initial?.fileRecord && (
+                <div className="rounded-2xl border border-border bg-card p-3 space-y-2">
+                  <Label className="text-[12px]">Variables detectadas</Label>
+                  {initial.variables && initial.variables.length > 0 ? (
+                    <div className="space-y-1.5">
+                      {initial.variables.map((v) => (
+                        <div
+                          key={v.key}
+                          className="flex items-center justify-between gap-2 rounded-lg bg-muted/30 px-2.5 py-1.5"
+                        >
+                          <span className="truncate font-mono text-[12px] text-foreground">{`{{${v.key}}}`}</span>
+                          <Badge variant="outline" className="shrink-0">
+                            {v.type === 'table' ? 'tabla' : 'texto'}
+                          </Badge>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-[11px] leading-relaxed text-muted-foreground/70">
+                      No se detectaron variables {'{{...}}'} en este archivo.
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+          ) : contentFormat === 'HTML' ? (
             <HtmlSourceEditor
               ref={editorRef}
               key={initial?.id ?? 'new'}
@@ -361,7 +446,7 @@ export function DocumentEditorForm({
                   onValueChange={(v) => handleTemplateKindChange(v === NONE ? undefined : (v as TemplateKind))}
                 >
                   <SelectTrigger className="w-full">
-                    <span className="flex-1 truncate text-left text-sm">
+                    <span className="min-w-0 flex-1 truncate text-left text-sm">
                       {templateKind ? TEMPLATE_KIND_LABELS[templateKind] : 'Plantilla genérica (sin uso automático)'}
                     </span>
                   </SelectTrigger>
@@ -385,13 +470,25 @@ export function DocumentEditorForm({
                   </p>
                 )}
                 {templateKind && conflictingTemplate && (
-                  <p className="text-[11px] leading-relaxed text-warn">
-                    Ya existe una plantilla activa para esto: <strong>{conflictingTemplate.title}</strong>.{' '}
-                    <Link href={`/dashboard/documents/${conflictingTemplate.id}`} className="underline underline-offset-2">
-                      Editá esa
-                    </Link>{' '}
-                    o elegí otro uso para guardar esta como plantilla genérica.
-                  </p>
+                  <div className="space-y-2 rounded-lg bg-warn/10 p-2.5">
+                    <p className="text-[11px] leading-relaxed text-warn">
+                      Ya existe una plantilla activa para esto: <strong>{conflictingTemplate.title}</strong>.{' '}
+                      <Link href={`/dashboard/documents/${conflictingTemplate.id}`} className="underline underline-offset-2">
+                        Editá esa
+                      </Link>{' '}
+                      o elegí otro uso para guardar esta como plantilla genérica.
+                    </p>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="w-full"
+                      disabled={saveMutation.isPending || !title.trim()}
+                      onClick={() => setShowReplaceConfirm(true)}
+                    >
+                      Reemplazar plantilla activa
+                    </Button>
+                  </div>
                 )}
                 {templateKind && !conflictingTemplate && (
                   <p className="text-[11px] text-muted-foreground/70">
@@ -400,11 +497,36 @@ export function DocumentEditorForm({
                 )}
               </div>
 
-              <VariablesPanel
-                templateKind={templateKind}
-                content={content}
-                onInsert={(token) => editorRef.current?.insertToken(token)}
-              />
+              <div className="rounded-2xl border border-border bg-card p-3 space-y-2.5">
+                <Label className="text-[12px]">Formato de contenido</Label>
+                <Select
+                  value={contentFormat}
+                  onValueChange={(v) => v && setContentFormat(v as DocContentFormat)}
+                >
+                  <SelectTrigger className="w-full">
+                    <span className="min-w-0 flex-1 truncate text-left text-sm">{CONTENT_FORMAT_LABELS[contentFormat]}</span>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {CONTENT_FORMATS.map((f) => (
+                      <SelectItem key={f} value={f}>{CONTENT_FORMAT_LABELS[f]}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {contentFormat === 'DOCX' && (
+                  <p className="text-[11px] leading-relaxed text-muted-foreground/70">
+                    Subí un archivo .docx con variables como <code className="font-mono">{'{{cliente.nombre}}'}</code>.
+                    El archivo es el contenido — no hay editor visual para este formato.
+                  </p>
+                )}
+              </div>
+
+              {contentFormat !== 'DOCX' && (
+                <VariablesPanel
+                  templateKind={templateKind}
+                  content={content}
+                  onInsert={(token) => editorRef.current?.insertToken(token)}
+                />
+              )}
             </>
           ) : (
             <>
@@ -458,6 +580,34 @@ export function DocumentEditorForm({
           )}
         </aside>
       </div>
+
+      {conflictingTemplate && templateKind && (
+        <Dialog open={showReplaceConfirm} onOpenChange={setShowReplaceConfirm}>
+          <DialogContent className="sm:max-w-md">
+            <DialogTitle>Reemplazar plantilla activa</DialogTitle>
+            <DialogDescription>
+              <strong className="text-foreground">{conflictingTemplate.title}</strong> deja de usarse automáticamente
+              para <strong className="text-foreground">{TEMPLATE_KIND_LABELS[templateKind]}</strong> — esta plantilla
+              toma su lugar.
+            </DialogDescription>
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="outline" size="sm" onClick={() => setShowReplaceConfirm(false)}>
+                Cancelar
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                onClick={() => {
+                  setShowReplaceConfirm(false);
+                  saveMutation.mutate({ replaceActiveTemplate: true });
+                }}
+              >
+                Reemplazar
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }

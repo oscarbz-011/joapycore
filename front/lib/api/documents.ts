@@ -3,7 +3,7 @@ import { apiClient } from './client';
 export type DocType = 'INTERNAL' | 'CONTRACT' | 'COMPLIANCE' | 'BILLING';
 export type DocVisibility = 'PUBLIC' | 'PRIVATE' | 'ROLE_BASED';
 export type TemplateKind = 'SALE_CONTRACT' | 'INVOICE' | 'PAYMENT_RECEIPT';
-export type DocContentFormat = 'TIPTAP' | 'HTML';
+export type DocContentFormat = 'TIPTAP' | 'HTML' | 'DOCX';
 
 export interface DocumentCategory {
   id: string;
@@ -40,7 +40,7 @@ export interface Document {
   contentFormat: DocContentFormat;
   isTemplate: boolean;
   templateKind?: TemplateKind | null;
-  variables?: Record<string, unknown> | null;
+  variables?: TemplateVariable[] | null;
   uploadedById?: string;
   createdAt: string;
   updatedAt: string;
@@ -61,6 +61,9 @@ export interface CreateDocumentPayload {
   contentFormat?: DocContentFormat;
   isTemplate?: boolean;
   templateKind?: TemplateKind;
+  // Si ya hay otra plantilla activa para el templateKind elegido, desactivarla
+  // (le quita el uso automático) en vez de que el backend rechace con 409.
+  replaceActiveTemplate?: boolean;
 }
 
 export interface DocumentFilters {
@@ -110,6 +113,12 @@ export const TEMPLATE_KIND_DEFAULT_CONTENT_FORMAT: Record<TemplateKind, DocConte
   PAYMENT_RECEIPT: 'HTML',
 };
 
+export const CONTENT_FORMAT_LABELS: Record<DocContentFormat, string> = {
+  TIPTAP: 'Editor de texto enriquecido',
+  HTML: 'HTML/CSS crudo',
+  DOCX: 'Archivo Word (.docx)',
+};
+
 export const documentsApi = {
   list: (filters: DocumentFilters = {}): Promise<Document[]> =>
     apiClient.get('/documents', { params: filters }).then((r) => r.data),
@@ -145,12 +154,16 @@ export const documentsApi = {
 
   sendEmail: (id: string, to?: string): Promise<void> =>
     apiClient.post(`/documents/${id}/email`, { to }).then((r) => r.data),
+
+  generate: (id: string, values: Record<string, string>): Promise<{ fileId: string }> =>
+    apiClient.post(`/documents/${id}/generate`, { values }).then((r) => r.data),
 };
 
 export interface TemplateVariable {
   key: string;
   label: string;
   type: 'text' | 'table';
+  columns?: string[];
 }
 
 const VARIABLE_TOKEN_RE = /\{\{([\w.]+)\}\}/g;

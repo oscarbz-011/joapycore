@@ -1,5 +1,11 @@
 import { Injectable } from '@nestjs/common';
-import { DocContentFormat, DocType, DocVisibility, Prisma, TemplateKind } from '@prisma/client';
+import {
+  DocContentFormat,
+  DocType,
+  DocVisibility,
+  Prisma,
+  TemplateKind,
+} from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
 
 export type { DocContentFormat, DocType, DocVisibility, TemplateKind };
@@ -51,7 +57,7 @@ interface UpdateDocumentData {
   contentFormat?: DocContentFormat;
   isTemplate?: boolean;
   templateKind?: TemplateKind | null;
-  variables?: Prisma.InputJsonValue;
+  variables?: Prisma.InputJsonValue | Prisma.NullableJsonNullValueInput;
   fileRecordId?: string | null;
 }
 
@@ -71,7 +77,7 @@ export class DocumentsRepository {
       filters.expiringSoonDays !== undefined
         ? (() => {
             const d = new Date();
-            d.setDate(d.getDate() + (filters.expiringSoonDays as number));
+            d.setDate(d.getDate() + filters.expiringSoonDays);
             return d;
           })()
         : undefined;
@@ -82,7 +88,9 @@ export class DocumentsRepository {
         deletedAt: null,
         ...(filters.type && { type: filters.type }),
         ...(filters.categoryId && { categoryId: filters.categoryId }),
-        ...(filters.isTemplate !== undefined && { isTemplate: filters.isTemplate }),
+        ...(filters.isTemplate !== undefined && {
+          isTemplate: filters.isTemplate,
+        }),
         ...(filters.templateKind && { templateKind: filters.templateKind }),
         ...(filters.entityType && { entityType: filters.entityType }),
         ...(filters.entityId && { entityId: filters.entityId }),
@@ -90,7 +98,11 @@ export class DocumentsRepository {
           OR: [
             { title: { contains: filters.search, mode: 'insensitive' } },
             { description: { contains: filters.search, mode: 'insensitive' } },
-            { category: { name: { contains: filters.search, mode: 'insensitive' } } },
+            {
+              category: {
+                name: { contains: filters.search, mode: 'insensitive' },
+              },
+            },
           ],
         }),
         ...(deadline && { expiresAt: { not: null, lte: deadline } }),
@@ -119,7 +131,10 @@ export class DocumentsRepository {
   }
 
   update(tenantId: string, id: string, data: UpdateDocumentData) {
-    return this.prisma.document.updateMany({ where: { id, tenantId, deletedAt: null }, data });
+    return this.prisma.document.updateMany({
+      where: { id, tenantId, deletedAt: null },
+      data,
+    });
   }
 
   softDelete(tenantId: string, id: string) {
