@@ -1,5 +1,10 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { DocContentFormat, DocType, DocVisibility, TemplateKind } from '@prisma/client';
+import {
+  DocContentFormat,
+  DocType,
+  DocVisibility,
+  TemplateKind,
+} from '@prisma/client';
 import {
   IsArray,
   IsBoolean,
@@ -49,7 +54,9 @@ export class CreateDocumentDto {
   @IsString({ each: true })
   allowedRoles?: string[];
 
-  @ApiPropertyOptional({ description: 'Tipo de entidad vinculada (ej. "customer", "sale_order")' })
+  @ApiPropertyOptional({
+    description: 'Tipo de entidad vinculada (ej. "customer", "sale_order")',
+  })
   @IsOptional()
   @IsString()
   entityType?: string;
@@ -59,28 +66,49 @@ export class CreateDocumentDto {
   @IsString()
   entityId?: string;
 
-  @ApiPropertyOptional({ description: 'Fecha ISO de vencimiento del documento' })
+  @ApiPropertyOptional({
+    description: 'Fecha ISO de vencimiento del documento',
+  })
   @IsOptional()
   @IsDateString()
   expiresAt?: string;
 
-  @ApiPropertyOptional({ description: 'Contenido del documento (TipTap JSON serializado, o HTML crudo según contentFormat)' })
+  @ApiPropertyOptional({
+    description:
+      'Contenido del documento (TipTap JSON serializado, o HTML crudo según contentFormat)',
+  })
   @IsOptional()
   @IsString()
   content?: string;
 
-  @ApiPropertyOptional({ enum: DocContentFormat, default: DocContentFormat.TIPTAP })
+  @ApiPropertyOptional({
+    enum: DocContentFormat,
+    default: DocContentFormat.TIPTAP,
+  })
   @IsOptional()
   @IsEnum(DocContentFormat)
   contentFormat?: DocContentFormat;
 
-  @ApiPropertyOptional({ description: 'Marca este documento como una plantilla reutilizable' })
+  @ApiPropertyOptional({
+    description: 'Marca este documento como una plantilla reutilizable',
+  })
   @IsOptional()
   @IsBoolean()
   isTemplate?: boolean;
 
-  @ApiPropertyOptional({ enum: TemplateKind, description: 'Requerido cuando isTemplate = true' })
+  @ApiPropertyOptional({
+    enum: TemplateKind,
+    description: 'Requerido cuando isTemplate = true',
+  })
   @IsOptional()
   @IsEnum(TemplateKind)
   templateKind?: TemplateKind;
+
+  @ApiPropertyOptional({
+    description:
+      'Si ya existe una plantilla activa para el templateKind elegido, desactivarla (quitarle el uso automático) en vez de rechazar con 409',
+  })
+  @IsOptional()
+  @IsBoolean()
+  replaceActiveTemplate?: boolean;
 }
