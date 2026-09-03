@@ -2,8 +2,10 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   IsBoolean,
   IsEmail,
+  IsInt,
   IsOptional,
   IsString,
+  Min,
   MinLength,
 } from 'class-validator';
 
@@ -41,4 +43,14 @@ export class CreateSupplierDto {
   @ApiProperty({ default: false })
   @IsBoolean()
   isImporter: boolean;
+
+  @ApiPropertyOptional({
+    default: 0,
+    description:
+      'Plazo de pago en días para las cuentas por pagar de este proveedor (0 = contado)',
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  paymentTermDays?: number;
 }
