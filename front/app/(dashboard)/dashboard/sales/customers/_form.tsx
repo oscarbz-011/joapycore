@@ -10,6 +10,7 @@ import {
   type EconomicActivity,
 } from '../../../../../lib/api/sales';
 import { NumericInput } from '../../../../../components/numeric-input';
+import { DeliveryMap } from '../../../../../components/logistics/delivery-map';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -25,7 +26,12 @@ const EMPTY_FORM: CreateCustomerPayload = {
   employerName: '', supervisorName: '', workPhone: '', workAddress: '', workSeniority: '',
   homeStreet: '', homeNeighborhood: '', homeReference: '',
   aptBuilding: '', aptFloor: '', aptNumber: '',
+  latitude: undefined, longitude: undefined,
 };
+
+// Asunción — mismo centro default que logistics/mine/page.tsx (confirmar
+// entrega) para que el pin arranque en el mismo lugar en ambas pantallas.
+const DEFAULT_CENTER: [number, number] = [-25.2637, -57.5759];
 
 function fromCustomer(c: Customer): CreateCustomerPayload {
   return {
@@ -55,6 +61,8 @@ function fromCustomer(c: Customer): CreateCustomerPayload {
     aptBuilding:       c.aptBuilding ?? '',
     aptFloor:          c.aptFloor ?? '',
     aptNumber:         c.aptNumber ?? '',
+    latitude:          c.latitude ?? undefined,
+    longitude:         c.longitude ?? undefined,
   };
 }
 
@@ -87,6 +95,22 @@ export function CustomerForm({ initial, onDone }: Props) {
   );
   const [error, setError] = useState('');
   const [confirmDelete, setConfirmDelete] = useState(false);
+
+  // Texto crudo de los inputs de lat/lng — separado de form.latitude/longitude
+  // porque con type="number" controlado, un valor intermedio no parseable
+  // (ej. "-", "-25.") hace que el navegador reporte value="" y React lo
+  // pisa en el próximo render, borrando lo que el usuario recién tipeó. Acá
+  // el input es type="text" y este string es la única fuente de verdad de
+  // lo que se ve; se intenta parsear en cada cambio, pero solo se escribe a
+  // form.latitude/longitude cuando el parseo da un número real.
+  const [latText, setLatText] = useState(form.latitude != null ? String(form.latitude) : '');
+  const [lngText, setLngText] = useState(form.longitude != null ? String(form.longitude) : '');
+
+  function setLocation(lat: number | undefined, lng: number | undefined) {
+    setForm((f) => ({ ...f, latitude: lat, longitude: lng }));
+    setLatText(lat != null ? String(lat) : '');
+    setLngText(lng != null ? String(lng) : '');
+  }
 
   function set<K extends keyof CreateCustomerPayload>(k: K, v: CreateCustomerPayload[K]) {
     setForm((f) => ({ ...f, [k]: v }));
@@ -121,6 +145,8 @@ export function CustomerForm({ initial, onDone }: Props) {
         aptBuilding:      form.aptBuilding?.trim() || undefined,
         aptFloor:         form.aptFloor?.trim() || undefined,
         aptNumber:        form.aptNumber?.trim() || undefined,
+        latitude:         form.latitude,
+        longitude:        form.longitude,
       };
       return initial
         ? salesApi.updateCustomer(initial.id, payload)
@@ -339,6 +365,79 @@ export function CustomerForm({ initial, onDone }: Props) {
               <Input value={form.aptNumber ?? ''} onChange={(e) => set('aptNumber', e.target.value)} placeholder="3B" />
             </div>
           </div>
+        </section>
+
+        {/* Ubicación — usada por Logística para el pin por defecto del mapa */}
+        <section className="p-6 space-y-3 border-t border-border">
+          <p className={SECTION_LABEL}>Ubicación de entrega (mapa)</p>
+          <p className="text-xs text-muted-foreground/70">
+            Cargá las coordenadas a mano, o hacé click/arrastrá el pin en el mapa — quedan sincronizados.
+          </p>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <Label>Latitud</Label>
+              <Input
+                type="text"
+                inputMode="decimal"
+                value={latText}
+                onChange={(e) => {
+                  const raw = e.target.value.replace(/[^-\d.]/g, '');
+                  setLatText(raw);
+                  if (raw.trim() === '') { set('latitude', undefined); return; }
+                  const n = parseFloat(raw);
+                  if (!Number.isNaN(n)) set('latitude', n);
+                }}
+                placeholder="-25.2637"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Longitud</Label>
+              <Input
+                type="text"
+                inputMode="decimal"
+                value={lngText}
+                onChange={(e) => {
+                  const raw = e.target.value.replace(/[^-\d.]/g, '');
+                  setLngText(raw);
+                  if (raw.trim() === '') { set('longitude', undefined); return; }
+                  const n = parseFloat(raw);
+                  if (!Number.isNaN(n)) set('longitude', n);
+                }}
+                placeholder="-57.5759"
+              />
+            </div>
+          </div>
+
+          {form.latitude != null && form.longitude != null ? (
+            <>
+              <DeliveryMap
+                latitude={form.latitude}
+                longitude={form.longitude}
+                draggable
+                onDragEnd={(lat, lng) => setLocation(lat, lng)}
+                height={220}
+              />
+              <Button type="button" variant="outline" size="sm" onClick={() => setLocation(undefined, undefined)}>
+                Quitar ubicación
+              </Button>
+            </>
+          ) : (
+            <div className="flex items-center justify-between gap-3 rounded-xl border border-dashed border-border px-4 py-3">
+              <p className="text-xs text-muted-foreground/70">
+                Sin ubicación registrada — Logística la usa para ubicar al cliente en el mapa antes de la 1ª entrega.
+              </p>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="shrink-0"
+                onClick={() => setLocation(DEFAULT_CENTER[0], DEFAULT_CENTER[1])}
+              >
+                Marcar ubicación
+              </Button>
+            </div>
+          )}
         </section>
 
         {/* Notas */}
