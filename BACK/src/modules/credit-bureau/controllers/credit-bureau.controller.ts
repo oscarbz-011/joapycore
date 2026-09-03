@@ -17,7 +17,7 @@ import { UpdateCreditBureauConfigDto } from '../dto/update-credit-bureau-config.
 import { CreditBureauChecksService } from '../services/credit-bureau-checks.service';
 import { CreditBureauConfigService } from '../services/credit-bureau-config.service';
 
-@ApiTags('Sales')
+@ApiTags('Credit Bureau')
 @ApiBearerAuth()
 @Controller('credit-bureau')
 export class CreditBureauController {
