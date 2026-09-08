@@ -17,12 +17,14 @@ export class PaymentsController {
 
   @Get('collections')
   @Permissions('payments:read')
-  @ApiOperation({ summary: 'Resumen de recaudaciones del mes por tipo y método de pago' })
+  @ApiOperation({
+    summary: 'Resumen de recaudaciones por tipo y método de pago',
+  })
   getCollections(
     @CurrentTenant() tenantId: string,
-    @Query('month') month?: string,
+    @Query('range') range?: 'day' | 'week' | 'month',
   ) {
-    return this.paymentsService.getCollections(tenantId, month);
+    return this.paymentsService.getCollections(tenantId, range);
   }
 
   @Get('accounts-receivable')

@@ -23,22 +23,83 @@ export class PaymentsService {
     return this.arRepository.findAll(tenantId);
   }
 
-  async getCollections(tenantId: string, month?: string) {
-    const now = new Date();
-    const year   = month ? parseInt(month.split('-')[0]) : now.getFullYear();
-    const monthN = month ? parseInt(month.split('-')[1]) - 1 : now.getMonth();
+  async getCollections(
+    tenantId: string,
+    range: 'day' | 'week' | 'month' = 'month',
+  ) {
+    // `paymentDate`/`paidAt` son días de calendario elegidos por el usuario,
+    // guardados en UTC-medianoche del día que se ve en pantalla (mismo
+    // criterio que `dueDate` — ver front/lib/date.ts). "Hoy" acá NO puede
+    // salir de `new Date()` con getFullYear/getMonth/getDate crudos: esos
+    // getters devuelven el día según el timezone del SISTEMA OPERATIVO del
+    // servidor, que no tiene por qué ser Paraguay (un server en UTC ya
+    // estaría "mañana" durante la noche paraguaya) — eso desalineaba el
+    // rango "Hoy" con pagos recién cargados. Se ancla explícito a
+    // America/Asuncion y se reconstruye en UTC para que coincida con cómo
+    // se guardó `paymentDate`.
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'America/Asuncion',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      weekday: 'short',
+    }).formatToParts(new Date());
+    const get = (type: string) => parts.find((p) => p.type === type)!.value;
+    const year = Number(get('year'));
+    const month = Number(get('month')) - 1;
+    const day = Number(get('day'));
+    // Intl weekday: "Mon".."Sun" — se mapea a 0=domingo..6=sábado para
+    // reusar el mismo cálculo de lunes-a-domingo que ya tenía este método.
+    const WEEKDAY_INDEX: Record<string, number> = {
+      Sun: 0,
+      Mon: 1,
+      Tue: 2,
+      Wed: 3,
+      Thu: 4,
+      Fri: 5,
+      Sat: 6,
+    };
+    const weekday = WEEKDAY_INDEX[get('weekday')];
 
-    const start = new Date(year, monthN, 1);
-    const end   = new Date(year, monthN + 1, 1);
+    let start: Date;
+    let end: Date;
 
-    const [cashRecords, creditInstallments] = await Promise.all([
+    if (range === 'day') {
+      start = new Date(Date.UTC(year, month, day));
+      end = new Date(Date.UTC(year, month, day + 1));
+    } else if (range === 'week') {
+      const diffToMonday = weekday === 0 ? 6 : weekday - 1;
+      start = new Date(Date.UTC(year, month, day - diffToMonday));
+      end = new Date(
+        Date.UTC(
+          start.getUTCFullYear(),
+          start.getUTCMonth(),
+          start.getUTCDate() + 7,
+        ),
+      );
+    } else {
+      start = new Date(Date.UTC(year, month, 1));
+      end = new Date(Date.UTC(year, month + 1, 1));
+    }
+
+    const [cashRecords, creditReceipts] = await Promise.all([
       this.prisma.paymentRecord.findMany({
         where: { tenantId, paymentDate: { gte: start, lt: end } },
         select: { amount: true, paymentMethod: true },
       }),
-      this.prisma.installment.findMany({
-        where: { tenantId, paidAt: { gte: start, lt: end } },
-        select: { paidAmount: true, paymentMethod: true },
+      // No se usa Installment.paidAt/paidAmount acá: paidAt solo se completa
+      // cuando la cuota queda TOTALMENTE pagada (ver applyPaymentToInstallment
+      // en loans.service.ts), así que un abono parcial nunca aparecía en
+      // "recaudación de hoy" — ni el día del abono ni ningún otro. paidAmount
+      // además es el acumulado de la cuota, no lo cobrado en esta operación.
+      // PaymentReceipt sí se crea una vez por cada cobro real (parcial o
+      // total, ver payInstallment/payByAmount/payInstallments), con
+      // totalAmount = lo efectivamente cobrado en esa operación e issuedAt
+      // = el instante real del cobro — es la fuente correcta para "cuánto se
+      // cobró en este rango".
+      this.prisma.paymentReceipt.findMany({
+        where: { tenantId, issuedAt: { gte: start, lt: end } },
+        select: { totalAmount: true, paymentMethod: true },
       }),
     ]);
 
@@ -57,11 +118,10 @@ export class PaymentsService {
 
     const aggCredit: Record<string, number> = {};
     let creditTotal = 0;
-    for (const i of creditInstallments) {
-      const a = toNum(i.paidAmount);
+    for (const r of creditReceipts) {
+      const a = toNum(r.totalAmount);
       creditTotal += a;
-      const m = i.paymentMethod ?? 'UNKNOWN';
-      aggCredit[m] = (aggCredit[m] ?? 0) + a;
+      aggCredit[r.paymentMethod] = (aggCredit[r.paymentMethod] ?? 0) + a;
     }
 
     const byMethod: Record<string, number> = { ...aggCash };
@@ -70,9 +130,9 @@ export class PaymentsService {
     }
 
     return {
-      month: `${year}-${String(monthN + 1).padStart(2, '0')}`,
+      range,
       total: cashTotal + creditTotal,
-      cash:   { total: cashTotal,   byMethod: aggCash },
+      cash: { total: cashTotal, byMethod: aggCash },
       credit: { total: creditTotal, byMethod: aggCredit },
       byMethod,
     };
@@ -93,7 +153,9 @@ export class PaymentsService {
     const ar = await this.findOne(tenantId, arId);
 
     if (ar.status === 'PAID') {
-      throw new UnprocessableEntityException('Esta cuenta ya fue pagada en su totalidad');
+      throw new UnprocessableEntityException(
+        'Esta cuenta ya fue pagada en su totalidad',
+      );
     }
     if (ar.status === 'CANCELLED') {
       throw new UnprocessableEntityException(
@@ -128,10 +190,16 @@ export class PaymentsService {
         tx,
       );
 
-      const updated = await this.arRepository.incrementPaid(arId, dto.amount, tx);
+      const updated = await this.arRepository.incrementPaid(
+        arId,
+        dto.amount,
+        tx,
+      );
       invoiceId = updated.invoiceId;
       newStatus =
-        Number(updated.paidAmount) >= Number(updated.amount) - 0.01 ? 'PAID' : 'PARTIAL';
+        Number(updated.paidAmount) >= Number(updated.amount) - 0.01
+          ? 'PAID'
+          : 'PARTIAL';
 
       await this.arRepository.updateStatus(arId, newStatus, tx);
     });
@@ -151,7 +219,11 @@ export class PaymentsService {
       module: 'payments',
       action: 'payment.registered',
       resourceId: arId,
-      after: { amount: dto.amount, method: dto.paymentMethod, status: newStatus! },
+      after: {
+        amount: dto.amount,
+        method: dto.paymentMethod,
+        status: newStatus!,
+      },
     } satisfies AuditLogEvent);
 
     return this.arRepository.findById(tenantId, arId);

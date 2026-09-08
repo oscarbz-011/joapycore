@@ -13,6 +13,7 @@ export class AccountsReceivableRepository {
       include: {
         invoice: {
           include: {
+            items: { select: { description: true, quantity: true } },
             saleOrder: {
               include: {
                 customer: true,
@@ -25,7 +26,13 @@ export class AccountsReceivableRepository {
                     // de la primera cuota desde que se crea el préstamo y
                     // nunca se actualiza a medida que se van pagando cuotas.
                     installments: {
-                      select: { number: true, dueDate: true, status: true, amount: true, paidAmount: true },
+                      select: {
+                        number: true,
+                        dueDate: true,
+                        status: true,
+                        amount: true,
+                        paidAmount: true,
+                      },
                       orderBy: { number: 'asc' },
                     },
                   },
@@ -40,7 +47,11 @@ export class AccountsReceivableRepository {
     });
   }
 
-  findById(tenantId: string, id: string, client: PrismaClientOrTx = this.prisma) {
+  findById(
+    tenantId: string,
+    id: string,
+    client: PrismaClientOrTx = this.prisma,
+  ) {
     return client.accountsReceivable.findFirst({
       where: { id, tenantId },
       include: {
