@@ -10,7 +10,10 @@ import { EmployeesRepository } from '../repositories/employees.repository';
 import { CreateEmployeeDto } from '../dto/create-employee.dto';
 import { UpdateEmployeeDto } from '../dto/update-employee.dto';
 import { PrismaService } from '../../../prisma/prisma.service';
-import { buildUsernameBase, resolveUsername } from '../../../common/utils/username.util';
+import {
+  buildUsernameBase,
+  resolveUsername,
+} from '../../../common/utils/username.util';
 import { toTitleCase } from '../../../common/utils/normalize.util';
 import {
   generateTempPassword,
@@ -41,7 +44,11 @@ export class EmployeesService {
   async create(tenantId: string, dto: CreateEmployeeDto) {
     const employeeNumber =
       await this.employeesRepository.nextEmployeeNumber(tenantId);
-    const employeeCode = await this.generateEmployeeCode(tenantId, dto.branchId, employeeNumber);
+    const employeeCode = await this.generateEmployeeCode(
+      tenantId,
+      dto.branchId,
+      employeeNumber,
+    );
 
     const firstName = toTitleCase(dto.firstName);
     const lastName = toTitleCase(dto.lastName);
@@ -128,6 +135,7 @@ export class EmployeesService {
           emergencyContactRelation: dto.emergencyContactRelation,
           hireDate: new Date(dto.hireDate),
           contractType: dto.contractType,
+          isCourier: dto.isCourier ?? false,
           areaId: dto.areaId,
           positionId: dto.positionId,
           managerId: dto.managerId,

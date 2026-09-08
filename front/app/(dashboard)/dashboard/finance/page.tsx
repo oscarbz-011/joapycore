@@ -7,7 +7,7 @@ import { financeApi, Loan, Installment } from '../../../../lib/api/finance';
 import { openPdf } from '../../../../lib/open-pdf';
 import { daysOverdue } from '../../../../lib/overdue';
 import { chargesTotalOf } from '../../../../lib/finance-distribute';
-import { formatDatePY } from '../../../../lib/date';
+import { formatDatePY, todayISODate } from '../../../../lib/date';
 import { ContractCard } from '../../../../components/contract-card';
 import { NumericInput } from '../../../../components/numeric-input';
 import { ReceiptButton } from '../../../../components/receipt-button';
@@ -106,7 +106,7 @@ function PayInstallmentForm({
   );
   const [amount, setAmount] = useState<number>(remaining);
   const [paymentMethod, setPaymentMethod] = useState('CASH');
-  const [paymentDate, setPaymentDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [paymentDate, setPaymentDate] = useState(() => todayISODate());
   const [notes, setNotes] = useState('');
 
   const mutation = useMutation({

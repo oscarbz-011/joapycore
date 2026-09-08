@@ -1,5 +1,6 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import {
+  IsBoolean,
   IsDateString,
   IsEnum,
   IsInt,
@@ -53,6 +54,12 @@ export class UpdateEmployeeDto {
   @ApiPropertyOptional() @IsOptional() @IsString() areaId?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() positionId?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() managerId?: string;
+  @ApiPropertyOptional({
+    description: 'Puede ser asignado como repartidor de entregas en Logística',
+  })
+  @IsOptional()
+  @IsBoolean()
+  isCourier?: boolean;
   @ApiPropertyOptional() @IsOptional() @IsInt() @Min(0) baseSalary?: number;
   @ApiPropertyOptional({ enum: PaymentMethod })
   @IsOptional()

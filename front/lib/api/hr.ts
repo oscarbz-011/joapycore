@@ -31,6 +31,7 @@ export interface Employee {
   emergencyContactName?: string | null;
   hireDate: string;
   contractType: ContractType;
+  isCourier: boolean;
   baseSalary: number;
   paymentMethod: PaymentMethod;
   bankName?: string | null;
@@ -55,6 +56,7 @@ export interface CreateEmployeePayload {
   gender?: Gender;
   maritalStatus?: MaritalStatus;
   contractType?: ContractType;
+  isCourier?: boolean;
   paymentMethod?: PaymentMethod;
   nationality?: string;
   phone?: string;

@@ -14,7 +14,7 @@ import {
 } from '../../../../../lib/api/payables';
 import { PAYMENT_METHOD_LABELS, type PaymentMethod } from '../../../../../lib/api/payments';
 import { apUrgency, type ApUrgency, type ApUrgencyLevel } from '../../../../../lib/ap-urgency';
-import { formatDatePY } from '../../../../../lib/date';
+import { formatDatePY, todayISODate } from '../../../../../lib/date';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -108,7 +108,7 @@ function RegisterPaymentModal({
 
   const [amount, setAmount] = useState<number>(Math.round(remaining));
   const [method, setMethod] = useState<PaymentMethod>('CASH');
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [date, setDate] = useState(todayISODate());
   const [reference, setReference] = useState('');
   const [notes, setNotes] = useState('');
   const [error, setError] = useState('');

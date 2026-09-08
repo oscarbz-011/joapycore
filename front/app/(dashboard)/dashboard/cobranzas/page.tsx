@@ -13,6 +13,7 @@ import {
   type DelinquencyReport,
   type DelinquencyReportStatus,
 } from '../../../../lib/api/cobranzas';
+import { todayISODate } from '../../../../lib/date';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -307,7 +308,7 @@ function RouteDetailPanel({
 // ── Create Route Modal ─────────────────────────────────────────────────────────
 
 function CreateRouteModal({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
-  const [form, setForm] = useState({ routeDate: new Date().toISOString().split('T')[0], notes: '' });
+  const [form, setForm] = useState({ routeDate: todayISODate(), notes: '' });
   const qc = useQueryClient();
 
   const mutation = useMutation({

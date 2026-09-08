@@ -42,3 +42,25 @@ export function todayISODate(): string {
   const now = new Date();
   return toISODate(new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate())));
 }
+
+// Día calendario en Paraguay (America/Asuncion) de un instante real —
+// para comparar timestamps genuinos (orderDate, issuedAt, createdAt...)
+// contra "hoy" sin el bug de tomar el prefijo UTC crudo: pasadas las
+// ~21:00 en Paraguay (UTC-3), un instante de "hoy" ya cruzó a las 00:00
+// UTC del día siguiente, así que un `.toISOString().slice(0,10)` (o
+// `.startsWith(...)` contra ese mismo prefijo) da "mañana" en vez de
+// "hoy" durante esas horas. No confundir con toISODate()/todayISODate(),
+// que son para DÍAS DE CALENDARIO ya sin hora (dueDate, paymentDate) —
+// esto es para INSTANTES reales, ver el criterio de anchor en
+// formatDatePY() arriba.
+export function localISODate(value: string | Date): string {
+  const date = typeof value === 'string' ? new Date(value) : value;
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Asuncion',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(date);
+  const get = (type: string) => parts.find((p) => p.type === type)!.value;
+  return `${get('year')}-${get('month')}-${get('day')}`;
+}

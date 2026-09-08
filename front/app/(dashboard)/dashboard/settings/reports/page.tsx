@@ -5,6 +5,7 @@ import { AlertTriangle, ArrowDown, CheckCircle, Clock, TrendingUp } from 'lucide
 import { useState } from 'react';
 import { reportsApi } from '../../../../../lib/api/reports';
 import { daysOverdue } from '../../../../../lib/overdue';
+import { todayISODate } from '../../../../../lib/date';
 import { cn } from '@/lib/utils';
 import { DatePicker } from '@/components/ui/date-picker';
 
@@ -38,9 +39,8 @@ function EmptyState({ text }: { text: string }) {
 // ── Ventas tab ────────────────────────────────────────────────────────────────
 
 function SalesTab() {
-  const today = new Date();
-  const firstDay = `${today.getFullYear()}-01-01`;
-  const lastDay = today.toISOString().slice(0, 10);
+  const lastDay = todayISODate();
+  const firstDay = `${lastDay.slice(0, 4)}-01-01`;
 
   const [dateFrom, setDateFrom] = useState(firstDay);
   const [dateTo, setDateTo] = useState(lastDay);
