@@ -41,7 +41,7 @@ export default function BatchesPage() {
 
   const { data: products = [] } = useQuery({
     queryKey: ['inventory-products-active'],
-    queryFn: () => inventoryApi.listProducts({ isActive: true }),
+    queryFn: () => inventoryApi.listProducts({ status: 'ACTIVE' }),
   });
 
   const { data: batches = [], isLoading } = useQuery({

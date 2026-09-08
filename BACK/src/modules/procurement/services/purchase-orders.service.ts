@@ -4,10 +4,18 @@ import {
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
+import { ProductStatus } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { PurchaseOrdersRepository } from '../repositories/purchase-orders.repository';
 import { CreatePurchaseOrderDto } from '../dto/create-purchase-order.dto';
 import type { AuditLogEvent } from '../../../audit/audit-log.event';
+
+const PRODUCT_STATUS_LABEL: Record<ProductStatus, string> = {
+  DRAFT: 'borrador',
+  ACTIVE: 'activo',
+  INACTIVE: 'descontinuado',
+  BLOCKED: 'bloqueado',
+};
 
 @Injectable()
 export class PurchaseOrdersService {
@@ -28,6 +36,27 @@ export class PurchaseOrdersService {
   }
 
   async create(tenantId: string, userId: string, dto: CreatePurchaseOrderDto) {
+    // Una ficha en DRAFT (incompleta), INACTIVE (descontinuada) o BLOCKED
+    // (restringida) no se compra. La ficha se puede crear a medias para no
+    // frenar la carga de catálogo, pero para operar tiene que estar completa
+    // — ver ProductsService.missingToActivate.
+    const productIds = [...new Set(dto.items.map((i) => i.productId))];
+    const products = await this.purchaseOrdersRepository.findProductStatuses(
+      tenantId,
+      productIds,
+    );
+    const notPurchasable = products.filter(
+      (p) => p.status !== ProductStatus.ACTIVE,
+    );
+    if (notPurchasable.length) {
+      const detail = notPurchasable
+        .map((p) => `${p.name} (${PRODUCT_STATUS_LABEL[p.status]})`)
+        .join(', ');
+      throw new UnprocessableEntityException(
+        `No se puede comprar un producto que no está activo: ${detail}`,
+      );
+    }
+
     return this.prisma.$transaction(async (tx) => {
       const order = await this.purchaseOrdersRepository.create(
         tenantId,

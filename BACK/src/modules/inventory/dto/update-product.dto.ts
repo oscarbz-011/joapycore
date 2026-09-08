@@ -9,7 +9,7 @@ import {
   IsUUID,
   Min,
 } from 'class-validator';
-import { MarkupType } from '@prisma/client';
+import { MarkupType, ProductStatus } from '@prisma/client';
 
 export class UpdateProductDto {
   @ApiPropertyOptional()
@@ -54,10 +54,12 @@ export class UpdateProductDto {
   @IsPositive()
   salePrice?: number;
 
-  @ApiPropertyOptional()
+  // El paso a ACTIVE valida que la ficha esté completa (ver
+  // ProductsService.assertActivatable) — no es un simple set del campo.
+  @ApiPropertyOptional({ enum: ProductStatus })
   @IsOptional()
-  @IsBoolean()
-  isActive?: boolean;
+  @IsEnum(ProductStatus)
+  status?: ProductStatus;
 
   @ApiPropertyOptional({
     description:

@@ -16,6 +16,7 @@ function makeProduct(overrides = {}) {
     unit: 'unidad',
     costPrice: 2_000_000,
     salePrice: 2_500_000,
+    status: 'ACTIVE',
     deletedAt: null,
     ...overrides,
   };
@@ -244,6 +245,33 @@ describe('SaleOrdersService', () => {
       await expect(
         service.create('tenant-1', baseDto, undefined, false, ['sales:create']),
       ).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it.each(['DRAFT', 'INACTIVE', 'BLOCKED'])(
+      'refuses to sell a product in %s',
+      async (status) => {
+        productsRepository.findManyByIds.mockResolvedValue([
+          makeProduct({ status }),
+        ]);
+
+        await expect(
+          service.create('tenant-1', baseDto, undefined, false, [
+            'sales:create',
+          ]),
+        ).rejects.toBeInstanceOf(UnprocessableEntityException);
+
+        expect(prisma.$transaction).not.toHaveBeenCalled();
+      },
+    );
+
+    it('names the product and its state so the seller knows what to fix', async () => {
+      productsRepository.findManyByIds.mockResolvedValue([
+        makeProduct({ status: 'DRAFT' }),
+      ]);
+
+      await expect(
+        service.create('tenant-1', baseDto, undefined, false, ['sales:create']),
+      ).rejects.toThrow(/Heladera Samsung \(borrador\)/);
     });
 
     it('throws UnprocessableEntityException when serialized product has wrong serial count', async () => {

@@ -89,7 +89,7 @@ function NewMovementModal({ onClose }: { onClose: () => void }) {
 
   const { data: products = [] } = useQuery({
     queryKey: ['inventory-products'],
-    queryFn: () => inventoryApi.listProductsWithStock({ isActive: true }),
+    queryFn: () => inventoryApi.listProductsWithStock({ status: 'ACTIVE' }),
   });
 
   const mutation = useMutation({

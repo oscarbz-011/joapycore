@@ -17,7 +17,8 @@ function makeProduct(overrides = {}) {
     unit: 'unidad',
     costPrice: 2_000_000,
     salePrice: 2_500_000,
-    isActive: true,
+    categoryId: 'cat-1',
+    status: 'ACTIVE' as const,
     deletedAt: null,
     brand: { id: 'brand-1', name: 'Samsung' },
     category: { id: 'cat-1', name: 'Heladeras' },
@@ -206,6 +207,90 @@ describe('ProductsService', () => {
         expect.objectContaining({ unit: 'caja' }),
       );
     });
+
+    it('creates as ACTIVE when the ficha comes complete', async () => {
+      productsRepository.create.mockResolvedValue(makeProduct());
+
+      await service.create('tenant-1', baseDto);
+
+      expect(productsRepository.create).toHaveBeenCalledWith(
+        'tenant-1',
+        expect.objectContaining({ status: 'ACTIVE' }),
+      );
+    });
+
+    it('creates as DRAFT when prices are missing, instead of rejecting', async () => {
+      productsRepository.create.mockResolvedValue(makeProduct());
+
+      await service.create('tenant-1', {
+        ...baseDto,
+        costPrice: undefined,
+        salePrice: undefined,
+      });
+
+      expect(productsRepository.create).toHaveBeenCalledWith(
+        'tenant-1',
+        expect.objectContaining({ status: 'DRAFT' }),
+      );
+    });
+
+    it('creates as DRAFT when the category is missing', async () => {
+      productsRepository.create.mockResolvedValue(makeProduct());
+
+      await service.create('tenant-1', { ...baseDto, categoryId: undefined });
+
+      expect(productsRepository.create).toHaveBeenCalledWith(
+        'tenant-1',
+        expect.objectContaining({ status: 'DRAFT' }),
+      );
+    });
+  });
+
+  // ── missingToActivate ──────────────────────────────────────────────────────
+
+  describe('missingToActivate', () => {
+    const complete = {
+      costPrice: 100,
+      salePrice: 150,
+      categoryId: 'cat-1',
+      unit: 'unidad',
+    };
+
+    it('returns an empty list for a complete ficha', () => {
+      expect(ProductsService.missingToActivate(complete)).toEqual([]);
+    });
+
+    it('lists every missing requirement at once, not just the first', () => {
+      expect(
+        ProductsService.missingToActivate({
+          costPrice: null,
+          salePrice: null,
+          categoryId: null,
+          unit: null,
+        }),
+      ).toEqual([
+        'precio de costo',
+        'precio de venta',
+        'categoría',
+        'unidad de medida',
+      ]);
+    });
+
+    it('treats a price of 0 as missing — null is "pendiente", 0 is not a real price here', () => {
+      expect(
+        ProductsService.missingToActivate({ ...complete, costPrice: 0 }),
+      ).toEqual(['precio de costo']);
+    });
+
+    it('reads Prisma Decimal values, not just plain numbers', () => {
+      expect(
+        ProductsService.missingToActivate({
+          ...complete,
+          costPrice: { toNumber: () => 100 },
+          salePrice: { toNumber: () => 150 },
+        }),
+      ).toEqual([]);
+    });
   });
 
   // ── update ─────────────────────────────────────────────────────────────────
@@ -237,6 +322,63 @@ describe('ProductsService', () => {
         expect.objectContaining({ name: 'Heladera LG' }),
       );
       expect(result?.name).toBe('Heladera LG');
+    });
+
+    it('refuses to activate a ficha that is still missing data', async () => {
+      productsRepository.findById.mockResolvedValue(
+        makeProduct({ costPrice: null, salePrice: null }),
+      );
+
+      await expect(
+        service.update('tenant-1', 'prod-1', { status: 'ACTIVE' }),
+      ).rejects.toBeInstanceOf(UnprocessableEntityException);
+
+      expect(productsRepository.update).not.toHaveBeenCalled();
+    });
+
+    it('names what is missing so the UI can show the checklist', async () => {
+      productsRepository.findById.mockResolvedValue(
+        makeProduct({ costPrice: null, categoryId: null }),
+      );
+
+      await expect(
+        service.update('tenant-1', 'prod-1', { status: 'ACTIVE' }),
+      ).rejects.toThrow(/precio de costo, categoría/);
+    });
+
+    it('allows completing the ficha and activating in the same request', async () => {
+      // Validar contra lo ya guardado (sin precio) en vez del resultado del
+      // update haría fallar este caso, que es el flujo normal desde la UI.
+      const draft = makeProduct({
+        status: 'DRAFT',
+        costPrice: null,
+        salePrice: null,
+      });
+      productsRepository.findById
+        .mockResolvedValueOnce(draft)
+        .mockResolvedValueOnce(makeProduct());
+
+      await service.update('tenant-1', 'prod-1', {
+        costPrice: 100,
+        salePrice: 150,
+        status: 'ACTIVE',
+      });
+
+      expect(productsRepository.update).toHaveBeenCalledWith(
+        'tenant-1',
+        'prod-1',
+        expect.objectContaining({ status: 'ACTIVE' }),
+      );
+    });
+
+    it('does not validate requirements when moving to a non-ACTIVE status', async () => {
+      productsRepository.findById
+        .mockResolvedValueOnce(makeProduct({ costPrice: null }))
+        .mockResolvedValueOnce(makeProduct({ status: 'BLOCKED' }));
+
+      await service.update('tenant-1', 'prod-1', { status: 'BLOCKED' });
+
+      expect(productsRepository.update).toHaveBeenCalled();
     });
   });
 

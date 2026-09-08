@@ -6,7 +6,11 @@ import {
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
-import { MovementReason, StockMovementType } from '@prisma/client';
+import {
+  MovementReason,
+  ProductStatus,
+  StockMovementType,
+} from '@prisma/client';
 import {
   ProductsRepository,
   ProductFilters,
@@ -57,7 +61,47 @@ export class ProductsService {
     return { ...product, stock };
   }
 
+  // Requisitos para que una ficha pueda pasar a ACTIVE (= operar: vender,
+  // comprar, facturar). Devuelve la lista de lo que falta, en vez de tirar
+  // en el primer faltante, para que el frontend pueda mostrar el checklist
+  // completo de una sola vez. No se exige proveedor asociado todavía: el
+  // ABM de ProductSupplier existe en la API pero no tiene UI, así que
+  // hacerlo obligatorio bloquearía la activación sin forma de resolverlo
+  // desde la pantalla — cuando esa UI exista, se agrega acá.
+  static missingToActivate(product: {
+    costPrice: unknown;
+    salePrice: unknown;
+    categoryId: string | null;
+    unit: string | null;
+  }): string[] {
+    const missing: string[] = [];
+    const num = (v: unknown): number | null =>
+      v === null || v === undefined
+        ? null
+        : typeof v === 'object' && 'toNumber' in v
+          ? (v as { toNumber(): number }).toNumber()
+          : Number(v);
+
+    const cost = num(product.costPrice);
+    const sale = num(product.salePrice);
+    if (cost === null || cost <= 0) missing.push('precio de costo');
+    if (sale === null || sale <= 0) missing.push('precio de venta');
+    if (!product.categoryId) missing.push('categoría');
+    if (!product.unit) missing.push('unidad de medida');
+    return missing;
+  }
+
   async create(tenantId: string, dto: CreateProductDto) {
+    // El estado no se pide al crear: se deriva de si la ficha vino completa.
+    // Cargar un producto a medias es válido (queda DRAFT) — lo que no es
+    // válido es que opere sin estar completo.
+    const missing = ProductsService.missingToActivate({
+      costPrice: dto.costPrice,
+      salePrice: dto.salePrice,
+      categoryId: dto.categoryId ?? null,
+      unit: dto.unit ?? 'unidad',
+    });
+
     return this.productsRepository.create(tenantId, {
       categoryId: dto.categoryId,
       brandId: dto.brandId,
@@ -69,11 +113,32 @@ export class ProductsService {
       unit: dto.unit ?? 'unidad',
       costPrice: dto.costPrice,
       salePrice: dto.salePrice,
+      status: missing.length
+        ? ProductStatus.DRAFT
+        : ProductStatus.ACTIVE,
     });
   }
 
   async update(tenantId: string, id: string, dto: UpdateProductDto) {
-    await this.findOne(tenantId, id);
+    const current = await this.findOne(tenantId, id);
+
+    // Pasar a ACTIVE valida contra el estado RESULTANTE (lo ya guardado +
+    // lo que trae este update), no contra lo guardado antes — si no,
+    // completar los precios y activar en un mismo request fallaría.
+    if (dto.status === ProductStatus.ACTIVE) {
+      const missing = ProductsService.missingToActivate({
+        costPrice: dto.costPrice ?? current.costPrice,
+        salePrice: dto.salePrice ?? current.salePrice,
+        categoryId: dto.categoryId ?? current.categoryId,
+        unit: dto.unit ?? current.unit,
+      });
+      if (missing.length) {
+        throw new UnprocessableEntityException(
+          `No se puede activar el producto, falta: ${missing.join(', ')}`,
+        );
+      }
+    }
+
     await this.productsRepository.update(tenantId, id, dto);
     return this.productsRepository.findById(tenantId, id);
   }

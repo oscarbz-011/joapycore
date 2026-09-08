@@ -1,5 +1,10 @@
 import { Injectable } from '@nestjs/common';
-import { MovementReason, Prisma, StockMovementType } from '@prisma/client';
+import {
+  MovementReason,
+  Prisma,
+  ProductStatus,
+  StockMovementType,
+} from '@prisma/client';
 import { randomUUID } from 'crypto';
 import { PrismaService } from '../../../prisma/prisma.service';
 
@@ -7,7 +12,7 @@ export interface ProductFilters {
   categoryId?: string;
   brandId?: string;
   isSerialized?: boolean;
-  isActive?: boolean;
+  status?: ProductStatus;
   search?: string;
 }
 
@@ -24,7 +29,7 @@ export class ProductsRepository {
       ...(filters.isSerialized !== undefined && {
         isSerialized: filters.isSerialized,
       }),
-      ...(filters.isActive !== undefined && { isActive: filters.isActive }),
+      ...(filters.status && { status: filters.status }),
       ...(filters.search && {
         OR: [
           { name: { contains: filters.search, mode: 'insensitive' } },
@@ -70,7 +75,7 @@ export class ProductsRepository {
   softDelete(tenantId: string, id: string) {
     return this.prisma.product.updateMany({
       where: { tenantId, id },
-      data: { deletedAt: new Date(), isActive: false },
+      data: { deletedAt: new Date(), status: ProductStatus.INACTIVE },
     });
   }
 

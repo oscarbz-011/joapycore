@@ -33,29 +33,45 @@ export interface AccountsReceivable {
     issuedAt: string | null;
     invoiceNumber: string | null;
     invoicePrefix: string | null;
+    items: { description: string; quantity: number }[];
     saleOrder: {
       id: string;
       saleType: 'CASH' | 'CREDIT';
       installments: number | null;
       customer: {
         id: string;
+        customerCode: string | null;
         firstName: string;
+        secondFirstName: string | null;
         lastName: string;
+        secondLastName: string | null;
         email: string | null;
         documentType: string | null;
         documentNumber: string | null;
       };
       loan: {
         totalAmount: number;
-        installments: { paidAmount: number }[];
+        // number/dueDate/status habilitan calcular la mora sobre la cuota
+        // real más próxima sin pagar — nunca usar el `dueDate` de este AR
+        // para crédito, queda fijo en la fecha de la primera cuota desde
+        // que se crea el préstamo y no se actualiza (ver front/lib/ar-urgency.ts).
+        installments: {
+          number: number;
+          dueDate: string;
+          status: 'PENDING' | 'PARTIAL' | 'PAID' | 'OVERDUE';
+          amount: number;
+          paidAmount: number;
+        }[];
       } | null;
     };
   };
   paymentRecords: PaymentRecord[];
 }
 
+export type CollectionsRange = 'day' | 'week' | 'month';
+
 export interface CollectionsSummary {
-  month: string;
+  range: CollectionsRange;
   total: number;
   cash:   { total: number; byMethod: Record<string, number> };
   credit: { total: number; byMethod: Record<string, number> };
@@ -89,6 +105,6 @@ export const paymentsApi = {
   registerPayment: (id: string, dto: RegisterPaymentPayload): Promise<AccountsReceivable> =>
     apiClient.post(`/payments/accounts-receivable/${id}/payments`, dto).then((r) => r.data),
 
-  getCollections: (month?: string): Promise<CollectionsSummary> =>
-    apiClient.get('/payments/collections', { params: month ? { month } : undefined }).then((r) => r.data),
+  getCollections: (range?: CollectionsRange): Promise<CollectionsSummary> =>
+    apiClient.get('/payments/collections', { params: range ? { range } : undefined }).then((r) => r.data),
 };

@@ -31,6 +31,7 @@ describe('PurchaseOrdersService', () => {
     updateStatus: jest.Mock;
     findItem: jest.Mock;
     updateItemReceivedQty: jest.Mock;
+    findProductStatuses: jest.Mock;
   };
   let eventEmitter: { emit: jest.Mock };
   let prisma: { $transaction: jest.Mock };
@@ -44,6 +45,13 @@ describe('PurchaseOrdersService', () => {
       updateStatus: jest.fn().mockResolvedValue(undefined),
       findItem: jest.fn(),
       updateItemReceivedQty: jest.fn(),
+      // Por defecto, ficha completa: los tests que no van sobre el estado del
+      // producto no tienen que saber que esta validación existe.
+      findProductStatuses: jest
+        .fn()
+        .mockResolvedValue([
+          { id: 'prod-1', name: 'Heladera Samsung', status: 'ACTIVE' },
+        ]),
     };
     eventEmitter = { emit: jest.fn() };
 
@@ -103,6 +111,31 @@ describe('PurchaseOrdersService', () => {
       const result = await service.create('tenant-1', 'user-1', dto);
       expect(prisma.$transaction).toHaveBeenCalled();
       expect(result).toBeDefined();
+    });
+
+    it.each(['DRAFT', 'INACTIVE', 'BLOCKED'])(
+      'refuses to buy a product in %s',
+      async (status) => {
+        purchaseOrdersRepository.findProductStatuses.mockResolvedValue([
+          { id: 'prod-1', name: 'Heladera Samsung', status },
+        ]);
+
+        await expect(
+          service.create('tenant-1', 'user-1', dto),
+        ).rejects.toBeInstanceOf(UnprocessableEntityException);
+
+        expect(prisma.$transaction).not.toHaveBeenCalled();
+      },
+    );
+
+    it('names the product and its state in the error', async () => {
+      purchaseOrdersRepository.findProductStatuses.mockResolvedValue([
+        { id: 'prod-1', name: 'Heladera Samsung', status: 'DRAFT' },
+      ]);
+
+      await expect(service.create('tenant-1', 'user-1', dto)).rejects.toThrow(
+        /Heladera Samsung \(borrador\)/,
+      );
     });
   });
 

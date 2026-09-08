@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -12,9 +12,12 @@ import {
   inventoryApi,
   type MovementReason,
   type CreateStockMovementPayload,
+  type ProductStatus,
   type UpdateProductPayload,
 } from '../../../../../../lib/api/inventory';
 import { procurementApi } from '../../../../../../lib/api/procurement';
+import { settingsApi } from '../../../../../../lib/api/settings';
+import { computeSuggestedPrice } from '../../../../../../lib/pricing';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -270,11 +273,57 @@ export default function ProductDetailPage() {
   });
 
   const [editForm, setEditForm] = useState<UpdateProductPayload>({});
+
+  // Mismo cálculo de precio sugerido que el modal de alta (lib/pricing.ts):
+  // completar el costo de una ficha en borrador tiene que proponer el precio
+  // de venta igual que al crearla, si no hay que sacar la cuenta a mano.
+  const { data: pricingConfig } = useQuery({
+    queryKey: ['pricing-config'],
+    queryFn: settingsApi.getPricing,
+  });
+  // suggestedFor() es puro (se puede llamar durante el render, para el texto
+  // del precio sugerido); suggestFrom() además recuerda lo último sugerido,
+  // que es cómo se distingue un precio de venta escrito a mano de uno
+  // calculado — solo se pisa el calculado.
+  const lastSuggestedRef = useRef<number | undefined>(undefined);
+  const suggestedFor = (cost: number) =>
+    Math.round(
+      computeSuggestedPrice(cost, pricingConfig, Number(product?.additionalMarkup ?? 0), product?.additionalMarkupType ?? null),
+    );
+  const suggestFrom = (cost: number) => {
+    const s = suggestedFor(cost);
+    lastSuggestedRef.current = s;
+    return s;
+  };
   const editMutation = useMutation({
-    mutationFn: () => inventoryApi.updateProduct(id, editForm),
+    // Mismo criterio que el alta: 0 en el form es "sin cargar", y se manda
+    // omitido — el backend valida `@IsPositive()`, así que enviar 0 daba
+    // 400 "salePrice must be a positive number" al guardar una ficha a la
+    // que todavía le falta el precio de venta.
+    mutationFn: () => inventoryApi.updateProduct(id, {
+      ...editForm,
+      costPrice: editForm.costPrice ? editForm.costPrice : undefined,
+      salePrice: editForm.salePrice ? editForm.salePrice : undefined,
+    }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['inventory-product', id] });
       setShowEdit(false);
+    },
+  });
+
+  const [statusError, setStatusError] = useState('');
+  const statusMutation = useMutation({
+    mutationFn: (status: ProductStatus) => inventoryApi.updateProduct(id, { status }),
+    onSuccess: () => {
+      setStatusError('');
+      void queryClient.invalidateQueries({ queryKey: ['inventory-product', id] });
+      void queryClient.invalidateQueries({ queryKey: ['inventory-products'] });
+    },
+    // El backend revalida los requisitos aunque el botón esté deshabilitado
+    // (la ficha pudo cambiar desde otra pestaña) — se muestra su mensaje.
+    onError: (err: Error & { response?: { data?: { message?: string | string[] } } }) => {
+      const msg = err?.response?.data?.message;
+      setStatusError(Array.isArray(msg) ? msg[0] : (msg ?? 'No se pudo cambiar el estado'));
     },
   });
 
@@ -293,9 +342,19 @@ export default function ProductDetailPage() {
     );
   }
 
-  const m = product.costPrice > 0
+  const m = product.costPrice && product.salePrice && product.costPrice > 0
     ? ((product.salePrice - product.costPrice) / product.costPrice) * 100
     : null;
+
+  // Mismo criterio que ProductsService.missingToActivate en el backend — acá
+  // sirve para mostrar el checklist antes de intentar activar, allá para que
+  // no entre nada incompleto aunque se llame directo a la API.
+  const missingToActivate = [
+    !product.costPrice || product.costPrice <= 0 ? 'precio de costo' : null,
+    !product.salePrice || product.salePrice <= 0 ? 'precio de venta' : null,
+    !product.category ? 'categoría' : null,
+    !product.unit ? 'unidad de medida' : null,
+  ].filter((x): x is string => x !== null);
 
   const tabs: { key: Tab; label: string }[] = [
     { key: 'info',      label: 'Información' },
@@ -328,8 +387,14 @@ export default function ProductDetailPage() {
           <div className="flex items-center gap-3 mt-1.5 flex-wrap">
             {product.category && <span className="text-xs text-muted-foreground">{product.category.name}</span>}
             {product.brand && <span className="text-xs text-muted-foreground">· {product.brand.name}</span>}
-            {!product.isActive && (
-              <Badge variant="destructive" className="text-xs">Inactivo</Badge>
+            {product.status === 'DRAFT' && (
+              <Badge className="bg-warn-subtle text-warn border-warn/30 hover:bg-warn-subtle text-xs">Borrador</Badge>
+            )}
+            {product.status === 'INACTIVE' && (
+              <Badge variant="secondary" className="text-xs">Descontinuado</Badge>
+            )}
+            {product.status === 'BLOCKED' && (
+              <Badge variant="destructive" className="text-xs">Bloqueado</Badge>
             )}
           </div>
         </div>
@@ -342,14 +407,33 @@ export default function ProductDetailPage() {
                 name: product.name,
                 model: product.model ?? undefined,
                 description: product.description ?? undefined,
-                costPrice: product.costPrice,
-                salePrice: product.salePrice,
+                costPrice: product.costPrice ?? undefined,
+                salePrice: product.salePrice ?? undefined,
               });
               setShowEdit(true);
             }}
           >
             Editar
           </Button>
+          {product.status !== 'ACTIVE' && (
+            <Button
+              size="sm"
+              disabled={missingToActivate.length > 0 || statusMutation.isPending}
+              onClick={() => statusMutation.mutate('ACTIVE')}
+            >
+              Activar
+            </Button>
+          )}
+          {product.status === 'ACTIVE' && (
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={statusMutation.isPending}
+              onClick={() => statusMutation.mutate('BLOCKED')}
+            >
+              Bloquear
+            </Button>
+          )}
           {activeTab === 'movements' && (
             <Button size="sm" onClick={() => setShowMovement(true)}>
               <Plus size={13} />
@@ -359,6 +443,28 @@ export default function ProductDetailPage() {
         </div>
       </div>
 
+      {/* Qué falta para poder operar con esta ficha. Se muestra el checklist
+          completo en vez de un "faltan datos" genérico. */}
+      {product.status !== 'ACTIVE' && (
+        <div className="mb-5 rounded-xl border border-warn/30 bg-warn-subtle px-4 py-3">
+          <p className="text-[13px] font-semibold text-warn">
+            {product.status === 'DRAFT' && 'Este producto está en borrador: no se puede vender ni comprar.'}
+            {product.status === 'INACTIVE' && 'Este producto está descontinuado: no entra en ventas ni compras nuevas.'}
+            {product.status === 'BLOCKED' && 'Este producto está bloqueado: no entra en ventas ni compras nuevas.'}
+          </p>
+          {missingToActivate.length > 0 ? (
+            <p className="mt-1 text-[12.5px] text-warn/80">
+              Para activarlo falta cargar: {missingToActivate.join(', ')}.
+            </p>
+          ) : (
+            <p className="mt-1 text-[12.5px] text-warn/80">
+              La ficha está completa — se puede activar.
+            </p>
+          )}
+          {statusError && <p className="mt-1 text-[12.5px] text-destructive">{statusError}</p>}
+        </div>
+      )}
+
       {/* Stats row */}
       <div className="mb-6 grid grid-cols-4 gap-3">
         {[
@@ -367,8 +473,8 @@ export default function ProductDetailPage() {
             value: product.isSerialized ? `${product.stock} u.` : `${product.stock} ${product.unit}`,
             cls: product.stock === 0 ? 'text-destructive' : product.stock <= 3 ? 'text-warn' : 'text-foreground',
           },
-          { label: 'Precio costo', value: fmtGs(product.costPrice), cls: 'text-foreground' },
-          { label: 'Precio venta', value: fmtGs(product.salePrice), cls: 'text-foreground' },
+          { label: 'Precio costo', value: product.costPrice == null ? 'Pendiente' : fmtGs(product.costPrice), cls: product.costPrice == null ? 'text-warn' : 'text-foreground' },
+          { label: 'Precio venta', value: product.salePrice == null ? 'Pendiente' : fmtGs(product.salePrice), cls: product.salePrice == null ? 'text-warn' : 'text-foreground' },
           { label: 'Margen', value: m != null ? `${m.toFixed(1)}%` : '—', cls: 'text-accent-on' },
         ].map(({ label, value, cls }) => (
           <div key={label} className="rounded-xl border border-border bg-card px-3.5 py-3">
@@ -426,16 +532,58 @@ export default function ProductDetailPage() {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5">
-                  <Label>Precio costo (PYG) *</Label>
-                  <NumericInput value={editForm.costPrice ?? 0} onChange={(v) => setEditForm((f) => ({ ...f, costPrice: v }))} className={NUM_CLS} />
+                  <Label>Precio costo (PYG)</Label>
+                  <NumericInput
+                    value={editForm.costPrice ?? 0}
+                    onChange={(v) => setEditForm((f) => ({
+                      ...f,
+                      costPrice: v,
+                      // Mismo criterio que el modal de alta: se sugiere el
+                      // precio de venta mientras no haya uno propio escrito a
+                      // mano — si el usuario ya lo tocó, no se le pisa.
+                      salePrice: !f.salePrice || f.salePrice === lastSuggestedRef.current
+                        ? suggestFrom(v)
+                        : f.salePrice,
+                    }))}
+                    className={NUM_CLS}
+                  />
                 </div>
                 <div className="space-y-1.5">
-                  <Label>Precio venta (PYG) *</Label>
+                  <Label>
+                    Precio venta (PYG)
+                    {pricingConfig && (editForm.costPrice ?? 0) > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setEditForm((f) => ({ ...f, salePrice: suggestFrom(f.costPrice ?? 0) }))}
+                        className="ml-2 text-[10px] font-normal text-primary underline"
+                      >
+                        recalcular
+                      </button>
+                    )}
+                  </Label>
                   <NumericInput value={editForm.salePrice ?? 0} onChange={(v) => setEditForm((f) => ({ ...f, salePrice: v }))} className={NUM_CLS} />
                 </div>
               </div>
+              {pricingConfig && (editForm.costPrice ?? 0) > 0 && (
+                <p className="text-[12px] text-muted-foreground">
+                  Precio sugerido con el margen configurado ({pricingConfig.markupMethod === 'PERCENTAGE'
+                    ? `${pricingConfig.defaultMarkup}%`
+                    : fmtGs(pricingConfig.defaultMarkup)}):{' '}
+                  <span className="font-mono tabular-nums text-foreground">{fmtGs(suggestedFor(editForm.costPrice ?? 0))}</span>
+                </p>
+              )}
               {editMutation.isError && (
-                <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">Error al guardar</div>
+                <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                  {(() => {
+                    // El mensaje del backend dice qué campo rechazó; un
+                    // "Error al guardar" genérico obliga a abrir la consola.
+                    const msg = (editMutation.error as Error & {
+                      response?: { data?: { message?: string | string[] } };
+                    })?.response?.data?.message;
+                    if (Array.isArray(msg)) return msg[0];
+                    return msg ?? 'Error al guardar';
+                  })()}
+                </div>
               )}
               <div className="flex gap-3">
                 <Button type="submit" disabled={editMutation.isPending}>
@@ -691,8 +839,8 @@ export default function ProductDetailPage() {
                 name: product.name,
                 model: product.model ?? undefined,
                 description: product.description ?? undefined,
-                costPrice: product.costPrice,
-                salePrice: product.salePrice,
+                costPrice: product.costPrice ?? undefined,
+                salePrice: product.salePrice ?? undefined,
               });
               setShowEdit(true);
             }}

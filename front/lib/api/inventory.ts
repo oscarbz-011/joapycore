@@ -14,6 +14,19 @@ export interface Brand {
 
 export type MarkupType = 'PERCENTAGE' | 'FIXED';
 
+// Estado de la FICHA del producto, no del stock (el stock son movimientos,
+// ver StockMovement). DRAFT = creada incompleta, no opera; ACTIVE = completa,
+// se puede comprar y vender; INACTIVE = descontinuada; BLOCKED = restringida.
+// Ver ARCHITECTURE.md v0.51.
+export type ProductStatus = 'DRAFT' | 'ACTIVE' | 'INACTIVE' | 'BLOCKED';
+
+export const PRODUCT_STATUS_LABEL: Record<ProductStatus, string> = {
+  DRAFT: 'Borrador',
+  ACTIVE: 'Activo',
+  INACTIVE: 'Descontinuado',
+  BLOCKED: 'Bloqueado',
+};
+
 export interface Product {
   id: string;
   name: string;
@@ -26,11 +39,12 @@ export interface Product {
   heightCm: number | null;
   widthCm: number | null;
   depthCm: number | null;
-  costPrice: number;
-  salePrice: number;
+  // null = precio pendiente (ficha en DRAFT), distinto de 0 (precio real).
+  costPrice: number | null;
+  salePrice: number | null;
   additionalMarkup: number | null;
   additionalMarkupType: MarkupType | null;
-  isActive: boolean;
+  status: ProductStatus;
   deletedAt: string | null;
   category: { id: string; name: string } | null;
   brand: { id: string; name: string } | null;
@@ -51,7 +65,7 @@ export interface ProductFilters {
   categoryId?: string;
   brandId?: string;
   isSerialized?: boolean;
-  isActive?: boolean;
+  status?: ProductStatus;
 }
 
 export interface CreateProductPayload {
@@ -63,8 +77,9 @@ export interface CreateProductPayload {
   isSerialized: boolean;
   usesLots?: boolean;
   unit?: string;
-  costPrice: number;
-  salePrice: number;
+  // Opcionales: sin precio el producto se crea en DRAFT (ver ProductStatus).
+  costPrice?: number;
+  salePrice?: number;
   additionalMarkup?: number;
   additionalMarkupType?: MarkupType;
 }
@@ -77,6 +92,7 @@ export type UpdateProductPayload =
     depthCm?: number | null;
     additionalMarkup?: number | null;
     additionalMarkupType?: MarkupType | null;
+    status?: ProductStatus;
   };
 
 export type MovementReason =

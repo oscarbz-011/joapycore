@@ -247,7 +247,7 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
                   iconColor="text-blue-600 dark:text-blue-400"
                   label={p.name + (p.model ? ` — ${p.model}` : '')}
                   sub={[p.category?.name, p.brand?.name].filter(Boolean).join(' · ')}
-                  right={fmtGs(p.salePrice)}
+                  right={p.salePrice == null ? 'Pendiente' : fmtGs(p.salePrice)}
                   onClick={() => navigate('/dashboard/inventory')}
                 />
               ))}

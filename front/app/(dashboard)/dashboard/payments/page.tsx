@@ -4,7 +4,7 @@ import { Fragment, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { NumericInput } from '../../../../components/numeric-input';
-import { X, Printer, FileText, CreditCard, ChevronRight, AlertTriangle, Clock } from 'lucide-react';
+import { X, Printer, FileText, CreditCard, ChevronRight, AlertTriangle, Clock, Search } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
   paymentsApi,
@@ -14,6 +14,7 @@ import {
   type PaymentMethod,
   type RegisterPaymentPayload,
   type CollectionsSummary,
+  type CollectionsRange,
 } from '../../../../lib/api/payments';
 import {
   financeApi,
@@ -27,7 +28,7 @@ import { distributeAmount, outstandingOf, chargesTotalOf, type DistributedItem }
 import { ReceiptButton } from '../../../../components/receipt-button';
 import { arUrgency, arDisplayDueDate, DUE_SOON_DAYS, type ArUrgency, type ArUrgencyLevel } from '../../../../lib/ar-urgency';
 import { daysOverdue } from '../../../../lib/overdue';
-import { formatDatePY } from '../../../../lib/date';
+import { formatDatePY, todayISODate, toISODate } from '../../../../lib/date';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -55,6 +56,9 @@ const AR_STATUS_LABELS: Record<string, string> = {
 const AR_TYPE_LABELS: Record<string, string> = {
   CASH: 'Solo contado', CREDIT: 'Solo crédito',
 };
+const PENDING_RANGE_LABELS: Record<CollectionsRange | 'all', string> = {
+  day: 'hoy', week: 'esta semana', month: 'este mes', all: 'general',
+};
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -72,6 +76,14 @@ function invoiceRef(ar: AccountsReceivable['invoice']) {
   return `#${ar.id.slice(0, 8).toUpperCase()}`;
 }
 
+// "Ventilador" / "Ventilador +2 más" — para no romper el ancho de la fila
+// con facturas de muchos ítems distintos.
+function productSummary(items: AccountsReceivable['invoice']['items']): string {
+  if (items.length === 0) return '—';
+  const [first, ...rest] = items;
+  return rest.length === 0 ? first.description : `${first.description} +${rest.length} más`;
+}
+
 // Para crédito, el saldo real vive en las cuotas del préstamo (pueden
 // diferir del AR si hubo reprogramaciones) — para contado, el AR es la
 // única fuente. Mismo cálculo que antes vivía duplicado dentro de la
@@ -84,6 +96,32 @@ function effectiveAmounts(ar: AccountsReceivable) {
     : Number(ar.paidAmount);
   const total = isCredit && loan ? Number(loan.totalAmount) : Number(ar.amount);
   return { isCredit, paid, total, pending: total - paid };
+}
+
+// [start, end) del rango elegido, como fechas ISO — mismo criterio día/semana
+// (lunes a domingo)/mes que ya usa el backend en PaymentsService.getCollections(),
+// pero acá alcanza con los componentes locales del navegador (se asume que
+// quien mira la pantalla está en Paraguay, a diferencia del backend, que
+// corre en un servidor de timezone desconocida y necesita anclar a
+// America/Asuncion explícito).
+function rangeBoundsISO(range: CollectionsRange): { start: string; end: string } {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = now.getMonth();
+  const d = now.getDate();
+  const iso = (year: number, month: number, day: number) => toISODate(new Date(Date.UTC(year, month, day)));
+
+  if (range === 'day') return { start: iso(y, m, d), end: iso(y, m, d + 1) };
+  if (range === 'week') {
+    const dow = now.getDay();
+    const diffToMonday = dow === 0 ? 6 : dow - 1;
+    const startDate = new Date(y, m, d - diffToMonday);
+    return {
+      start: iso(startDate.getFullYear(), startDate.getMonth(), startDate.getDate()),
+      end: iso(startDate.getFullYear(), startDate.getMonth(), startDate.getDate() + 7),
+    };
+  }
+  return { start: iso(y, m, 1), end: iso(y, m + 1, 1) };
 }
 
 // Mismo diseño de resaltado (barra izquierda + fecha coloreada) para
@@ -393,7 +431,7 @@ function RegisterPaymentModal({
 
   const [amount, setAmount] = useState<number>(Math.round(remaining));
   const [method, setMethod] = useState<PaymentMethod>('CASH');
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [date, setDate] = useState(todayISODate());
   const [reference, setReference] = useState('');
   const [notes, setNotes] = useState('');
   const [error, setError] = useState('');
@@ -516,7 +554,7 @@ function PayInstallmentsModal({
   const totalAmount = items.reduce((s, i) => s + i.amount, 0);
 
   const [method, setMethod] = useState<PaymentMethod>('CASH');
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [date, setDate] = useState(todayISODate());
   const [reference, setReference] = useState('');
   const [notes, setNotes] = useState('');
   const [error, setError] = useState('');
@@ -1040,16 +1078,22 @@ const METHOD_SHORT: Record<string, string> = {
 
 const MES_LARGO = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 
-function CollectionsWidget() {
-  const now   = new Date();
-  const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+const RANGE_OPTIONS: { value: CollectionsRange; label: string }[] = [
+  { value: 'day',   label: 'Hoy' },
+  { value: 'week',  label: 'Esta semana' },
+  { value: 'month', label: 'Este mes' },
+];
+
+function CollectionsWidget({ range, onRangeChange }: { range: CollectionsRange; onRangeChange: (r: CollectionsRange) => void }) {
+  const now = new Date();
 
   const { data, isLoading } = useQuery<CollectionsSummary>({
-    queryKey: ['collections', month],
-    queryFn:  () => paymentsApi.getCollections(month),
+    queryKey: ['collections', range],
+    queryFn:  () => paymentsApi.getCollections(range),
   });
 
-  const monthLabel  = MES_LARGO[now.getMonth()] + ' ' + now.getFullYear();
+  const rangeLabel =
+    range === 'day' ? 'Hoy' : range === 'week' ? 'Esta semana' : `${MES_LARGO[now.getMonth()]} ${now.getFullYear()}`;
   const totalPct    = data && data.total > 0 ? Math.round((data.cash.total / data.total) * 100) : 0;
   const methodEntries = data ? Object.entries(data.byMethod).sort(([, a], [, b]) => b - a) : [];
 
@@ -1058,12 +1102,30 @@ function CollectionsWidget() {
       <div className="flex items-center justify-between">
         <div>
           <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/60">Recaudaciones</p>
-          <p className="text-sm text-muted-foreground">{monthLabel}</p>
+          <p className="text-sm text-muted-foreground">{rangeLabel}</p>
         </div>
         {!isLoading && data && (
           <p className="text-xl font-bold text-foreground">{formatPrice(data.total)}</p>
         )}
         {isLoading && <div className="h-5 w-32 animate-pulse rounded bg-muted/30" />}
+      </div>
+
+      <div className="flex gap-1 rounded-full bg-muted/20 p-1 w-fit">
+        {RANGE_OPTIONS.map((opt) => (
+          <button
+            key={opt.value}
+            type="button"
+            onClick={() => onRangeChange(opt.value)}
+            className={cn(
+              'rounded-full px-3 py-1 text-xs font-medium transition-colors',
+              range === opt.value
+                ? 'bg-card text-foreground shadow-sm'
+                : 'text-muted-foreground hover:text-foreground',
+            )}
+          >
+            {opt.label}
+          </button>
+        ))}
       </div>
 
       {data && data.total > 0 && (
@@ -1111,7 +1173,9 @@ function CollectionsWidget() {
       )}
 
       {!isLoading && data && data.total === 0 && (
-        <p className="text-center text-xs text-muted-foreground/60 py-2">Sin recaudaciones registradas este mes</p>
+        <p className="text-center text-xs text-muted-foreground/60 py-2">
+          Sin recaudaciones registradas {range === 'day' ? 'hoy' : range === 'week' ? 'esta semana' : 'este mes'}
+        </p>
       )}
     </Card>
   );
@@ -1146,6 +1210,9 @@ function ARRow({ ar, onClick, indent }: { ar: AccountsReceivable; onClick: () =>
         <span className="font-mono text-xs text-muted-foreground">
           {invoiceRef(ar.invoice)}
         </span>
+      </td>
+      <td className="px-4 py-3 max-w-[14rem] truncate text-muted-foreground" title={ar.invoice.items.map((i) => i.description).join(', ')}>
+        {productSummary(ar.invoice.items)}
       </td>
       <td className="px-4 py-3">
         {isCredit ? (
@@ -1185,6 +1252,9 @@ export default function PaymentsPage() {
 
   const [statusFilter, setStatusFilter] = useState<'' | ARStatus>('');
   const [typeFilter, setTypeFilter]     = useState<'' | 'CASH' | 'CREDIT'>('');
+  const [search, setSearch]             = useState('');
+  const [range, setRange]               = useState<CollectionsRange>('month');
+  const [pendingRange, setPendingRange] = useState<CollectionsRange | 'all'>('all');
   const [panelAR, setPanelAR]           = useState<AccountsReceivable | null>(null);
   const [panelOpen, setPanelOpen]       = useState(false);
   const [dismissedArParam, setDismissedArParam] = useState<string | null>(null);
@@ -1205,9 +1275,26 @@ export default function PaymentsPage() {
   const effectivePanelAR = panelAR ?? deepLinkedAR;
   const effectivePanelOpen = panelOpen || !!deepLinkedAR;
 
+  // Sin filtro de estado explícito, se ocultan las ya pagadas en su
+  // totalidad — no tiene sentido mostrar todas las cuentas por cobrar
+  // (activas + saldadas hace tiempo) de entrada; el usuario las ve
+  // eligiendo "Pagado" en el filtro a propósito.
+  const searchNorm = search.trim().toLowerCase();
   const filtered = arList.filter((ar) => {
-    if (statusFilter && ar.status !== statusFilter) return false;
+    if (statusFilter) {
+      if (ar.status !== statusFilter) return false;
+    } else if (ar.status === 'PAID') {
+      return false;
+    }
     if (typeFilter && ar.invoice.saleOrder.saleType !== typeFilter) return false;
+    if (searchNorm) {
+      const c = ar.invoice.saleOrder.customer;
+      const haystack = [
+        c.firstName, c.secondFirstName, c.lastName, c.secondLastName,
+        c.email, c.documentNumber, c.customerCode,
+      ].filter(Boolean).join(' ').toLowerCase();
+      if (!haystack.includes(searchNorm)) return false;
+    }
     return true;
   });
 
@@ -1236,9 +1323,27 @@ export default function PaymentsPage() {
     if (!panelAR && arParam) setDismissedArParam(arParam);
   }
 
-  const totalPending = arList
-    .filter((ar) => ar.status === 'PENDING' || ar.status === 'PARTIAL')
-    .reduce((sum, ar) => sum + effectiveAmounts(ar).pending, 0);
+  // Vencimiento real de cada cuenta — para crédito, la cuota más próxima sin
+  // pagar (arDisplayDueDate ya resuelve esto), no el AR.dueDate estático.
+  // Una cuenta sin fecha de vencimiento (ej. contado sin AR.dueDate) no cae
+  // en ningún rango puntual — solo se cuenta en "Este mes" como aproximación
+  // razonable en vez de desaparecer de todos los rangos. "General" (default)
+  // no filtra por fecha — es el monto total adeudado sin importar cuándo vence,
+  // pedido aparte por el usuario además del recorte por día/semana/mes.
+  const activePendingAR = arList.filter((ar) => ar.status === 'PENDING' || ar.status === 'PARTIAL');
+  const totalPending = (() => {
+    if (pendingRange === 'all') {
+      return activePendingAR.reduce((sum, ar) => sum + effectiveAmounts(ar).pending, 0);
+    }
+    const { start, end } = rangeBoundsISO(pendingRange);
+    return activePendingAR
+      .filter((ar) => {
+        const due = arDisplayDueDate(ar);
+        if (!due) return pendingRange === 'month';
+        return due >= start && due < end;
+      })
+      .reduce((sum, ar) => sum + effectiveAmounts(ar).pending, 0);
+  })();
 
   return (
     <div>
@@ -1247,33 +1352,54 @@ export default function PaymentsPage() {
           <h1 className="text-2xl font-semibold text-foreground">Pagos</h1>
           <p className="mt-1 text-sm text-muted-foreground">Cuentas por cobrar y registro de pagos</p>
         </div>
-        {totalPending > 0 && (
-          <div className="rounded-xl bg-warn-subtle border border-warn px-4 py-2 text-right">
-            <p className="text-xs text-warn font-medium">Total pendiente</p>
+        {activePendingAR.length > 0 && (
+          <div className="rounded-xl bg-warn-subtle border border-warn px-4 py-2 text-right space-y-1.5">
+            <p className="text-xs text-warn font-medium">Total pendiente ({PENDING_RANGE_LABELS[pendingRange]})</p>
             <p className="text-lg font-bold text-warn">{formatPrice(totalPending)}</p>
+            <div className="flex justify-end gap-0.5">
+              {(['day', 'week', 'month', 'all'] as const).map((v) => (
+                <button
+                  key={v}
+                  type="button"
+                  onClick={() => setPendingRange(v)}
+                  className={cn(
+                    'rounded-full px-2 py-0.5 text-[10px] font-medium capitalize transition-colors',
+                    pendingRange === v
+                      ? 'bg-card text-warn shadow-sm'
+                      : 'text-warn/60 hover:text-warn',
+                  )}
+                >
+                  {v === 'all' ? 'General' : PENDING_RANGE_LABELS[v]}
+                </button>
+              ))}
+            </div>
           </div>
         )}
       </div>
 
       <div className="mb-6">
-        <CollectionsWidget />
+        <CollectionsWidget range={range} onRangeChange={setRange} />
       </div>
 
       <div className="mb-4 flex gap-3">
         <Select value={statusFilter || 'all'} onValueChange={(v) => setStatusFilter(v === 'all' ? '' : v as ARStatus)}>
           <SelectTrigger>
             <span className="min-w-0 flex-1 truncate text-left text-sm">
-              {statusFilter ? AR_STATUS_LABELS[statusFilter] : 'Todos los estados'}
+              {statusFilter ? AR_STATUS_LABELS[statusFilter] : 'Activas (sin pagadas)'}
             </span>
           </SelectTrigger>
           <SelectContent className="w-auto min-w-[9rem]">
-            <SelectItem value="all">Todos los estados</SelectItem>
+            <SelectItem value="all">Activas (sin pagadas)</SelectItem>
             <SelectItem value="PENDING">Pendiente</SelectItem>
             <SelectItem value="PARTIAL">Parcial</SelectItem>
             <SelectItem value="PAID">Pagado</SelectItem>
             <SelectItem value="CANCELLED">Cancelado</SelectItem>
           </SelectContent>
         </Select>
+        <div className="relative flex-1 min-w-48 max-w-xs">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground/50" />
+          <Input className="pl-8" placeholder="Buscar cliente..." value={search} onChange={(e) => setSearch(e.target.value)} />
+        </div>
         <Select value={typeFilter || 'all'} onValueChange={(v) => setTypeFilter(v === 'all' ? '' : v as 'CASH' | 'CREDIT')}>
           <SelectTrigger>
             <span className="min-w-0 flex-1 truncate text-left text-sm">
@@ -1306,6 +1432,7 @@ export default function PaymentsPage() {
                 <tr>
                   <th className="px-4 py-3 text-left">Cliente</th>
                   <th className="px-4 py-3 text-left">Factura</th>
+                  <th className="px-4 py-3 text-left">Producto</th>
                   <th className="px-4 py-3 text-left">Tipo</th>
                   <th className="px-4 py-3 text-left">Vencimiento</th>
                   <th className="px-4 py-3 text-left">Estado</th>
@@ -1356,7 +1483,7 @@ export default function PaymentsPage() {
                             </div>
                           </div>
                         </td>
-                        <td className="px-4 py-3 text-xs text-muted-foreground" colSpan={3}>
+                        <td className="px-4 py-3 text-xs text-muted-foreground" colSpan={4}>
                           {group.length} productos activos
                           {overdueCount > 0 && (
                             <Badge variant="destructive" className="ml-2 gap-1">

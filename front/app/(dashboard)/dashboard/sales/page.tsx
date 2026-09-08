@@ -891,7 +891,7 @@ export default function SalesPage() {
 
   const { data: orders = [], isLoading } = useQuery({ queryKey: ['sale-orders'], queryFn: salesApi.listOrders });
   const { data: customers = [] } = useQuery({ queryKey: ['sale-customers'], queryFn: salesApi.listCustomers });
-  const { data: products = [] } = useQuery({ queryKey: ['inventory-products-active'], queryFn: () => inventoryApi.listProducts({ isActive: true }) });
+  const { data: products = [] } = useQuery({ queryKey: ['inventory-products-active'], queryFn: () => inventoryApi.listProducts({ status: 'ACTIVE' }) });
 
   const filtered = orders.filter((o) => {
     const name = `${o.customer.firstName} ${o.customer.lastName}`.toLowerCase();

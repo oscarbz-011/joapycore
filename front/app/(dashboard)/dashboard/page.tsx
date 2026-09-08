@@ -14,6 +14,7 @@ import type { SaleOrder } from '../../../lib/api/sales';
 import { inventoryApi } from '../../../lib/api/inventory';
 import type { ProductWithStock } from '../../../lib/api/inventory';
 import { paymentsApi } from '../../../lib/api/payments';
+import { localISODate } from '../../../lib/date';
 import { auditApi } from '../../../lib/api/audit';
 import type { AuditLog } from '../../../lib/api/audit';
 import { Button } from '@/components/ui/button';
@@ -372,7 +373,7 @@ export default function DashboardPage() {
   });
   const { data: products = [], isLoading: prodLoading } = useQuery<ProductWithStock[]>({
     queryKey: ['products-with-stock'],
-    queryFn: () => inventoryApi.listProductsWithStock({ isActive: true }),
+    queryFn: () => inventoryApi.listProductsWithStock({ status: 'ACTIVE' }),
     enabled: activeModules.includes('inventory'),
   });
   const { data: arList = [], isLoading: arLoading } = useQuery({
@@ -391,9 +392,12 @@ export default function DashboardPage() {
   const kpis = useMemo(() => {
     const thisM = now.getMonth(), thisY = now.getFullYear();
     const lastM = thisM === 0 ? 11 : thisM - 1, lastY = thisM === 0 ? thisY - 1 : thisY;
-    const todayStr = now.toISOString().slice(0, 10);
+    // orderDate es un instante real (no un día de calendario elegido) — hay
+    // que anclar a Paraguay explícito, no comparar contra el prefijo UTC
+    // crudo (ver localISODate en lib/date.ts).
+    const todayStr = localISODate(now);
 
-    const ordersHoy     = orders.filter((o) => o.orderDate.startsWith(todayStr)).length;
+    const ordersHoy     = orders.filter((o) => localISODate(o.orderDate) === todayStr).length;
     const thisMonthAct  = orders.filter((o) => ACTIVE_STATUSES.includes(o.status) && inMonth(o.orderDate, thisY, thisM));
     const lastMonthAct  = orders.filter((o) => ACTIVE_STATUSES.includes(o.status) && inMonth(o.orderDate, lastY, lastM));
     const ventas        = thisMonthAct.reduce((s, o) => s + orderTotal(o), 0);

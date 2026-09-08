@@ -10,14 +10,21 @@ import {
 import { NumericInput } from '../../../../components/numeric-input';
 import {
   inventoryApi,
+  PRODUCT_STATUS_LABEL,
   type Brand,
   type Category,
   type CreateProductPayload,
   type MarkupType,
   type Product,
+  type ProductStatus,
   type ProductWithStock,
 } from '../../../../lib/api/inventory';
-import { settingsApi, type PricingConfig } from '../../../../lib/api/settings';
+import { settingsApi } from '../../../../lib/api/settings';
+import {
+  computeAdditionalAmount,
+  computeGlobalMarkupAmount,
+  computeSuggestedPrice,
+} from '../../../../lib/pricing';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -39,8 +46,20 @@ function fmtGs(n: number) {
 }
 
 function markup(p: Product) {
-  if (p.costPrice <= 0) return null;
+  // Un producto en borrador puede no tener precios todavía (null) — no hay
+  // margen que mostrar, no es un margen de 0.
+  if (!p.costPrice || !p.salePrice || p.costPrice <= 0) return null;
   return ((p.salePrice - p.costPrice) / p.costPrice) * 100;
+}
+
+// ── Estado de la ficha ─────────────────────────────────────────────────────────
+
+function StatusBadge({ status }: { status: ProductStatus }) {
+  if (status === 'ACTIVE') return null; // el estado normal no necesita ruido visual
+  if (status === 'DRAFT')
+    return <Badge className="bg-warn-subtle text-warn border-warn/30 hover:bg-warn-subtle">Borrador</Badge>;
+  if (status === 'BLOCKED') return <Badge variant="destructive">Bloqueado</Badge>;
+  return <Badge variant="secondary">Descontinuado</Badge>;
 }
 
 // ── Stock badge ────────────────────────────────────────────────────────────────
@@ -95,29 +114,17 @@ function InventoryNav({ active }: { active: 'products' | 'movements' | 'config' 
   );
 }
 
-// ── Price helpers ──────────────────────────────────────────────────────────────
-
-function computeGlobalMarkupAmount(cost: number, cfg: PricingConfig): number {
-  return cfg.markupMethod === 'PERCENTAGE' ? cost * (cfg.defaultMarkup / 100) : cfg.defaultMarkup;
-}
-
-function computeAdditionalAmount(basePrice: number, markup: number, type: MarkupType): number {
-  return type === 'PERCENTAGE' ? basePrice * (markup / 100) : markup;
-}
-
-function computeSuggestedPrice(
-  cost: number, cfg: PricingConfig | null | undefined,
-  additionalMarkup: number, additionalMarkupType: MarkupType | null,
-): number {
-  if (!cfg || cost <= 0) return 0;
-  const base = cfg.markupMethod === 'PERCENTAGE' ? cost * (1 + cfg.defaultMarkup / 100) : cost + cfg.defaultMarkup;
-  if (!additionalMarkup || !additionalMarkupType) return base;
-  return additionalMarkupType === 'PERCENTAGE' ? base * (1 + additionalMarkup / 100) : base + additionalMarkup;
-}
-
 // ── Product modal ──────────────────────────────────────────────────────────────
 
-const EMPTY_FORM: CreateProductPayload = {
+// Los precios viven como number en el form (0 = "sin cargar") y recién al
+// enviar se traducen a undefined, que es como el backend distingue "pendiente"
+// de un precio real de cero. Ver ProductStatus / ARCHITECTURE.md v0.51.
+type ProductForm = Omit<CreateProductPayload, 'costPrice' | 'salePrice'> & {
+  costPrice: number;
+  salePrice: number;
+};
+
+const EMPTY_FORM: ProductForm = {
   categoryId: '', brandId: '', name: '', model: '', description: '',
   isSerialized: false, usesLots: false, unit: 'unidad', costPrice: 0, salePrice: 0,
 };
@@ -132,12 +139,12 @@ function ProductModal({
   initial?: Product;
 }) {
   const queryClient = useQueryClient();
-  const [form, setForm] = useState<CreateProductPayload>(
+  const [form, setForm] = useState<ProductForm>(
     initial
       ? { categoryId: initial.category?.id ?? '', brandId: initial.brand?.id ?? '', name: initial.name,
           model: initial.model ?? '', description: initial.description ?? '', isSerialized: initial.isSerialized,
           usesLots: initial.usesLots,
-          unit: initial.unit, costPrice: initial.costPrice, salePrice: initial.salePrice }
+          unit: initial.unit, costPrice: initial.costPrice ?? 0, salePrice: initial.salePrice ?? 0 }
       : EMPTY_FORM,
   );
   const [error, setError] = useState('');
@@ -147,7 +154,7 @@ function ProductModal({
 
   const { data: pricingConfig } = useQuery({ queryKey: ['pricing-config'], queryFn: settingsApi.getPricing });
 
-  const lastComputedRef = useRef<number>(initial ? initial.salePrice : 0);
+  const lastComputedRef = useRef<number>(initial?.salePrice ?? 0);
   useEffect(() => {
     if (!pricingConfig || form.costPrice <= 0) return;
     const suggested = computeSuggestedPrice(form.costPrice, pricingConfig, additionalMarkup, additionalMarkupType);
@@ -158,7 +165,7 @@ function ProductModal({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [form.costPrice, additionalMarkup, additionalMarkupType, pricingConfig]);
 
-  const set = <K extends keyof CreateProductPayload>(k: K, v: CreateProductPayload[K]) =>
+  const set = <K extends keyof ProductForm>(k: K, v: ProductForm[K]) =>
     setForm((f) => ({ ...f, [k]: v }));
 
   const mutation = useMutation({
@@ -166,14 +173,20 @@ function ProductModal({
       const extraMarkup = showAdditionalMarkup && additionalMarkup > 0
         ? { additionalMarkup, additionalMarkupType }
         : { additionalMarkup: null, additionalMarkupType: null };
+      // 0 en el form significa "todavía no lo sé" — se manda undefined para
+      // que el backend lo guarde como pendiente (null) y no como precio cero.
+      const prices = {
+        costPrice: form.costPrice > 0 ? form.costPrice : undefined,
+        salePrice: form.salePrice > 0 ? form.salePrice : undefined,
+      };
       if (initial) {
         return inventoryApi.updateProduct(initial.id, {
-          ...form, ...extraMarkup,
+          ...form, ...prices, ...extraMarkup,
           model: form.model || undefined, description: form.description || undefined,
         });
       }
       return inventoryApi.createProduct({
-        ...form,
+        ...form, ...prices,
         ...(showAdditionalMarkup && additionalMarkup > 0 ? { additionalMarkup, additionalMarkupType } : {}),
         model: form.model || undefined, description: form.description || undefined,
       });
@@ -274,17 +287,16 @@ function ProductModal({
               <p className="mb-3 text-[11px] font-bold uppercase tracking-widest text-muted-foreground/60">Precios y tipo</p>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label className="mb-1 text-[12px]">Precio costo (PYG) *</Label>
+                  <Label className="mb-1 text-[12px]">Precio costo (PYG)</Label>
                   <NumericInput
                     value={form.costPrice}
                     onChange={(v) => set('costPrice', v)}
                     className="h-9 w-full min-w-0 rounded-3xl border border-transparent bg-input/50 px-3 text-sm outline-none transition-[color,box-shadow,background-color] focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30"
-                    required
                   />
                 </div>
                 <div>
                   <Label className="mb-1 text-[12px]">
-                    Precio venta (PYG) *
+                    Precio venta (PYG)
                     {pricingConfig && form.costPrice > 0 && (
                       <button
                         type="button"
@@ -303,10 +315,18 @@ function ProductModal({
                     value={form.salePrice}
                     onChange={(v) => { set('salePrice', v); lastComputedRef.current = -1; }}
                     className="h-9 w-full min-w-0 rounded-3xl border border-transparent bg-input/50 px-3 text-sm outline-none transition-[color,box-shadow,background-color] focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30"
-                    required
                   />
                 </div>
               </div>
+
+              {/* La ficha se puede guardar incompleta — lo que no se puede es
+                  operar con ella. Se avisa acá, no al intentar guardar. */}
+              {(form.costPrice <= 0 || form.salePrice <= 0 || !form.categoryId) && (
+                <p className="mt-2 text-[12px] text-warn">
+                  Sin precio de costo, precio de venta y categoría el producto queda en{' '}
+                  <strong>Borrador</strong>: se guarda en el catálogo, pero no se puede vender ni comprar hasta completarlo.
+                </p>
+              )}
 
               {/* Desglose */}
               {pricingConfig && form.costPrice > 0 && (
@@ -466,25 +486,32 @@ export default function InventoryPage() {
   const [search, setSearch]               = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
   const [brandFilter, setBrandFilter]       = useState('');
+  const [statusFilter, setStatusFilter]     = useState<ProductStatus | ''>('');
   const [showCreate, setShowCreate]         = useState(false);
 
+  // Sin filtro de estado por defecto: un producto en Borrador tiene que ser
+  // visible acá, si no queda inalcanzable justo en la pantalla donde se
+  // completa. El que no quiera verlos filtra por estado explícitamente.
   const { data: products = [], isLoading } = useQuery<ProductWithStock[]>({
-    queryKey: ['inventory-products', search, categoryFilter, brandFilter],
+    queryKey: ['inventory-products', search, categoryFilter, brandFilter, statusFilter],
     queryFn: () => inventoryApi.listProductsWithStock({
       search: search || undefined,
       categoryId: categoryFilter || undefined,
       brandId: brandFilter || undefined,
-      isActive: true,
+      status: statusFilter || undefined,
     }),
   });
   const { data: categories = [] } = useQuery({ queryKey: ['inventory-categories'], queryFn: inventoryApi.listCategories });
   const { data: brands = [] }     = useQuery({ queryKey: ['inventory-brands'],     queryFn: inventoryApi.listBrands });
 
   const kpis = useMemo(() => {
-    const valorInventario = products.reduce((s, p) => s + p.salePrice * p.stock, 0);
+    // Los productos sin precio (Borrador) no suman al valor de inventario —
+    // no valen 0, simplemente todavía no se sabe cuánto valen.
+    const valorInventario = products.reduce((s, p) => s + (p.salePrice ?? 0) * p.stock, 0);
     const criticos = products.filter((p) => p.stock > 0 && p.stock <= 3).length;
     const agotados  = products.filter((p) => p.stock === 0).length;
-    return { total: products.length, valorInventario, criticos, agotados };
+    const borradores = products.filter((p) => p.status === 'DRAFT').length;
+    return { total: products.length, valorInventario, criticos, agotados, borradores };
   }, [products]);
 
   return (
@@ -502,11 +529,16 @@ export default function InventoryPage() {
       </div>
 
       {/* KPI cards */}
-      <div className="mb-5 grid grid-cols-4 gap-4">
+      <div className={cn('mb-5 grid gap-4', kpis.borradores > 0 ? 'grid-cols-5' : 'grid-cols-4')}>
         <InventoryKpi label="Productos"          value={kpis.total} />
         <InventoryKpi label="Valor de inventario" value={fmtGs(kpis.valorInventario)} />
         <InventoryKpi label="Stock crítico"       value={kpis.criticos} danger={kpis.criticos > 0} />
         <InventoryKpi label="Agotados"            value={kpis.agotados}  danger={kpis.agotados > 0} />
+        {/* Solo aparece si hay fichas a medio cargar — es una tarea pendiente,
+            no un dato permanente del inventario. */}
+        {kpis.borradores > 0 && (
+          <InventoryKpi label="En borrador" value={kpis.borradores} />
+        )}
       </div>
 
       {/* Tabs */}
@@ -557,6 +589,24 @@ export default function InventoryPage() {
               ))}
             </SelectContent>
           </Select>
+          <Select
+            value={statusFilter || null}
+            onValueChange={(v: string | null) =>
+              setStatusFilter(v === 'all' || v === null ? '' : (v as ProductStatus))
+            }
+          >
+            <SelectTrigger className="w-40 overflow-hidden">
+              <span className="min-w-0 flex-1 truncate text-left text-sm">
+                {statusFilter ? PRODUCT_STATUS_LABEL[statusFilter] : 'Todos los estados'}
+              </span>
+            </SelectTrigger>
+            <SelectContent className="w-auto min-w-[10rem]">
+              <SelectItem value="all">Todos los estados</SelectItem>
+              {(Object.keys(PRODUCT_STATUS_LABEL) as ProductStatus[]).map((s) => (
+                <SelectItem key={s} value={s}>{PRODUCT_STATUS_LABEL[s]}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
       </div>
 
@@ -600,7 +650,10 @@ export default function InventoryPage() {
                             <Package size={15} />
                           </span>
                           <div>
-                            <p className="font-semibold text-foreground">{product.name}</p>
+                            <div className="flex items-center gap-2">
+                              <p className="font-semibold text-foreground">{product.name}</p>
+                              <StatusBadge status={product.status} />
+                            </div>
                             {product.model && <p className="font-mono text-[11.5px] text-muted-foreground">{product.model}</p>}
                           </div>
                         </div>
@@ -608,8 +661,12 @@ export default function InventoryPage() {
                       <td className="px-4 py-3 text-muted-foreground">{product.category?.name ?? '—'}</td>
                       <td className="px-4 py-3 text-muted-foreground">{product.brand?.name ?? '—'}</td>
                       <td className="px-4 py-3 text-center"><StockBadge stock={product.stock} /></td>
-                      <td className="px-4 py-3 text-right font-mono text-[12.5px] text-muted-foreground">{fmtGs(product.costPrice)}</td>
-                      <td className="px-4 py-3 text-right font-mono text-[12.5px] font-semibold text-foreground">{fmtGs(product.salePrice)}</td>
+                      <td className="px-4 py-3 text-right font-mono text-[12.5px] text-muted-foreground">
+                        {product.costPrice == null ? <span className="text-warn">Pendiente</span> : fmtGs(product.costPrice)}
+                      </td>
+                      <td className="px-4 py-3 text-right font-mono text-[12.5px] font-semibold text-foreground">
+                        {product.salePrice == null ? <span className="font-normal text-warn">Pendiente</span> : fmtGs(product.salePrice)}
+                      </td>
                       <td className="px-4 py-3 text-right font-bold text-accent-on">
                         {m != null ? `${m.toFixed(1)}%` : '—'}
                       </td>

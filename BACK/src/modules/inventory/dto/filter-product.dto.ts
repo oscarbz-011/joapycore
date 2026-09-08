@@ -1,6 +1,13 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
-import { IsBoolean, IsOptional, IsString, IsUUID } from 'class-validator';
+import {
+  IsBoolean,
+  IsEnum,
+  IsOptional,
+  IsString,
+  IsUUID,
+} from 'class-validator';
+import { ProductStatus } from '@prisma/client';
 
 export class FilterProductDto {
   @ApiPropertyOptional()
@@ -19,11 +26,10 @@ export class FilterProductDto {
   @IsBoolean()
   isSerialized?: boolean;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ enum: ProductStatus })
   @IsOptional()
-  @Transform(({ value }) => value === 'true')
-  @IsBoolean()
-  isActive?: boolean;
+  @IsEnum(ProductStatus)
+  status?: ProductStatus;
 
   @ApiPropertyOptional()
   @IsOptional()

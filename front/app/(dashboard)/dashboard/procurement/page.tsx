@@ -17,7 +17,7 @@ import {
 import { inventoryApi, type Product } from '../../../../lib/api/inventory';
 import { warehousesApi } from '../../../../lib/api/warehouses';
 import { daysOverdue } from '../../../../lib/overdue';
-import { formatDatePY } from '../../../../lib/date';
+import { formatDatePY, todayISODate } from '../../../../lib/date';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -123,7 +123,7 @@ function CreateOrderModal({
   const queryClient = useQueryClient();
   const [supplierId, setSupplierId] = useState('');
   const [purchaseType, setPurchaseType] = useState<PurchaseType>('LOCAL');
-  const [orderDate, setOrderDate] = useState(new Date().toISOString().slice(0, 10));
+  const [orderDate, setOrderDate] = useState(todayISODate());
   const [expectedDate, setExpectedDate] = useState('');
   const [exchangeRate, setExchangeRate] = useState('');
   const [customsDuty, setCustomsDuty] = useState('');
@@ -794,7 +794,7 @@ export default function ProcurementPage() {
 
   const { data: products = [] } = useQuery({
     queryKey: ['inventory-products-active'],
-    queryFn: () => inventoryApi.listProducts({ isActive: true }),
+    queryFn: () => inventoryApi.listProducts({ status: 'ACTIVE' }),
   });
 
   const filtered = statusFilter ? orders.filter((o) => o.status === statusFilter) : orders;

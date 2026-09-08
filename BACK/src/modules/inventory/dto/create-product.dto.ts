@@ -56,15 +56,26 @@ export class CreateProductDto {
   @IsString()
   unit?: string;
 
-  @ApiProperty()
+  // Opcionales a propósito: la ficha del producto se puede crear incompleta
+  // (queda en DRAFT) para no frenar la carga de catálogo. Los precios se
+  // exigen recién al activarlo — ver ProductsService.assertActivatable.
+  @ApiPropertyOptional({
+    description:
+      'Omitir si todavía no se conoce — el producto queda en DRAFT hasta tenerlo',
+  })
+  @IsOptional()
   @IsNumber({ maxDecimalPlaces: 2 })
   @IsPositive()
-  costPrice: number;
+  costPrice?: number;
 
-  @ApiProperty()
+  @ApiPropertyOptional({
+    description:
+      'Omitir si todavía no se conoce — el producto queda en DRAFT hasta tenerlo',
+  })
+  @IsOptional()
   @IsNumber({ maxDecimalPlaces: 2 })
   @IsPositive()
-  salePrice: number;
+  salePrice?: number;
 
   @ApiPropertyOptional({
     description: 'Margen adicional sobre el margen global',

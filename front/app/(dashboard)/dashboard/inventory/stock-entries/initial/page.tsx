@@ -52,7 +52,7 @@ export default function InitialStockPage() {
 
   const { data: products = [] } = useQuery({
     queryKey: ['inventory-products-active'],
-    queryFn: () => inventoryApi.listProducts({ isActive: true }),
+    queryFn: () => inventoryApi.listProducts({ status: 'ACTIVE' }),
   });
 
   const { data: warehouses = [] } = useQuery({

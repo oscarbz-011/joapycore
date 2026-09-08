@@ -110,10 +110,13 @@ export class ReportsService {
         brand: p.brand?.name ?? '',
         isSerialized: p.isSerialized,
         stock,
-        costPrice: Number(p.costPrice),
-        salePrice: Number(p.salePrice),
-        stockValue: stock * Number(p.costPrice),
-        isActive: p.isActive,
+        // Un producto en DRAFT puede no tener precio todavía (null): para el
+        // reporte se computa como 0 para no romper los totales, pero no es lo
+        // mismo que un precio real de cero — por eso va el status al lado.
+        costPrice: Number(p.costPrice ?? 0),
+        salePrice: Number(p.salePrice ?? 0),
+        stockValue: stock * Number(p.costPrice ?? 0),
+        status: p.status,
       };
     });
 

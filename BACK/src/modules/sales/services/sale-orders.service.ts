@@ -6,7 +6,12 @@ import {
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
-import { MarkupType, Prisma, Product } from '@prisma/client';
+import {
+  MarkupType,
+  Prisma,
+  Product,
+  ProductStatus,
+} from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { ProductsRepository } from '../../inventory/repositories/products.repository';
 import { AdjustOrderDto } from '../dto/adjust-order.dto';
@@ -22,6 +27,13 @@ import { GuarantorsRepository } from '../repositories/guarantors.repository';
 import { SaleOrdersRepository } from '../repositories/sale-orders.repository';
 import { CreditEvaluationService } from './credit-evaluation.service';
 import type { AuditLogEvent } from '../../../audit/audit-log.event';
+
+const PRODUCT_STATUS_LABEL: Record<ProductStatus, string> = {
+  DRAFT: 'borrador',
+  ACTIVE: 'activo',
+  INACTIVE: 'descontinuado',
+  BLOCKED: 'bloqueado',
+};
 
 function toNum(value: unknown): number {
   if (typeof value === 'object' && value !== null && 'toNumber' in value) {
@@ -456,6 +468,7 @@ export class SaleOrdersService {
         tenantId,
         productIds,
       );
+      this.assertSellable(products);
       productMap = new Map(products.map((p) => [p.id, p]));
     }
 
@@ -567,6 +580,25 @@ export class SaleOrdersService {
   // atomic request) can share the same item/stock/serial mechanics without
   // duplicating them. A new short-path channel composes these the same way
   // createPosSale() does — it should never need a new branch inside create().
+
+  // Solo se vende lo que está ACTIVE. DRAFT = ficha incompleta (sin precio o
+  // sin categoría), INACTIVE = descontinuado, BLOCKED = restringido por
+  // calidad/auditoría — ninguno de los tres puede entrar en una venta nueva,
+  // pero los tres siguen existiendo en el historial de ventas viejas (por eso
+  // se valida acá, sobre los ítems entrantes, y no filtrando el catálogo).
+  private assertSellable(products: Product[]) {
+    const notSellable = products.filter(
+      (p) => p.status !== ProductStatus.ACTIVE,
+    );
+    if (notSellable.length) {
+      const detail = notSellable
+        .map((p) => `${p.name} (${PRODUCT_STATUS_LABEL[p.status]})`)
+        .join(', ');
+      throw new UnprocessableEntityException(
+        `No se puede vender un producto que no está activo: ${detail}`,
+      );
+    }
+  }
 
   private computeTotals(dto: {
     items: Array<{ quantity: number; unitPrice: number }>;
@@ -847,6 +879,7 @@ export class SaleOrdersService {
       tenantId,
       productIds,
     );
+    this.assertSellable(products);
     const productMap = new Map(products.map((p) => [p.id, p]));
 
     // Validate free-text items have a description
@@ -1290,6 +1323,7 @@ export class SaleOrdersService {
       tenantId,
       productIds,
     );
+    this.assertSellable(products);
     const productMap = new Map(products.map((p) => [p.id, p]));
 
     const { subtotal, total } = this.computeTotals(dto);

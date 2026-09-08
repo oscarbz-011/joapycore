@@ -258,7 +258,7 @@ function SaleScreen({ session }: { session: PosSession }) {
   const queryClient = useQueryClient();
   const { data: products = [] } = useQuery({
     queryKey: ['products-with-stock'],
-    queryFn: () => inventoryApi.listProductsWithStock({ isActive: true }),
+    queryFn: () => inventoryApi.listProductsWithStock({ status: 'ACTIVE' }),
   });
   const { data: customers = [] } = useQuery({
     queryKey: ['customers'],
@@ -368,7 +368,7 @@ function SaleScreen({ session }: { session: PosSession }) {
               onChange={(_, product) => product && addProduct(product)}
               getKey={(p) => p.id}
               getLabel={(p) => p.name}
-              getDescription={(p) => `${money(p.salePrice)} · Stock: ${p.stock}`}
+              getDescription={(p) => `${money(p.salePrice ?? 0)} · Stock: ${p.stock}`}
               filterFn={(p, q) =>
                 p.name.toLowerCase().includes(q.toLowerCase()) ||
                 (p.model ?? '').toLowerCase().includes(q.toLowerCase())
