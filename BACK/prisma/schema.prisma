@@ -446,6 +446,7 @@ model Tenant {
   productBatches         ProductBatch[]
   productComponents      ProductComponent[]
   productionOrders       ProductionOrder[]
+  supplierCatalogItems   SupplierCatalogItem[]
   stockMovements         StockMovement[]
   posTerminals           PosTerminal[]
   posSessions            PosSession[]
@@ -806,6 +807,7 @@ model Product {
   usedIn               ProductComponent[] @relation("ProductComponentOf")
   productionOrders     ProductionOrder[]
   productionConsumed   ProductionOrderItem[]
+  supplierCatalogItems SupplierCatalogItem[]
 
   @@map("products")
 }
@@ -885,6 +887,42 @@ model ProductionOrderItem {
 
   @@unique([productionOrderId, componentId])
   @@map("production_order_items")
+}
+
+// Catálogo tal como lo manda el proveedor, ANTES de mapearlo al catálogo
+// interno. Es una tabla aparte de ProductSupplier a propósito: aquella exige
+// `productId` y es única por par producto-proveedor, así que no puede
+// representar un ítem todavía sin mapear — y ese es justamente el punto de
+// importar la lista de precios sin tener que crear productos primero.
+// Ver plan-modulo-compras.md, Fase 1.
+model SupplierCatalogItem {
+  id          String  @id @default(uuid())
+  tenantId    String  @map("tenant_id")
+  supplierId  String  @map("supplier_id")
+  // Código con el que el proveedor identifica el ítem — es la clave natural
+  // de la importación (upsert por proveedor + código).
+  supplierSku String  @map("supplier_sku")
+  description String
+  price       Decimal? @db.Decimal(12, 2)
+  // Unidad en la que vende el proveedor y cuántas unidades internas equivale
+  // (ej. vende "caja x12" y el factor 12 lo lleva a unidades).
+  supplierUnit     String?  @map("supplier_unit")
+  conversionFactor Decimal? @map("conversion_factor") @db.Decimal(12, 4)
+  validFrom        DateTime? @map("valid_from")
+  validTo          DateTime? @map("valid_to")
+  // Nullable a propósito: el ítem vive suelto hasta que alguien lo vincula a
+  // un producto interno (o hasta que la orden de compra lo fuerza).
+  productId   String?  @map("product_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  tenant   Tenant   @relation(fields: [tenantId], references: [id])
+  supplier Supplier @relation(fields: [supplierId], references: [id])
+  product  Product? @relation(fields: [productId], references: [id])
+
+  @@unique([supplierId, supplierSku])
+  @@index([tenantId, supplierId])
+  @@map("supplier_catalog_items")
 }
 
 model ProductSupplier {
@@ -1000,6 +1038,7 @@ model Supplier {
   tenant           Tenant            @relation(fields: [tenantId], references: [id])
   purchaseOrders   PurchaseOrder[]
   productSuppliers ProductSupplier[]
+  catalogItems     SupplierCatalogItem[]
   accountsPayable  AccountsPayable[]
 
   @@map("suppliers")
