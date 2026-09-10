@@ -9,11 +9,13 @@ import {
   MODULE_CATALOG,
 } from '../../common/constants/modules.constant';
 import { TenantModulesRepository } from '../repositories/tenant-modules.repository';
+import { TenantModulesCache } from './tenant-modules.cache';
 
 @Injectable()
 export class TenantModulesService {
   constructor(
     private readonly tenantModulesRepository: TenantModulesRepository,
+    private readonly tenantModulesCache: TenantModulesCache,
     private readonly eventEmitter: EventEmitter2,
   ) {}
 
@@ -67,6 +69,9 @@ export class TenantModulesService {
 
     await this.tenantModulesRepository.backfillMissing(tenantId);
     await this.tenantModulesRepository.setActive(tenantId, moduleName, active);
+    // Sin esto el cambio tardaría hasta el TTL en verse; con esto el próximo
+    // request ya lee el estado nuevo.
+    this.tenantModulesCache.invalidate(tenantId);
 
     if (active && !wasActive) {
       this.eventEmitter.emit('tenant.module.activated', {

@@ -22,6 +22,7 @@ describe('TenantModulesService', () => {
     setActive: jest.Mock;
     backfillMissing: jest.Mock;
   };
+  let cache: { invalidate: jest.Mock; getActiveModules: jest.Mock };
   let eventEmitter: { emit: jest.Mock };
 
   beforeEach(() => {
@@ -30,8 +31,13 @@ describe('TenantModulesService', () => {
       setActive: jest.fn(),
       backfillMissing: jest.fn().mockResolvedValue(undefined),
     };
+    cache = { invalidate: jest.fn(), getActiveModules: jest.fn() };
     eventEmitter = { emit: jest.fn() };
-    service = new TenantModulesService(repo as any, eventEmitter as any);
+    service = new TenantModulesService(
+      repo as any,
+      cache as any,
+      eventEmitter as any,
+    );
   });
 
   // ── list ───────────────────────────────────────────────────────────────────
@@ -128,6 +134,24 @@ describe('TenantModulesService', () => {
         },
       );
     });
+
+    // Sin esto, activar un módulo no tenía efecto hasta re-loguearse: el
+    // guard leía `activeModules` del JWT, que es una foto del login.
+    it.each([true, false])(
+      'invalidates the modules cache when setting active=%s',
+      async (active) => {
+        const allModules = [
+          makeModule('inventory', true),
+          makeModule('documents', !active),
+        ];
+        repo.findAllForTenant.mockResolvedValue(allModules);
+        repo.setActive.mockResolvedValue(1);
+
+        await service.setActive('tenant-1', 'documents', active);
+
+        expect(cache.invalidate).toHaveBeenCalledWith('tenant-1');
+      },
+    );
 
     it('does not re-emit tenant.module.activated when the module was already active', async () => {
       const allModules = [

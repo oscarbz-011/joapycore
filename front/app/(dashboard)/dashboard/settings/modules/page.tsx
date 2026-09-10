@@ -18,6 +18,7 @@ import {
   FolderKanban,
   Boxes,
   FolderOpen,
+  Hammer,
   Lock,
   LayoutGrid,
   List,
@@ -86,6 +87,7 @@ const CATALOG: Record<string, CatalogEntry> = {
   projects:    { displayName: 'Proyectos',       icon: FolderKanban,  category: 'Proyectos',              description: 'Gestión de proyectos, tareas, timesheet y recursos',       dependencies: [],                                isStable: false },
   assets:      { displayName: 'Activos Fijos',   icon: Boxes,         category: 'Activos Fijos',          description: 'Registro, asignación y mantenimiento de activos empresariales', dependencies: [],                            isStable: false },
   documents:   { displayName: 'Documentos',      icon: FolderOpen,    category: 'Documentos',             description: 'Repositorio de documentos, políticas y contratos',         dependencies: [],                                isStable: false },
+  production:  { displayName: 'Producción',      icon: Hammer,        category: 'Producción',             description: 'Recetas de materiales y órdenes de producción',            dependencies: ['inventory'],                     isStable: false },
 };
 
 // ── Próximamente — módulos que todavía no existen, agrupados en la misma
@@ -123,7 +125,7 @@ const PLANNED: PlannedEntry[] = [
 
 const CATEGORY_ORDER = [
   'Inventario y Productos', 'Ventas y CRM', 'Compras y Proveedores', 'Finanzas y Contabilidad',
-  'Logística', 'Recursos Humanos', 'Punto de Venta', 'Proyectos', 'Activos Fijos', 'Documentos',
+  'Producción', 'Logística', 'Recursos Humanos', 'Punto de Venta', 'Proyectos', 'Activos Fijos', 'Documentos',
   'Herramientas y Sistema', 'Integraciones',
 ];
 

@@ -4,7 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
-  LayoutDashboard, AppWindow, Package, ShoppingCart, Truck, Landmark,
+  LayoutDashboard, AppWindow, Package, ShoppingCart, Truck, Landmark, Hammer,
   Route, Users, Network, FolderKanban, Monitor, Boxes, FolderOpen,
   Headphones, Crown, Building2, Settings, ChevronDown,
 } from 'lucide-react';
@@ -12,6 +12,7 @@ import { useQuery } from '@tanstack/react-query';
 import { cn } from '@/lib/utils';
 import { useAuth } from '../../../../lib/auth-context';
 import { alertsApi } from '../../../../lib/api/alerts';
+import { tenantsApi } from '../../../../lib/api/tenants';
 import { usePendingNotifications } from '../../../../lib/use-pending-notifications';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -84,6 +85,15 @@ const STATIC_GROUPS: SidebarGroup[] = [
       { label: 'Comparar precios',     href: '/dashboard/procurement/compare-prices', permission: 'procurement:read' },
       { label: 'Proveedores',          href: '/dashboard/procurement/suppliers', permission: 'suppliers:read' },
       { label: 'Devolución de compra', href: '/dashboard/procurement', stub: true },
+    ],
+  },
+  {
+    // Solo aparece para tenants con el módulo activo — rubros que fabrican lo
+    // que venden (carpintería, taller). Ver ProductKind.
+    id: 'production', label: 'Producción', icon: Hammer,
+    modules: ['production'], anyPermission: ['production:orders:read', 'production:recipes:read'],
+    items: [
+      { label: 'Órdenes de producción', href: '/dashboard/production', permission: 'production:orders:read' },
     ],
   },
   {
@@ -332,9 +342,23 @@ export function Sidebar() {
   const pathname    = usePathname();
   const { jwtPayload } = useAuth();
 
-  const activeModules = jwtPayload?.activeModules ?? [];
   const permissions   = jwtPayload?.permissions   ?? [];
   const tenantName    = jwtPayload?.tenantName    ?? '';
+
+  // Los módulos se leen de la API, no del JWT: `activeModules` en el token es
+  // una foto del login, así que activar un módulo no se veía en el menú hasta
+  // volver a loguearse. El JWT queda como initialData para que el menú se
+  // pinte completo en el primer render, sin parpadeo mientras carga la query.
+  // La pantalla de Módulos invalida ['tenant-modules'] al togglear.
+  const { data: tenantModules } = useQuery({
+    queryKey: ['tenant-modules'],
+    queryFn: tenantsApi.listModules,
+    enabled: !!jwtPayload,
+    staleTime: 60_000,
+  });
+  const activeModules = tenantModules
+    ? tenantModules.filter((m) => m.active).map((m) => m.moduleName)
+    : (jwtPayload?.activeModules ?? []);
 
   const { data: alertConfigs = [] } = useQuery({
     queryKey: ['alert-configs'],

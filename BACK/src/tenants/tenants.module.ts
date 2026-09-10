@@ -9,6 +9,7 @@ import { TenantsRepository } from './repositories/tenants.repository';
 import { CreditConfigService } from './services/credit-config.service';
 import { PricingConfigService } from './services/pricing-config.service';
 import { SalesConfigService } from './services/sales-config.service';
+import { TenantModulesCache } from './services/tenant-modules.cache';
 import { TenantModulesService } from './services/tenant-modules.service';
 import { TenantsService } from './services/tenants.service';
 
@@ -23,6 +24,7 @@ import { TenantsService } from './services/tenants.service';
     SalesConfigRepository,
     TenantsService,
     TenantModulesService,
+    TenantModulesCache,
     PricingConfigService,
     CreditConfigService,
     SalesConfigService,
@@ -35,6 +37,7 @@ import { TenantsService } from './services/tenants.service';
     SalesConfigRepository,
     TenantsService,
     TenantModulesService,
+    TenantModulesCache,
     PricingConfigService,
     CreditConfigService,
     SalesConfigService,

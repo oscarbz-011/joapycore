@@ -8,12 +8,16 @@ import { Reflector } from '@nestjs/core';
 import { Request } from 'express';
 import { REQUIRED_MODULE_KEY } from '../decorators/required-module.decorator';
 import { JwtPayload } from '../types/jwt-payload.interface';
+import { TenantModulesCache } from '../../tenants/services/tenant-modules.cache';
 
 @Injectable()
 export class TenantModuleGuard implements CanActivate {
-  constructor(private readonly reflector: Reflector) {}
+  constructor(
+    private readonly reflector: Reflector,
+    private readonly tenantModulesCache: TenantModulesCache,
+  ) {}
 
-  canActivate(context: ExecutionContext): boolean {
+  async canActivate(context: ExecutionContext): Promise<boolean> {
     const requiredModule = this.reflector.getAllAndOverride<string>(
       REQUIRED_MODULE_KEY,
       [context.getHandler(), context.getClass()],
@@ -26,9 +30,20 @@ export class TenantModuleGuard implements CanActivate {
     const request = context
       .switchToHttp()
       .getRequest<Request & { user?: JwtPayload }>();
-    const user = request.user;
+    const tenantId = request.user?.tenantId;
 
-    if (!user?.activeModules?.includes(requiredModule)) {
+    if (!tenantId) {
+      throw new ForbiddenException(
+        `Module "${requiredModule}" is not active for this tenant`,
+      );
+    }
+
+    // Estado real, no el `activeModules` del JWT: ese es una foto del login y
+    // dejaba que activar un módulo no tuviera efecto hasta re-loguearse.
+    const activeModules =
+      await this.tenantModulesCache.getActiveModules(tenantId);
+
+    if (!activeModules.includes(requiredModule)) {
       throw new ForbiddenException(
         `Module "${requiredModule}" is not active for this tenant`,
       );
