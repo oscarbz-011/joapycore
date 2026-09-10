@@ -9,7 +9,7 @@ import {
   IsUUID,
   Min,
 } from 'class-validator';
-import { MarkupType, ProductStatus } from '@prisma/client';
+import { MarkupType, ProductKind, ProductStatus } from '@prisma/client';
 
 export class UpdateProductDto {
   @ApiPropertyOptional()
@@ -60,6 +60,24 @@ export class UpdateProductDto {
   @IsOptional()
   @IsEnum(ProductStatus)
   status?: ProductStatus;
+
+  // Cambiar el tipo NO recalcula isPurchasable/isSellable: si el usuario ya
+  // los ajustó a mano, pisarlos sería perder su decisión. Para volver a los
+  // defaults del tipo se mandan los flags explícitos.
+  @ApiPropertyOptional({ enum: ProductKind })
+  @IsOptional()
+  @IsEnum(ProductKind)
+  kind?: ProductKind;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsBoolean()
+  isPurchasable?: boolean;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsBoolean()
+  isSellable?: boolean;
 
   @ApiPropertyOptional({
     description:

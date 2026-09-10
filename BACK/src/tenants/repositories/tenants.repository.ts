@@ -1,11 +1,11 @@
 import { Injectable } from '@nestjs/common';
-import { EmployeeCount, Prisma } from '@prisma/client';
+import { EmployeeCount, Industry, Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { PrismaClientOrTx } from '../../prisma/types';
 
 interface CreateTenantData {
   name: string;
-  industry?: string | null;
+  industry?: Industry | null;
   plan?: string;
   employeeCount?: EmployeeCount;
 }

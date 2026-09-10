@@ -27,6 +27,24 @@ export const PRODUCT_STATUS_LABEL: Record<ProductStatus, string> = {
   BLOCKED: 'Bloqueado',
 };
 
+// De dónde sale el stock del producto. El proyecto es multi-rubro: una
+// ferretería revende lo que compra, una carpintería fabrica lo que vende y
+// solo compra materia prima. Es por producto, no por rubro — el rubro del
+// tenant solo define el default al crear. Ver ARCHITECTURE.md v0.52.
+export type ProductKind = 'RESALE' | 'RAW_MATERIAL' | 'MANUFACTURED';
+
+export const PRODUCT_KIND_LABEL: Record<ProductKind, string> = {
+  RESALE: 'Reventa',
+  RAW_MATERIAL: 'Materia prima',
+  MANUFACTURED: 'Fabricado',
+};
+
+export const PRODUCT_KIND_HINT: Record<ProductKind, string> = {
+  RESALE: 'Se compra terminado a un proveedor y se vende tal cual.',
+  RAW_MATERIAL: 'Se compra para consumir en producción — no se vende en el mostrador.',
+  MANUFACTURED: 'Se produce internamente a partir de una receta — no se compra a proveedores.',
+};
+
 export interface Product {
   id: string;
   name: string;
@@ -45,6 +63,9 @@ export interface Product {
   additionalMarkup: number | null;
   additionalMarkupType: MarkupType | null;
   status: ProductStatus;
+  kind: ProductKind;
+  isPurchasable: boolean;
+  isSellable: boolean;
   deletedAt: string | null;
   category: { id: string; name: string } | null;
   brand: { id: string; name: string } | null;
@@ -66,6 +87,12 @@ export interface ProductFilters {
   brandId?: string;
   isSerialized?: boolean;
   status?: ProductStatus;
+  kind?: ProductKind;
+  // Los usan los selectores de producto de cada flujo para no ofrecer lo que
+  // el backend después va a rechazar (Compras: isPurchasable, Ventas/POS:
+  // isSellable).
+  isPurchasable?: boolean;
+  isSellable?: boolean;
 }
 
 export interface CreateProductPayload {
@@ -82,6 +109,10 @@ export interface CreateProductPayload {
   salePrice?: number;
   additionalMarkup?: number;
   additionalMarkupType?: MarkupType;
+  // Si se omite, el backend lo deriva del rubro del tenant.
+  kind?: ProductKind;
+  isPurchasable?: boolean;
+  isSellable?: boolean;
 }
 
 export type UpdateProductPayload =
@@ -93,6 +124,9 @@ export type UpdateProductPayload =
     additionalMarkup?: number | null;
     additionalMarkupType?: MarkupType | null;
     status?: ProductStatus;
+    kind?: ProductKind;
+    isPurchasable?: boolean;
+    isSellable?: boolean;
   };
 
 export type MovementReason =

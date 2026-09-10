@@ -13,12 +13,16 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
 
+// Los valores son el enum Industry del backend, no texto libre: el rubro
+// define las categorías sembradas, los módulos activados y el tipo de producto
+// por defecto (una carpintería fabrica, una ferretería revende).
 const INDUSTRIES = [
-  { value: 'electrodomesticos', label: 'Electrodomésticos' },
-  { value: 'ferreteria',        label: 'Ferretería' },
-  { value: 'supermercado',      label: 'Supermercado / Almacén' },
-  { value: 'servicios',         label: 'Servicios' },
-  { value: 'otro',              label: 'Otro' },
+  { value: 'ELECTRODOMESTICOS', label: 'Electrodomésticos' },
+  { value: 'FERRETERIA',        label: 'Ferretería' },
+  { value: 'SUPERMERCADO',      label: 'Supermercado / Almacén' },
+  { value: 'MUEBLERIA',         label: 'Mueblería / Carpintería' },
+  { value: 'SERVICIOS',         label: 'Servicios' },
+  { value: 'OTRO',              label: 'Otro' },
 ] as const;
 
 const EMPLOYEE_RANGES = [

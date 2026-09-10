@@ -32,7 +32,7 @@ export default function AdjustOrderPage() {
   });
   const { data: products = [] } = useQuery({
     queryKey: ['inventory-products-active'],
-    queryFn: () => inventoryApi.listProducts({ status: 'ACTIVE' }),
+    queryFn: () => inventoryApi.listProducts({ status: 'ACTIVE', isSellable: true }),
   });
   const { data: creditConfig } = useQuery({ queryKey: ['credit-config'], queryFn: settingsApi.getCredit });
   const activePlans = creditConfig?.isEnabled ? (creditConfig.plans ?? []).filter((p) => p.isActive) : [];

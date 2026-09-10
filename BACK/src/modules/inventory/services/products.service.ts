@@ -12,6 +12,10 @@ import {
   StockMovementType,
 } from '@prisma/client';
 import {
+  KIND_DEFAULT_FLAGS,
+  defaultKindForIndustry,
+} from '../constants/product-kind.constant';
+import {
   ProductsRepository,
   ProductFilters,
 } from '../repositories/products.repository';
@@ -102,7 +106,20 @@ export class ProductsService {
       unit: dto.unit ?? 'unidad',
     });
 
+    // El tipo se pide solo si el caller lo manda; si no, lo define el rubro
+    // del tenant (una carpintería fabrica lo que vende, una ferretería
+    // revende). Los flags de flujo salen del tipo salvo que vengan explícitos.
+    const kind =
+      dto.kind ??
+      defaultKindForIndustry(
+        await this.productsRepository.findTenantIndustry(tenantId),
+      );
+    const flags = KIND_DEFAULT_FLAGS[kind];
+
     return this.productsRepository.create(tenantId, {
+      kind,
+      isPurchasable: dto.isPurchasable ?? flags.isPurchasable,
+      isSellable: dto.isSellable ?? flags.isSellable,
       categoryId: dto.categoryId,
       brandId: dto.brandId,
       model: dto.model,

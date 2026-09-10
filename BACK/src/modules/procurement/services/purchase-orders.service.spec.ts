@@ -50,7 +50,7 @@ describe('PurchaseOrdersService', () => {
       findProductStatuses: jest
         .fn()
         .mockResolvedValue([
-          { id: 'prod-1', name: 'Heladera Samsung', status: 'ACTIVE' },
+          { id: 'prod-1', name: 'Heladera Samsung', status: 'ACTIVE', isPurchasable: true },
         ]),
     };
     eventEmitter = { emit: jest.fn() };
@@ -117,7 +117,7 @@ describe('PurchaseOrdersService', () => {
       'refuses to buy a product in %s',
       async (status) => {
         purchaseOrdersRepository.findProductStatuses.mockResolvedValue([
-          { id: 'prod-1', name: 'Heladera Samsung', status },
+          { id: 'prod-1', name: 'Heladera Samsung', status, isPurchasable: true },
         ]);
 
         await expect(
@@ -130,12 +130,49 @@ describe('PurchaseOrdersService', () => {
 
     it('names the product and its state in the error', async () => {
       purchaseOrdersRepository.findProductStatuses.mockResolvedValue([
-        { id: 'prod-1', name: 'Heladera Samsung', status: 'DRAFT' },
+        {
+          id: 'prod-1',
+          name: 'Heladera Samsung',
+          status: 'DRAFT',
+          isPurchasable: true,
+        },
       ]);
 
       await expect(service.create('tenant-1', 'user-1', dto)).rejects.toThrow(
         /Heladera Samsung \(borrador\)/,
       );
+    });
+
+    it('refuses to buy a manufactured product — el mueble sale de producción, no de un proveedor', async () => {
+      purchaseOrdersRepository.findProductStatuses.mockResolvedValue([
+        {
+          id: 'prod-1',
+          name: 'Mesa de comedor 6 sillas',
+          status: 'ACTIVE',
+          isPurchasable: false,
+        },
+      ]);
+
+      await expect(service.create('tenant-1', 'user-1', dto)).rejects.toThrow(
+        /no se compra a proveedores, se fabrica: Mesa de comedor 6 sillas/,
+      );
+
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+    });
+
+    it('buys a raw material — la materia prima sí entra por compra', async () => {
+      purchaseOrdersRepository.findProductStatuses.mockResolvedValue([
+        {
+          id: 'prod-1',
+          name: 'Tablero MDF 18mm',
+          status: 'ACTIVE',
+          isPurchasable: true,
+        },
+      ]);
+
+      await service.create('tenant-1', 'user-1', dto);
+
+      expect(prisma.$transaction).toHaveBeenCalled();
     });
   });
 

@@ -38,6 +38,7 @@ describe('ProductsService', () => {
     softDelete: jest.Mock;
     getStock: jest.Mock;
     getSerializedStock: jest.Mock;
+    findTenantIndustry: jest.Mock;
   };
   let productUnitsRepository: {
     createMany: jest.Mock;
@@ -67,6 +68,8 @@ describe('ProductsService', () => {
       softDelete: jest.fn(),
       getStock: jest.fn().mockResolvedValue(10),
       getSerializedStock: jest.fn().mockResolvedValue(3),
+      // Rubro del tenant — define el ProductKind por defecto al crear.
+      findTenantIndustry: jest.fn().mockResolvedValue('ELECTRODOMESTICOS'),
     };
     productUnitsRepository = {
       createMany: jest.fn(),
@@ -205,6 +208,92 @@ describe('ProductsService', () => {
       expect(productsRepository.create).toHaveBeenCalledWith(
         'tenant-1',
         expect.objectContaining({ unit: 'caja' }),
+      );
+    });
+
+    // ── Multi-rubro: tipo de producto ────────────────────────────────────
+
+    it('defaults to RESALE for a tenant that resells (ferretería)', async () => {
+      productsRepository.findTenantIndustry.mockResolvedValue('FERRETERIA');
+      productsRepository.create.mockResolvedValue(makeProduct());
+
+      await service.create('tenant-1', baseDto);
+
+      expect(productsRepository.create).toHaveBeenCalledWith(
+        'tenant-1',
+        expect.objectContaining({
+          kind: 'RESALE',
+          isPurchasable: true,
+          isSellable: true,
+        }),
+      );
+    });
+
+    it('defaults to MANUFACTURED for a carpintería — lo que vende, lo fabrica', async () => {
+      productsRepository.findTenantIndustry.mockResolvedValue('MUEBLERIA');
+      productsRepository.create.mockResolvedValue(makeProduct());
+
+      await service.create('tenant-1', baseDto);
+
+      expect(productsRepository.create).toHaveBeenCalledWith(
+        'tenant-1',
+        expect.objectContaining({
+          kind: 'MANUFACTURED',
+          // No se le compra a un proveedor: sale de una orden de producción.
+          isPurchasable: false,
+          isSellable: true,
+        }),
+      );
+    });
+
+    it('falls back to RESALE when the tenant has no rubro', async () => {
+      productsRepository.findTenantIndustry.mockResolvedValue(null);
+      productsRepository.create.mockResolvedValue(makeProduct());
+
+      await service.create('tenant-1', baseDto);
+
+      expect(productsRepository.create).toHaveBeenCalledWith(
+        'tenant-1',
+        expect.objectContaining({ kind: 'RESALE' }),
+      );
+    });
+
+    it('an explicit kind wins over the rubro default', async () => {
+      productsRepository.findTenantIndustry.mockResolvedValue('MUEBLERIA');
+      productsRepository.create.mockResolvedValue(makeProduct());
+
+      await service.create('tenant-1', { ...baseDto, kind: 'RAW_MATERIAL' });
+
+      expect(productsRepository.create).toHaveBeenCalledWith(
+        'tenant-1',
+        expect.objectContaining({
+          kind: 'RAW_MATERIAL',
+          // La madera se compra pero no se vende en el mostrador.
+          isPurchasable: true,
+          isSellable: false,
+        }),
+      );
+      // No hace falta consultar el rubro si el caller ya definió el tipo.
+      expect(productsRepository.findTenantIndustry).not.toHaveBeenCalled();
+    });
+
+    it('explicit flags win over the kind defaults — el tornillo que además se vende suelto', async () => {
+      productsRepository.findTenantIndustry.mockResolvedValue('MUEBLERIA');
+      productsRepository.create.mockResolvedValue(makeProduct());
+
+      await service.create('tenant-1', {
+        ...baseDto,
+        kind: 'RAW_MATERIAL',
+        isSellable: true,
+      });
+
+      expect(productsRepository.create).toHaveBeenCalledWith(
+        'tenant-1',
+        expect.objectContaining({
+          kind: 'RAW_MATERIAL',
+          isPurchasable: true,
+          isSellable: true,
+        }),
       );
     });
 

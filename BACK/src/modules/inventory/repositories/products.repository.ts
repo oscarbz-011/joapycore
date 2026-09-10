@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import {
   MovementReason,
   Prisma,
+  ProductKind,
   ProductStatus,
   StockMovementType,
 } from '@prisma/client';
@@ -13,6 +14,9 @@ export interface ProductFilters {
   brandId?: string;
   isSerialized?: boolean;
   status?: ProductStatus;
+  kind?: ProductKind;
+  isPurchasable?: boolean;
+  isSellable?: boolean;
   search?: string;
 }
 
@@ -30,6 +34,13 @@ export class ProductsRepository {
         isSerialized: filters.isSerialized,
       }),
       ...(filters.status && { status: filters.status }),
+      ...(filters.kind && { kind: filters.kind }),
+      ...(filters.isPurchasable !== undefined && {
+        isPurchasable: filters.isPurchasable,
+      }),
+      ...(filters.isSellable !== undefined && {
+        isSellable: filters.isSellable,
+      }),
       ...(filters.search && {
         OR: [
           { name: { contains: filters.search, mode: 'insensitive' } },
@@ -56,6 +67,17 @@ export class ProductsRepository {
     return this.prisma.product.findMany({
       where: { tenantId, id: { in: ids }, deletedAt: null },
     });
+  }
+
+  // El rubro del tenant define con qué ProductKind nace un producto cuando el
+  // caller no lo especifica (ver defaultKindForIndustry). Se consulta desde
+  // acá para que la llamada cruda a Prisma quede en el repositorio.
+  async findTenantIndustry(tenantId: string) {
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { id: tenantId },
+      select: { industry: true },
+    });
+    return tenant?.industry ?? null;
   }
 
   create(

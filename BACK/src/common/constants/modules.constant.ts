@@ -1,3 +1,5 @@
+import { Industry } from '@prisma/client';
+
 export interface ModuleDefinition {
   displayName: string;
   description: string;
@@ -107,6 +109,16 @@ export const MODULE_CATALOG: Record<string, ModuleDefinition> = {
     dependencies: [],
     isStable: false,
   },
+  // Para los rubros que fabrican lo que venden (carpintería, taller): recetas
+  // de materiales y órdenes de producción que consumen materia prima y dan de
+  // alta el producto terminado. Ver ProductKind.
+  production: {
+    displayName: 'Producción',
+    description: 'Recetas de materiales y órdenes de producción',
+    icon: 'Hammer',
+    dependencies: ['inventory'],
+    isStable: false,
+  },
 } as const;
 
 export const ALL_TENANT_MODULES = Object.keys(MODULE_CATALOG);
@@ -116,8 +128,10 @@ export const ALL_TENANT_MODULES = Object.keys(MODULE_CATALOG);
  * Solo se usan como template de onboarding — el tenant puede
  * activar/desactivar cualquier módulo del catálogo después.
  */
-export const MODULE_TEMPLATES: Record<string, string[]> = {
-  electrodomesticos: [
+// Módulos que se activan al registrar un tenant, según su rubro. La clave pasó
+// de texto libre al enum Industry junto con Tenant.industry.
+export const MODULE_TEMPLATES: Record<Industry, string[]> = {
+  ELECTRODOMESTICOS: [
     'inventory',
     'sales',
     'billing',
@@ -127,8 +141,21 @@ export const MODULE_TEMPLATES: Record<string, string[]> = {
     'collections',
     'hr',
   ],
-  ferreteria: ['inventory', 'sales', 'billing', 'payments', 'procurement'],
-  supermercado: ['inventory', 'sales', 'billing', 'payments', 'pos'],
-  servicios: ['sales', 'billing', 'payments', 'hr'],
-  default: ['inventory', 'sales', 'billing', 'payments'],
+  FERRETERIA: ['inventory', 'sales', 'billing', 'payments', 'procurement'],
+  SUPERMERCADO: ['inventory', 'sales', 'billing', 'payments', 'pos'],
+  SERVICIOS: ['sales', 'billing', 'payments', 'hr'],
+  // Una carpintería fabrica lo que vende: necesita producción además de
+  // compras (para la materia prima). Ver ProductKind.
+  MUEBLERIA: [
+    'inventory',
+    'sales',
+    'billing',
+    'payments',
+    'procurement',
+    'production',
+  ],
+  OTRO: ['inventory', 'sales', 'billing', 'payments'],
 };
+
+// Fallback cuando el tenant no eligió rubro (industry null).
+export const FALLBACK_MODULES = MODULE_TEMPLATES.OTRO;

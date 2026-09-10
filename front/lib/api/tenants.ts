@@ -5,10 +5,21 @@ export interface ActividadEconomica {
   descripcion: string;
 }
 
+// Rubro del tenant — lista cerrada (enum Industry del backend). Define las
+// categorías sembradas al registrarse, los módulos activados y el tipo de
+// producto por defecto. Ver ARCHITECTURE.md v0.52.
+export type Industry =
+  | 'ELECTRODOMESTICOS'
+  | 'FERRETERIA'
+  | 'SUPERMERCADO'
+  | 'MUEBLERIA'
+  | 'SERVICIOS'
+  | 'OTRO';
+
 export interface TenantResponse {
   id: string;
   name: string;
-  industry: string | null;
+  industry: Industry | null;
   plan: string;
   status: string;
   razonSocial: string | null;

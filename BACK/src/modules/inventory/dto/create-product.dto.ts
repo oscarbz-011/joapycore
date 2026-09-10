@@ -10,7 +10,7 @@ import {
   Min,
   MinLength,
 } from 'class-validator';
-import { MarkupType } from '@prisma/client';
+import { MarkupType, ProductKind } from '@prisma/client';
 
 export class CreateProductDto {
   @ApiPropertyOptional()
@@ -55,6 +55,35 @@ export class CreateProductDto {
   @IsOptional()
   @IsString()
   unit?: string;
+
+  // Si se omite, se deriva del rubro del tenant (una mueblería crea productos
+  // fabricados por defecto, el resto de reventa) — ver
+  // defaultKindForIndustry().
+  @ApiPropertyOptional({
+    enum: ProductKind,
+    description:
+      'Naturaleza del producto. Si se omite, se deriva del rubro del tenant',
+  })
+  @IsOptional()
+  @IsEnum(ProductKind)
+  kind?: ProductKind;
+
+  // Si se omiten, se derivan del `kind` (ver KIND_DEFAULT_FLAGS). Se mandan
+  // explícitos solo para los casos mixtos: materia prima que además se vende
+  // suelta, o producto fabricado que a veces también se compra hecho.
+  @ApiPropertyOptional({
+    description: 'Participa en órdenes de compra. Default según el tipo',
+  })
+  @IsOptional()
+  @IsBoolean()
+  isPurchasable?: boolean;
+
+  @ApiPropertyOptional({
+    description: 'Participa en ventas. Default según el tipo',
+  })
+  @IsOptional()
+  @IsBoolean()
+  isSellable?: boolean;
 
   // Opcionales a propósito: la ficha del producto se puede crear incompleta
   // (queda en DRAFT) para no frenar la carga de catálogo. Los precios se

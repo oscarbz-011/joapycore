@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { EmployeeCount } from '@prisma/client';
+import { EmployeeCount, Industry } from '@prisma/client';
 import { IsEmail, IsEnum, IsOptional, IsString, Matches, MinLength } from 'class-validator';
 
 export class RegisterDto {
@@ -8,13 +8,18 @@ export class RegisterDto {
   @MinLength(2)
   tenantName: string;
 
+  // Lista cerrada: además de sembrar las categorías por defecto, el rubro
+  // decide con qué ProductKind nacen los productos del tenant (una mueblería
+  // fabrica, una ferretería revende). Con texto libre, un typo dejaba al
+  // tenant sin defaults en silencio.
   @ApiPropertyOptional({
-    description: 'Rubro de la empresa (texto libre). Ej: electrodomesticos, ferreteria, supermercado',
-    example: 'electrodomesticos',
+    enum: Industry,
+    description: 'Rubro de la empresa — define las categorías y el tipo de producto por defecto',
+    example: Industry.ELECTRODOMESTICOS,
   })
   @IsOptional()
-  @IsString()
-  industry?: string;
+  @IsEnum(Industry)
+  industry?: Industry;
 
   @ApiProperty()
   @IsString()

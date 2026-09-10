@@ -23,7 +23,7 @@ export default function ComparePricesPage() {
 
   const { data: products = [] } = useQuery({
     queryKey: ['inventory-products-active'],
-    queryFn: () => inventoryApi.listProducts({ status: 'ACTIVE' }),
+    queryFn: () => inventoryApi.listProducts({ status: 'ACTIVE', isPurchasable: true }),
   });
 
   const { data: prices = [], isLoading } = useQuery({

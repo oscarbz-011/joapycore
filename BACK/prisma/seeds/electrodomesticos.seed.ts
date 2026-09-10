@@ -1,4 +1,4 @@
-import type { PrismaClient } from '@prisma/client';
+import { Industry, type PrismaClient } from '@prisma/client';
 import {
   createDemoTenant,
   customerCode,
@@ -20,7 +20,7 @@ export async function seedElectrodomesticos(prisma: PrismaClient) {
 
   const { tenant, branch, warehouse } = await createDemoTenant(prisma, {
     name: 'Electro Hogar Paraguay',
-    industry: 'electrodomesticos',
+    industry: Industry.ELECTRODOMESTICOS,
     ownerEmail: OWNER_EMAIL,
     ownerFirstName: 'Marta',
     ownerLastName: 'Duarte',
@@ -316,7 +316,7 @@ export async function seedElectrodomesticos(prisma: PrismaClient) {
 
   void warehouse;
   return {
-    industry: 'electrodomesticos',
+    industry: Industry.ELECTRODOMESTICOS,
     ownerEmail: OWNER_EMAIL,
     skipped: false,
   };

@@ -45,6 +45,18 @@ export class PurchaseOrdersService {
       tenantId,
       productIds,
     );
+    // Un producto fabricado internamente (MANUFACTURED, ej. el mueble de una
+    // carpintería) no se le compra a un proveedor: su stock entra por una
+    // orden de producción. El flag es editable por producto para los casos
+    // mixtos — ver ProductKind / KIND_DEFAULT_FLAGS.
+    const notForPurchase = products.filter((p) => !p.isPurchasable);
+    if (notForPurchase.length) {
+      const detail = notForPurchase.map((p) => p.name).join(', ');
+      throw new UnprocessableEntityException(
+        `Este producto no se compra a proveedores, se fabrica: ${detail}`,
+      );
+    }
+
     const notPurchasable = products.filter(
       (p) => p.status !== ProductStatus.ACTIVE,
     );

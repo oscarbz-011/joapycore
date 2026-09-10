@@ -1,4 +1,4 @@
-import type { PrismaClient } from '@prisma/client';
+import { Industry, type PrismaClient } from '@prisma/client';
 import {
   createDemoTenant,
   customerCode,
@@ -16,7 +16,7 @@ export async function seedFerreteria(prisma: PrismaClient) {
 
   const { tenant, branch } = await createDemoTenant(prisma, {
     name: 'Ferretería El Tornillo',
-    industry: 'ferreteria',
+    industry: Industry.FERRETERIA,
     ownerEmail: OWNER_EMAIL,
     ownerFirstName: 'Ricardo',
     ownerLastName: 'Ibáñez',

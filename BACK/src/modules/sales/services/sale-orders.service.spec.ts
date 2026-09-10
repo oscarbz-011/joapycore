@@ -17,6 +17,9 @@ function makeProduct(overrides = {}) {
     costPrice: 2_000_000,
     salePrice: 2_500_000,
     status: 'ACTIVE',
+    kind: 'RESALE',
+    isPurchasable: true,
+    isSellable: true,
     deletedAt: null,
     ...overrides,
   };
@@ -272,6 +275,32 @@ describe('SaleOrdersService', () => {
       await expect(
         service.create('tenant-1', baseDto, undefined, false, ['sales:create']),
       ).rejects.toThrow(/Heladera Samsung \(borrador\)/);
+    });
+
+    it('refuses to sell a raw material — la madera entra por compra y sale por producción', async () => {
+      productsRepository.findManyByIds.mockResolvedValue([
+        makeProduct({ name: 'Tablero MDF 18mm', isSellable: false }),
+      ]);
+
+      await expect(
+        service.create('tenant-1', baseDto, undefined, false, ['sales:create']),
+      ).rejects.toThrow(/no se vende, es de uso interno: Tablero MDF 18mm/);
+
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+    });
+
+    it('sells a raw material that was explicitly marked as sellable', async () => {
+      // El tornillo que es materia prima de un mueble y además se vende
+      // suelto en el mostrador — por eso el flag es editable, no derivado.
+      productsRepository.findManyByIds.mockResolvedValue([
+        makeProduct({ kind: 'RAW_MATERIAL', isSellable: true }),
+      ]);
+
+      await service.create('tenant-1', baseDto, undefined, false, [
+        'sales:create',
+      ]);
+
+      expect(prisma.$transaction).toHaveBeenCalled();
     });
 
     it('throws UnprocessableEntityException when serialized product has wrong serial count', async () => {

@@ -50,6 +50,11 @@ enum MovementReason {
   INITIAL
   SALE_OUT
   SALE_REVERSAL
+  // Producción: la materia prima sale (PRODUCTION_OUT) y el producto
+  // fabricado entra (PRODUCTION_IN) al completarse una orden. Ver
+  // ProductionOrder / InventoryOnProductionListener.
+  PRODUCTION_IN
+  PRODUCTION_OUT
 }
 
 // Origen documentado de una carga inicial de stock (reason=INITIAL) — no
@@ -164,6 +169,37 @@ enum ProductStatus {
   ACTIVE // completo, habilitado para comprar y vender
   INACTIVE // descontinuado — sobrevive en el historial de ventas pasadas
   BLOCKED // completo pero restringido (problema de calidad, auditoría pendiente)
+}
+
+// De dónde sale el stock de este producto. El proyecto es multi-rubro y el
+// inventario no se maneja igual en todos: una ferretería o una tienda de
+// electrodomésticos compra terminado para revender, una carpintería fabrica lo
+// que vende y solo compra materia prima e insumos. La clasificación es POR
+// PRODUCTO, no por rubro — una mueblería también revende colchones, y el rubro
+// del tenant solo define el default al crear (ver INDUSTRY_DEFAULT_KIND).
+enum ProductKind {
+  RESALE // se compra terminado y se vende tal cual
+  RAW_MATERIAL // se compra para consumir en producción (madera, tornillos, cola)
+  MANUFACTURED // se produce internamente a partir de una receta y se vende
+}
+
+// Rubro del tenant. Era texto libre y solo servía para sembrar categorías por
+// defecto; un typo en el registro dejaba al tenant sin defaults en silencio.
+// Como ahora también decide el ProductKind por defecto, pasó a lista cerrada.
+enum Industry {
+  ELECTRODOMESTICOS
+  FERRETERIA
+  SUPERMERCADO
+  MUEBLERIA
+  SERVICIOS
+  OTRO
+}
+
+enum ProductionOrderStatus {
+  DRAFT // se puede editar cantidad y consumos
+  IN_PROGRESS // materia prima ya reservada/en uso, la orden está en el taller
+  COMPLETED // se fabricó: salió la materia prima y entró el producto terminado
+  CANCELLED
 }
 
 enum SaleType {
@@ -354,7 +390,7 @@ enum PosSessionStatus {
 model Tenant {
   id       String       @id @default(uuid())
   name     String
-  industry String?
+  industry Industry?
   plan     String       @default("trial")
   status   TenantStatus @default(ACTIVE)
 
@@ -408,6 +444,8 @@ model Tenant {
   productSuppliers       ProductSupplier[]
   productUnits           ProductUnit[]
   productBatches         ProductBatch[]
+  productComponents      ProductComponent[]
+  productionOrders       ProductionOrder[]
   stockMovements         StockMovement[]
   posTerminals           PosTerminal[]
   posSessions            PosSession[]
@@ -541,6 +579,7 @@ model Warehouse {
   stockMovements   StockMovement[]
   saleOrderItems   SaleOrderItem[]
   purchaseReceipts PurchaseReceipt[]
+  productionOrders ProductionOrder[]
 
   @@unique([tenantId, name])
   @@map("warehouses")
@@ -601,6 +640,7 @@ model User {
   posSessionsAsCashier           PosSession[]            @relation("SessionCashier")
   collectedPaymentReceipts       PaymentReceipt[]
   createdPurchaseReceipts        PurchaseReceipt[]
+  createdProductionOrders        ProductionOrder[]
   recordedDeliveryTrackingEvents DeliveryTrackingEvent[]
   createdSupplierPayments        SupplierPayment[]
   reviewedDelinquencyReports     DelinquencyReport[]     @relation("DelinquencyReportReviewedBy")
@@ -717,6 +757,17 @@ model Product {
   description          String?
   isSerialized         Boolean     @default(false) @map("is_serialized")
   usesLots             Boolean     @default(false) @map("uses_lots")
+  // Naturaleza del producto — ver enum ProductKind. Define de dónde entra su
+  // stock (compra vs. producción) y de qué default parten los dos flags de
+  // abajo.
+  kind                 ProductKind @default(RESALE)
+  // En qué flujos participa. Se derivan de `kind` al crear pero quedan
+  // editables a propósito: el mismo tornillo puede ser materia prima de un
+  // mueble Y venderse suelto en el mostrador, y eso no es un caso raro en una
+  // ferretería/carpintería. Las reglas de Compras y Ventas miran estos flags,
+  // no el `kind`, justamente para no romperse en esos casos mixtos.
+  isPurchasable        Boolean     @default(true) @map("is_purchasable")
+  isSellable           Boolean     @default(true) @map("is_sellable")
   unit                 String      @default("unidad")
   weightKg             Float?      @map("weight_kg")
   heightCm             Float?      @map("height_cm")
@@ -749,8 +800,91 @@ model Product {
   saleOrderItems       SaleOrderItem[]
   productSuppliers     ProductSupplier[]
   comboItems           SaleComboItem[]
+  // De qué está hecho este producto (si es MANUFACTURED)…
+  recipe               ProductComponent[] @relation("ProductRecipe")
+  // …y en la receta de qué otros productos aparece (si es materia prima).
+  usedIn               ProductComponent[] @relation("ProductComponentOf")
+  productionOrders     ProductionOrder[]
+  productionConsumed   ProductionOrderItem[]
 
   @@map("products")
+}
+
+// Receta / lista de materiales de un producto MANUFACTURED: de qué está hecho
+// y cuánto lleva de cada cosa. Es un árbol de un solo nivel a propósito — una
+// carpintería arma "mesa = 3 tableros + 12 tornillos + 1 cola", no necesita
+// sub-ensambles anidados para el MVP. Se valida en el servicio que un producto
+// no sea componente de sí mismo (ni en cadena) para no crear ciclos.
+model ProductComponent {
+  id        String   @id @default(uuid())
+  tenantId  String   @map("tenant_id")
+  // El producto que se fabrica.
+  productId String   @map("product_id")
+  // El insumo que se consume (materia prima, o incluso otro producto).
+  componentId String @map("component_id")
+  // Cuánto se consume por unidad producida. Decimal porque una receta puede
+  // llevar 0,5 litros de barniz o 2,25 metros de tela.
+  quantity  Decimal  @db.Decimal(12, 3)
+  notes     String?
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  tenant    Tenant  @relation(fields: [tenantId], references: [id])
+  product   Product @relation("ProductRecipe", fields: [productId], references: [id])
+  component Product @relation("ProductComponentOf", fields: [componentId], references: [id])
+
+  @@unique([productId, componentId])
+  @@index([tenantId, productId])
+  @@map("product_components")
+}
+
+// Orden de producción: fabricar N unidades de un producto MANUFACTURED
+// consumiendo su receta. Al completarse genera los movimientos de stock (OUT
+// por cada componente, IN por el producto terminado) — nunca se toca el stock
+// directo, igual que en compras y ventas.
+model ProductionOrder {
+  id          String                @id @default(uuid())
+  tenantId    String                @map("tenant_id")
+  orderNumber Int                   @map("order_number")
+  productId   String                @map("product_id")
+  quantity    Decimal               @db.Decimal(12, 3)
+  status      ProductionOrderStatus @default(DRAFT)
+  // Depósito del que sale la materia prima y al que entra lo fabricado.
+  warehouseId String?               @map("warehouse_id")
+  startedAt   DateTime?             @map("started_at")
+  completedAt DateTime?             @map("completed_at")
+  notes       String?
+  createdById String?               @map("created_by_id")
+  createdAt   DateTime              @default(now()) @map("created_at")
+  updatedAt   DateTime              @updatedAt @map("updated_at")
+
+  tenant    Tenant                @relation(fields: [tenantId], references: [id])
+  product   Product               @relation(fields: [productId], references: [id])
+  warehouse Warehouse?            @relation(fields: [warehouseId], references: [id])
+  createdBy User?                 @relation(fields: [createdById], references: [id])
+  items     ProductionOrderItem[]
+
+  @@unique([tenantId, orderNumber])
+  @@index([tenantId, status])
+  @@map("production_orders")
+}
+
+// Consumo planificado vs. real de cada componente. Se copia de la receta al
+// crear la orden (snapshot: si la receta cambia después, la orden vieja sigue
+// mostrando lo que realmente se planificó) y el consumo real se ajusta al
+// completar, porque en el taller casi nunca sale exacto.
+model ProductionOrderItem {
+  id                String  @id @default(uuid())
+  productionOrderId String  @map("production_order_id")
+  componentId       String  @map("component_id")
+  plannedQuantity   Decimal @map("planned_quantity") @db.Decimal(12, 3)
+  usedQuantity      Decimal @default(0) @map("used_quantity") @db.Decimal(12, 3)
+
+  productionOrder ProductionOrder @relation(fields: [productionOrderId], references: [id])
+  component       Product         @relation(fields: [componentId], references: [id])
+
+  @@unique([productionOrderId, componentId])
+  @@map("production_order_items")
 }
 
 model ProductSupplier {

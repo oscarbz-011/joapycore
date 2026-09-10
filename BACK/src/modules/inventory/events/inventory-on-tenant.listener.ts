@@ -1,10 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
+import { Industry } from '@prisma/client';
 import { CategoriesRepository } from '../repositories/categories.repository';
 
 interface TenantRegisteredEvent {
   tenantId: string;
-  industry: string | null | undefined;
+  industry: Industry | null | undefined;
 }
 
 @Injectable()

@@ -794,7 +794,7 @@ export default function ProcurementPage() {
 
   const { data: products = [] } = useQuery({
     queryKey: ['inventory-products-active'],
-    queryFn: () => inventoryApi.listProducts({ status: 'ACTIVE' }),
+    queryFn: () => inventoryApi.listProducts({ status: 'ACTIVE', isPurchasable: true }),
   });
 
   const filtered = statusFilter ? orders.filter((o) => o.status === statusFilter) : orders;

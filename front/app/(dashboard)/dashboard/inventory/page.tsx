@@ -10,15 +10,19 @@ import {
 import { NumericInput } from '../../../../components/numeric-input';
 import {
   inventoryApi,
+  PRODUCT_KIND_HINT,
+  PRODUCT_KIND_LABEL,
   PRODUCT_STATUS_LABEL,
   type Brand,
   type Category,
   type CreateProductPayload,
   type MarkupType,
   type Product,
+  type ProductKind,
   type ProductStatus,
   type ProductWithStock,
 } from '../../../../lib/api/inventory';
+import { tenantsApi } from '../../../../lib/api/tenants';
 import { settingsApi } from '../../../../lib/api/settings';
 import {
   computeAdditionalAmount,
@@ -53,6 +57,17 @@ function markup(p: Product) {
 }
 
 // ── Estado de la ficha ─────────────────────────────────────────────────────────
+
+// Solo se muestra cuando NO es reventa: en un negocio que solo revende, el
+// tipo es siempre el mismo y etiquetarlo en cada fila sería ruido.
+function KindBadge({ kind }: { kind: ProductKind }) {
+  if (kind === 'RESALE') return null;
+  return (
+    <Badge variant="outline" className="text-[10.5px] font-normal">
+      {PRODUCT_KIND_LABEL[kind]}
+    </Badge>
+  );
+}
 
 function StatusBadge({ status }: { status: ProductStatus }) {
   if (status === 'ACTIVE') return null; // el estado normal no necesita ruido visual
@@ -153,6 +168,18 @@ function ProductModal({
   const [showAdditionalMarkup, setShowAdditionalMarkup] = useState((initial?.additionalMarkup ?? 0) > 0);
 
   const { data: pricingConfig } = useQuery({ queryKey: ['pricing-config'], queryFn: settingsApi.getPricing });
+  // El rubro decide con qué tipo arranca un producto nuevo (una carpintería
+  // fabrica lo que vende, el resto revende). Al editar se respeta el que ya
+  // tiene la ficha. El backend aplica el mismo default si no se manda nada.
+  const { data: tenant } = useQuery({ queryKey: ['tenant-me'], queryFn: tenantsApi.getMe });
+  // Derivado, no sincronizado: el estado guarda solo la elección explícita del
+  // usuario y el default sale del rubro en cada render. Así no hace falta un
+  // efecto ni un ref para "ya apliqué el default" (que además dependería de
+  // cuándo llega la query del tenant).
+  const [kindOverride, setKindOverride] = useState<ProductKind | null>(initial?.kind ?? null);
+  const kind: ProductKind =
+    kindOverride ?? (tenant?.industry === 'MUEBLERIA' ? 'MANUFACTURED' : 'RESALE');
+  const setKind = setKindOverride;
 
   const lastComputedRef = useRef<number>(initial?.salePrice ?? 0);
   useEffect(() => {
@@ -181,12 +208,12 @@ function ProductModal({
       };
       if (initial) {
         return inventoryApi.updateProduct(initial.id, {
-          ...form, ...prices, ...extraMarkup,
+          ...form, ...prices, ...extraMarkup, kind,
           model: form.model || undefined, description: form.description || undefined,
         });
       }
       return inventoryApi.createProduct({
-        ...form, ...prices,
+        ...form, ...prices, kind,
         ...(showAdditionalMarkup && additionalMarkup > 0 ? { additionalMarkup, additionalMarkupType } : {}),
         model: form.model || undefined, description: form.description || undefined,
       });
@@ -282,9 +309,33 @@ function ProductModal({
               </div>
             </div>
 
-            {/* Precios y tipo */}
+            {/* Tipo de producto — multi-rubro: define si se compra a un
+                proveedor, si se fabrica, y si se vende en el mostrador. */}
             <div>
-              <p className="mb-3 text-[11px] font-bold uppercase tracking-widest text-muted-foreground/60">Precios y tipo</p>
+              <p className="mb-3 text-[11px] font-bold uppercase tracking-widest text-muted-foreground/60">Tipo de producto</p>
+              <div className="grid grid-cols-3 gap-2">
+                {(Object.keys(PRODUCT_KIND_LABEL) as ProductKind[]).map((k) => (
+                  <button
+                    key={k}
+                    type="button"
+                    onClick={() => setKind(k)}
+                    className={cn(
+                      'rounded-2xl border px-3 py-2 text-left text-[13px] font-medium transition-colors',
+                      kind === k
+                        ? 'border-primary bg-primary/10 text-foreground'
+                        : 'border-border text-muted-foreground hover:text-foreground',
+                    )}
+                  >
+                    {PRODUCT_KIND_LABEL[k]}
+                  </button>
+                ))}
+              </div>
+              <p className="mt-2 text-[12px] text-muted-foreground">{PRODUCT_KIND_HINT[kind]}</p>
+            </div>
+
+            {/* Precios */}
+            <div>
+              <p className="mb-3 text-[11px] font-bold uppercase tracking-widest text-muted-foreground/60">Precios</p>
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <Label className="mb-1 text-[12px]">Precio costo (PYG)</Label>
@@ -653,6 +704,7 @@ export default function InventoryPage() {
                             <div className="flex items-center gap-2">
                               <p className="font-semibold text-foreground">{product.name}</p>
                               <StatusBadge status={product.status} />
+                              <KindBadge kind={product.kind} />
                             </div>
                             {product.model && <p className="font-mono text-[11.5px] text-muted-foreground">{product.model}</p>}
                           </div>

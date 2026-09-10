@@ -1,8 +1,9 @@
 import { PrismaPg } from '@prisma/adapter-pg';
-import { PrismaClient } from '@prisma/client';
+import { Industry, PrismaClient } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 import {
   ALL_TENANT_MODULES,
+  FALLBACK_MODULES,
   MODULE_TEMPLATES,
 } from '../../src/common/constants/modules.constant';
 
@@ -21,7 +22,7 @@ export function createPrisma() {
 
 export interface DemoTenantInput {
   name: string;
-  industry: string;
+  industry: Industry;
   ownerEmail: string;
   ownerFirstName?: string;
   ownerLastName?: string;
@@ -56,8 +57,7 @@ export async function createDemoTenant(
   input: DemoTenantInput,
 ) {
   const passwordHash = await bcrypt.hash(DEMO_PASSWORD, SALT_ROUNDS);
-  const activeModules =
-    MODULE_TEMPLATES[input.industry] ?? MODULE_TEMPLATES.default;
+  const activeModules = MODULE_TEMPLATES[input.industry] ?? FALLBACK_MODULES;
 
   return prisma.$transaction(async (tx) => {
     const tenant = await tx.tenant.create({

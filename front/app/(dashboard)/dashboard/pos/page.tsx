@@ -258,7 +258,7 @@ function SaleScreen({ session }: { session: PosSession }) {
   const queryClient = useQueryClient();
   const { data: products = [] } = useQuery({
     queryKey: ['products-with-stock'],
-    queryFn: () => inventoryApi.listProductsWithStock({ status: 'ACTIVE' }),
+    queryFn: () => inventoryApi.listProductsWithStock({ status: 'ACTIVE', isSellable: true }),
   });
   const { data: customers = [] } = useQuery({
     queryKey: ['customers'],

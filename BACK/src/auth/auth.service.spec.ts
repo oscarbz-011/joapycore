@@ -1,7 +1,7 @@
 /// <reference types="jest" />
 
 import { ConflictException, UnauthorizedException } from '@nestjs/common';
-import { UserStatus } from '@prisma/client';
+import { Industry, UserStatus } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 import { createHash } from 'node:crypto';
 import { AuthService } from './auth.service';
@@ -123,7 +123,7 @@ describe('AuthService', () => {
 
       const result = await service.register({
         tenantName: 'Acme',
-        industry: 'electrodomesticos',
+        industry: Industry.ELECTRODOMESTICOS,
         firstName: 'Ada',
         lastName: 'Lovelace',
         email: 'owner@example.com',

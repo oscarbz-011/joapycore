@@ -587,6 +587,18 @@ export class SaleOrdersService {
   // pero los tres siguen existiendo en el historial de ventas viejas (por eso
   // se valida acá, sobre los ítems entrantes, y no filtrando el catálogo).
   private assertSellable(products: Product[]) {
+    // Además del estado, no todo producto se vende: una materia prima
+    // (RAW_MATERIAL, ej. la madera de una carpintería) entra por compra y sale
+    // por producción, nunca por el mostrador. El flag es editable por producto
+    // para los casos mixtos — ver ProductKind / KIND_DEFAULT_FLAGS.
+    const notForSale = products.filter((p) => !p.isSellable);
+    if (notForSale.length) {
+      const detail = notForSale.map((p) => p.name).join(', ');
+      throw new UnprocessableEntityException(
+        `Este producto no se vende, es de uso interno: ${detail}`,
+      );
+    }
+
     const notSellable = products.filter(
       (p) => p.status !== ProductStatus.ACTIVE,
     );

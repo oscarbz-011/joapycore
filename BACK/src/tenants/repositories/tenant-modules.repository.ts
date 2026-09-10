@@ -1,6 +1,8 @@
 import { Injectable } from '@nestjs/common';
+import { Industry } from '@prisma/client';
 import {
   ALL_TENANT_MODULES,
+  FALLBACK_MODULES,
   MODULE_TEMPLATES,
 } from '../../common/constants/modules.constant';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -17,12 +19,10 @@ export class TenantModulesRepository {
    */
   seedDefaults(
     tenantId: string,
-    industry: string | null | undefined,
+    industry: Industry | null | undefined,
     client: PrismaClientOrTx = this.prisma,
   ) {
-    const template =
-      (industry ? MODULE_TEMPLATES[industry] : null) ??
-      MODULE_TEMPLATES['default'];
+    const template = industry ? MODULE_TEMPLATES[industry] : FALLBACK_MODULES;
     const rows = ALL_TENANT_MODULES.map((moduleName) => {
       const active = template.includes(moduleName);
       return {
