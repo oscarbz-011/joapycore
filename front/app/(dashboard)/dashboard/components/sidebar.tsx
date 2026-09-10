@@ -12,7 +12,7 @@ import { useQuery } from '@tanstack/react-query';
 import { cn } from '@/lib/utils';
 import { useAuth } from '../../../../lib/auth-context';
 import { alertsApi } from '../../../../lib/api/alerts';
-import { tenantsApi } from '../../../../lib/api/tenants';
+import { useActiveModules } from '../../../../lib/use-active-modules';
 import { usePendingNotifications } from '../../../../lib/use-pending-notifications';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -345,20 +345,8 @@ export function Sidebar() {
   const permissions   = jwtPayload?.permissions   ?? [];
   const tenantName    = jwtPayload?.tenantName    ?? '';
 
-  // Los módulos se leen de la API, no del JWT: `activeModules` en el token es
-  // una foto del login, así que activar un módulo no se veía en el menú hasta
-  // volver a loguearse. El JWT queda como initialData para que el menú se
-  // pinte completo en el primer render, sin parpadeo mientras carga la query.
-  // La pantalla de Módulos invalida ['tenant-modules'] al togglear.
-  const { data: tenantModules } = useQuery({
-    queryKey: ['tenant-modules'],
-    queryFn: tenantsApi.listModules,
-    enabled: !!jwtPayload,
-    staleTime: 60_000,
-  });
-  const activeModules = tenantModules
-    ? tenantModules.filter((m) => m.active).map((m) => m.moduleName)
-    : (jwtPayload?.activeModules ?? []);
+  // En vivo, no del JWT — ver useActiveModules.
+  const { activeModules } = useActiveModules();
 
   const { data: alertConfigs = [] } = useQuery({
     queryKey: ['alert-configs'],

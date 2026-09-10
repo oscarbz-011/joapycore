@@ -23,6 +23,7 @@ import {
   type ProductWithStock,
 } from '../../../../lib/api/inventory';
 import { tenantsApi } from '../../../../lib/api/tenants';
+import { useActiveModules } from '../../../../lib/use-active-modules';
 import { settingsApi } from '../../../../lib/api/settings';
 import {
   computeAdditionalAmount,
@@ -172,13 +173,25 @@ function ProductModal({
   // fabrica lo que vende, el resto revende). Al editar se respeta el que ya
   // tiene la ficha. El backend aplica el mismo default si no se manda nada.
   const { data: tenant } = useQuery({ queryKey: ['tenant-me'], queryFn: tenantsApi.getMe });
+  // Sin el módulo de Producción, distinguir materia prima de fabricado no
+  // significa nada: el negocio compra y vende, punto. Se oculta el selector y
+  // todo producto nace RESALE (comprable y vendible), que es el comportamiento
+  // que había antes de introducir ProductKind.
+  const { hasModule } = useActiveModules();
+  const showKindPicker = hasModule('production');
+
   // Derivado, no sincronizado: el estado guarda solo la elección explícita del
   // usuario y el default sale del rubro en cada render. Así no hace falta un
   // efecto ni un ref para "ya apliqué el default" (que además dependería de
   // cuándo llega la query del tenant).
   const [kindOverride, setKindOverride] = useState<ProductKind | null>(initial?.kind ?? null);
-  const kind: ProductKind =
-    kindOverride ?? (tenant?.industry === 'MUEBLERIA' ? 'MANUFACTURED' : 'RESALE');
+  const kind: ProductKind = !showKindPicker
+    // Forzado, no solo escondido: una mueblería con el módulo apagado tomaría
+    // MANUFACTURED por el default del rubro y crearía productos no comprables
+    // sin que el usuario tenga dónde verlo ni corregirlo. Al editar se respeta
+    // el tipo que la ficha ya tenga.
+    ? (initial?.kind ?? 'RESALE')
+    : (kindOverride ?? (tenant?.industry === 'MUEBLERIA' ? 'MANUFACTURED' : 'RESALE'));
   const setKind = setKindOverride;
 
   const lastComputedRef = useRef<number>(initial?.salePrice ?? 0);
@@ -310,7 +323,9 @@ function ProductModal({
             </div>
 
             {/* Tipo de producto — multi-rubro: define si se compra a un
-                proveedor, si se fabrica, y si se vende en el mostrador. */}
+                proveedor, si se fabrica, y si se vende en el mostrador. Solo
+                tiene sentido con el módulo de Producción activo. */}
+            {showKindPicker && (
             <div>
               <p className="mb-3 text-[11px] font-bold uppercase tracking-widest text-muted-foreground/60">Tipo de producto</p>
               <div className="grid grid-cols-3 gap-2">
@@ -332,6 +347,7 @@ function ProductModal({
               </div>
               <p className="mt-2 text-[12px] text-muted-foreground">{PRODUCT_KIND_HINT[kind]}</p>
             </div>
+            )}
 
             {/* Precios */}
             <div>

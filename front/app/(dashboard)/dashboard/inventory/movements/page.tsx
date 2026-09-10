@@ -39,6 +39,8 @@ const REASON_LABELS: Record<MovementReason, string> = {
   INITIAL:         'Stock inicial',
   SALE_OUT:        'Salida por venta',
   SALE_REVERSAL:   'Reversión de venta',
+  PRODUCTION_IN:   'Ingreso por producción',
+  PRODUCTION_OUT:  'Consumo en producción',
 };
 
 const MANUAL_REASONS: MovementReason[] = ['PURCHASE', 'CUSTOMER_RETURN', 'ADJUSTMENT', 'TRANSFER'];

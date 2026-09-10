@@ -136,7 +136,11 @@ export type MovementReason =
   | 'TRANSFER'
   | 'INITIAL'
   | 'SALE_OUT'
-  | 'SALE_REVERSAL';
+  | 'SALE_REVERSAL'
+  // Generados por una orden de producción: sale la materia prima, entra el
+  // producto fabricado. Ver ARCHITECTURE.md v0.52.
+  | 'PRODUCTION_IN'
+  | 'PRODUCTION_OUT';
 
 export interface StockMovement {
   id: string;

@@ -18,6 +18,7 @@ import {
 import { procurementApi } from '../../../../../../lib/api/procurement';
 import { settingsApi } from '../../../../../../lib/api/settings';
 import { computeSuggestedPrice } from '../../../../../../lib/pricing';
+import { useActiveModules } from '../../../../../../lib/use-active-modules';
 import { RecipeTab } from './recipe-tab';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -48,6 +49,8 @@ const REASON_LABELS: Record<MovementReason, string> = {
   INITIAL:         'Stock inicial',
   SALE_OUT:        'Salida por venta',
   SALE_REVERSAL:   'Reversión de venta',
+  PRODUCTION_IN:   'Ingreso por producción',
+  PRODUCTION_OUT:  'Consumo en producción',
 };
 
 const MANUAL_REASONS: MovementReason[] = ['PURCHASE', 'CUSTOMER_RETURN', 'ADJUSTMENT', 'TRANSFER'];
@@ -312,6 +315,7 @@ export default function ProductDetailPage() {
     },
   });
 
+  const { hasModule } = useActiveModules();
   const [statusError, setStatusError] = useState('');
   const statusMutation = useMutation({
     mutationFn: (status: ProductStatus) => inventoryApi.updateProduct(id, { status }),
@@ -360,9 +364,12 @@ export default function ProductDetailPage() {
   const tabs: { key: Tab; label: string }[] = [
     { key: 'info',      label: 'Información' },
     { key: 'movements', label: 'Movimientos' },
-    // La receta solo tiene sentido en un producto fabricado; en uno de
-    // reventa la pestaña estaría siempre vacía.
-    ...(product.kind === 'MANUFACTURED' ? [{ key: 'recipe' as Tab, label: 'Receta' }] : []),
+    // La receta solo tiene sentido en un producto fabricado y con el módulo de
+    // Producción activo; sin él, sus endpoints devuelven 403 y la pestaña
+    // quedaría rota.
+    ...(product.kind === 'MANUFACTURED' && hasModule('production')
+      ? [{ key: 'recipe' as Tab, label: 'Receta' }]
+      : []),
     { key: 'suppliers', label: 'Proveedores' },
     ...(product.isSerialized ? [{ key: 'units' as Tab, label: 'Unidades' }] : []),
   ];
