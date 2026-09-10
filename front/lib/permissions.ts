@@ -69,6 +69,16 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
     ],
   },
   {
+    module: 'production',
+    label: 'Producción',
+    permissions: [
+      { key: 'production:recipes:read', label: 'Ver recetas de productos' },
+      { key: 'production:recipes:manage', label: 'Editar recetas de productos' },
+      { key: 'production:orders:read', label: 'Ver órdenes de producción' },
+      { key: 'production:orders:manage', label: 'Crear y completar órdenes de producción' },
+    ],
+  },
+  {
     module: 'sales',
     label: 'Ventas',
     permissions: [

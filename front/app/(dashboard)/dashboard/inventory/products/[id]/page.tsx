@@ -18,6 +18,7 @@ import {
 import { procurementApi } from '../../../../../../lib/api/procurement';
 import { settingsApi } from '../../../../../../lib/api/settings';
 import { computeSuggestedPrice } from '../../../../../../lib/pricing';
+import { RecipeTab } from './recipe-tab';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -51,7 +52,7 @@ const REASON_LABELS: Record<MovementReason, string> = {
 
 const MANUAL_REASONS: MovementReason[] = ['PURCHASE', 'CUSTOMER_RETURN', 'ADJUSTMENT', 'TRANSFER'];
 
-type Tab = 'info' | 'movements' | 'suppliers' | 'units';
+type Tab = 'info' | 'movements' | 'recipe' | 'suppliers' | 'units';
 
 // ── Movement modal ─────────────────────────────────────────────────────────────
 
@@ -359,6 +360,9 @@ export default function ProductDetailPage() {
   const tabs: { key: Tab; label: string }[] = [
     { key: 'info',      label: 'Información' },
     { key: 'movements', label: 'Movimientos' },
+    // La receta solo tiene sentido en un producto fabricado; en uno de
+    // reventa la pestaña estaría siempre vacía.
+    ...(product.kind === 'MANUFACTURED' ? [{ key: 'recipe' as Tab, label: 'Receta' }] : []),
     { key: 'suppliers', label: 'Proveedores' },
     ...(product.isSerialized ? [{ key: 'units' as Tab, label: 'Unidades' }] : []),
   ];
@@ -692,6 +696,11 @@ export default function ProductDetailPage() {
             </div>
           )}
         </div>
+      )}
+
+      {/* ── Receta tab ───────────────────────────────────────────────────────── */}
+      {activeTab === 'recipe' && (
+        <RecipeTab productId={id} unit={product.unit} />
       )}
 
       {/* ── Proveedores tab ──────────────────────────────────────────────────── */}

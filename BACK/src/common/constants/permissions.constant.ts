@@ -48,6 +48,11 @@ export const PERMISSIONS = [
   'suppliers:read',
   'suppliers:create',
   'suppliers:update',
+  // Producción (rubros que fabrican lo que venden — ver ProductKind)
+  'production:recipes:read',
+  'production:recipes:manage',
+  'production:orders:read',
+  'production:orders:manage',
   // Procurement
   'procurement:read',
   'procurement:create',

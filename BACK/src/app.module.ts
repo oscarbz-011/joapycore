@@ -23,6 +23,7 @@ import { InventoryModule } from './modules/inventory/inventory.module';
 import { PaymentsModule } from './modules/payments/payments.module';
 import { PosModule } from './modules/pos/pos.module';
 import { ProcurementModule } from './modules/procurement/procurement.module';
+import { ProductionModule } from './modules/production/production.module';
 import { ReportsModule } from './modules/reports/reports.module';
 import { LogisticsModule } from './modules/logistics/logistics.module';
 import { DocumentsModule } from './modules/documents/documents.module';
@@ -49,6 +50,7 @@ import { UsersModule } from './users/users.module';
     AuditModule,
     InventoryModule,
     ProcurementModule,
+    ProductionModule,
     SalesModule,
     LogisticsModule,
     DocumentsModule,

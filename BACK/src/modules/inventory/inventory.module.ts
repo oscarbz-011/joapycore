@@ -7,6 +7,7 @@ import { ProductsController } from './controllers/products.controller';
 import { StockEntryController } from './controllers/stock-entry.controller';
 import { InventoryOnInvoiceListener } from './events/inventory-on-invoice.listener';
 import { InventoryOnPurchaseReceiptListener } from './events/inventory-on-purchase-receipt.listener';
+import { InventoryOnProductionListener } from './events/inventory-on-production.listener';
 import { InventoryOnSaleDeliveredListener } from './events/inventory-on-sale-delivered.listener';
 import { InventoryOnTenantListener } from './events/inventory-on-tenant.listener';
 import { BrandsRepository } from './repositories/brands.repository';
@@ -43,6 +44,7 @@ import { StockEntryService } from './services/stock-entry.service';
     InventoryOnTenantListener,
     InventoryOnInvoiceListener,
     InventoryOnPurchaseReceiptListener,
+    InventoryOnProductionListener,
     InventoryOnSaleDeliveredListener,
   ],
   exports: [ProductsRepository, ProductUnitsRepository, CategoriesRepository],
