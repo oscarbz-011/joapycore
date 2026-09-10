@@ -70,6 +70,49 @@ function KindBadge({ kind }: { kind: ProductKind }) {
   );
 }
 
+// El tipo y los flujos son dos ejes distintos: el tipo dice qué es el producto,
+// los flags en qué circuitos participa. Acá vive solo el valor con el que
+// arranca cada tipo — se puede desviar por producto porque los casos mixtos son
+// reales (un tornillo que es materia prima de un mueble y además se vende
+// suelto en el mostrador). Espejo de KIND_DEFAULT_FLAGS del backend.
+type ProductFlags = { isPurchasable: boolean; isSellable: boolean };
+
+const KIND_DEFAULT_FLAGS: Record<ProductKind, ProductFlags> = {
+  RESALE:       { isPurchasable: true,  isSellable: true  },
+  RAW_MATERIAL: { isPurchasable: true,  isSellable: false },
+  MANUFACTURED: { isPurchasable: false, isSellable: true  },
+};
+
+function ProductFlagToggle({
+  label, hint, checked, isDefault, onChange,
+}: {
+  label: string;
+  hint: string;
+  checked: boolean;
+  isDefault: boolean;
+  onChange: (checked: boolean) => void;
+}) {
+  return (
+    <div>
+      <label className="flex cursor-pointer items-center gap-2.5">
+        <input
+          type="checkbox"
+          checked={checked}
+          onChange={(e) => onChange(e.target.checked)}
+          className="h-4 w-4 rounded border-border accent-primary"
+        />
+        <span className="text-[13.5px] font-medium text-foreground">{label}</span>
+        {/* El desvío del default es la excepción deliberada, no un error: se
+            marca para que se vea de un vistazo cuál de los dos lo tiene. */}
+        {!isDefault && (
+          <Badge variant="outline" className="text-[10.5px] font-normal">Distinto del default</Badge>
+        )}
+      </label>
+      <p className="ml-[26px] mt-0.5 text-[12px] text-muted-foreground/70">{hint}</p>
+    </div>
+  );
+}
+
 function StatusBadge({ status }: { status: ProductStatus }) {
   if (status === 'ACTIVE') return null; // el estado normal no necesita ruido visual
   if (status === 'DRAFT')
@@ -194,6 +237,22 @@ function ProductModal({
     : (kindOverride ?? (tenant?.industry === 'MUEBLERIA' ? 'MANUFACTURED' : 'RESALE'));
   const setKind = setKindOverride;
 
+  // Mismo criterio que el tipo: el estado guarda solo la desviación explícita y
+  // el valor sale del tipo en cada render, así cambiar de tipo mueve los flags
+  // solos. Al editar se siembra únicamente si la ficha ya se desviaba del
+  // default de su tipo — si coincidía, seguir al tipo devuelve lo mismo y no se
+  // congela un valor que el usuario nunca eligió.
+  const [flagsOverride, setFlagsOverride] = useState<ProductFlags | null>(() => {
+    if (!initial) return null;
+    const base = KIND_DEFAULT_FLAGS[initial.kind];
+    return initial.isPurchasable === base.isPurchasable && initial.isSellable === base.isSellable
+      ? null
+      : { isPurchasable: initial.isPurchasable, isSellable: initial.isSellable };
+  });
+  const kindFlags = KIND_DEFAULT_FLAGS[kind];
+  const flags = flagsOverride ?? kindFlags;
+  const setFlag = (k: keyof ProductFlags, v: boolean) => setFlagsOverride({ ...flags, [k]: v });
+
   const lastComputedRef = useRef<number>(initial?.salePrice ?? 0);
   useEffect(() => {
     if (!pricingConfig || form.costPrice <= 0) return;
@@ -221,12 +280,12 @@ function ProductModal({
       };
       if (initial) {
         return inventoryApi.updateProduct(initial.id, {
-          ...form, ...prices, ...extraMarkup, kind,
+          ...form, ...prices, ...extraMarkup, kind, ...flags,
           model: form.model || undefined, description: form.description || undefined,
         });
       }
       return inventoryApi.createProduct({
-        ...form, ...prices, kind,
+        ...form, ...prices, kind, ...flags,
         ...(showAdditionalMarkup && additionalMarkup > 0 ? { additionalMarkup, additionalMarkupType } : {}),
         model: form.model || undefined, description: form.description || undefined,
       });
@@ -346,6 +405,36 @@ function ProductModal({
                 ))}
               </div>
               <p className="mt-2 text-[12px] text-muted-foreground">{PRODUCT_KIND_HINT[kind]}</p>
+
+              {/* Ventas y Compras miran estos flags, no el tipo — por eso se
+                  pueden desviar del default sin cambiar la naturaleza del
+                  producto. */}
+              <div className="mt-3 space-y-3 rounded-2xl border border-border bg-muted/30 px-4 py-3">
+                <p className="text-[11px] text-muted-foreground/70">
+                  Los tildes arrancan según el tipo, pero se pueden ajustar: un tornillo puede ser
+                  materia prima de un mueble y además venderse suelto en el mostrador.
+                </p>
+                <ProductFlagToggle
+                  label="Se compra a proveedores"
+                  hint="Aparece en órdenes de compra y recepciones de mercadería."
+                  checked={flags.isPurchasable}
+                  isDefault={flags.isPurchasable === kindFlags.isPurchasable}
+                  onChange={(v) => setFlag('isPurchasable', v)}
+                />
+                <ProductFlagToggle
+                  label="Se vende a clientes"
+                  hint="Aparece en ventas, cotizaciones y en el mostrador."
+                  checked={flags.isSellable}
+                  isDefault={flags.isSellable === kindFlags.isSellable}
+                  onChange={(v) => setFlag('isSellable', v)}
+                />
+                {!flags.isPurchasable && !flags.isSellable && (
+                  <p className="text-[12px] text-warn">
+                    Sin ninguno de los dos el producto no se puede comprar ni vender: solo queda
+                    disponible para producción.
+                  </p>
+                )}
+              </div>
             </div>
             )}
 
@@ -554,18 +643,25 @@ export default function InventoryPage() {
   const [categoryFilter, setCategoryFilter] = useState('');
   const [brandFilter, setBrandFilter]       = useState('');
   const [statusFilter, setStatusFilter]     = useState<ProductStatus | ''>('');
+  const [kindFilter, setKindFilter]         = useState<ProductKind | ''>('');
   const [showCreate, setShowCreate]         = useState(false);
+
+  // Sin el módulo de Producción todos los productos son de reventa: filtrar por
+  // tipo sería una opción muerta.
+  const { hasModule } = useActiveModules();
+  const showKindFilter = hasModule('production');
 
   // Sin filtro de estado por defecto: un producto en Borrador tiene que ser
   // visible acá, si no queda inalcanzable justo en la pantalla donde se
   // completa. El que no quiera verlos filtra por estado explícitamente.
   const { data: products = [], isLoading } = useQuery<ProductWithStock[]>({
-    queryKey: ['inventory-products', search, categoryFilter, brandFilter, statusFilter],
+    queryKey: ['inventory-products', search, categoryFilter, brandFilter, statusFilter, kindFilter],
     queryFn: () => inventoryApi.listProductsWithStock({
       search: search || undefined,
       categoryId: categoryFilter || undefined,
       brandId: brandFilter || undefined,
       status: statusFilter || undefined,
+      kind: kindFilter || undefined,
     }),
   });
   const { data: categories = [] } = useQuery({ queryKey: ['inventory-categories'], queryFn: inventoryApi.listCategories });
@@ -674,6 +770,26 @@ export default function InventoryPage() {
               ))}
             </SelectContent>
           </Select>
+          {showKindFilter && (
+            <Select
+              value={kindFilter || null}
+              onValueChange={(v: string | null) =>
+                setKindFilter(v === 'all' || v === null ? '' : (v as ProductKind))
+              }
+            >
+              <SelectTrigger className="w-40 overflow-hidden">
+                <span className="min-w-0 flex-1 truncate text-left text-sm">
+                  {kindFilter ? PRODUCT_KIND_LABEL[kindFilter] : 'Todos los tipos'}
+                </span>
+              </SelectTrigger>
+              <SelectContent className="w-auto min-w-[10rem]">
+                <SelectItem value="all">Todos los tipos</SelectItem>
+                {(Object.keys(PRODUCT_KIND_LABEL) as ProductKind[]).map((k) => (
+                  <SelectItem key={k} value={k}>{PRODUCT_KIND_LABEL[k]}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
         </div>
       </div>
 

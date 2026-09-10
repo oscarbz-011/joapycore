@@ -11,6 +11,8 @@ import {
   type ProductionOrder,
   type ProductionOrderStatus,
 } from '../../../../lib/api/production';
+import { warehousesApi } from '../../../../lib/api/warehouses';
+import { useAuth } from '../../../../lib/auth-context';
 import { formatDatePY } from '../../../../lib/date';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -59,6 +61,7 @@ function NewOrderModal({
   const queryClient = useQueryClient();
   const [productId, setProductId] = useState('');
   const [quantity, setQuantity] = useState(0);
+  const [warehouseId, setWarehouseId] = useState('');
   const [notes, setNotes] = useState('');
   const [error, setError] = useState('');
 
@@ -69,14 +72,25 @@ function NewOrderModal({
     queryFn: () => inventoryApi.listProducts({ status: 'ACTIVE', kind: 'MANUFACTURED' }),
   });
 
+  const { data: warehouses = [] } = useQuery({
+    queryKey: ['warehouses'],
+    queryFn: warehousesApi.listWarehouses,
+  });
+
   const mutation = useMutation({
     mutationFn: () =>
-      productionApi.createOrder({ productId, quantity, notes: notes || undefined }),
+      productionApi.createOrder({
+        productId,
+        quantity,
+        warehouseId: warehouseId || undefined,
+        notes: notes || undefined,
+      }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['production-orders'] });
       onOpenChange(false);
       setProductId('');
       setQuantity(0);
+      setWarehouseId('');
       setNotes('');
       setError('');
     },
@@ -130,6 +144,31 @@ function NewOrderModal({
           </div>
 
           <div>
+            <Label className="mb-1 text-[12px]">Depósito</Label>
+            <Select
+              value={warehouseId || 'none'}
+              onValueChange={(v) => setWarehouseId(v && v !== 'none' ? v : '')}
+            >
+              <SelectTrigger className="w-full">
+                <span
+                  className={cn(
+                    'min-w-0 flex-1 truncate text-left text-sm',
+                    !warehouseId && 'text-muted-foreground',
+                  )}
+                >
+                  {warehouses.find((w) => w.id === warehouseId)?.name ?? '— Sin especificar —'}
+                </span>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">— Sin especificar —</SelectItem>
+                {warehouses.map((w) => (
+                  <SelectItem key={w.id} value={w.id}>{w.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div>
             <Label className="mb-1 text-[12px]">Notas</Label>
             <Textarea rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} />
           </div>
@@ -154,11 +193,114 @@ function NewOrderModal({
   );
 }
 
+// ── Modal de completado ───────────────────────────────────────────────────────
+
+function CompleteOrderModal({
+  order,
+  open,
+  onOpenChange,
+  onCompleted,
+}: {
+  order: ProductionOrder;
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  onCompleted: () => void;
+}) {
+  // En el taller casi nunca se consume lo planificado: se arranca con ese
+  // número y el operario lo corrige con lo que realmente usó.
+  const [used, setUsed] = useState<Record<string, number>>(() =>
+    Object.fromEntries(order.items.map((i) => [i.componentId, Number(i.plannedQuantity)])),
+  );
+  const [error, setError] = useState('');
+
+  const mutation = useMutation({
+    mutationFn: () =>
+      productionApi.completeOrder(order.id, {
+        consumptions: order.items.map((i) => ({
+          componentId: i.componentId,
+          usedQuantity: used[i.componentId] ?? Number(i.plannedQuantity),
+        })),
+      }),
+    onSuccess: () => {
+      onCompleted();
+      onOpenChange(false);
+    },
+    onError: (err: Error & { response?: { data?: { message?: string | string[] } } }) => {
+      // El backend revalida stock al completar y devuelve 422 con el detalle de
+      // qué faltó: hay que mostrarlo acá, no cerrar el modal.
+      const msg = err?.response?.data?.message;
+      setError(Array.isArray(msg) ? msg[0] : (msg ?? 'No se pudo completar la orden'));
+    },
+  });
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent showCloseButton={false} className="flex flex-col gap-0 overflow-hidden p-0 sm:max-w-lg">
+        <DialogHeader className="flex-row items-center justify-between border-b border-border px-6 py-4">
+          <DialogTitle>Completar orden #{order.orderNumber}</DialogTitle>
+          <Button variant="ghost" size="icon-sm" type="button" onClick={() => onOpenChange(false)}>
+            <X size={16} />
+          </Button>
+        </DialogHeader>
+
+        <form
+          onSubmit={(e) => { e.preventDefault(); setError(''); mutation.mutate(); }}
+          className="max-h-[70vh] space-y-4 overflow-y-auto px-6 py-5"
+        >
+          <p className="text-[13px] text-muted-foreground">
+            Se van a dar de alta {fmtQty(order.quantity)} {order.product.unit} de{' '}
+            <strong className="text-foreground">{order.product.name}</strong>. Ajustá cuánta materia
+            prima se usó de verdad; si no tocás nada se descuenta lo planificado.
+          </p>
+
+          <div className="space-y-3">
+            {order.items.map((item) => (
+              <div key={item.id} className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="truncate text-[13px] text-foreground">{item.component.name}</p>
+                  <p className="text-[11.5px] text-muted-foreground">
+                    Planificado: {fmtQty(item.plannedQuantity)} {item.component.unit}
+                  </p>
+                </div>
+                <div className="flex w-36 shrink-0 items-center gap-2">
+                  <NumericInput
+                    value={used[item.componentId] ?? 0}
+                    onChange={(v) => setUsed((prev) => ({ ...prev, [item.componentId]: v }))}
+                    decimals={3}
+                    className={NUM_CLS}
+                  />
+                  <span className="shrink-0 text-[12px] text-muted-foreground">{item.component.unit}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {error && (
+            <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+              {error}
+            </div>
+          )}
+
+          <div className="flex justify-end gap-2 pt-1">
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+              Cancelar
+            </Button>
+            <Button type="submit" disabled={mutation.isPending}>
+              {mutation.isPending ? 'Completando…' : 'Completar orden'}
+            </Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // ── Detalle de una orden ──────────────────────────────────────────────────────
 
-function OrderCard({ order }: { order: ProductionOrder }) {
+function OrderCard({ order, canManage }: { order: ProductionOrder; canManage: boolean }) {
   const queryClient = useQueryClient();
   const [error, setError] = useState('');
+  const [showComplete, setShowComplete] = useState(false);
 
   const invalidate = () => {
     void queryClient.invalidateQueries({ queryKey: ['production-orders'] });
@@ -176,19 +318,13 @@ function OrderCard({ order }: { order: ProductionOrder }) {
     onSuccess: () => { setError(''); invalidate(); },
     onError,
   });
-  const completeMutation = useMutation({
-    mutationFn: () => productionApi.completeOrder(order.id),
-    onSuccess: () => { setError(''); invalidate(); },
-    onError,
-  });
   const cancelMutation = useMutation({
     mutationFn: () => productionApi.cancelOrder(order.id),
     onSuccess: () => { setError(''); invalidate(); },
     onError,
   });
 
-  const busy =
-    startMutation.isPending || completeMutation.isPending || cancelMutation.isPending;
+  const busy = startMutation.isPending || cancelMutation.isPending;
 
   return (
     <Card className="p-4">
@@ -205,23 +341,25 @@ function OrderCard({ order }: { order: ProductionOrder }) {
             {order.completedAt && <> · completada el {formatDatePY(order.completedAt, 'local')}</>}
           </p>
         </div>
-        <div className="flex shrink-0 gap-2">
-          {order.status === 'DRAFT' && (
-            <Button size="sm" disabled={busy} onClick={() => startMutation.mutate()}>
-              Iniciar
-            </Button>
-          )}
-          {order.status === 'IN_PROGRESS' && (
-            <Button size="sm" disabled={busy} onClick={() => completeMutation.mutate()}>
-              Completar
-            </Button>
-          )}
-          {(order.status === 'DRAFT' || order.status === 'IN_PROGRESS') && (
-            <Button size="sm" variant="outline" disabled={busy} onClick={() => cancelMutation.mutate()}>
-              Cancelar
-            </Button>
-          )}
-        </div>
+        {canManage && (
+          <div className="flex shrink-0 gap-2">
+            {order.status === 'DRAFT' && (
+              <Button size="sm" disabled={busy} onClick={() => startMutation.mutate()}>
+                Iniciar
+              </Button>
+            )}
+            {order.status === 'IN_PROGRESS' && (
+              <Button size="sm" disabled={busy} onClick={() => setShowComplete(true)}>
+                Completar
+              </Button>
+            )}
+            {(order.status === 'DRAFT' || order.status === 'IN_PROGRESS') && (
+              <Button size="sm" variant="outline" disabled={busy} onClick={() => cancelMutation.mutate()}>
+                Cancelar
+              </Button>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Consumo de materia prima */}
@@ -242,6 +380,15 @@ function OrderCard({ order }: { order: ProductionOrder }) {
       </div>
 
       {error && <p className="mt-2 text-[12.5px] text-destructive">{error}</p>}
+
+      {showComplete && (
+        <CompleteOrderModal
+          order={order}
+          open={showComplete}
+          onOpenChange={setShowComplete}
+          onCompleted={() => { setError(''); invalidate(); }}
+        />
+      )}
     </Card>
   );
 }
@@ -249,6 +396,11 @@ function OrderCard({ order }: { order: ProductionOrder }) {
 // ── Página ────────────────────────────────────────────────────────────────────
 
 export default function ProductionPage() {
+  const { jwtPayload } = useAuth();
+  // Con solo `production:orders:read` se puede mirar pero no operar: sin esto
+  // los botones estaban a la vista y devolvían 403 al tocarlos.
+  const canManage = jwtPayload?.permissions.includes('production:orders:manage') ?? false;
+
   const [showCreate, setShowCreate] = useState(false);
   const [statusFilter, setStatusFilter] = useState<ProductionOrderStatus | ''>('');
 
@@ -266,10 +418,12 @@ export default function ProductionPage() {
             Órdenes que consumen materia prima y dan de alta el producto terminado
           </p>
         </div>
-        <Button onClick={() => setShowCreate(true)}>
-          <Plus size={15} />
-          Nueva orden
-        </Button>
+        {canManage && (
+          <Button onClick={() => setShowCreate(true)}>
+            <Plus size={15} />
+            Nueva orden
+          </Button>
+        )}
       </div>
 
       <div className="mb-4 flex gap-2">
@@ -307,7 +461,9 @@ export default function ProductionPage() {
         </div>
       ) : (
         <div className="space-y-3">
-          {orders.map((order) => <OrderCard key={order.id} order={order} />)}
+          {orders.map((order) => (
+            <OrderCard key={order.id} order={order} canManage={canManage} />
+          ))}
         </div>
       )}
 

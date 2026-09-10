@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Hammer, Trash2 } from 'lucide-react';
+import { Check, Hammer, Pencil, Trash2, X } from 'lucide-react';
 import { NumericInput } from '../../../../../../components/numeric-input';
 import { inventoryApi } from '../../../../../../lib/api/inventory';
 import { productionApi } from '../../../../../../lib/api/production';
@@ -15,6 +15,14 @@ const NUM_CLS =
 
 function fmtGs(n: number) {
   return 'Gs. ' + new Intl.NumberFormat('es-PY').format(Math.round(n));
+}
+
+type ApiError = Error & { response?: { data?: { message?: string | string[] } } };
+
+// El backend manda el mensaje suelto o como array (class-validator).
+function apiMessage(err: ApiError, fallback: string) {
+  const msg = err?.response?.data?.message;
+  return Array.isArray(msg) ? msg[0] : (msg ?? fallback);
 }
 
 function fmtQty(n: number) {
@@ -32,6 +40,9 @@ export function RecipeTab({ productId, unit }: { productId: string; unit: string
   const [componentId, setComponentId] = useState('');
   const [quantity, setQuantity] = useState(0);
   const [error, setError] = useState('');
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editQty, setEditQty] = useState(0);
+  const [editError, setEditError] = useState('');
 
   const { data: recipe = [], isLoading } = useQuery({
     queryKey: ['product-recipe', productId],
@@ -57,16 +68,48 @@ export function RecipeTab({ productId, unit }: { productId: string; unit: string
       setError('');
       invalidate();
     },
-    onError: (err: Error & { response?: { data?: { message?: string | string[] } } }) => {
-      const msg = err?.response?.data?.message;
-      setError(Array.isArray(msg) ? msg[0] : (msg ?? 'No se pudo agregar el componente'));
+    onError: (err: ApiError) => setError(apiMessage(err, 'No se pudo agregar el componente')),
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: (vars: { id: string; quantity: number }) =>
+      productionApi.updateComponent(productId, vars.id, { quantity: vars.quantity }),
+    onSuccess: () => {
+      setEditingId(null);
+      setEditError('');
+      invalidate();
     },
+    onError: (err: ApiError) => setEditError(apiMessage(err, 'No se pudo actualizar la cantidad')),
   });
 
   const removeMutation = useMutation({
     mutationFn: (id: string) => productionApi.removeComponent(productId, id),
     onSuccess: invalidate,
   });
+
+  const startEdit = (id: string, current: number) => {
+    setEditingId(id);
+    setEditQty(current);
+    setEditError('');
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+    setEditError('');
+  };
+
+  const saveEdit = (id: string, current: number) => {
+    // El backend valida @IsPositive(): cortamos antes de gastar un request.
+    if (editQty <= 0) {
+      setEditError('La cantidad tiene que ser mayor a cero');
+      return;
+    }
+    if (editQty === current) {
+      cancelEdit();
+      return;
+    }
+    updateMutation.mutate({ id, quantity: editQty });
+  };
 
   const alreadyUsed = new Set(recipe.map((r) => r.componentId));
   const available = products.filter((p) => p.id !== productId && !alreadyUsed.has(p.id));
@@ -105,26 +148,83 @@ export function RecipeTab({ productId, unit }: { productId: string; unit: string
             Cantidades por <strong>1 {unit}</strong> producida.
           </p>
           <div className="space-y-2">
-            {recipe.map((r) => (
-              <div key={r.id} className="flex items-center gap-3 rounded-xl border border-border bg-card px-4 py-3">
-                <div className="flex-1 min-w-0">
-                  <p className="font-medium text-foreground">{r.component.name}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {fmtQty(Number(r.quantity))} {r.component.unit}
-                    {r.component.costPrice != null && (
-                      <> · {fmtGs(Number(r.quantity) * Number(r.component.costPrice))}</>
+            {recipe.map((r) => {
+              const current = Number(r.quantity);
+              const editing = editingId === r.id;
+              return (
+                <div key={r.id} className="group flex items-center gap-3 rounded-xl border border-border bg-card px-4 py-3">
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-foreground">{r.component.name}</p>
+                    {editing ? (
+                      <div className="mt-1 flex items-center gap-1.5">
+                        <NumericInput
+                          value={editQty}
+                          onChange={setEditQty}
+                          decimals={3}
+                          autoFocus
+                          disabled={updateMutation.isPending}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') saveEdit(r.id, current);
+                            if (e.key === 'Escape') cancelEdit();
+                          }}
+                          className={cn(NUM_CLS, 'h-8 w-24')}
+                        />
+                        <span className="text-xs text-muted-foreground">{r.component.unit}</span>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon-sm"
+                          title="Guardar cantidad"
+                          disabled={updateMutation.isPending}
+                          onClick={() => saveEdit(r.id, current)}
+                        >
+                          <Check size={14} />
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon-sm"
+                          title="Cancelar"
+                          disabled={updateMutation.isPending}
+                          onClick={cancelEdit}
+                        >
+                          <X size={14} />
+                        </Button>
+                      </div>
+                    ) : (
+                      <p className="flex items-center gap-1 text-xs text-muted-foreground">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="xs"
+                          title="Editar cantidad"
+                          onClick={() => startEdit(r.id, current)}
+                          className="-ml-2.5 font-normal text-muted-foreground"
+                        >
+                          {fmtQty(current)} {r.component.unit}
+                          <Pencil size={10} className="opacity-0 transition-opacity group-hover:opacity-60" />
+                        </Button>
+                        {r.component.costPrice != null && (
+                          <>· {fmtGs(current * Number(r.component.costPrice))}</>
+                        )}
+                      </p>
                     )}
-                  </p>
+                    {editing && editError && (
+                      <p className="mt-1 text-[12.5px] text-destructive">{editError}</p>
+                    )}
+                  </div>
+                  {!editing && (
+                    <button
+                      title="Quitar de la receta"
+                      onClick={() => removeMutation.mutate(r.id)}
+                      className="text-muted-foreground/60 transition-colors hover:text-destructive"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  )}
                 </div>
-                <button
-                  title="Quitar de la receta"
-                  onClick={() => removeMutation.mutate(r.id)}
-                  className="text-muted-foreground/60 transition-colors hover:text-destructive"
-                >
-                  <Trash2 size={14} />
-                </button>
-              </div>
-            ))}
+              );
+            })}
           </div>
 
           <div className="flex items-center justify-between rounded-xl border border-border bg-muted/20 px-4 py-3">
