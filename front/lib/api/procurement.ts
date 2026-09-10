@@ -8,6 +8,39 @@ export type PurchaseOrderStatus =
   | 'RECEIVED'
   | 'CANCELLED';
 
+// ── Catálogo del proveedor ────────────────────────────────────────────────
+// La lista de precios tal como la manda el proveedor, ANTES de mapearla al
+// catálogo interno. `productId` en null = ítem todavía sin vincular, que es
+// justamente lo que permite importar sin tener que crear productos primero.
+// Ver ARCHITECTURE.md v0.56.
+
+export interface SupplierCatalogItem {
+  id: string;
+  supplierId: string;
+  supplierSku: string;
+  description: string;
+  price: number | null;
+  supplierUnit: string | null;
+  conversionFactor: number | null;
+  validFrom: string | null;
+  validTo: string | null;
+  productId: string | null;
+  product: { id: string; name: string; unit: string } | null;
+}
+
+export interface CatalogImportResult {
+  imported: number;
+  /** Filas rechazadas, con el número de fila tal como se ve en Excel. */
+  errors: { row: number; message: string }[];
+  totalRows: number;
+}
+
+export interface CatalogFilters {
+  search?: string;
+  unmapped?: boolean;
+  onlyValid?: boolean;
+}
+
 export interface Supplier {
   id: string;
   name: string;
@@ -143,6 +176,38 @@ export const procurementApi = {
     apiClient.get(`/procurement/purchase-receipts/${id}`).then((r) => r.data),
 
   // Suppliers
+  // ── Catálogo del proveedor ──────────────────────────────────────────────
+  listCatalog: (supplierId: string, filters: CatalogFilters = {}): Promise<SupplierCatalogItem[]> =>
+    apiClient
+      .get(`/procurement/suppliers/${supplierId}/catalog`, { params: filters })
+      .then((r) => r.data),
+
+  // El apiClient fuerza 'application/json' por defecto, así que hay que pisarlo
+  // acá: sin esto el multipart sale sin boundary, multer no encuentra el
+  // archivo y el backend responde 400. Mismo patrón que files.ts / sifen.ts.
+  importCatalog: (supplierId: string, file: File): Promise<CatalogImportResult> => {
+    const body = new FormData();
+    body.append('file', file);
+    return apiClient
+      .post(`/procurement/suppliers/${supplierId}/catalog/import`, body, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      })
+      .then((r) => r.data);
+  },
+
+  updateCatalogItem: (
+    id: string,
+    dto: { description?: string; price?: number; supplierUnit?: string; conversionFactor?: number },
+  ): Promise<SupplierCatalogItem> =>
+    apiClient.patch(`/procurement/catalog/${id}`, dto).then((r) => r.data),
+
+  /** productId null desvincula el ítem sin borrarlo. */
+  mapCatalogItem: (id: string, productId: string | null): Promise<SupplierCatalogItem> =>
+    apiClient.patch(`/procurement/catalog/${id}/product`, { productId }).then((r) => r.data),
+
+  removeCatalogItem: (id: string): Promise<void> =>
+    apiClient.delete(`/procurement/catalog/${id}`).then(() => undefined),
+
   listSuppliers: (): Promise<Supplier[]> =>
     apiClient.get('/procurement/suppliers').then((r) => r.data),
 

@@ -1,8 +1,9 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Plus, Search, X } from 'lucide-react';
+import { FileSpreadsheet, Plus, Search, X } from 'lucide-react';
 import { procurementApi, type CreateSupplierPayload, type Supplier } from '../../../../../lib/api/procurement';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -45,6 +46,7 @@ function SupplierForm({
   initial?: Supplier;
   onClose: () => void;
 }) {
+  const router = useRouter();
   const queryClient = useQueryClient();
   const [form, setForm] = useState<CreateSupplierPayload>(
     initial ? fromSupplier(initial) : EMPTY_FORM,
@@ -204,6 +206,18 @@ function SupplierForm({
         </div>
 
         {initial && (
+          <Button
+            type="button"
+            variant="outline"
+            className="w-full"
+            onClick={() => router.push(`/dashboard/procurement/suppliers/${initial.id}`)}
+          >
+            <FileSpreadsheet size={15} />
+            Catálogo de precios
+          </Button>
+        )}
+
+        {initial && (
           <div>
             {!confirmDelete ? (
               <Button
@@ -250,6 +264,7 @@ function SupplierForm({
 // ── Main page ──────────────────────────────────────────────────────────────────
 
 export default function SuppliersPage() {
+  const router = useRouter();
   const [search, setSearch] = useState('');
   const [showCreate, setShowCreate] = useState(false);
   const [selectedSupplier, setSelectedSupplier] = useState<Supplier | null>(null);
@@ -340,6 +355,18 @@ export default function SuppliersPage() {
                         Inactivo
                       </Badge>
                     )}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="ml-3 shrink-0"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        router.push(`/dashboard/procurement/suppliers/${supplier.id}`);
+                      }}
+                    >
+                      <FileSpreadsheet size={14} />
+                      Catálogo
+                    </Button>
                   </li>
                 ))}
               </ul>
