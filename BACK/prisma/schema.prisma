@@ -649,6 +649,7 @@ model User {
   createdSupplierPayments        SupplierPayment[]
   reviewedDelinquencyReports     DelinquencyReport[]     @relation("DelinquencyReportReviewedBy")
 
+  @@index([tenantId])
   @@map("users")
 }
 
@@ -660,6 +661,7 @@ model UserPermission {
   permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
 
   @@id([userId, permissionId])
+  @@index([permissionId])
   @@map("user_permissions")
 }
 
@@ -696,6 +698,7 @@ model RolePermission {
   permission Permission @relation(fields: [permissionId], references: [id])
 
   @@id([roleId, permissionId])
+  @@index([permissionId])
   @@map("role_permissions")
 }
 
@@ -707,6 +710,7 @@ model UserRole {
   role Role @relation(fields: [roleId], references: [id])
 
   @@id([userId, roleId])
+  @@index([roleId])
   @@map("user_roles")
 }
 
@@ -720,6 +724,7 @@ model RefreshToken {
 
   user User @relation(fields: [userId], references: [id])
 
+  @@index([userId])
   @@map("refresh_tokens")
 }
 
@@ -812,6 +817,9 @@ model Product {
   productionConsumed   ProductionOrderItem[]
   supplierCatalogItems SupplierCatalogItem[]
 
+  @@index([tenantId, status])
+  @@index([categoryId])
+  @@index([brandId])
   @@map("products")
 }
 
@@ -943,6 +951,8 @@ model ProductSupplier {
   supplier Supplier @relation(fields: [supplierId], references: [id])
 
   @@unique([productId, supplierId])
+  @@index([tenantId])
+  @@index([supplierId])
   @@map("product_suppliers")
 }
 
@@ -965,6 +975,8 @@ model ProductUnit {
   saleOrderItem       SaleOrderItem?       @relation(fields: [saleOrderItemId], references: [id])
 
   @@unique([tenantId, productId, serialNumber])
+  @@index([productId])
+  @@index([saleOrderItemId])
   @@map("product_units")
 }
 
@@ -990,6 +1002,7 @@ model ProductBatch {
 
   @@unique([tenantId, productId, batchNumber])
   @@index([tenantId, productId, remainingQty])
+  @@index([productId])
   @@map("product_batches")
 }
 
@@ -1014,6 +1027,9 @@ model StockMovement {
   warehouse Warehouse?    @relation(fields: [warehouseId], references: [id])
   batch     ProductBatch? @relation(fields: [batchId], references: [id])
 
+  @@index([tenantId, productId])
+  @@index([referenceId])
+  @@index([warehouseId])
   @@map("stock_movements")
 }
 
@@ -1044,6 +1060,7 @@ model Supplier {
   catalogItems     SupplierCatalogItem[]
   accountsPayable  AccountsPayable[]
 
+  @@index([tenantId])
   @@map("suppliers")
 }
 
@@ -1069,6 +1086,8 @@ model PurchaseOrder {
   items    PurchaseOrderItem[]
   receipts PurchaseReceipt[]
 
+  @@index([tenantId, status])
+  @@index([supplierId])
   @@map("purchase_orders")
 }
 
@@ -1086,6 +1105,7 @@ model PurchaseOrderItem {
   productBatches       ProductBatch[]
   purchaseReceiptItems PurchaseReceiptItem[]
 
+  @@index([purchaseOrderId])
   @@map("purchase_order_items")
 }
 
@@ -1134,6 +1154,7 @@ model PurchaseReceiptItem {
   product           Product           @relation(fields: [productId], references: [id])
   productUnits      ProductUnit[]
 
+  @@index([purchaseReceiptId])
   @@map("purchase_receipt_items")
 }
 
@@ -1270,6 +1291,8 @@ model SaleOrder {
   bureauChecks CreditBureauCheck[]
 
   @@unique([tenantId, quoteNumber])
+  @@index([customerId])
+  @@index([sellerId])
   @@map("sale_orders")
 }
 
@@ -1290,6 +1313,8 @@ model Guarantor {
   tenant    Tenant    @relation(fields: [tenantId], references: [id])
   saleOrder SaleOrder @relation(fields: [saleOrderId], references: [id])
 
+  @@index([tenantId])
+  @@index([saleOrderId])
   @@map("guarantors")
 }
 
@@ -1313,6 +1338,7 @@ model SalePayment {
   posSession  PosSession? @relation(fields: [posSessionId], references: [id])
 
   @@index([tenantId, saleOrderId])
+  @@index([saleOrderId])
   @@map("sale_payments")
 }
 
@@ -1338,6 +1364,7 @@ model DeliveryNote {
   assignedEmployee Employee?               @relation(fields: [assignedEmployeeId], references: [id])
   trackingEvents   DeliveryTrackingEvent[]
 
+  @@index([tenantId, status])
   @@map("delivery_notes")
 }
 
@@ -1364,6 +1391,7 @@ model DeliveryTrackingEvent {
   recordedBy   User?        @relation(fields: [recordedById], references: [id])
 
   @@index([tenantId, deliveryNoteId, recordedAt])
+  @@index([deliveryNoteId])
   @@map("delivery_tracking_events")
 }
 
@@ -1384,6 +1412,7 @@ model DownPayment {
   saleOrder    SaleOrder @relation(fields: [saleOrderId], references: [id])
   registeredBy User?     @relation("DownPaymentRegistrar", fields: [registeredById], references: [id])
 
+  @@index([tenantId])
   @@map("down_payments")
 }
 
@@ -1429,6 +1458,8 @@ model SaleOrderItem {
   productUnits ProductUnit[]
   combo        SaleCombo?    @relation(fields: [comboId], references: [id])
 
+  @@index([saleOrderId])
+  @@index([productId])
   @@map("sale_order_items")
 }
 
@@ -1449,6 +1480,7 @@ model SaleCombo {
   items     SaleComboItem[]
   saleItems SaleOrderItem[]
 
+  @@index([tenantId])
   @@map("sale_combos")
 }
 
@@ -1539,6 +1571,7 @@ model InvoiceItem {
 
   invoice Invoice @relation(fields: [invoiceId], references: [id])
 
+  @@index([invoiceId])
   @@map("invoice_items")
 }
 
@@ -1556,6 +1589,8 @@ model CreditNote {
   tenant  Tenant  @relation(fields: [tenantId], references: [id])
   invoice Invoice @relation(fields: [invoiceId], references: [id])
 
+  @@index([tenantId])
+  @@index([invoiceId])
   @@map("credit_notes")
 }
 
@@ -1577,6 +1612,7 @@ model AccountsReceivable {
   paymentRecords   PaymentRecord[]
   collectionVisits CollectionVisit[]
 
+  @@index([tenantId, status])
   @@map("accounts_receivable")
 }
 
@@ -1594,6 +1630,8 @@ model PaymentRecord {
   tenant             Tenant             @relation(fields: [tenantId], references: [id])
   accountsReceivable AccountsReceivable @relation(fields: [accountsReceivableId], references: [id])
 
+  @@index([tenantId])
+  @@index([accountsReceivableId])
   @@map("payment_records")
 }
 
@@ -1618,6 +1656,8 @@ model AccountsPayable {
   supplier         Supplier          @relation(fields: [supplierId], references: [id])
   supplierPayments SupplierPayment[]
 
+  @@index([tenantId, status])
+  @@index([supplierId])
   @@map("accounts_payable")
 }
 
@@ -1637,6 +1677,8 @@ model SupplierPayment {
   accountsPayable AccountsPayable @relation(fields: [accountsPayableId], references: [id])
   createdBy       User?           @relation(fields: [createdById], references: [id])
 
+  @@index([tenantId])
+  @@index([accountsPayableId])
   @@map("supplier_payments")
 }
 
@@ -1764,6 +1806,8 @@ model Leave {
   employee   Employee  @relation(fields: [employeeId], references: [id])
   approvedBy Employee? @relation("LeaveApprover", fields: [approvedById], references: [id])
 
+  @@index([tenantId])
+  @@index([employeeId])
   @@map("leaves")
 }
 
@@ -1779,6 +1823,7 @@ model LeaveBalance {
   employee Employee @relation(fields: [employeeId], references: [id])
 
   @@unique([employeeId, year])
+  @@index([tenantId])
   @@map("leave_balances")
 }
 
@@ -1993,6 +2038,7 @@ model FileRecord {
   invoiceFor Invoice?        @relation("InvoicePdf")
   receiptFor PaymentReceipt? @relation("ReceiptPdf")
 
+  @@index([tenantId, module, entityType, entityId])
   @@map("file_records")
 }
 
@@ -2069,6 +2115,7 @@ model CreditBureauCheck {
   customer  Customer   @relation(fields: [customerId], references: [id])
   saleOrder SaleOrder? @relation(fields: [saleOrderId], references: [id])
 
+  @@index([tenantId, customerId])
   @@map("credit_bureau_checks")
 }
 
@@ -2119,6 +2166,8 @@ model InterestComponent {
   creditConfig CreditConfig                @relation(fields: [creditConfigId], references: [id])
   charges      InstallmentInterestCharge[]
 
+  @@index([tenantId])
+  @@index([creditConfigId])
   @@map("interest_components")
 }
 
@@ -2166,6 +2215,8 @@ model Loan {
   paymentReceipts   PaymentReceipt[]
   delinquencyReports DelinquencyReport[]
 
+  @@index([tenantId, status])
+  @@index([customerId])
   @@map("loans")
 }
 
@@ -2232,6 +2283,8 @@ model PaymentReceipt {
   interestInvoice Invoice?
 
   @@unique([tenantId, establecimiento, puntoExpedicion, sequential])
+  @@index([loanId])
+  @@index([customerId])
   @@map("payment_receipts")
 }
 
@@ -2255,6 +2308,7 @@ model PaymentReceiptItem {
   receipt     PaymentReceipt @relation(fields: [receiptId], references: [id])
   installment Installment    @relation(fields: [installmentId], references: [id])
 
+  @@index([receiptId])
   @@map("payment_receipt_items")
 }
 
@@ -2286,6 +2340,7 @@ model SaleTarget {
   tenant Tenant @relation(fields: [tenantId], references: [id])
   user   User?  @relation(fields: [userId], references: [id])
 
+  @@index([tenantId])
   @@map("sale_targets")
 }
 
@@ -2346,6 +2401,7 @@ model CollectionVisit {
 
   @@index([tenantId, routeId])
   @@index([tenantId, customerId])
+  @@index([routeId])
   @@map("collection_visits")
 }
 
