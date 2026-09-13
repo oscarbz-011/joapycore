@@ -1,7 +1,10 @@
 import { User } from '@prisma/client';
 
-// tempPasswordEncrypted is internal — never sent to clients
-export type SafeUser = Omit<User, 'passwordHash' | 'tempPasswordEncrypted'>;
+// tempPasswordEncrypted y sessionsValidAfter son internos — nunca van al cliente
+export type SafeUser = Omit<
+  User,
+  'passwordHash' | 'tempPasswordEncrypted' | 'sessionsValidAfter'
+>;
 
 export type SafeUserWithRoles = SafeUser & {
   roles: Array<{ id: string; name: string }>;
@@ -10,7 +13,12 @@ export type SafeUserWithRoles = SafeUser & {
 };
 
 export function toSafeUser(user: User): SafeUser {
-  const { passwordHash: _h, tempPasswordEncrypted: _e, ...safe } = user;
+  const {
+    passwordHash: _h,
+    tempPasswordEncrypted: _e,
+    sessionsValidAfter: _s,
+    ...safe
+  } = user;
   return safe;
 }
 
@@ -23,6 +31,7 @@ export function toSafeUserWithRoles(
   const {
     passwordHash: _h,
     tempPasswordEncrypted: _e,
+    sessionsValidAfter: _s,
     userRoles,
     userPermissions,
     ...safe

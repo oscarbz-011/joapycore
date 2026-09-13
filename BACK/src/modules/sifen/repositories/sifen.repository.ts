@@ -27,12 +27,23 @@ export class SifenRepository {
   }
 
   upsert(tenantId: string, data: UpsertSifenConfigData) {
-    // Cast needed: Prisma Bytes expects Uint8Array<ArrayBuffer> but Buffer uses ArrayBufferLike
-    const d = data as Record<string, unknown>;
+    // Prisma tipa Bytes como Uint8Array<ArrayBuffer> y Buffer es
+    // Uint8Array<ArrayBufferLike>: se copia a un Uint8Array en vez de
+    // castear todo el objeto (el cast ocultaba cualquier otro error de tipos).
+    const { certData, caCertData, ...rest } = data;
+    const d = {
+      ...rest,
+      ...(certData !== undefined ? { certData: toBytes(certData) } : {}),
+      ...(caCertData !== undefined ? { caCertData: toBytes(caCertData) } : {}),
+    };
     return this.prisma.sifenConfig.upsert({
       where: { tenantId },
-      create: { tenantId, ...d } as Parameters<typeof this.prisma.sifenConfig.upsert>[0]['create'],
-      update: d as Parameters<typeof this.prisma.sifenConfig.upsert>[0]['update'],
+      create: { tenantId, ...d },
+      update: d,
     });
   }
+}
+
+function toBytes(buffer: Buffer | null): Uint8Array<ArrayBuffer> | null {
+  return buffer ? new Uint8Array(buffer) : null;
 }

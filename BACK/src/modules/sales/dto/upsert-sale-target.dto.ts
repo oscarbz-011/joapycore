@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsDecimal, IsNumber, IsString, Matches, Min } from 'class-validator';
+import { IsNumber, IsString, Matches, Min } from 'class-validator';
 
 export class UpsertSaleTargetDto {
   @ApiProperty({ example: '2025-07', description: 'Period in YYYY-MM format' })

@@ -31,7 +31,7 @@ function convertDataTableHtml(table: PdfTableVariable): string {
 }
 
 function hasOwn(obj: Record<string, unknown>, key: string): boolean {
-  return Object.prototype.hasOwnProperty.call(obj, key);
+  return Object.hasOwn(obj, key);
 }
 
 // rawVariables se inserta tal cual, SIN escapar — para fragmentos de HTML ya
