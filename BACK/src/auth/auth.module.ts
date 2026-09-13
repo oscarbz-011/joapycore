@@ -9,6 +9,7 @@ import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { RefreshTokensRepository } from './repositories/refresh-tokens.repository';
 import { PermissionsResolver } from './services/permissions.resolver';
+import { RefreshTokensCleanupService } from './services/refresh-tokens-cleanup.service';
 import { SessionStateCache } from './services/session-state.cache';
 import { JwtStrategy } from './strategies/jwt.strategy';
 
@@ -37,6 +38,7 @@ import { JwtStrategy } from './strategies/jwt.strategy';
     JwtStrategy,
     PermissionsResolver,
     SessionStateCache,
+    RefreshTokensCleanupService,
   ],
 })
 export class AuthModule {}

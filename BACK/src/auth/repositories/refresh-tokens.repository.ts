@@ -15,6 +15,15 @@ export class RefreshTokensRepository {
     return this.prisma.refreshToken.findUnique({ where: { id } });
   }
 
+  // Vencidos o revocados antes del corte.
+  deleteStale(cutoff: Date) {
+    return this.prisma.refreshToken.deleteMany({
+      where: {
+        OR: [{ expiresAt: { lt: cutoff } }, { revokedAt: { lt: cutoff } }],
+      },
+    });
+  }
+
   revokeAllForUser(userId: string) {
     return this.prisma.refreshToken.updateMany({
       where: { userId, revokedAt: null },
