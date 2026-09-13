@@ -1,4 +1,4 @@
-import { apiClient } from './client';
+import { apiClient, LONG_REQUEST_TIMEOUT_MS } from './client';
 
 export type SifenEnvironment = 'TESTING' | 'PRODUCTION';
 
@@ -37,6 +37,7 @@ export const sifenApi = {
     return apiClient
       .post('/sifen/config/certificate', form, {
         headers: { 'Content-Type': 'multipart/form-data' },
+        timeout: LONG_REQUEST_TIMEOUT_MS,
       })
       .then((r) => r.data);
   },
@@ -51,6 +52,7 @@ export const sifenApi = {
     return apiClient
       .post('/sifen/config/ca-certificate', form, {
         headers: { 'Content-Type': 'multipart/form-data' },
+        timeout: LONG_REQUEST_TIMEOUT_MS,
       })
       .then((r) => r.data);
   },

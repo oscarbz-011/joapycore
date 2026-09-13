@@ -1,4 +1,4 @@
-import { apiClient } from './client';
+import { apiClient, LONG_REQUEST_TIMEOUT_MS } from './client';
 
 export type PurchaseType = 'LOCAL' | 'IMPORT';
 export type PurchaseOrderStatus =
@@ -191,6 +191,7 @@ export const procurementApi = {
     return apiClient
       .post(`/procurement/suppliers/${supplierId}/catalog/import`, body, {
         headers: { 'Content-Type': 'multipart/form-data' },
+        timeout: LONG_REQUEST_TIMEOUT_MS,
       })
       .then((r) => r.data);
   },

@@ -1,4 +1,4 @@
-import { apiClient } from './client';
+import { apiClient, LONG_REQUEST_TIMEOUT_MS } from './client';
 
 export type DocType = 'INTERNAL' | 'CONTRACT' | 'COMPLIANCE' | 'BILLING';
 export type DocVisibility = 'PUBLIC' | 'PRIVATE' | 'ROLE_BASED';
@@ -139,7 +139,10 @@ export const documentsApi = {
     const form = new FormData();
     form.append('file', file);
     return apiClient
-      .post(`/documents/${id}/file`, form, { headers: { 'Content-Type': 'multipart/form-data' } })
+      .post(`/documents/${id}/file`, form, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+        timeout: LONG_REQUEST_TIMEOUT_MS,
+      })
       .then((r) => r.data);
   },
 
@@ -153,10 +156,14 @@ export const documentsApi = {
     apiClient.post(`/documents/${id}/preview`, {}).then((r) => r.data),
 
   sendEmail: (id: string, to?: string): Promise<void> =>
-    apiClient.post(`/documents/${id}/email`, { to }).then((r) => r.data),
+    apiClient
+      .post(`/documents/${id}/email`, { to }, { timeout: LONG_REQUEST_TIMEOUT_MS })
+      .then((r) => r.data),
 
   generate: (id: string, values: Record<string, string>): Promise<{ fileId: string }> =>
-    apiClient.post(`/documents/${id}/generate`, { values }).then((r) => r.data),
+    apiClient
+      .post(`/documents/${id}/generate`, { values }, { timeout: LONG_REQUEST_TIMEOUT_MS })
+      .then((r) => r.data),
 };
 
 export interface TemplateVariable {

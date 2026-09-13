@@ -1,4 +1,4 @@
-import { apiClient } from './client';
+import { apiClient, LONG_REQUEST_TIMEOUT_MS } from './client';
 
 export interface FileRecord {
   id: string;
@@ -31,6 +31,7 @@ export const filesApi = {
     return apiClient
       .post(`/files/upload?${params.toString()}`, form, {
         headers: { 'Content-Type': 'multipart/form-data' },
+        timeout: LONG_REQUEST_TIMEOUT_MS,
       })
       .then((r) => r.data);
   },
@@ -45,7 +46,9 @@ export const filesApi = {
   // directo (driver local) o un 302 a una URL prefirmada (driver s3), y axios
   // sigue el redirect de forma transparente en ambos casos.
   downloadBlob: (id: string): Promise<Blob> =>
-    apiClient.get(`/files/${id}/download`, { responseType: 'blob' }).then((r) => r.data),
+    apiClient
+      .get(`/files/${id}/download`, { responseType: 'blob', timeout: LONG_REQUEST_TIMEOUT_MS })
+      .then((r) => r.data),
 
   delete: (id: string): Promise<void> =>
     apiClient.delete(`/files/${id}`).then((r) => r.data),

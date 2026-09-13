@@ -3,6 +3,11 @@ import { tokenStore } from '../token-store';
 import { ApiError } from './api-error';
 import { API_BASE, refreshSessionTokens } from './session-refresh';
 
+// Subidas, descargas de archivos y generación de PDF/email pueden tardar
+// bastante más que una consulta: el servidor termina bien pero el cliente
+// cortaba a los 12 s y mostraba un error.
+export const LONG_REQUEST_TIMEOUT_MS = 120_000;
+
 export const apiClient = axios.create({
   baseURL: API_BASE,
   headers: { 'Content-Type': 'application/json' },
