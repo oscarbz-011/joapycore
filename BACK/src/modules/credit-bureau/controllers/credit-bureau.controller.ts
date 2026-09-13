@@ -11,6 +11,7 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CurrentTenant } from '../../../common/decorators/current-tenant.decorator';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
 import { Permissions } from '../../../common/decorators/permissions.decorator';
+import { RequiredModule } from '../../../common/decorators/required-module.decorator';
 import type { JwtPayload } from '../../../common/types/jwt-payload.interface';
 import { RecordBureauCheckDto } from '../dto/record-bureau-check.dto';
 import { UpdateCreditBureauConfigDto } from '../dto/update-credit-bureau-config.dto';
@@ -18,7 +19,9 @@ import { CreditBureauChecksService } from '../services/credit-bureau-checks.serv
 import { CreditBureauConfigService } from '../services/credit-bureau-config.service';
 
 @ApiTags('Credit Bureau')
+// La consulta al buró es parte de la evaluación de crédito (Financiamiento).
 @ApiBearerAuth()
+@RequiredModule('finance')
 @Controller('credit-bureau')
 export class CreditBureauController {
   constructor(

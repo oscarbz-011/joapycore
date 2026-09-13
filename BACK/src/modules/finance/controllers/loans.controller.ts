@@ -11,6 +11,7 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CurrentTenant } from '../../../common/decorators/current-tenant.decorator';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
 import { Permissions } from '../../../common/decorators/permissions.decorator';
+import { RequiredModule } from '../../../common/decorators/required-module.decorator';
 import type { JwtPayload } from '../../../common/types/jwt-payload.interface';
 import { AdvancePaymentDto } from '../dto/advance-payment.dto';
 import { PayInstallmentDto } from '../dto/pay-installment.dto';
@@ -19,6 +20,7 @@ import { LoansService } from '../services/loans.service';
 
 @ApiTags('Finance')
 @ApiBearerAuth()
+@RequiredModule('finance')
 @Controller('finance/loans')
 export class LoansController {
   constructor(private readonly loansService: LoansService) {}

@@ -17,6 +17,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
+import { useActiveModules } from '@/lib/use-active-modules';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -552,13 +553,16 @@ function CreditBureauIntegrationCard() {
 }
 
 function IntegrationsTab() {
+  const { hasModule } = useActiveModules();
   const [enabled, setEnabled] = useState<Record<string, boolean>>(
     Object.fromEntries(INTEGRATIONS.map((i) => [i.id, i.on])),
   );
 
   return (
     <div className="space-y-4">
-      <CreditBureauIntegrationCard />
+      {/* El buró es parte de la evaluación de crédito: sin Financiamiento
+          activo el backend responde 403. */}
+      {hasModule('finance') && <CreditBureauIntegrationCard />}
 
       <div className="rounded-xl border border-border bg-card divide-y divide-border overflow-hidden">
         {INTEGRATIONS.map((int) => (
