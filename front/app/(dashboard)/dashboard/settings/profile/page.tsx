@@ -12,7 +12,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
 export default function ProfilePage() {
-  const { mustChangePassword, clearMustChangePassword } = useAuth();
+  const { mustChangePassword, changePassword } = useAuth();
   const queryClient = useQueryClient();
   const { data: me, isLoading } = useQuery({ queryKey: ['me'], queryFn: usersApi.getMe });
 
@@ -54,13 +54,12 @@ export default function ProfilePage() {
 
   const pwMutation = useMutation({
     mutationFn: () =>
-      usersApi.changePassword({ currentPassword: pw.current, newPassword: pw.next }),
+      changePassword(pw.current, pw.next),
     onSuccess: () => {
       setPw({ current: '', next: '', confirm: '' });
       setPwOk(true);
       setPwError('');
       setPwOpen(false);
-      clearMustChangePassword?.();
       setTimeout(() => setPwOk(false), 3000);
     },
     onError: (err: Error) => {

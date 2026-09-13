@@ -9,10 +9,26 @@ import { RolesRepository } from '../repositories/roles.repository';
 import { AssignPermissionsDto } from '../dto/assign-permissions.dto';
 import { CreateRoleDto } from '../dto/create-role.dto';
 import { UpdateRoleDto } from '../dto/update-role.dto';
+import { EventEmitter2 } from '@nestjs/event-emitter';
+import {
+  SESSION_INVALIDATE_EVENT,
+  type SessionInvalidateEvent,
+} from '../../common/events/session-invalidate.event';
 
 @Injectable()
 export class RolesService {
-  constructor(private readonly rolesRepository: RolesRepository) {}
+  constructor(
+    private readonly rolesRepository: RolesRepository,
+    private readonly eventEmitter: EventEmitter2,
+  ) {}
+
+  // Cambiar un rol afecta a todos los usuarios que lo tienen: se descarta el
+  // estado de sesión cacheado de todo el tenant.
+  private invalidateTenantSessions(tenantId: string) {
+    this.eventEmitter.emit(SESSION_INVALIDATE_EVENT, {
+      tenantId,
+    } satisfies SessionInvalidateEvent);
+  }
 
   list(tenantId: string) {
     return this.rolesRepository.findAllForTenant(tenantId);
@@ -55,6 +71,7 @@ export class RolesService {
       throw new ForbiddenException('Cannot delete a system role');
     }
     await this.rolesRepository.delete(tenantId, id);
+    this.invalidateTenantSessions(tenantId);
   }
 
   listAllPermissions() {
@@ -82,6 +99,7 @@ export class RolesService {
       id,
       permissions.map((p) => p.id),
     );
+    this.invalidateTenantSessions(tenantId);
     return this.getById(tenantId, id);
   }
 }

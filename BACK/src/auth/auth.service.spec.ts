@@ -1,7 +1,7 @@
 /// <reference types="jest" />
 
 import { ConflictException, UnauthorizedException } from '@nestjs/common';
-import { Industry, UserStatus } from '@prisma/client';
+import { Industry, TenantStatus, UserStatus } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 import { createHash } from 'node:crypto';
 import { AuthService } from './auth.service';
@@ -10,7 +10,12 @@ jest.mock('bcryptjs');
 
 describe('AuthService', () => {
   let service: AuthService;
-  let prisma: { $transaction: jest.Mock; user: { update: jest.Mock } };
+  let prisma: { $transaction: jest.Mock };
+  let tx: {
+    branch: { create: jest.Mock };
+    warehouse: { create: jest.Mock };
+  };
+  let permissionsResolver: { resolve: jest.Mock };
   let configService: { get: jest.Mock };
   let jwtService: { signAsync: jest.Mock };
   let eventEmitter: { emit: jest.Mock };
@@ -22,6 +27,7 @@ describe('AuthService', () => {
     findRolesForUser: jest.Mock;
     findPermissionsForUser: jest.Mock;
     findByIdForAuth: jest.Mock;
+    update: jest.Mock;
   };
   let rolesRepository: {
     findAllPermissions: jest.Mock;
@@ -32,11 +38,13 @@ describe('AuthService', () => {
   let tenantModulesRepository: {
     seedDefaults: jest.Mock;
     findActiveModuleNames: jest.Mock;
+    backfillMissing: jest.Mock;
   };
   let refreshTokensRepository: {
     create: jest.Mock;
     findById: jest.Mock;
     revoke: jest.Mock;
+    revokeAllForUser: jest.Mock;
   };
 
   const baseUser = {
@@ -53,11 +61,19 @@ describe('AuthService', () => {
   };
 
   beforeEach(() => {
+    tx = {
+      branch: { create: jest.fn().mockResolvedValue({ id: 'branch-1' }) },
+      warehouse: { create: jest.fn().mockResolvedValue({ id: 'wh-1' }) },
+    };
     prisma = {
-      $transaction: jest.fn((callback: (tx: unknown) => unknown) =>
-        callback({}),
+      $transaction: jest.fn((callback: (t: unknown) => unknown) =>
+        callback(tx),
       ),
-      user: { update: jest.fn().mockResolvedValue({}) },
+    };
+    permissionsResolver = {
+      resolve: jest
+        .fn()
+        .mockResolvedValue({ roles: ['Owner'], permissions: ['sales:read'] }),
     };
     configService = {
       get: jest.fn((_key: string, fallback?: unknown) => fallback),
@@ -74,6 +90,7 @@ describe('AuthService', () => {
       findRolesForUser: jest.fn().mockResolvedValue([]),
       findPermissionsForUser: jest.fn().mockResolvedValue([]),
       findByIdForAuth: jest.fn(),
+      update: jest.fn().mockResolvedValue(1),
     };
     rolesRepository = {
       findAllPermissions: jest.fn().mockResolvedValue([]),
@@ -82,16 +99,22 @@ describe('AuthService', () => {
     };
     tenantsRepository = {
       create: jest.fn(),
-      findById: jest.fn().mockResolvedValue({ id: 'tenant-1', name: 'Acme' }),
+      findById: jest.fn().mockResolvedValue({
+        id: 'tenant-1',
+        name: 'Acme',
+        status: TenantStatus.ACTIVE,
+      }),
     };
     tenantModulesRepository = {
       seedDefaults: jest.fn(),
       findActiveModuleNames: jest.fn().mockResolvedValue([]),
+      backfillMissing: jest.fn(),
     };
     refreshTokensRepository = {
       create: jest.fn().mockResolvedValue({ id: 'refresh-1' }),
       findById: jest.fn(),
       revoke: jest.fn(),
+      revokeAllForUser: jest.fn(),
     };
 
     service = new AuthService(
@@ -104,6 +127,7 @@ describe('AuthService', () => {
       tenantsRepository as any,
       tenantModulesRepository as any,
       refreshTokensRepository as any,
+      permissionsResolver as any,
     );
   });
 
@@ -134,23 +158,25 @@ describe('AuthService', () => {
         'tenant-1',
         'Owner',
         true,
-        {},
+        tx,
       );
       expect(rolesRepository.attachPermissions).toHaveBeenCalledWith(
         'role-1',
         ['perm-1'],
-        {},
+        tx,
       );
       expect(usersRepository.attachRole).toHaveBeenCalledWith(
         'user-1',
         'role-1',
-        {},
+        tx,
       );
       expect(tenantModulesRepository.seedDefaults).toHaveBeenCalledWith(
         'tenant-1',
-        'electrodomesticos',
-        {},
+        Industry.ELECTRODOMESTICOS,
+        tx,
       );
+      expect(tx.branch.create).toHaveBeenCalled();
+      expect(tx.warehouse.create).toHaveBeenCalled();
       expect(eventEmitter.emit).toHaveBeenCalledWith('user.registered', {
         userId: 'user-1',
         tenantId: 'tenant-1',
@@ -202,12 +228,46 @@ describe('AuthService', () => {
       expect(result.accessToken).toBe('signed-access-token');
     });
 
+    it('rejects login when the tenant is suspended', async () => {
+      usersRepository.findByEmailOrUsername.mockResolvedValue(baseUser);
+      (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+      tenantsRepository.findById.mockResolvedValue({
+        id: 'tenant-1',
+        status: TenantStatus.SUSPENDED,
+      });
+
+      await expect(
+        service.login({ emailOrUsername: baseUser.email, password: 'secret' }),
+      ).rejects.toThrow('La empresa está suspendida');
+      expect(jwtService.signAsync).not.toHaveBeenCalled();
+    });
+
+    it('puts the permissions resolved from the database in the token', async () => {
+      usersRepository.findByEmailOrUsername.mockResolvedValue(baseUser);
+      (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+
+      await service.login({
+        emailOrUsername: baseUser.email,
+        password: 'secret',
+      });
+
+      expect(jwtService.signAsync).toHaveBeenCalledWith(
+        expect.objectContaining({
+          roles: ['Owner'],
+          permissions: ['sales:read'],
+        }),
+      );
+    });
+
     it('rejects an incorrect password', async () => {
       usersRepository.findByEmailOrUsername.mockResolvedValue(baseUser);
       (bcrypt.compare as jest.Mock).mockResolvedValue(false);
 
       await expect(
-        service.login({ emailOrUsername: baseUser.email, password: 'wrong' } as any),
+        service.login({
+          emailOrUsername: baseUser.email,
+          password: 'wrong',
+        } as any),
       ).rejects.toBeInstanceOf(UnauthorizedException);
     });
 
@@ -244,6 +304,80 @@ describe('AuthService', () => {
       expect(refreshTokensRepository.revoke).toHaveBeenCalledWith('refresh-1');
       expect(usersRepository.findByIdForAuth).toHaveBeenCalledWith(baseUser.id);
       expect(result.accessToken).toBe('signed-access-token');
+    });
+
+    const tokenFor = (
+      secret: string,
+      overrides: Record<string, unknown> = {},
+    ) => ({
+      id: 'refresh-1',
+      userId: baseUser.id,
+      tokenHash: createHash('sha256').update(secret).digest('hex'),
+      expiresAt: new Date(Date.now() + 60_000),
+      revokedAt: null,
+      createdAt: new Date(),
+      ...overrides,
+    });
+
+    it('closes every session when a token rotated long ago is reused', async () => {
+      const secret = 'c'.repeat(64);
+      refreshTokensRepository.findById.mockResolvedValue(
+        tokenFor(secret, { revokedAt: new Date(Date.now() - 5 * 60_000) }),
+      );
+
+      await expect(
+        service.refresh({ refreshToken: `refresh-1.${secret}` }),
+      ).rejects.toBeInstanceOf(UnauthorizedException);
+      expect(refreshTokensRepository.revokeAllForUser).toHaveBeenCalledWith(
+        baseUser.id,
+      );
+      expect(eventEmitter.emit).toHaveBeenCalledWith(
+        'auth.session.invalidate',
+        {
+          userId: baseUser.id,
+        },
+      );
+    });
+
+    it('does not treat a just-rotated token (two tabs racing) as theft', async () => {
+      const secret = 'd'.repeat(64);
+      refreshTokensRepository.findById.mockResolvedValue(
+        tokenFor(secret, { revokedAt: new Date(Date.now() - 2_000) }),
+      );
+
+      await expect(
+        service.refresh({ refreshToken: `refresh-1.${secret}` }),
+      ).rejects.toBeInstanceOf(UnauthorizedException);
+      expect(refreshTokensRepository.revokeAllForUser).not.toHaveBeenCalled();
+    });
+
+    it('rejects a refresh token issued before the password change', async () => {
+      const secret = 'e'.repeat(64);
+      refreshTokensRepository.findById.mockResolvedValue(
+        tokenFor(secret, { createdAt: new Date(Date.now() - 60 * 60_000) }),
+      );
+      usersRepository.findByIdForAuth.mockResolvedValue({
+        ...baseUser,
+        sessionsValidAfter: new Date(Date.now() - 60_000),
+      });
+
+      await expect(
+        service.refresh({ refreshToken: `refresh-1.${secret}` }),
+      ).rejects.toThrow('La sesión fue cerrada');
+      expect(jwtService.signAsync).not.toHaveBeenCalled();
+    });
+
+    it('rejects refresh when the tenant was suspended', async () => {
+      const secret = 'f'.repeat(64);
+      refreshTokensRepository.findById.mockResolvedValue(tokenFor(secret));
+      usersRepository.findByIdForAuth.mockResolvedValue(baseUser);
+      tenantsRepository.findById.mockResolvedValue({
+        status: TenantStatus.SUSPENDED,
+      });
+
+      await expect(
+        service.refresh({ refreshToken: `refresh-1.${secret}` }),
+      ).rejects.toThrow('La empresa está suspendida');
     });
 
     it('rejects a revoked refresh token', async () => {

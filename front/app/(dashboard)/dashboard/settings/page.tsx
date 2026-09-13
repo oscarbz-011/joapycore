@@ -275,7 +275,7 @@ function ProfileTab() {
 // ── Tab: Security ──────────────────────────────────────────────────────────────
 
 function SecurityTab() {
-  const { mustChangePassword, clearMustChangePassword } = useAuth();
+  const { mustChangePassword, changePassword } = useAuth();
   const [pwOpen,  setPwOpen]  = useState(!!mustChangePassword);
   const [form,    setForm]    = useState({ current: '', next: '', confirm: '' });
   const [pwError, setPwError] = useState('');
@@ -283,13 +283,12 @@ function SecurityTab() {
 
   const mutation = useMutation({
     mutationFn: () =>
-      usersApi.changePassword({ currentPassword: form.current, newPassword: form.next }),
+      changePassword(form.current, form.next),
     onSuccess: () => {
       setForm({ current: '', next: '', confirm: '' });
       setPwOk(true);
       setPwError('');
       setTimeout(() => setPwOk(false), 2500);
-      clearMustChangePassword?.();
       setPwOpen(false);
     },
     onError: (err: Error) => {

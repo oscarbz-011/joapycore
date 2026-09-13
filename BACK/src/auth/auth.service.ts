@@ -6,7 +6,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { JwtService } from '@nestjs/jwt';
-import { User, UserStatus } from '@prisma/client';
+import { TenantStatus, User, UserStatus } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { JwtPayload } from '../common/types/jwt-payload.interface';
@@ -22,10 +22,15 @@ import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { RegisterDto } from './dto/register.dto';
 import { RefreshTokensRepository } from './repositories/refresh-tokens.repository';
 import type { AuditLogEvent } from '../audit/audit-log.event';
-import { PERMISSIONS } from '../common/constants/permissions.constant';
+import { PermissionsResolver } from './services/permissions.resolver';
+import { issuedBeforeCutoff } from './services/session-state.cache';
+import { SESSION_INVALIDATE_EVENT } from '../common/events/session-invalidate.event';
 
 const SALT_ROUNDS = 10;
 const OWNER_ROLE_NAME = 'Owner';
+// Dos pestañas pueden rotar el mismo refresh token casi a la vez: presentar
+// uno recién revocado dentro de esta ventana es una carrera, no un robo.
+const REFRESH_REUSE_GRACE_MS = 60_000;
 
 @Injectable()
 export class AuthService {
@@ -39,6 +44,7 @@ export class AuthService {
     private readonly tenantsRepository: TenantsRepository,
     private readonly tenantModulesRepository: TenantModulesRepository,
     private readonly refreshTokensRepository: RefreshTokensRepository,
+    private readonly permissionsResolver: PermissionsResolver,
   ) {}
 
   async register(dto: RegisterDto) {
@@ -52,7 +58,11 @@ export class AuthService {
 
     const user = await this.prisma.$transaction(async (tx) => {
       const tenant = await this.tenantsRepository.create(
-        { name: dto.tenantName, industry: dto.industry, employeeCount: dto.employeeCount },
+        {
+          name: dto.tenantName,
+          industry: dto.industry,
+          employeeCount: dto.employeeCount,
+        },
         tx,
       );
       const ownerRole = await this.rolesRepository.create(
@@ -100,8 +110,14 @@ export class AuthService {
     });
 
     const tokens = await this.issueTokens(user);
-    this.eventEmitter.emit('user.registered', { userId: user.id, tenantId: user.tenantId });
-    this.eventEmitter.emit('tenant.registered', { tenantId: user.tenantId, industry: dto.industry });
+    this.eventEmitter.emit('user.registered', {
+      userId: user.id,
+      tenantId: user.tenantId,
+    });
+    this.eventEmitter.emit('tenant.registered', {
+      tenantId: user.tenantId,
+      industry: dto.industry,
+    });
     this.eventEmitter.emit('audit.log', {
       tenantId: user.tenantId,
       userId: user.id,
@@ -113,7 +129,9 @@ export class AuthService {
   }
 
   async login(dto: LoginDto) {
-    const user = await this.usersRepository.findByEmailOrUsername(dto.emailOrUsername);
+    const user = await this.usersRepository.findByEmailOrUsername(
+      dto.emailOrUsername,
+    );
     if (!user || user.status !== UserStatus.ACTIVE) {
       throw new UnauthorizedException('Invalid credentials');
     }
@@ -137,13 +155,17 @@ export class AuthService {
       );
     }
 
-    await this.prisma.user.update({
-      where: { id: user.id },
-      data: { lastLoginAt: new Date() },
+    await this.assertTenantActive(user.tenantId);
+
+    await this.usersRepository.update(user.tenantId, user.id, {
+      lastLoginAt: new Date(),
     });
 
     const tokens = await this.issueTokens(user);
-    this.eventEmitter.emit('user.logged_in', { userId: user.id, tenantId: user.tenantId });
+    this.eventEmitter.emit('user.logged_in', {
+      userId: user.id,
+      tenantId: user.tenantId,
+    });
     this.eventEmitter.emit('audit.log', {
       tenantId: user.tenantId,
       userId: user.id,
@@ -157,7 +179,7 @@ export class AuthService {
   async refresh(dto: RefreshTokenDto) {
     const { id, secret } = this.parseRefreshToken(dto.refreshToken);
     const stored = await this.refreshTokensRepository.findById(id);
-    if (!stored || stored.revokedAt || stored.expiresAt < new Date()) {
+    if (!stored) {
       throw new UnauthorizedException('Invalid refresh token');
     }
 
@@ -170,12 +192,40 @@ export class AuthService {
       throw new UnauthorizedException('Invalid refresh token');
     }
 
+    if (stored.revokedAt) {
+      // Un token ya rotado que vuelve a aparecer fuera de la ventana de
+      // carrera entre pestañas indica que alguien más lo tiene: se cierran
+      // todas las sesiones del usuario.
+      if (Date.now() - stored.revokedAt.getTime() > REFRESH_REUSE_GRACE_MS) {
+        await this.refreshTokensRepository.revokeAllForUser(stored.userId);
+        this.eventEmitter.emit(SESSION_INVALIDATE_EVENT, {
+          userId: stored.userId,
+        });
+      }
+      throw new UnauthorizedException('Invalid refresh token');
+    }
+    if (stored.expiresAt < new Date()) {
+      throw new UnauthorizedException('Invalid refresh token');
+    }
+
     await this.refreshTokensRepository.revoke(stored.id);
 
     const user = await this.usersRepository.findByIdForAuth(stored.userId);
     if (!user || user.status !== UserStatus.ACTIVE) {
       throw new UnauthorizedException('Invalid refresh token');
     }
+    // Emitido antes de cambiar la contraseña o de desactivar/reactivar.
+    if (
+      issuedBeforeCutoff(
+        Math.floor(stored.createdAt.getTime() / 1000),
+        user.sessionsValidAfter,
+      )
+    ) {
+      throw new UnauthorizedException(
+        'La sesión fue cerrada. Iniciá sesión de nuevo.',
+      );
+    }
+    await this.assertTenantActive(user.tenantId);
 
     return this.issueTokens(user);
   }
@@ -188,26 +238,19 @@ export class AuthService {
     }
   }
 
-  private async issueTokens(user: User) {
-    const userRoles = await this.usersRepository.findRolesForUser(user.id);
-    const roles = userRoles.map((userRole) => userRole.role.name);
-
-    const hasSystemRole = userRoles.some((ur) => ur.role.isSystem);
-    let permissions: string[];
-
-    if (hasSystemRole) {
-      // Owner gets every permission defined in the constant — no DB lookup needed.
-      // Adding new permissions to the constant is enough; no seed re-run required.
-      permissions = [...PERMISSIONS];
-    } else {
-      const rolePermissions = userRoles.flatMap((userRole) =>
-        userRole.role.rolePermissions.map((rp) => rp.permission.key),
+  private async assertTenantActive(tenantId: string): Promise<void> {
+    const tenant = await this.tenantsRepository.findById(tenantId);
+    if (tenant?.status !== TenantStatus.ACTIVE) {
+      throw new UnauthorizedException(
+        'La empresa está suspendida. Contactá al administrador.',
       );
-      const userExtraPermissions =
-        await this.usersRepository.findPermissionsForUser(user.id);
-      const extraKeys = userExtraPermissions.map((up) => up.permission.key);
-      permissions = Array.from(new Set([...rolePermissions, ...extraKeys]));
     }
+  }
+
+  private async issueTokens(user: User) {
+    const { roles, permissions } = await this.permissionsResolver.resolve(
+      user.id,
+    );
     await this.tenantModulesRepository.backfillMissing(user.tenantId);
     const activeModules =
       await this.tenantModulesRepository.findActiveModuleNames(user.tenantId);

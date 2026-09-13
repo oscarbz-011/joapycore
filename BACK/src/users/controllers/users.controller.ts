@@ -106,7 +106,9 @@ export class UsersController {
 
   @Post(':id/reset-password')
   @Permissions('users:update')
-  @ApiOperation({ summary: 'Generate a new temporary password for a user (admin)' })
+  @ApiOperation({
+    summary: 'Generate a new temporary password for a user (admin)',
+  })
   resetPassword(
     @CurrentTenant() tenantId: string,
     @CurrentUser() user: JwtPayload,

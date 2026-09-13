@@ -40,6 +40,7 @@ function makeUser(overrides = {}) {
 
 describe('UsersService', () => {
   let service: UsersService;
+  let eventEmitter: { emit: jest.Mock };
   let usersRepository: {
     findAll: jest.Mock;
     findById: jest.Mock;
@@ -73,8 +74,12 @@ describe('UsersService', () => {
       findPermissionsByKeys: jest.fn(),
     };
 
-    const eventEmitter = { emit: jest.fn() };
-    service = new UsersService(usersRepository as any, rolesRepository as any, eventEmitter as any);
+    eventEmitter = { emit: jest.fn() };
+    service = new UsersService(
+      usersRepository as any,
+      rolesRepository as any,
+      eventEmitter as any,
+    );
   });
 
   // ── list ───────────────────────────────────────────────────────────────────
@@ -174,7 +179,7 @@ describe('UsersService', () => {
       );
       expect(result.id).toBe('user-2');
       expect(result.tempPassword).toEqual(expect.any(String));
-      expect(result.tempPassword!.length).toBeGreaterThanOrEqual(8);
+      expect(result.tempPassword.length).toBeGreaterThanOrEqual(8);
     });
 
     it('throws ConflictException if email is already in use', async () => {
@@ -191,7 +196,7 @@ describe('UsersService', () => {
   // ── deactivate / reactivate ────────────────────────────────────────────────
 
   describe('deactivate', () => {
-    it('sets status to INACTIVE', async () => {
+    it('sets status to INACTIVE, cuts existing sessions and drops the cached session', async () => {
       usersRepository.findById.mockResolvedValue(
         makeUser({ status: UserStatus.INACTIVE }),
       );
@@ -201,7 +206,13 @@ describe('UsersService', () => {
       expect(usersRepository.update).toHaveBeenCalledWith(
         'tenant-1',
         'user-1',
-        { status: UserStatus.INACTIVE },
+        { status: UserStatus.INACTIVE, sessionsValidAfter: expect.any(Date) },
+      );
+      expect(eventEmitter.emit).toHaveBeenCalledWith(
+        'auth.session.invalidate',
+        {
+          userId: 'user-1',
+        },
       );
     });
 

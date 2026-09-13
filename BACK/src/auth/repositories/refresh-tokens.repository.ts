@@ -15,6 +15,13 @@ export class RefreshTokensRepository {
     return this.prisma.refreshToken.findUnique({ where: { id } });
   }
 
+  revokeAllForUser(userId: string) {
+    return this.prisma.refreshToken.updateMany({
+      where: { userId, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
+  }
+
   revoke(id: string) {
     return this.prisma.refreshToken.update({
       where: { id },

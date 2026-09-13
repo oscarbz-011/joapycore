@@ -20,6 +20,10 @@ import {
   encryptTempPassword,
   buildTempPasswordExpiry,
 } from '../../../common/utils/temp-password.util';
+import {
+  SESSION_INVALIDATE_EVENT,
+  type SessionInvalidateEvent,
+} from '../../../common/events/session-invalidate.event';
 
 const SALT_ROUNDS = 10;
 
@@ -212,11 +216,16 @@ export class EmployeesService {
 
       if (employee.userId) {
         await tx.user.updateMany({
-          where: { id: employee.userId },
-          data: { status: 'INACTIVE' },
+          where: { id: employee.userId, tenantId },
+          data: { status: 'INACTIVE', sessionsValidAfter: new Date() },
         });
       }
     });
+    if (employee.userId) {
+      this.eventEmitter.emit(SESSION_INVALIDATE_EVENT, {
+        userId: employee.userId,
+      } satisfies SessionInvalidateEvent);
+    }
 
     this.eventEmitter.emit('audit.log', {
       tenantId,
@@ -252,8 +261,12 @@ export class EmployeesService {
         mustChangePassword: true,
         tempPasswordEncrypted,
         tempPasswordExpiresAt,
+        sessionsValidAfter: new Date(),
       },
     });
+    this.eventEmitter.emit(SESSION_INVALIDATE_EVENT, {
+      userId: employee.userId,
+    } satisfies SessionInvalidateEvent);
 
     return { tempPassword };
   }

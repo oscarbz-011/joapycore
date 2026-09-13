@@ -8,6 +8,8 @@ import { UsersModule } from '../users/users.module';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { RefreshTokensRepository } from './repositories/refresh-tokens.repository';
+import { PermissionsResolver } from './services/permissions.resolver';
+import { SessionStateCache } from './services/session-state.cache';
 import { JwtStrategy } from './strategies/jwt.strategy';
 
 @Module({
@@ -29,6 +31,12 @@ import { JwtStrategy } from './strategies/jwt.strategy';
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, RefreshTokensRepository, JwtStrategy],
+  providers: [
+    AuthService,
+    RefreshTokensRepository,
+    JwtStrategy,
+    PermissionsResolver,
+    SessionStateCache,
+  ],
 })
 export class AuthModule {}

@@ -1,6 +1,13 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { EmployeeCount, Industry } from '@prisma/client';
-import { IsEmail, IsEnum, IsOptional, IsString, Matches, MinLength } from 'class-validator';
+import {
+  IsEmail,
+  IsEnum,
+  IsOptional,
+  IsString,
+  Matches,
+  MinLength,
+} from 'class-validator';
 
 export class RegisterDto {
   @ApiProperty()
@@ -14,7 +21,8 @@ export class RegisterDto {
   // tenant sin defaults en silencio.
   @ApiPropertyOptional({
     enum: Industry,
-    description: 'Rubro de la empresa — define las categorías y el tipo de producto por defecto',
+    description:
+      'Rubro de la empresa — define las categorías y el tipo de producto por defecto',
     example: Industry.ELECTRODOMESTICOS,
   })
   @IsOptional()
@@ -38,13 +46,21 @@ export class RegisterDto {
   @MinLength(8)
   password: string;
 
-  @ApiPropertyOptional({ description: 'Si no se provee, se auto-genera desde nombre y apellido' })
+  @ApiPropertyOptional({
+    description: 'Si no se provee, se auto-genera desde nombre y apellido',
+  })
   @IsOptional()
   @IsString()
-  @Matches(/^[a-z0-9_.]+$/, { message: 'username solo puede tener minúsculas, números, puntos y guiones bajos' })
+  @Matches(/^[a-z0-9_.]+$/, {
+    message:
+      'username solo puede tener minúsculas, números, puntos y guiones bajos',
+  })
   username?: string;
 
-  @ApiPropertyOptional({ enum: EmployeeCount, description: 'Rango aproximado de empleados' })
+  @ApiPropertyOptional({
+    enum: EmployeeCount,
+    description: 'Rango aproximado de empleados',
+  })
   @IsOptional()
   @IsEnum(EmployeeCount)
   employeeCount?: EmployeeCount;

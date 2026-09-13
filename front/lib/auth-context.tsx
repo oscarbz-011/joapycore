@@ -10,11 +10,19 @@ import {
 } from 'react';
 import { useRouter } from 'next/navigation';
 import { authApi } from './api/auth';
+import { usersApi } from './api/users';
 import { decodeJwt, tokenStore } from './token-store';
 import type { JwtPayload, RegisterDto, User } from '../types/auth';
 
 const MCP_KEY = 'mcp'; // mustChangePassword sessionStorage key
-const TMP_PW_KEY = 'tmp_pw'; // temporary password sessionStorage key
+// Limpieza de la clave que versiones anteriores dejaban en sessionStorage
+// con la contraseña temporal en texto plano.
+const LEGACY_TMP_PW_KEY = 'tmp_pw';
+
+// La contraseña temporal solo vive en memoria, para precompletar el cambio
+// obligatorio justo después del login. Nunca en storage: cualquier script
+// inyectado podría leerla. Si se recarga la página, el usuario la tipea.
+let pendingTempPassword: string | null = null;
 
 interface AuthState {
   user: User | null;
@@ -30,6 +38,13 @@ interface AuthContextValue extends AuthState {
   logout: () => Promise<void>;
   clearMustChangePassword: () => void;
   refreshSession: () => Promise<void>;
+  /** Contraseña temporal del último login, si sigue en memoria. */
+  getPendingTempPassword: () => string | null;
+  /**
+   * Cambia la contraseña y vuelve a autenticar con la nueva: el backend cierra
+   * todas las sesiones emitidas con la anterior, incluida esta.
+   */
+  changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -87,12 +102,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       tokenStore.setAccessToken(data.accessToken);
       tokenStore.setRefreshToken(data.refreshToken);
       const mustChangePassword = !!data.mustChangePassword;
+      sessionStorage.removeItem(LEGACY_TMP_PW_KEY);
       if (mustChangePassword) {
         sessionStorage.setItem(MCP_KEY, '1');
-        sessionStorage.setItem(TMP_PW_KEY, password);
+        pendingTempPassword = password;
       } else {
         sessionStorage.removeItem(MCP_KEY);
-        sessionStorage.removeItem(TMP_PW_KEY);
+        pendingTempPassword = null;
       }
       setState({
         user: data.user,
@@ -135,14 +151,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     tokenStore.clear();
     sessionStorage.removeItem(MCP_KEY);
-    sessionStorage.removeItem(TMP_PW_KEY);
+    sessionStorage.removeItem(LEGACY_TMP_PW_KEY);
+    pendingTempPassword = null;
     setState({ user: null, jwtPayload: null, isLoading: false, isAuthenticated: false, mustChangePassword: false });
     router.push('/login');
   }, [router]);
 
   const clearMustChangePassword = useCallback(() => {
     sessionStorage.removeItem(MCP_KEY);
-    sessionStorage.removeItem(TMP_PW_KEY);
+    sessionStorage.removeItem(LEGACY_TMP_PW_KEY);
+    pendingTempPassword = null;
     setState((s) => ({ ...s, mustChangePassword: false }));
   }, []);
 
@@ -159,8 +177,42 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }));
   }, []);
 
+  const getPendingTempPassword = useCallback(() => pendingTempPassword, []);
+
+  const changePassword = useCallback(
+    async (currentPassword: string, newPassword: string) => {
+      const email = state.user?.email;
+      await usersApi.changePassword({ currentPassword, newPassword });
+      if (!email) return;
+      const data = await authApi.login({ emailOrUsername: email, password: newPassword });
+      tokenStore.setAccessToken(data.accessToken);
+      tokenStore.setRefreshToken(data.refreshToken);
+      sessionStorage.removeItem(MCP_KEY);
+      sessionStorage.removeItem(LEGACY_TMP_PW_KEY);
+      pendingTempPassword = null;
+      setState((s) => ({
+        ...s,
+        user: data.user,
+        jwtPayload: decodeJwt(data.accessToken),
+        mustChangePassword: false,
+      }));
+    },
+    [state.user?.email],
+  );
+
   return (
-    <AuthContext.Provider value={{ ...state, login, register, logout, clearMustChangePassword, refreshSession }}>
+    <AuthContext.Provider
+      value={{
+        ...state,
+        login,
+        register,
+        logout,
+        clearMustChangePassword,
+        refreshSession,
+        getPendingTempPassword,
+        changePassword,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );

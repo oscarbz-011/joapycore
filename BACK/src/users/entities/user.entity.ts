@@ -10,7 +10,6 @@ export type SafeUserWithRoles = SafeUser & {
 };
 
 export function toSafeUser(user: User): SafeUser {
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { passwordHash: _h, tempPasswordEncrypted: _e, ...safe } = user;
   return safe;
 }
@@ -21,8 +20,13 @@ export function toSafeUserWithRoles(
     userPermissions: Array<{ permission: { key: string } }>;
   },
 ): SafeUserWithRoles {
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const { passwordHash: _h, tempPasswordEncrypted: _e, userRoles, userPermissions, ...safe } = user;
+  const {
+    passwordHash: _h,
+    tempPasswordEncrypted: _e,
+    userRoles,
+    userPermissions,
+    ...safe
+  } = user;
   return {
     ...safe,
     roles: userRoles.map((ur) => ur.role),

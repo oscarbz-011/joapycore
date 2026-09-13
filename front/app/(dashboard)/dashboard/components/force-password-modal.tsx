@@ -5,17 +5,16 @@ import { apiErrorMessage } from '@/lib/api/api-error';
 import { useState } from 'react';
 import { ShieldAlert } from 'lucide-react';
 import { useMutation } from '@tanstack/react-query';
-import { usersApi } from '../../../../lib/api/users';
 import { useAuth } from '../../../../lib/auth-context';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
 export function ForcePasswordModal() {
-  const { clearMustChangePassword } = useAuth();
+  const { changePassword, getPendingTempPassword } = useAuth();
 
-  const storedTmp =
-    typeof window !== 'undefined' ? (sessionStorage.getItem('tmp_pw') ?? '') : '';
+  // Solo en memoria (ver auth-context): tras recargar la página queda vacío.
+  const [storedTmp] = useState(() => getPendingTempPassword() ?? '');
 
   const [form, setForm] = useState({
     currentPassword: storedTmp,
@@ -25,14 +24,7 @@ export function ForcePasswordModal() {
   const [localError, setLocalError] = useState('');
 
   const mutation = useMutation({
-    mutationFn: () =>
-      usersApi.changePassword({
-        currentPassword: form.currentPassword,
-        newPassword: form.newPassword,
-      }),
-    onSuccess: () => {
-      clearMustChangePassword();
-    },
+    mutationFn: () => changePassword(form.currentPassword, form.newPassword),
     onError: (err: Error) => {
       setLocalError(apiErrorMessage(err, 'Error al cambiar la contraseña'));
     },

@@ -12,11 +12,18 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import { RolesRepository } from '../repositories/roles.repository';
 import { UsersRepository } from '../repositories/users.repository';
 import type { AuditLogEvent } from '../../audit/audit-log.event';
+import {
+  SESSION_INVALIDATE_EVENT,
+  type SessionInvalidateEvent,
+} from '../../common/events/session-invalidate.event';
 import { AssignUserRolesDto } from '../dto/assign-user-roles.dto';
 import { ChangePasswordDto } from '../dto/change-password.dto';
 import { CreateUserDto } from '../dto/create-user.dto';
 import { UpdateUserDto } from '../dto/update-user.dto';
-import { toSafeUserWithRoles, type SafeUserWithRoles } from '../entities/user.entity';
+import {
+  toSafeUserWithRoles,
+  type SafeUserWithRoles,
+} from '../entities/user.entity';
 import {
   generateTempPassword,
   encryptTempPassword,
@@ -109,8 +116,10 @@ export class UsersService {
   async deactivate(tenantId: string, id: string, actorId?: string) {
     const count = await this.usersRepository.update(tenantId, id, {
       status: UserStatus.INACTIVE,
+      sessionsValidAfter: new Date(),
     });
     if (count === 0) throw new NotFoundException('User not found');
+    this.invalidateSession({ userId: id });
     this.eventEmitter.emit('audit.log', {
       tenantId,
       userId: actorId,
@@ -126,6 +135,7 @@ export class UsersService {
       status: UserStatus.ACTIVE,
     });
     if (count === 0) throw new NotFoundException('User not found');
+    this.invalidateSession({ userId: id });
     this.eventEmitter.emit('audit.log', {
       tenantId,
       userId: actorId,
@@ -154,7 +164,9 @@ export class UsersService {
       mustChangePassword: true,
       tempPasswordEncrypted,
       tempPasswordExpiresAt,
+      sessionsValidAfter: new Date(),
     });
+    this.invalidateSession({ userId: id });
 
     this.eventEmitter.emit('audit.log', {
       tenantId,
@@ -190,6 +202,7 @@ export class UsersService {
     }
 
     await this.usersRepository.setRoles(id, dto.roleIds);
+    this.invalidateSession({ userId: id });
     return this.getById(tenantId, id);
   }
 
@@ -205,12 +218,20 @@ export class UsersService {
       throw new BadRequestException('La contraseña actual es incorrecta');
 
     const newHash = await bcrypt.hash(dto.newPassword, SALT_ROUNDS);
+    // Cierra todas las sesiones abiertas con la contraseña anterior; el
+    // front vuelve a autenticarse con la nueva para seguir en esta.
     await this.usersRepository.update(user.tenantId, userId, {
       passwordHash: newHash,
       mustChangePassword: false,
       tempPasswordEncrypted: null,
       tempPasswordExpiresAt: null,
+      sessionsValidAfter: new Date(),
     });
+    this.invalidateSession({ userId });
+  }
+
+  private invalidateSession(event: SessionInvalidateEvent) {
+    this.eventEmitter.emit(SESSION_INVALIDATE_EVENT, event);
   }
 
   async setExtraPermissions(
@@ -230,6 +251,7 @@ export class UsersService {
       id,
       permissions.map((p) => p.id),
     );
+    this.invalidateSession({ userId: id });
     return this.getById(tenantId, id);
   }
 
