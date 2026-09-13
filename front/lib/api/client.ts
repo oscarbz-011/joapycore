@@ -1,9 +1,7 @@
-import axios from 'axios';
+import axios, { type AxiosError, type InternalAxiosRequestConfig } from 'axios';
 import { tokenStore } from '../token-store';
-import type { AuthTokens } from '../../types/auth';
 import { ApiError } from './api-error';
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000';
+import { API_BASE, refreshSessionTokens } from './session-refresh';
 
 export const apiClient = axios.create({
   baseURL: API_BASE,
@@ -17,67 +15,64 @@ apiClient.interceptors.request.use((config) => {
   return config;
 });
 
-let isRefreshing = false;
-type QueueCallback = (token: string) => void;
-let refreshQueue: QueueCallback[] = [];
+type RetriableConfig = InternalAxiosRequestConfig & { _retry?: boolean };
 
 apiClient.interceptors.response.use(
   (res) => res,
   async (error: unknown) => {
     if (!axios.isAxiosError(error)) {
-      return Promise.reject(new ApiError('Error inesperado.', 0));
+      throw new ApiError('Error inesperado.', 0);
     }
 
-    const original = error.config as typeof error.config & { _retry?: boolean };
-    const status = error.response?.status ?? 0;
-
-    // ── Token refresh on 401 ────────────────────────────────────────────────
-    // Only attempt refresh when the request was authenticated (had a Bearer token).
-    // Unauthenticated endpoints (/auth/login, /auth/register, /auth/refresh) never
-    // carry an Authorization header, so we skip the retry to avoid loops and
-    // deadlocks when isRefreshing is already true.
-    const hadAuthHeader = !!(original?.headers?.Authorization);
-    if (status === 401 && !original?._retry && original && hadAuthHeader) {
-      original._retry = true;
-
-      const refreshToken = tokenStore.getRefreshToken();
-      if (!refreshToken) {
-        return Promise.reject(toApiError(error));
-      }
-
-      if (isRefreshing) {
-        return new Promise((resolve) => {
-          refreshQueue.push((token) => {
-            if (original.headers) original.headers.Authorization = `Bearer ${token}`;
-            resolve(apiClient(original));
-          });
-        });
-      }
-
-      isRefreshing = true;
-      try {
-        const { data } = await axios.post<AuthTokens>(`${API_BASE}/auth/refresh`, {
-          refreshToken,
-        });
-        tokenStore.setAccessToken(data.accessToken);
-        tokenStore.setRefreshToken(data.refreshToken);
-        refreshQueue.forEach((cb) => cb(data.accessToken));
-        refreshQueue = [];
-        if (original.headers) original.headers.Authorization = `Bearer ${data.accessToken}`;
-        return apiClient(original);
-      } catch {
-        tokenStore.clear();
-        if (typeof window !== 'undefined') window.location.href = '/login';
-        return Promise.reject(toApiError(error));
-      } finally {
-        isRefreshing = false;
-      }
+    // Solo se intenta renovar si la request iba autenticada. Los endpoints
+    // públicos (/auth/login, /auth/register, /auth/refresh) no llevan
+    // Authorization, así se evitan bucles.
+    const original = error.config as RetriableConfig | undefined;
+    if (
+      error.response?.status === 401 &&
+      original &&
+      !original._retry &&
+      original.headers?.Authorization
+    ) {
+      return retryAfterRenewingSession(error, original);
     }
 
-    // ── Normalize all other errors to ApiError ──────────────────────────────
-    return Promise.reject(toApiError(error));
+    throw toApiError(error);
   },
 );
+
+async function retryAfterRenewingSession(error: AxiosError, original: RetriableConfig) {
+  original._retry = true;
+  const sentAuth = original.headers.Authorization;
+  const renewedElsewhere = () => {
+    const token = tokenStore.getAccessToken();
+    return token && `Bearer ${token}` !== sentAuth ? token : null;
+  };
+  const retryWith = (token: string) => {
+    original.headers.Authorization = `Bearer ${token}`;
+    return apiClient(original);
+  };
+
+  // Otro flujo ya renovó la sesión mientras esta request viajaba (otra
+  // request que refrescó, o volver a autenticarse tras cambiar la
+  // contraseña): se reintenta con ese token, sin rotar de nuevo.
+  const already = renewedElsewhere();
+  if (already) return retryWith(already);
+  if (!tokenStore.getRefreshToken()) throw toApiError(error);
+
+  try {
+    const data = await refreshSessionTokens();
+    return retryWith(data.accessToken);
+  } catch {
+    // Si en el medio alguien dejó una sesión nueva, se usa esa en vez de
+    // cerrar la sesión del usuario.
+    const latest = renewedElsewhere();
+    if (latest) return retryWith(latest);
+    tokenStore.clear();
+    if (typeof window !== 'undefined') window.location.href = '/login';
+    throw toApiError(error);
+  }
+}
 
 function toApiError(error: unknown): ApiError {
   if (!axios.isAxiosError(error)) {
@@ -122,6 +117,7 @@ function friendlyStatus(status: number): string {
     404: 'El recurso solicitado no existe.',
     409: 'Ya existe un registro con esos datos.',
     422: 'No se puede procesar la solicitud con el estado actual.',
+    429: 'Demasiadas solicitudes. Esperá un momento y volvé a intentar.',
   };
   return map[status] ?? 'Ocurrió un error. Intentá de nuevo.';
 }

@@ -10,6 +10,7 @@ import {
 } from 'react';
 import { useRouter } from 'next/navigation';
 import { authApi } from './api/auth';
+import { refreshSessionTokens } from './api/session-refresh';
 import { usersApi } from './api/users';
 import { decodeJwt, tokenStore } from './token-store';
 import type { JwtPayload, RegisterDto, User } from '../types/auth';
@@ -66,11 +67,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    authApi
-      .refresh(storedRefresh)
+    refreshSessionTokens()
       .then((data) => {
-        tokenStore.setAccessToken(data.accessToken);
-        tokenStore.setRefreshToken(data.refreshToken);
         const mustChangePassword =
           typeof window !== 'undefined' &&
           sessionStorage.getItem(MCP_KEY) === '1';
@@ -167,9 +165,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const refreshSession = useCallback(async () => {
     const storedRefresh = tokenStore.getRefreshToken();
     if (!storedRefresh) return;
-    const data = await authApi.refresh(storedRefresh);
-    tokenStore.setAccessToken(data.accessToken);
-    tokenStore.setRefreshToken(data.refreshToken);
+    const data = await refreshSessionTokens();
     setState((s) => ({
       ...s,
       user: data.user,

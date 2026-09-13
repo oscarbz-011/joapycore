@@ -1,6 +1,6 @@
 import { io, type Socket } from 'socket.io-client';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000';
+import { API_BASE } from './api/session-refresh';
 
 let _socket: Socket | null = null;
 
