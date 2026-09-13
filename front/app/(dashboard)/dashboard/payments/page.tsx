@@ -1,5 +1,7 @@
 'use client';
 
+import { paymentMethodLabel } from '@/lib/payment-methods';
+
 import { apiErrorMessage } from '@/lib/api/api-error';
 
 import { Fragment, useState } from 'react';
@@ -1066,15 +1068,6 @@ function ARDetailPanel({
 
 // ── Collections widget ─────────────────────────────────────────────────────────
 
-const METHOD_SHORT: Record<string, string> = {
-  CASH:          'Efectivo',
-  BANK_TRANSFER: 'Transferencia',
-  PAGO_EXPRESS:  'Pago Express',
-  AQUI_PAGO:     'AquíPago',
-  DEPOSITO:      'Depósito',
-  CHEQUE:        'Cheque',
-  UNKNOWN:       'Sin método',
-};
 
 const MES_LARGO = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 
@@ -1157,7 +1150,7 @@ function CollectionsWidget({ range, onRangeChange }: { range: CollectionsRange; 
             return (
               <div key={method} className="space-y-0.5">
                 <div className="flex justify-between text-xs">
-                  <span className="text-muted-foreground">{METHOD_SHORT[method] ?? method}</span>
+                  <span className="text-muted-foreground">{method === 'UNKNOWN' ? 'Sin método' : paymentMethodLabel(method)}</span>
                   <span className="font-medium text-foreground">{formatPrice(amount)}</span>
                 </div>
                 <div className="h-1.5 w-full rounded-full bg-muted/20">

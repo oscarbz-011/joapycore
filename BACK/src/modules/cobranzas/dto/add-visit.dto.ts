@@ -1,5 +1,11 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsNumber, IsOptional, IsPositive, IsString, Min } from 'class-validator';
+import {
+  IsNumber,
+  IsOptional,
+  IsPositive,
+  IsString,
+  Min,
+} from 'class-validator';
 
 export class AddVisitDto {
   @ApiProperty({ description: 'ID del cliente a visitar' })
@@ -21,12 +27,17 @@ export class AddVisitDto {
   @IsOptional()
   installmentId?: string;
 
-  @ApiPropertyOptional({ description: 'ID de la cuenta por cobrar relacionada' })
+  @ApiPropertyOptional({
+    description: 'ID de la cuenta por cobrar relacionada',
+  })
   @IsString()
   @IsOptional()
   arId?: string;
 
-  @ApiPropertyOptional({ description: 'Orden de visita en la ruta', default: 0 })
+  @ApiPropertyOptional({
+    description: 'Orden de visita en la ruta',
+    default: 0,
+  })
   @IsNumber()
   @Min(0)
   @IsOptional()

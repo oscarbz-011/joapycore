@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { CollectionRouteStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
 
 @Injectable()
@@ -12,18 +12,47 @@ export class CollectionRoutesRepository {
       createdBy: { select: { id: true, firstName: true, lastName: true } },
       visits: {
         include: {
-          customer: { select: { id: true, firstName: true, lastName: true, phone: true, address: true } },
-          installment: { select: { id: true, number: true, dueDate: true, amount: true, paidAmount: true, status: true } },
+          customer: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              phone: true,
+              address: true,
+            },
+          },
+          installment: {
+            select: {
+              id: true,
+              number: true,
+              dueDate: true,
+              amount: true,
+              paidAmount: true,
+              status: true,
+            },
+          },
         },
         orderBy: { visitOrder: 'asc' as const },
       },
     };
   }
 
-  findAll(tenantId: string, filters?: { collectorId?: string; status?: string; from?: Date; to?: Date }) {
+  findAll(
+    tenantId: string,
+    filters?: { collectorId?: string; status?: string; from?: Date; to?: Date },
+  ) {
     const where: Prisma.CollectionRouteWhereInput = { tenantId };
     if (filters?.collectorId) where.collectorId = filters.collectorId;
-    if (filters?.status) where.status = filters.status as any;
+    // Query param libre: un valor que no es del enum se ignora en vez de
+    // hacer fallar la consulta.
+    if (
+      filters?.status &&
+      (Object.values(CollectionRouteStatus) as string[]).includes(
+        filters.status,
+      )
+    ) {
+      where.status = filters.status as CollectionRouteStatus;
+    }
     if (filters?.from || filters?.to) {
       where.routeDate = {
         ...(filters.from ? { gte: filters.from } : {}),
@@ -49,6 +78,10 @@ export class CollectionRoutesRepository {
   }
 
   update(id: string, data: Prisma.CollectionRouteUncheckedUpdateInput) {
-    return this.prisma.collectionRoute.update({ where: { id }, data, include: this.include });
+    return this.prisma.collectionRoute.update({
+      where: { id },
+      data,
+      include: this.include,
+    });
   }
 }

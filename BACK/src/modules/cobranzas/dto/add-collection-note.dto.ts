@@ -1,12 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { CollectionNoteType } from '@prisma/client';
 import { IsEnum, IsOptional, IsString } from 'class-validator';
-
-export enum CollectionNoteTypeDto {
-  VISIT = 'VISIT',
-  CALL = 'CALL',
-  MESSAGE = 'MESSAGE',
-  GENERAL = 'GENERAL',
-}
 
 export class AddCollectionNoteDto {
   @ApiProperty({ description: 'ID del cliente' })
@@ -17,8 +11,11 @@ export class AddCollectionNoteDto {
   @IsString()
   note: string;
 
-  @ApiPropertyOptional({ enum: CollectionNoteTypeDto, default: CollectionNoteTypeDto.GENERAL })
-  @IsEnum(CollectionNoteTypeDto)
+  @ApiPropertyOptional({
+    enum: CollectionNoteType,
+    default: CollectionNoteType.GENERAL,
+  })
+  @IsEnum(CollectionNoteType)
   @IsOptional()
-  type?: CollectionNoteTypeDto;
+  type?: CollectionNoteType;
 }

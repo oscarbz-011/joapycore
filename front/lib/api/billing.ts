@@ -1,8 +1,9 @@
 import { apiClient } from './client';
+import type { PaymentMethod } from '../payment-methods';
 
 export type InvoiceStatus = 'PENDING' | 'ISSUED' | 'PAID' | 'CANCELLED';
 export type CreditNoteStatus = 'ISSUED' | 'APPLIED';
-export type PaymentMethod = 'CASH' | 'BANK_TRANSFER' | 'CARD' | 'PAGO_EXPRESS' | 'AQUI_PAGO' | 'CHECK';
+export type { PaymentMethod } from '../payment-methods';
 
 export interface InvoiceItem {
   id: string;

@@ -8,9 +8,27 @@ export class CollectionVisitsRepository {
 
   private get include() {
     return {
-      customer: { select: { id: true, firstName: true, lastName: true, phone: true, address: true } },
-      installment: { select: { id: true, number: true, dueDate: true, amount: true, status: true } },
-      loan: { select: { id: true, totalAmount: true, totalInstallments: true } },
+      customer: {
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          phone: true,
+          address: true,
+        },
+      },
+      installment: {
+        select: {
+          id: true,
+          number: true,
+          dueDate: true,
+          amount: true,
+          status: true,
+        },
+      },
+      loan: {
+        select: { id: true, totalAmount: true, totalInstallments: true },
+      },
     };
   }
 
@@ -34,7 +52,11 @@ export class CollectionVisitsRepository {
   }
 
   update(id: string, data: Prisma.CollectionVisitUncheckedUpdateInput) {
-    return this.prisma.collectionVisit.update({ where: { id }, data, include: this.include });
+    return this.prisma.collectionVisit.update({
+      where: { id },
+      data,
+      include: this.include,
+    });
   }
 
   delete(id: string) {

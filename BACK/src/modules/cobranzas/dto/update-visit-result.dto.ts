@@ -1,4 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { PaymentMethod } from '@prisma/client';
 import { Type } from 'class-transformer';
 import {
   IsDate,
@@ -17,14 +18,6 @@ export enum VisitResultDto {
   PROMISE = 'PROMISE',
 }
 
-export enum PaymentMethodDto {
-  CASH = 'CASH',
-  BANK_TRANSFER = 'BANK_TRANSFER',
-  CHECK = 'CHECK',
-  MOBILE = 'MOBILE',
-  OTHER = 'OTHER',
-}
-
 export class UpdateVisitResultDto {
   @ApiProperty({ enum: VisitResultDto })
   @IsEnum(VisitResultDto)
@@ -36,17 +29,21 @@ export class UpdateVisitResultDto {
   @IsOptional()
   collectedAmount?: number;
 
-  @ApiPropertyOptional({ enum: PaymentMethodDto })
-  @IsEnum(PaymentMethodDto)
+  // Enum de la base: el DTO propio aceptaba MOBILE/OTHER, que Prisma rechaza
+  // al guardar (500), y no permitía tarjeta ni las bocas de cobranza.
+  @ApiPropertyOptional({ enum: PaymentMethod })
+  @IsEnum(PaymentMethod)
   @IsOptional()
-  paymentMethod?: PaymentMethodDto;
+  paymentMethod?: PaymentMethod;
 
   @ApiPropertyOptional()
   @IsString()
   @IsOptional()
   reference?: string;
 
-  @ApiPropertyOptional({ description: 'Fecha de compromiso (solo para PROMISE)' })
+  @ApiPropertyOptional({
+    description: 'Fecha de compromiso (solo para PROMISE)',
+  })
   @IsDate()
   @Type(() => Date)
   @IsOptional()

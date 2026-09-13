@@ -1,6 +1,14 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsDate, IsInt, IsNumber, IsOptional, IsPositive, IsString, Min } from 'class-validator';
+import {
+  IsDate,
+  IsInt,
+  IsNumber,
+  IsOptional,
+  IsPositive,
+  IsString,
+  Min,
+} from 'class-validator';
 
 export class CreatePaymentAgreementDto {
   @ApiProperty({ description: 'ID del cliente' })
@@ -27,7 +35,10 @@ export class CreatePaymentAgreementDto {
   @IsPositive()
   agreedAmount: number;
 
-  @ApiProperty({ example: '2026-09-01', description: 'Fecha de inicio del acuerdo' })
+  @ApiProperty({
+    example: '2026-09-01',
+    description: 'Fecha de inicio del acuerdo',
+  })
   @IsDate()
   @Type(() => Date)
   startDate: Date;

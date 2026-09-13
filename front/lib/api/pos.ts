@@ -4,7 +4,7 @@ import type { SaleOrder } from './sales';
 export type PosSessionStatus = 'OPEN' | 'CLOSED' | 'DISCREPANCY';
 
 // Mirrors the Prisma PaymentMethod enum used by POST /pos/sales.
-export type PosPaymentMethod = 'BANK_TRANSFER' | 'CASH' | 'CARD' | 'PAGO_EXPRESS' | 'AQUI_PAGO' | 'CHECK';
+export type PosPaymentMethod = import('../payment-methods').PaymentMethod;
 
 // /pos/sales and /pos/sales/history additionally include salePayments,
 // which the generic SaleOrder type (sales.ts) doesn't declare.

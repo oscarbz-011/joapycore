@@ -202,7 +202,7 @@ export class CobranzasService {
     const updated = await this.visitsRepo.update(visitId, {
       result: dto.result,
       collectedAmount: newCollected,
-      paymentMethod: (dto.paymentMethod as any) ?? null,
+      paymentMethod: dto.paymentMethod ?? null,
       reference: dto.reference ?? null,
       promiseDate: dto.promiseDate ?? null,
       notes: dto.notes ?? null,
@@ -354,7 +354,7 @@ export class CobranzasService {
       tenantId,
       customerId: dto.customerId,
       note: dto.note,
-      type: (dto.type as any) ?? 'GENERAL',
+      type: dto.type ?? 'GENERAL',
       createdById: userId,
     });
   }

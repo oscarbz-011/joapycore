@@ -21,6 +21,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
+import { PAYMENT_METHODS, PAYMENT_METHOD_LABELS, type PaymentMethod } from '@/lib/payment-methods';
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -30,13 +31,6 @@ function formatPrice(v: number) {
 
 const NUM_CLS = 'h-9 w-full min-w-0 rounded-3xl border border-transparent bg-input/50 px-3 text-sm outline-none transition-[color,box-shadow,background-color] focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30';
 
-const PAY_LABELS: Record<string, string> = {
-  CASH: 'Efectivo',
-  BANK_TRANSFER: 'Transferencia',
-  CHECK: 'Cheque',
-  MOBILE: 'Billetera móvil',
-  OTHER: 'Otro',
-};
 
 // ── Status badges ──────────────────────────────────────────────────────────────
 
@@ -107,7 +101,7 @@ function PayInstallmentForm({
     Number(installment.amount) - Number(installment.paidAmount) + chargesTotalOf(installment),
   );
   const [amount, setAmount] = useState<number>(remaining);
-  const [paymentMethod, setPaymentMethod] = useState('CASH');
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('CASH');
   const [paymentDate, setPaymentDate] = useState(() => todayISODate());
   const [notes, setNotes] = useState('');
 
@@ -136,16 +130,14 @@ function PayInstallmentForm({
         </div>
         <div className="flex-1 space-y-1">
           <Label>Método de pago</Label>
-          <Select value={paymentMethod} onValueChange={(v) => v && setPaymentMethod(v)}>
+          <Select value={paymentMethod} onValueChange={(v) => v && setPaymentMethod(v as PaymentMethod)}>
             <SelectTrigger className="w-full">
-              <span className="flex-1 text-left text-sm truncate">{PAY_LABELS[paymentMethod] ?? paymentMethod}</span>
+              <span className="flex-1 text-left text-sm truncate">{PAYMENT_METHOD_LABELS[paymentMethod]}</span>
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="CASH">Efectivo</SelectItem>
-              <SelectItem value="BANK_TRANSFER">Transferencia</SelectItem>
-              <SelectItem value="CHECK">Cheque</SelectItem>
-              <SelectItem value="MOBILE">Billetera móvil</SelectItem>
-              <SelectItem value="OTHER">Otro</SelectItem>
+              {PAYMENT_METHODS.map((m) => (
+                <SelectItem key={m} value={m}>{PAYMENT_METHOD_LABELS[m]}</SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>

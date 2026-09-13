@@ -1,13 +1,10 @@
 import { apiClient } from './client';
 
 export type ARStatus = 'PENDING' | 'PARTIAL' | 'PAID' | 'CANCELLED';
-export type PaymentMethod =
-  | 'BANK_TRANSFER'
-  | 'CASH'
-  | 'PAGO_EXPRESS'
-  | 'AQUI_PAGO'
-  | 'DEPOSITO'
-  | 'CHEQUE';
+import type { PaymentMethod } from '../payment-methods';
+
+export type { PaymentMethod } from '../payment-methods';
+export { PAYMENT_METHOD_LABELS } from '../payment-methods';
 
 export interface PaymentRecord {
   id: string;
@@ -85,15 +82,6 @@ export interface RegisterPaymentPayload {
   reference?: string;
   notes?: string;
 }
-
-export const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
-  CASH: 'Efectivo',
-  BANK_TRANSFER: 'Transferencia bancaria',
-  PAGO_EXPRESS: 'Pago Express',
-  AQUI_PAGO: 'AquíPago',
-  DEPOSITO: 'Depósito bancario',
-  CHEQUE: 'Cheque',
-};
 
 export const paymentsApi = {
   listAR: (): Promise<AccountsReceivable[]> =>

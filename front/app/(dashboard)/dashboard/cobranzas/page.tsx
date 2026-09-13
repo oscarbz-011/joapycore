@@ -1,5 +1,7 @@
 'use client';
 
+import { PAYMENT_METHODS, PAYMENT_METHOD_LABELS, paymentMethodLabel } from '@/lib/payment-methods';
+
 import { apiErrorMessage } from '@/lib/api/api-error';
 
 import { useState } from 'react';
@@ -236,15 +238,13 @@ function RouteDetailPanel({
                           <Select value={resultForm.paymentMethod} onValueChange={(v) => v && setResultForm((f) => ({ ...f, paymentMethod: v }))}>
                             <SelectTrigger className="w-full">
                               <span className="flex-1 text-left text-sm truncate">
-                                {({ CASH: 'Efectivo', BANK_TRANSFER: 'Transferencia', MOBILE: 'Pago móvil', CHECK: 'Cheque', OTHER: 'Otro' } as Record<string, string>)[resultForm.paymentMethod] ?? resultForm.paymentMethod}
+                                {paymentMethodLabel(resultForm.paymentMethod)}
                               </span>
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="CASH">Efectivo</SelectItem>
-                              <SelectItem value="BANK_TRANSFER">Transferencia</SelectItem>
-                              <SelectItem value="MOBILE">Pago móvil</SelectItem>
-                              <SelectItem value="CHECK">Cheque</SelectItem>
-                              <SelectItem value="OTHER">Otro</SelectItem>
+                              {PAYMENT_METHODS.map((m) => (
+                                <SelectItem key={m} value={m}>{PAYMENT_METHOD_LABELS[m]}</SelectItem>
+                              ))}
                             </SelectContent>
                           </Select>
                         </>

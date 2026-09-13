@@ -8,7 +8,14 @@ export class PaymentAgreementsRepository {
 
   private get include() {
     return {
-      customer: { select: { id: true, firstName: true, lastName: true, documentNumber: true } },
+      customer: {
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          documentNumber: true,
+        },
+      },
       loan: { select: { id: true, principal: true, totalAmount: true } },
       approvedBy: { select: { id: true, firstName: true, lastName: true } },
       createdBy: { select: { id: true, firstName: true, lastName: true } },
@@ -35,6 +42,10 @@ export class PaymentAgreementsRepository {
   }
 
   update(id: string, data: Prisma.PaymentAgreementUncheckedUpdateInput) {
-    return this.prisma.paymentAgreement.update({ where: { id }, data, include: this.include });
+    return this.prisma.paymentAgreement.update({
+      where: { id },
+      data,
+      include: this.include,
+    });
   }
 }
