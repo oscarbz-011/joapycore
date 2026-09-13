@@ -1,5 +1,7 @@
 'use client';
 
+import { apiErrorMessage } from '@/lib/api/api-error';
+
 import { useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -152,8 +154,8 @@ function ProfileTab() {
       setServerError('');
       setTimeout(() => setSuccess(false), 2500);
     },
-    onError: (err: Error & { response?: { data?: { message?: string } } }) => {
-      setServerError(err?.response?.data?.message ?? 'Error al guardar');
+    onError: (err: Error) => {
+      setServerError(apiErrorMessage(err, 'Error al guardar'));
     },
   });
 
@@ -290,8 +292,8 @@ function SecurityTab() {
       clearMustChangePassword?.();
       setPwOpen(false);
     },
-    onError: (err: Error & { response?: { data?: { message?: string } } }) => {
-      setPwError(err?.response?.data?.message ?? 'Error al cambiar contraseña');
+    onError: (err: Error) => {
+      setPwError(apiErrorMessage(err, 'Error al cambiar contraseña'));
     },
   });
 
@@ -720,7 +722,7 @@ function CertificatesTab() {
               </div>
               {uploadMut.isError && (
                 <p className="text-xs text-destructive">
-                  {(uploadMut.error as Error & { response?: { data?: { message?: string } } })?.response?.data?.message ?? 'Error al cargar el certificado'}
+                  {apiErrorMessage(uploadMut.error, 'Error al cargar el certificado')}
                 </p>
               )}
               <div className="flex gap-2">

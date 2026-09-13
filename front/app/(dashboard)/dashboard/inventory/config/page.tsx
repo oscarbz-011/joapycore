@@ -1,5 +1,7 @@
 'use client';
 
+import { apiErrorMessage } from '@/lib/api/api-error';
+
 import { useState } from 'react';
 import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -66,8 +68,8 @@ function CategoriesPanel() {
       setError('');
       void queryClient.invalidateQueries({ queryKey: ['inventory-categories'] });
     },
-    onError: (err: Error & { response?: { data?: { message?: string } } }) => {
-      setError(err?.response?.data?.message ?? 'Error al crear categoría');
+    onError: (err: Error) => {
+      setError(apiErrorMessage(err, 'Error al crear categoría'));
     },
   });
 
@@ -151,8 +153,8 @@ function BrandsPanel() {
       setError('');
       void queryClient.invalidateQueries({ queryKey: ['inventory-brands'] });
     },
-    onError: (err: Error & { response?: { data?: { message?: string } } }) => {
-      setError(err?.response?.data?.message ?? 'Error al crear marca');
+    onError: (err: Error) => {
+      setError(apiErrorMessage(err, 'Error al crear marca'));
     },
   });
 

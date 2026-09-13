@@ -1,5 +1,7 @@
 'use client';
 
+import { apiErrorMessage } from '@/lib/api/api-error';
+
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ChevronDown, ChevronRight, AlertCircle, AlertTriangle } from 'lucide-react';
@@ -173,7 +175,7 @@ function PayInstallmentForm({
       </div>
       {mutation.isError && (
         <p className="text-xs text-destructive">
-          {(mutation.error as Error & { response?: { data?: { message?: string } } })?.response?.data?.message ?? 'Error al registrar pago'}
+          {apiErrorMessage(mutation.error, 'Error al registrar pago')}
         </p>
       )}
     </div>

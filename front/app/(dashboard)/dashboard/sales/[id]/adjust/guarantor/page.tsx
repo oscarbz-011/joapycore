@@ -1,5 +1,7 @@
 'use client';
 
+import { apiErrorMessage } from '@/lib/api/api-error';
+
 import { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -61,9 +63,8 @@ export default function NewGuarantorPage() {
       void queryClient.invalidateQueries({ queryKey: ['sale-orders'] });
       back();
     },
-    onError: (err: Error & { response?: { data?: { message?: string | string[] } } }) => {
-      const msg = err?.response?.data?.message;
-      setError(Array.isArray(msg) ? msg[0] : (msg ?? 'Error al guardar el garante'));
+    onError: (err: Error) => {
+      setError(apiErrorMessage(err, 'Error al guardar el garante'));
     },
   });
 

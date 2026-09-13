@@ -1,5 +1,7 @@
 'use client';
 
+import { apiErrorMessage } from '@/lib/api/api-error';
+
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Check, FolderOpen, Pencil, Plus, Trash2, X } from 'lucide-react';
@@ -24,8 +26,8 @@ export function CategoriesTab() {
   const createMutation = useMutation({
     mutationFn: () => documentCategoriesApi.create(name.trim()),
     onSuccess: () => { setName(''); setError(''); invalidate(); },
-    onError: (err: Error & { response?: { data?: { message?: string } } }) => {
-      setError(err?.response?.data?.message ?? 'Error al crear categoría');
+    onError: (err: Error) => {
+      setError(apiErrorMessage(err, 'Error al crear categoría'));
     },
   });
 

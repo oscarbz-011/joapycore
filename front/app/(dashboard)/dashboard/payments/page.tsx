@@ -1,5 +1,7 @@
 'use client';
 
+import { apiErrorMessage } from '@/lib/api/api-error';
+
 import { Fragment, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -450,9 +452,8 @@ function RegisterPaymentModal({
     onSuccess: () => {
       onSaved();
     },
-    onError: (err: Error & { response?: { data?: { message?: string | string[] } } }) => {
-      const msg = err?.response?.data?.message;
-      setError(Array.isArray(msg) ? msg[0] : (msg ?? 'Error al registrar el pago'));
+    onError: (err: Error) => {
+      setError(apiErrorMessage(err, 'Error al registrar el pago'));
     },
   });
 
@@ -574,9 +575,8 @@ function PayInstallmentsModal({
       if (data.receipt?.pdfFileId) void openPdf(data.receipt.pdfFileId);
       onSaved();
     },
-    onError: (err: Error & { response?: { data?: { message?: string | string[] } } }) => {
-      const msg = err?.response?.data?.message;
-      setError(Array.isArray(msg) ? msg[0] : (msg ?? 'Error al registrar el cobro'));
+    onError: (err: Error) => {
+      setError(apiErrorMessage(err, 'Error al registrar el cobro'));
     },
   });
 

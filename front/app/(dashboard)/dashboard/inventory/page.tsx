@@ -1,5 +1,7 @@
 'use client';
 
+import { apiErrorMessage } from '@/lib/api/api-error';
+
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -294,9 +296,8 @@ function ProductModal({
       void queryClient.invalidateQueries({ queryKey: ['inventory-products'] });
       onOpenChange(false);
     },
-    onError: (err: Error & { response?: { data?: { message?: string | string[] } } }) => {
-      const msg = err?.response?.data?.message;
-      setError(Array.isArray(msg) ? msg[0] : (msg ?? 'Error al guardar'));
+    onError: (err: Error) => {
+      setError(apiErrorMessage(err, 'Error al guardar'));
     },
   });
 

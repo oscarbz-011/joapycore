@@ -1,5 +1,7 @@
 'use client';
 
+import { apiErrorMessage } from '@/lib/api/api-error';
+
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { User, Camera, AlertTriangle, Mail, Phone, Calendar, Building2 } from 'lucide-react';
@@ -39,8 +41,8 @@ export default function ProfilePage() {
       setProfileError('');
       setTimeout(() => setProfileSuccess(false), 3000);
     },
-    onError: (err: Error & { response?: { data?: { message?: string } } }) => {
-      setProfileError(err?.response?.data?.message ?? 'Error al guardar los cambios');
+    onError: (err: Error) => {
+      setProfileError(apiErrorMessage(err, 'Error al guardar los cambios'));
     },
   });
 
@@ -61,8 +63,8 @@ export default function ProfilePage() {
       clearMustChangePassword?.();
       setTimeout(() => setPwOk(false), 3000);
     },
-    onError: (err: Error & { response?: { data?: { message?: string } } }) => {
-      setPwError(err?.response?.data?.message ?? 'Error al cambiar la contraseña');
+    onError: (err: Error) => {
+      setPwError(apiErrorMessage(err, 'Error al cambiar la contraseña'));
     },
   });
 

@@ -1,5 +1,7 @@
 'use client';
 
+import { apiErrorMessage } from '@/lib/api/api-error';
+
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
@@ -156,9 +158,8 @@ export function CustomerForm({ initial, onDone }: Props) {
       void queryClient.invalidateQueries({ queryKey: ['sale-customers'] });
       onDone(customer);
     },
-    onError: (err: Error & { response?: { data?: { message?: string | string[] } } }) => {
-      const msg = err?.response?.data?.message;
-      setError(Array.isArray(msg) ? msg[0] : (msg ?? 'Error al guardar'));
+    onError: (err: Error) => {
+      setError(apiErrorMessage(err, 'Error al guardar'));
     },
   });
 

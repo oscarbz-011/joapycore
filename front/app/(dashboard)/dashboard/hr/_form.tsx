@@ -1,5 +1,7 @@
 'use client';
 
+import { apiErrorMessage } from '@/lib/api/api-error';
+
 import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Check, Copy } from 'lucide-react';
@@ -172,9 +174,8 @@ export function EmployeeForm({ initial, onDone }: Props) {
       }
       onDone();
     },
-    onError: (err: Error & { response?: { data?: { message?: string | string[] } } }) => {
-      const msg = err?.response?.data?.message;
-      setError(Array.isArray(msg) ? msg[0] : (msg ?? 'Error al guardar'));
+    onError: (err: Error) => {
+      setError(apiErrorMessage(err, 'Error al guardar'));
     },
   });
 
@@ -184,9 +185,8 @@ export function EmployeeForm({ initial, onDone }: Props) {
       void queryClient.invalidateQueries({ queryKey: ['hr-employees'] });
       onDone();
     },
-    onError: (err: Error & { response?: { data?: { message?: string | string[] } } }) => {
-      const msg = err?.response?.data?.message;
-      setError(Array.isArray(msg) ? msg[0] : (msg ?? 'Error al dar de baja'));
+    onError: (err: Error) => {
+      setError(apiErrorMessage(err, 'Error al dar de baja'));
     },
   });
 

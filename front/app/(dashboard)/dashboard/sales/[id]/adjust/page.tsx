@@ -1,5 +1,7 @@
 'use client';
 
+import { apiErrorMessage } from '@/lib/api/api-error';
+
 import { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -199,7 +201,7 @@ export default function AdjustOrderPage() {
 
       {saveMutation.isError && (
         <p className="mb-3 text-xs text-destructive">
-          {(saveMutation.error as Error & { response?: { data?: { message?: string | string[] } } })?.response?.data?.message ?? 'Error al guardar los cambios'}
+          {apiErrorMessage(saveMutation.error, 'Error al guardar los cambios')}
         </p>
       )}
       {saveMutation.isSuccess && (
@@ -244,7 +246,7 @@ export default function AdjustOrderPage() {
 
       {resubmitMutation.isError && (
         <p className="mb-3 text-xs text-destructive">
-          {(resubmitMutation.error as Error & { response?: { data?: { message?: string | string[] } } })?.response?.data?.message ?? 'Error al reenviar a evaluación'}
+          {apiErrorMessage(resubmitMutation.error, 'Error al reenviar a evaluación')}
         </p>
       )}
 

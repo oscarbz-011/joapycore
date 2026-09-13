@@ -1,5 +1,7 @@
 'use client';
 
+import { apiErrorMessage } from '@/lib/api/api-error';
+
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus, X, Star, Building2, MapPin, Phone, LayoutGrid, List } from 'lucide-react';
@@ -69,9 +71,8 @@ function BranchForm({ initial, onClose }: { initial?: Branch; onClose: () => voi
       return initial ? branchesApi.updateBranch(initial.id, payload) : branchesApi.createBranch(payload);
     },
     onSuccess: () => { void queryClient.invalidateQueries({ queryKey: ['branches'] }); onClose(); },
-    onError: (err: Error & { response?: { data?: { message?: string | string[] } } }) => {
-      const msg = err?.response?.data?.message;
-      setError(Array.isArray(msg) ? msg[0] : (msg ?? 'Error al guardar'));
+    onError: (err: Error) => {
+      setError(apiErrorMessage(err, 'Error al guardar'));
     },
   });
 

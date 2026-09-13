@@ -1,5 +1,7 @@
 'use client';
 
+import { apiErrorMessage } from '@/lib/api/api-error';
+
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -186,9 +188,8 @@ export default function NewQuotePage() {
       void qc.invalidateQueries({ queryKey: ['sale-orders'] });
       router.push(`/dashboard/sales/quotes/${order.id}`);
     },
-    onError: (err: Error & { response?: { data?: { message?: string | string[] } } }) => {
-      const msg = err?.response?.data?.message;
-      setError(Array.isArray(msg) ? msg[0] : (msg ?? 'Error al crear el presupuesto'));
+    onError: (err: Error) => {
+      setError(apiErrorMessage(err, 'Error al crear el presupuesto'));
     },
   });
 

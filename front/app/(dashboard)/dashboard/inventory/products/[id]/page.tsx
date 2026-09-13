@@ -1,5 +1,7 @@
 'use client';
 
+import { apiErrorMessage } from '@/lib/api/api-error';
+
 import { useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -84,9 +86,8 @@ function MovementModal({ productId, onClose }: { productId: string; onClose: () 
       void queryClient.invalidateQueries({ queryKey: ['inventory-products'] });
       onClose();
     },
-    onError: (err: Error & { response?: { data?: { message?: string | string[] } } }) => {
-      const msg = err?.response?.data?.message;
-      setError(Array.isArray(msg) ? msg[0] : (msg ?? 'Error al registrar movimiento'));
+    onError: (err: Error) => {
+      setError(apiErrorMessage(err, 'Error al registrar movimiento'));
     },
   });
 
@@ -326,9 +327,8 @@ export default function ProductDetailPage() {
     },
     // El backend revalida los requisitos aunque el botón esté deshabilitado
     // (la ficha pudo cambiar desde otra pestaña) — se muestra su mensaje.
-    onError: (err: Error & { response?: { data?: { message?: string | string[] } } }) => {
-      const msg = err?.response?.data?.message;
-      setStatusError(Array.isArray(msg) ? msg[0] : (msg ?? 'No se pudo cambiar el estado'));
+    onError: (err: Error) => {
+      setStatusError(apiErrorMessage(err, 'No se pudo cambiar el estado'));
     },
   });
 
@@ -585,15 +585,9 @@ export default function ProductDetailPage() {
               )}
               {editMutation.isError && (
                 <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-                  {(() => {
-                    // El mensaje del backend dice qué campo rechazó; un
-                    // "Error al guardar" genérico obliga a abrir la consola.
-                    const msg = (editMutation.error as Error & {
-                      response?: { data?: { message?: string | string[] } };
-                    })?.response?.data?.message;
-                    if (Array.isArray(msg)) return msg[0];
-                    return msg ?? 'Error al guardar';
-                  })()}
+                  {/* El mensaje del backend dice qué campo rechazó; un
+                      "Error al guardar" genérico obliga a abrir la consola. */}
+                  {apiErrorMessage(editMutation.error, 'Error al guardar')}
                 </div>
               )}
               <div className="flex gap-3">
@@ -828,7 +822,7 @@ export default function ProductDetailPage() {
             )}
             {unitsMutation.isError && (
               <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-                {(unitsMutation.error as Error & { response?: { data?: { message?: string } } })?.response?.data?.message ?? 'Error al registrar unidades'}
+                {apiErrorMessage(unitsMutation.error, 'Error al registrar unidades')}
               </div>
             )}
             <Button

@@ -1,5 +1,7 @@
 'use client';
 
+import { apiErrorMessage } from '@/lib/api/api-error';
+
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { DoorClosed, DoorOpen, Minus, Plus, ShoppingCart, Trash2 } from 'lucide-react';
@@ -117,8 +119,7 @@ function OpenSessionForm() {
 
         {openMutation.isError && (
           <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-            {(openMutation.error as Error & { response?: { data?: { message?: string } } })
-              ?.response?.data?.message ?? 'No se pudo abrir la caja'}
+            {apiErrorMessage(openMutation.error, 'No se pudo abrir la caja')}
           </div>
         )}
 
@@ -328,9 +329,8 @@ function SaleScreen({ session }: { session: PosSession }) {
       void queryClient.invalidateQueries({ queryKey: ['pos-session-sales', session.id] });
       void queryClient.invalidateQueries({ queryKey: ['products-with-stock'] });
     },
-    onError: (err: Error & { response?: { data?: { message?: string | string[] } } }) => {
-      const msg = err?.response?.data?.message;
-      setError(Array.isArray(msg) ? msg[0] : (msg ?? 'No se pudo completar la venta'));
+    onError: (err: Error) => {
+      setError(apiErrorMessage(err, 'No se pudo completar la venta'));
     },
   });
 

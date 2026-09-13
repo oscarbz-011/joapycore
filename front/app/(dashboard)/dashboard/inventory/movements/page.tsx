@@ -1,5 +1,7 @@
 'use client';
 
+import { apiErrorMessage } from '@/lib/api/api-error';
+
 import { useState } from 'react';
 import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -107,9 +109,8 @@ function NewMovementModal({ onClose }: { onClose: () => void }) {
       void queryClient.invalidateQueries({ queryKey: ['inventory-products'] });
       onClose();
     },
-    onError: (err: Error & { response?: { data?: { message?: string | string[] } } }) => {
-      const msg = err?.response?.data?.message;
-      setError(Array.isArray(msg) ? msg[0] : (msg ?? 'Error al registrar movimiento'));
+    onError: (err: Error) => {
+      setError(apiErrorMessage(err, 'Error al registrar movimiento'));
     },
   });
 

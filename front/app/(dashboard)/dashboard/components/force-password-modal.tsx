@@ -1,5 +1,7 @@
 'use client';
 
+import { apiErrorMessage } from '@/lib/api/api-error';
+
 import { useState } from 'react';
 import { ShieldAlert } from 'lucide-react';
 import { useMutation } from '@tanstack/react-query';
@@ -31,8 +33,8 @@ export function ForcePasswordModal() {
     onSuccess: () => {
       clearMustChangePassword();
     },
-    onError: (err: Error & { response?: { data?: { message?: string } } }) => {
-      setLocalError(err?.response?.data?.message ?? 'Error al cambiar la contraseña');
+    onError: (err: Error) => {
+      setLocalError(apiErrorMessage(err, 'Error al cambiar la contraseña'));
     },
   });
 

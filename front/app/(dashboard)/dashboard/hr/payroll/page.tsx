@@ -1,5 +1,7 @@
 'use client';
 
+import { apiErrorMessage } from '@/lib/api/api-error';
+
 import { useState } from 'react';
 import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -234,8 +236,8 @@ export default function HrPayrollPage() {
       setRunError('');
       setExpandedId(data.id);
     },
-    onError: (err: Error & { response?: { data?: { message?: string } } }) => {
-      setRunError(err?.response?.data?.message ?? 'Error al liquidar nómina');
+    onError: (err: Error) => {
+      setRunError(apiErrorMessage(err, 'Error al liquidar nómina'));
     },
   });
 

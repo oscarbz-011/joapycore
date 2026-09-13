@@ -1,5 +1,7 @@
 'use client';
 
+import { apiErrorMessage } from '@/lib/api/api-error';
+
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { X, MapPin, CheckCircle2, AlertOctagon } from 'lucide-react';
@@ -498,9 +500,8 @@ function ReviewDelinquencyModal({
       void qc.invalidateQueries({ queryKey: ['delinquency-reports'] });
       onOpenChange(false);
     },
-    onError: (err: Error & { response?: { data?: { message?: string | string[] } } }) => {
-      const msg = err?.response?.data?.message;
-      setError(Array.isArray(msg) ? msg[0] : (msg ?? 'Error al guardar'));
+    onError: (err: Error) => {
+      setError(apiErrorMessage(err, 'Error al guardar'));
     },
   });
 

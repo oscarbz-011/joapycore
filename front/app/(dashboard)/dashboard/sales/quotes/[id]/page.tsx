@@ -1,5 +1,7 @@
 'use client';
 
+import { apiErrorMessage } from '@/lib/api/api-error';
+
 import { useParams, useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, Download, ArrowRightCircle, Ban } from 'lucide-react';
@@ -113,7 +115,7 @@ export default function QuoteDetailPage() {
 
       {(convertMutation.isError || cancelMutation.isError) && (
         <p className="mt-3 text-sm text-destructive">
-          {((convertMutation.error ?? cancelMutation.error) as Error & { response?: { data?: { message?: string } } })?.response?.data?.message ?? 'Ocurrió un error'}
+          {apiErrorMessage((convertMutation.error ?? cancelMutation.error), 'Ocurrió un error')}
         </p>
       )}
 

@@ -1,5 +1,7 @@
 'use client';
 
+import { apiErrorMessage } from '@/lib/api/api-error';
+
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ChevronDown, ChevronUp, AlertTriangle, ShieldAlert, X } from 'lucide-react';
@@ -139,7 +141,7 @@ export function RejectModal({ order, open, onOpenChange, onSuccess }: {
 
           {mutation.isError && (
             <p className="text-xs text-destructive">
-              {(mutation.error as Error & { response?: { data?: { message?: string } } })?.response?.data?.message ?? 'Error al rechazar'}
+              {apiErrorMessage(mutation.error, 'Error al rechazar')}
             </p>
           )}
 
@@ -235,7 +237,7 @@ export function AdjustmentModal({ order, open, onOpenChange, onSuccess }: {
 
           {mutation.isError && (
             <p className="text-xs text-destructive">
-              {(mutation.error as Error & { response?: { data?: { message?: string } } })?.response?.data?.message ?? 'Error al enviar'}
+              {apiErrorMessage(mutation.error, 'Error al enviar')}
             </p>
           )}
 

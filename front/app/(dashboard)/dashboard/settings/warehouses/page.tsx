@@ -1,5 +1,7 @@
 'use client';
 
+import { apiErrorMessage } from '@/lib/api/api-error';
+
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus, X, Star, Warehouse, MapPin, LayoutGrid, List } from 'lucide-react';
@@ -36,9 +38,8 @@ function WarehouseForm({
       return initial ? warehousesApi.updateWarehouse(initial.id, payload) : warehousesApi.createWarehouse(payload);
     },
     onSuccess: () => { void queryClient.invalidateQueries({ queryKey: ['warehouses'] }); onClose(); },
-    onError: (err: Error & { response?: { data?: { message?: string | string[] } } }) => {
-      const msg = err?.response?.data?.message;
-      setError(Array.isArray(msg) ? msg[0] : (msg ?? 'Error al guardar'));
+    onError: (err: Error) => {
+      setError(apiErrorMessage(err, 'Error al guardar'));
     },
   });
 

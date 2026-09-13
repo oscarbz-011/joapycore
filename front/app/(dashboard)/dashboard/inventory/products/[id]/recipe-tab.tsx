@@ -1,5 +1,7 @@
 'use client';
 
+import { apiErrorMessage } from '@/lib/api/api-error';
+
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Check, Hammer, Pencil, Trash2, X } from 'lucide-react';
@@ -15,14 +17,6 @@ const NUM_CLS =
 
 function fmtGs(n: number) {
   return 'Gs. ' + new Intl.NumberFormat('es-PY').format(Math.round(n));
-}
-
-type ApiError = Error & { response?: { data?: { message?: string | string[] } } };
-
-// El backend manda el mensaje suelto o como array (class-validator).
-function apiMessage(err: ApiError, fallback: string) {
-  const msg = err?.response?.data?.message;
-  return Array.isArray(msg) ? msg[0] : (msg ?? fallback);
 }
 
 function fmtQty(n: number) {
@@ -68,7 +62,7 @@ export function RecipeTab({ productId, unit }: { productId: string; unit: string
       setError('');
       invalidate();
     },
-    onError: (err: ApiError) => setError(apiMessage(err, 'No se pudo agregar el componente')),
+    onError: (err) => setError(apiErrorMessage(err, 'No se pudo agregar el componente')),
   });
 
   const updateMutation = useMutation({
@@ -79,7 +73,7 @@ export function RecipeTab({ productId, unit }: { productId: string; unit: string
       setEditError('');
       invalidate();
     },
-    onError: (err: ApiError) => setEditError(apiMessage(err, 'No se pudo actualizar la cantidad')),
+    onError: (err) => setEditError(apiErrorMessage(err, 'No se pudo actualizar la cantidad')),
   });
 
   const removeMutation = useMutation({

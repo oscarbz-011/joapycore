@@ -1,5 +1,7 @@
 'use client';
 
+import { apiErrorMessage } from '@/lib/api/api-error';
+
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Hammer, Plus, X } from 'lucide-react';
@@ -94,9 +96,8 @@ function NewOrderModal({
       setNotes('');
       setError('');
     },
-    onError: (err: Error & { response?: { data?: { message?: string | string[] } } }) => {
-      const msg = err?.response?.data?.message;
-      setError(Array.isArray(msg) ? msg[0] : (msg ?? 'No se pudo crear la orden'));
+    onError: (err: Error) => {
+      setError(apiErrorMessage(err, 'No se pudo crear la orden'));
     },
   });
 
@@ -225,11 +226,10 @@ function CompleteOrderModal({
       onCompleted();
       onOpenChange(false);
     },
-    onError: (err: Error & { response?: { data?: { message?: string | string[] } } }) => {
+    onError: (err: Error) => {
       // El backend revalida stock al completar y devuelve 422 con el detalle de
       // qué faltó: hay que mostrarlo acá, no cerrar el modal.
-      const msg = err?.response?.data?.message;
-      setError(Array.isArray(msg) ? msg[0] : (msg ?? 'No se pudo completar la orden'));
+            setError(apiErrorMessage(err, 'No se pudo completar la orden'));
     },
   });
 
@@ -308,9 +308,8 @@ function OrderCard({ order, canManage }: { order: ProductionOrder; canManage: bo
     void queryClient.invalidateQueries({ queryKey: ['inventory-products'] });
   };
 
-  const onError = (err: Error & { response?: { data?: { message?: string | string[] } } }) => {
-    const msg = err?.response?.data?.message;
-    setError(Array.isArray(msg) ? msg[0] : (msg ?? 'No se pudo actualizar la orden'));
+  const onError = (err: Error) => {
+    setError(apiErrorMessage(err, 'No se pudo actualizar la orden'));
   };
 
   const startMutation = useMutation({

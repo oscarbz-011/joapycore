@@ -1,5 +1,7 @@
 'use client';
 
+import { apiErrorMessage } from '@/lib/api/api-error';
+
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -319,9 +321,8 @@ function CreateOrderModal({ open, onOpenChange, customers, products }: {
       void queryClient.invalidateQueries({ queryKey: ['sale-orders'] });
       onOpenChange(false);
     },
-    onError: (err: Error & { response?: { data?: { message?: string | string[] } } }) => {
-      const msg = err?.response?.data?.message;
-      setError(Array.isArray(msg) ? msg[0] : (msg ?? 'Error al crear el pedido'));
+    onError: (err: Error) => {
+      setError(apiErrorMessage(err, 'Error al crear el pedido'));
     },
   });
 
@@ -842,7 +843,7 @@ function OrderDetailPanel({ open, onOpenChange, order }: {
                   <Button size="sm" variant="outline" className="flex-1" onClick={() => setConfirmAction(null)}>Volver</Button>
                 </div>
                 {convertMutation.isError && (
-                  <p className="text-xs text-destructive">{(convertMutation.error as Error & { response?: { data?: { message?: string } } })?.response?.data?.message ?? 'Error al convertir'}</p>
+                  <p className="text-xs text-destructive">{apiErrorMessage(convertMutation.error, 'Error al convertir')}</p>
                 )}
               </div>
             )}
@@ -857,7 +858,7 @@ function OrderDetailPanel({ open, onOpenChange, order }: {
                   <Button size="sm" variant="outline" className="flex-1" onClick={() => setConfirmAction(null)}>Volver</Button>
                 </div>
                 {confirmMutation.isError && (
-                  <p className="text-xs text-destructive">{(confirmMutation.error as Error & { response?: { data?: { message?: string } } })?.response?.data?.message ?? 'Error al confirmar'}</p>
+                  <p className="text-xs text-destructive">{apiErrorMessage(confirmMutation.error, 'Error al confirmar')}</p>
                 )}
               </div>
             )}

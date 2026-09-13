@@ -1,5 +1,7 @@
 'use client';
 
+import { apiErrorMessage } from '@/lib/api/api-error';
+
 import { useState } from 'react';
 import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -90,9 +92,8 @@ export default function InitialStockPage() {
       setForm(EMPTY_FORM);
       setSuccess(true);
     },
-    onError: (err: Error & { response?: { data?: { message?: string | string[] } } }) => {
-      const msg = err?.response?.data?.message;
-      setError(Array.isArray(msg) ? msg[0] : (msg ?? 'Error al registrar la carga inicial'));
+    onError: (err: Error) => {
+      setError(apiErrorMessage(err, 'Error al registrar la carga inicial'));
     },
   });
 

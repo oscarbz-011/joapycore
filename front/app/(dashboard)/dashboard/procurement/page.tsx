@@ -1,5 +1,7 @@
 'use client';
 
+import { apiErrorMessage } from '@/lib/api/api-error';
+
 import { useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
@@ -166,9 +168,8 @@ function CreateOrderModal({
       void queryClient.invalidateQueries({ queryKey: ['purchase-orders'] });
       onSaved();
     },
-    onError: (err: Error & { response?: { data?: { message?: string | string[] } } }) => {
-      const msg = err?.response?.data?.message;
-      setError(Array.isArray(msg) ? msg[0] : (msg ?? 'Error al crear la orden'));
+    onError: (err: Error) => {
+      setError(apiErrorMessage(err, 'Error al crear la orden'));
     },
   });
 
@@ -428,9 +429,8 @@ function ReceiveModal({
       void queryClient.invalidateQueries({ queryKey: ['purchase-receipts', order.id] });
       onSaved();
     },
-    onError: (err: Error & { response?: { data?: { message?: string | string[] } } }) => {
-      const msg = err?.response?.data?.message;
-      setError(Array.isArray(msg) ? msg[0] : (msg ?? 'Error al registrar recepción'));
+    onError: (err: Error) => {
+      setError(apiErrorMessage(err, 'Error al registrar recepción'));
     },
   });
 

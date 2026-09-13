@@ -1,5 +1,7 @@
 'use client';
 
+import { apiErrorMessage } from '@/lib/api/api-error';
+
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus, Shield, ShieldCheck, Trash2, ChevronDown, ChevronRight } from 'lucide-react';
@@ -19,7 +21,7 @@ function CreateRoleModal({ onClose }: { onClose: () => void }) {
       onClose();
     },
     onError: (err: { response?: { data?: { message?: string } } }) => {
-      setError(err.response?.data?.message ?? 'Error al crear el rol');
+      setError(apiErrorMessage(err, 'Error al crear el rol'));
     },
   });
 

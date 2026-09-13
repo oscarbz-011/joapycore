@@ -1,5 +1,7 @@
 'use client';
 
+import { apiErrorMessage } from '@/lib/api/api-error';
+
 import { useState, useEffect, useRef } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Building2, Plus, Trash2 } from 'lucide-react';
@@ -284,8 +286,8 @@ export default function TenantPage() {
       setServerError('');
       setTimeout(() => setSuccess(false), 2500);
     },
-    onError: (err: Error & { response?: { data?: { message?: string } } }) => {
-      setServerError(err?.response?.data?.message ?? 'Error al guardar');
+    onError: (err: Error) => {
+      setServerError(apiErrorMessage(err, 'Error al guardar'));
     },
   });
 

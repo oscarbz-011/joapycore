@@ -1,5 +1,7 @@
 'use client';
 
+import { apiErrorMessage } from '@/lib/api/api-error';
+
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Package, Truck, CheckCircle2, Clock, ChevronDown, ChevronRight, MapPin, Phone, UserCog, X } from 'lucide-react';
@@ -180,9 +182,8 @@ function AssignModal({ note, onClose }: { note: DeliveryNote; onClose: () => voi
       void queryClient.invalidateQueries({ queryKey: ['logistics-deliveries'] });
       onClose();
     },
-    onError: (err: Error & { response?: { data?: { message?: string | string[] } } }) => {
-      const msg = err?.response?.data?.message;
-      setError(Array.isArray(msg) ? msg[0] : (msg ?? 'Error al asignar la entrega'));
+    onError: (err: Error) => {
+      setError(apiErrorMessage(err, 'Error al asignar la entrega'));
     },
   });
 

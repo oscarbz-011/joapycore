@@ -1,5 +1,7 @@
 'use client';
 
+import { apiErrorMessage } from '@/lib/api/api-error';
+
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -694,8 +696,7 @@ export default function ModulesPage() {
       {/* Error */}
       {toggleMutation.isError && (
         <div className="rounded-[10px] border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-          {(toggleMutation.error as Error & { response?: { data?: { message?: string } } })
-            ?.response?.data?.message ?? 'Error al cambiar el módulo'}
+          {apiErrorMessage(toggleMutation.error, 'Error al cambiar el módulo')}
         </div>
       )}
 

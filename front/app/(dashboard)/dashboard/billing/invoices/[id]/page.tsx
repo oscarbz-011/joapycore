@@ -1,5 +1,7 @@
 'use client';
 
+import { apiErrorMessage } from '@/lib/api/api-error';
+
 import { useEffect, useState, type ReactNode } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -378,7 +380,7 @@ export default function InvoiceDetailPage() {
 
               {issueMutation.isError && (
                 <p className="mb-3 text-xs text-destructive">
-                  {(issueMutation.error as Error & { response?: { data?: { message?: string } } })?.response?.data?.message ?? 'Error al emitir la factura'}
+                  {apiErrorMessage(issueMutation.error, 'Error al emitir la factura')}
                 </p>
               )}
 
@@ -462,7 +464,7 @@ export default function InvoiceDetailPage() {
                   </div>
                   {cancelMutation.isError && (
                     <p className="mb-2 text-xs text-destructive">
-                      {(cancelMutation.error as Error & { response?: { data?: { message?: string } } })?.response?.data?.message ?? 'Error al cancelar'}
+                      {apiErrorMessage(cancelMutation.error, 'Error al cancelar')}
                     </p>
                   )}
                   <div className="flex gap-2">

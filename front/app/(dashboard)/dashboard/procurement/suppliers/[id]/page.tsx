@@ -1,5 +1,7 @@
 'use client';
 
+import { apiErrorMessage } from '@/lib/api/api-error';
+
 import { useEffect, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -33,11 +35,6 @@ function fmtGs(n: number) {
   return 'Gs. ' + new Intl.NumberFormat('es-PY').format(Math.round(n));
 }
 
-function apiError(err: unknown, fallback: string): string {
-  const msg = (err as { response?: { data?: { message?: string | string[] } } })?.response?.data?.message;
-  return Array.isArray(msg) ? msg[0] : (msg ?? fallback);
-}
-
 type MapFilter = 'all' | 'unmapped';
 
 // ── Vincular a un producto interno ─────────────────────────────────────────────
@@ -66,7 +63,7 @@ function MapDialog({
       void queryClient.invalidateQueries({ queryKey: ['supplier-catalog'] });
       onClose();
     },
-    onError: (err) => setError(apiError(err, 'No se pudo vincular el producto')),
+    onError: (err) => setError(apiErrorMessage(err, 'No se pudo vincular el producto')),
   });
 
   const q = search.trim().toLowerCase();
@@ -181,7 +178,7 @@ function EditItemDialog({
       void queryClient.invalidateQueries({ queryKey: ['supplier-catalog'] });
       onClose();
     },
-    onError: (err) => setError(apiError(err, 'No se pudo guardar el ítem')),
+    onError: (err) => setError(apiErrorMessage(err, 'No se pudo guardar el ítem')),
   });
 
   return (
@@ -266,7 +263,7 @@ function DeleteItemDialog({
       void queryClient.invalidateQueries({ queryKey: ['supplier-catalog'] });
       onClose();
     },
-    onError: (err) => setError(apiError(err, 'No se pudo eliminar el ítem')),
+    onError: (err) => setError(apiErrorMessage(err, 'No se pudo eliminar el ítem')),
   });
 
   return (
@@ -470,7 +467,7 @@ export default function SupplierDetailPage() {
       setImportReport({ fileName: file.name, result });
       void queryClient.invalidateQueries({ queryKey: ['supplier-catalog'] });
     },
-    onError: (err) => setImportError(apiError(err, 'No se pudo importar el archivo')),
+    onError: (err) => setImportError(apiErrorMessage(err, 'No se pudo importar el archivo')),
   });
 
   const unmapMutation = useMutation({

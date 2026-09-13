@@ -1,5 +1,7 @@
 'use client';
 
+import { apiErrorMessage } from '@/lib/api/api-error';
+
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { X } from 'lucide-react';
@@ -32,9 +34,8 @@ export function DeliverModal({ note, onClose }: { note: DeliveryNote; onClose: (
       void queryClient.invalidateQueries({ queryKey: ['logistics-mine'] });
       onClose();
     },
-    onError: (err: Error & { response?: { data?: { message?: string | string[] } } }) => {
-      const msg = err?.response?.data?.message;
-      setError(Array.isArray(msg) ? msg[0] : (msg ?? 'Error al confirmar la entrega'));
+    onError: (err: Error) => {
+      setError(apiErrorMessage(err, 'Error al confirmar la entrega'));
     },
   });
 

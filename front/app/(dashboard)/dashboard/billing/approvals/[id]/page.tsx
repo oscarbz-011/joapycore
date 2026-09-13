@@ -1,5 +1,7 @@
 'use client';
 
+import { apiErrorMessage } from '@/lib/api/api-error';
+
 import { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -199,7 +201,7 @@ export default function ApprovalDetailPage() {
           </div>
           {approveMutation.isError && (
             <p className="text-xs text-destructive">
-              {(approveMutation.error as Error & { response?: { data?: { message?: string } } })?.response?.data?.message ?? 'Error al aprobar'}
+              {apiErrorMessage(approveMutation.error, 'Error al aprobar')}
             </p>
           )}
         </div>
