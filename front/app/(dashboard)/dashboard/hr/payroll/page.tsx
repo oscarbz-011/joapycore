@@ -1,47 +1,19 @@
 'use client';
 
+import { HrNav } from '../_nav';
+
 import { apiErrorMessage } from '@/lib/api/api-error';
 
 import { useState } from 'react';
-import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Play, CheckCircle, ChevronDown, ChevronRight, Settings, Users2, LayoutGrid, Receipt } from 'lucide-react';
+import { Play, CheckCircle, ChevronDown, ChevronRight, Settings } from 'lucide-react';
 import { hrApi, type PayrollRecord, type PayrollRecordItem } from '../../../../../lib/api/hr';
 import { NumericInput } from '../../../../../components/numeric-input';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import { cn } from '@/lib/utils';
 
 const NUM_CLS = 'h-9 w-full min-w-0 rounded-3xl border border-transparent bg-input/50 px-3 text-sm outline-none transition-[color,box-shadow,background-color] focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30';
-
-function HrNav({ active }: { active: 'employees' | 'areas' | 'payroll' }) {
-  const links = [
-    { key: 'employees', label: 'Empleados',      href: '/dashboard/hr',         icon: Users2 },
-    { key: 'areas',     label: 'Áreas y cargos', href: '/dashboard/hr/areas',   icon: LayoutGrid },
-    { key: 'payroll',   label: 'Nómina',          href: '/dashboard/hr/payroll', icon: Receipt },
-  ] as const;
-
-  return (
-    <div className="flex gap-1 border-b border-border mb-6">
-      {links.map(({ key, label, href, icon: Icon }) => (
-        <Link
-          key={key}
-          href={href}
-          className={cn(
-            'flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px',
-            active === key
-              ? 'border-primary text-foreground'
-              : 'border-transparent text-muted-foreground hover:text-foreground',
-          )}
-        >
-          <Icon size={15} />
-          {label}
-        </Link>
-      ))}
-    </div>
-  );
-}
 
 const STATUS_LABELS: Record<string, string> = {
   PENDING:   'Borrador',

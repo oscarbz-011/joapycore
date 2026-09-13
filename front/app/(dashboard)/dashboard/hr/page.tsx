@@ -1,9 +1,10 @@
 'use client';
 
-import Link from 'next/link';
+import { HrNav } from './_nav';
+
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { Plus, Users2, LayoutGrid, Receipt, Pencil } from 'lucide-react';
+import { Plus, Pencil } from 'lucide-react';
 import { hrApi, type Employee } from '../../../../lib/api/hr';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -25,33 +26,6 @@ const DOC_LABELS: Record<string, string> = {
 };
 
 // ── Sub-nav ────────────────────────────────────────────────────────────────────
-
-function HrNav({ active }: { active: 'employees' | 'areas' | 'payroll' }) {
-  const links = [
-    { key: 'employees', label: 'Empleados', href: '/dashboard/hr', icon: Users2 },
-    { key: 'areas', label: 'Áreas y cargos', href: '/dashboard/hr/areas', icon: LayoutGrid },
-    { key: 'payroll', label: 'Nómina', href: '/dashboard/hr/payroll', icon: Receipt },
-  ] as const;
-
-  return (
-    <div className="flex gap-1 border-b border-border mb-6">
-      {links.map(({ key, label, href, icon: Icon }) => (
-        <Link
-          key={key}
-          href={href}
-          className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px ${
-            active === key
-              ? 'border-primary text-foreground'
-              : 'border-transparent text-muted-foreground hover:text-foreground'
-          }`}
-        >
-          <Icon size={15} />
-          {label}
-        </Link>
-      ))}
-    </div>
-  );
-}
 
 // ── Status badge ───────────────────────────────────────────────────────────────
 

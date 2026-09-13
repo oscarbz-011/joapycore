@@ -1,9 +1,10 @@
 'use client';
 
+import { HrNav } from '../_nav';
+
 import { useState } from 'react';
-import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Plus, Users2, LayoutGrid, Receipt, Pencil, Check, X } from 'lucide-react';
+import { Plus, Pencil, Check, X } from 'lucide-react';
 import { hrApi, type Area, type Position } from '../../../../../lib/api/hr';
 import { usersApi } from '../../../../../lib/api/users';
 import { Badge } from '@/components/ui/badge';
@@ -11,34 +12,6 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
-
-function HrNav({ active }: { active: 'employees' | 'areas' | 'payroll' }) {
-  const links = [
-    { key: 'employees', label: 'Empleados',     href: '/dashboard/hr',         icon: Users2 },
-    { key: 'areas',     label: 'Áreas y cargos', href: '/dashboard/hr/areas',   icon: LayoutGrid },
-    { key: 'payroll',   label: 'Nómina',          href: '/dashboard/hr/payroll', icon: Receipt },
-  ] as const;
-
-  return (
-    <div className="flex gap-1 border-b border-border mb-6">
-      {links.map(({ key, label, href, icon: Icon }) => (
-        <Link
-          key={key}
-          href={href}
-          className={cn(
-            'flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px',
-            active === key
-              ? 'border-primary text-foreground'
-              : 'border-transparent text-muted-foreground hover:text-foreground',
-          )}
-        >
-          <Icon size={15} />
-          {label}
-        </Link>
-      ))}
-    </div>
-  );
-}
 
 function ActiveBadge({ isActive }: { isActive: boolean }) {
   return isActive

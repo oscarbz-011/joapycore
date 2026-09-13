@@ -7,8 +7,42 @@ export type MaritalStatus = 'SINGLE' | 'MARRIED' | 'DIVORCED' | 'WIDOWED' | 'OTH
 export type ContractType = 'PERMANENT' | 'TEMPORARY' | 'PART_TIME' | 'CONTRACTOR';
 export type PaymentMethod = 'BANK_TRANSFER' | 'CASH';
 export type PayrollStatus = 'PENDING' | 'PROCESSED' | 'PAID';
+export type LeaveType = 'VACATION' | 'SICK' | 'MATERNITY' | 'PATERNITY' | 'PERSONAL' | 'OTHER';
+export type LeaveStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'CANCELLED';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
+export interface Leave {
+  id: string;
+  employeeId: string;
+  type: LeaveType;
+  status: LeaveStatus;
+  startDate: string;
+  endDate: string;
+  days: number;
+  notes?: string | null;
+  approvedAt?: string | null;
+  createdAt: string;
+  employee: { id: string; firstName: string; lastName: string; employeeNumber: number };
+  approvedBy?: { id: string; firstName: string; lastName: string } | null;
+}
+
+export interface CreateLeavePayload {
+  employeeId: string;
+  type: LeaveType;
+  startDate: string;
+  endDate: string;
+  notes?: string;
+}
+
+export interface LeaveBalance {
+  employeeId: string;
+  year: number;
+  entitled: number;
+  taken: number;
+  pending: number;
+  available: number;
+}
+
 export interface Employee {
   id: string;
   employeeNumber: number;
@@ -186,4 +220,26 @@ export const hrApi = {
 
   markPaid: (id: string): Promise<PayrollRecord> =>
     apiClient.post(`/hr/payroll/records/${id}/pay`).then((r) => r.data),
+
+  // ── Licencias ──
+  listLeaves: (filters: { employeeId?: string; status?: LeaveStatus; year?: number } = {}): Promise<Leave[]> =>
+    apiClient.get('/hr/leaves', { params: filters }).then((r) => r.data),
+
+  requestLeave: (payload: CreateLeavePayload): Promise<Leave> =>
+    apiClient.post('/hr/leaves', payload).then((r) => r.data),
+
+  approveLeave: (id: string): Promise<Leave> =>
+    apiClient.patch(`/hr/leaves/${id}/approve`).then((r) => r.data),
+
+  rejectLeave: (id: string, reason?: string): Promise<Leave> =>
+    apiClient.patch(`/hr/leaves/${id}/reject`, { reason }).then((r) => r.data),
+
+  cancelLeave: (id: string): Promise<Leave> =>
+    apiClient.patch(`/hr/leaves/${id}/cancel`).then((r) => r.data),
+
+  getLeaveBalance: (employeeId: string, year: number): Promise<LeaveBalance> =>
+    apiClient.get(`/hr/employees/${employeeId}/leave-balance`, { params: { year } }).then((r) => r.data),
+
+  setLeaveBalance: (employeeId: string, year: number, entitled: number): Promise<LeaveBalance> =>
+    apiClient.put(`/hr/employees/${employeeId}/leave-balance`, { year, entitled }).then((r) => r.data),
 };

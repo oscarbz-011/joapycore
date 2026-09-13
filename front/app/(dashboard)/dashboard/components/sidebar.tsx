@@ -137,7 +137,7 @@ const STATIC_GROUPS: SidebarGroup[] = [
       { label: 'Departamentos',     href: '/dashboard/hr/areas' },
       { label: 'Roles',             href: '/dashboard/hr',         stub: true },
       { label: 'Asistencia',        href: '/dashboard/hr',         stub: true },
-      { label: 'Vacaciones',        href: '/dashboard/hr',         stub: true },
+      { label: 'Vacaciones',        href: '/dashboard/hr/leaves',  permission: 'hr:read' },
       { label: 'Nómina de sueldos', href: '/dashboard/hr/payroll', permission: 'hr:payroll:run' },
       { label: 'Reclutamiento',     href: '/dashboard/hr',         stub: true },
     ],

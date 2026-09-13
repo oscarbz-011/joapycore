@@ -18,6 +18,10 @@ export const WS_EVENT_MAP: Record<string, string[][]> = {
   'installment.paid':         [['loans']],
   'employee.created':         [['hr-employees']],
   'employee.terminated':      [['hr-employees']],
+  'hr.leave.requested':       [['hr-leaves'], ['hr-leave-balance']],
+  'hr.leave.approved':        [['hr-leaves'], ['hr-leave-balance']],
+  'hr.leave.rejected':        [['hr-leaves'], ['hr-leave-balance']],
+  'hr.leave.cancelled':       [['hr-leaves'], ['hr-leave-balance']],
   // Recepción de compra confirmada — mueve la orden (receivedQty/estado) y,
   // vía el listener de inventory, el stock/lotes resultantes.
   'purchase.receipt.created': [['purchase-orders'], ['purchase-receipts'], ['products'], ['product-batches'], ['accounts-payable']],
