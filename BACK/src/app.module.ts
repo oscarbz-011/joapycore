@@ -4,6 +4,8 @@ import emailConfig from './config/email.config';
 import storageConfig from './config/storage.config';
 import { validateEnv } from './config/env.validation';
 import { APP_GUARD } from '@nestjs/core';
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
+import { THROTTLE } from './config/security.config';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { ScheduleModule } from '@nestjs/schedule';
 import { AuditModule } from './audit/audit.module';
@@ -43,6 +45,11 @@ import { UsersModule } from './users/users.module';
       load: [storageConfig, emailConfig],
       validate: validateEnv,
     }),
+    ThrottlerModule.forRoot({
+      throttlers: [THROTTLE.global],
+      errorMessage:
+        'Demasiadas solicitudes. Esperá un momento y volvé a intentar.',
+    }),
     EventEmitterModule.forRoot(),
     ScheduleModule.forRoot(),
     PrismaModule,
@@ -73,6 +80,8 @@ import { UsersModule } from './users/users.module';
     CreditBureauModule,
   ],
   providers: [
+    // Primero el rate limit: corta antes de gastar en validar el JWT.
+    { provide: APP_GUARD, useClass: ThrottlerGuard },
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     { provide: APP_GUARD, useClass: PermissionsGuard },
     { provide: APP_GUARD, useClass: TenantModuleGuard },

@@ -9,10 +9,11 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { JwtPayload } from '../../common/types/jwt-payload.interface';
+import { corsOrigin } from '../../config/security.config';
 
 @Injectable()
 @WebSocketGateway({
-  cors: { origin: '*' },
+  cors: { origin: corsOrigin },
   namespace: '/notifications',
 })
 export class NotificationsGateway

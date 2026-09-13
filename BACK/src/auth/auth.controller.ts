@@ -5,7 +5,9 @@ import {
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import { Public } from '../common/decorators/public.decorator';
+import { THROTTLE } from '../config/security.config';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
@@ -17,6 +19,7 @@ export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @Public()
+  @Throttle({ default: THROTTLE.register })
   @Post('register')
   @ApiOperation({
     summary: 'Registrar un nuevo tenant y su usuario Owner',
@@ -33,6 +36,7 @@ export class AuthController {
   }
 
   @Public()
+  @Throttle({ default: THROTTLE.login })
   @Post('login')
   @ApiOperation({
     summary: 'Iniciar sesión con email o username',
@@ -52,6 +56,7 @@ export class AuthController {
   }
 
   @Public()
+  @Throttle({ default: THROTTLE.refresh })
   @Post('refresh')
   @ApiOperation({
     summary: 'Renovar el accessToken usando un refreshToken vigente',
