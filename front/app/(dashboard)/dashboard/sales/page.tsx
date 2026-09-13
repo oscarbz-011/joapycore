@@ -237,6 +237,9 @@ function CreateOrderModal({ open, onOpenChange, customers, products }: {
     sessionStorage.removeItem(ORDER_DRAFT_CUSTOMER_KEY);
     try {
       const draft: OrderDraft = JSON.parse(rawDraft);
+    // Lectura de sessionStorage al montar: es sincronizar con un sistema
+    // externo (no derivable en el render, que también corre en el servidor).
+    // eslint-disable-next-line react-hooks/set-state-in-effect
       setItems(draft.items.map((it) => ({ ...it, product: products.find((p) => p.id === it.productId) ?? null })));
       setSellerId(draft.sellerId);
       setSaleType(draft.saleType);
@@ -564,7 +567,7 @@ function CreateOrderModal({ open, onOpenChange, customers, products }: {
                     </div>
                     <div>
                       <Label className="mb-1 text-xs">Motivo</Label>
-                      <Select value={surchargeReason || 'none'} onValueChange={(v) => setSurchargeReason(v === 'none' ? '' : v)}>
+                      <Select value={surchargeReason || 'none'} onValueChange={(v) => setSurchargeReason(!v || v === 'none' ? '' : v)}>
                         <SelectTrigger className="w-full">
                           <span className="flex-1 text-left text-sm truncate">{surchargeReason || '— Seleccionar —'}</span>
                         </SelectTrigger>

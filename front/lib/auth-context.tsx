@@ -63,6 +63,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const storedRefresh = tokenStore.getRefreshToken();
     if (!storedRefresh) {
+      // localStorage solo existe en el navegador: se lee después de montar
+      // para no romper la hidratación.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setState((s) => ({ ...s, isLoading: false }));
       return;
     }

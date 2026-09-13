@@ -2,7 +2,7 @@
 
 import { apiErrorMessage } from '@/lib/api/api-error';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Check, Copy } from 'lucide-react';
 import {
@@ -139,12 +139,12 @@ export function EmployeeForm({ initial, onDone }: Props) {
   // Al crear (no al editar), precarga la sucursal principal apenas cargan
   // las sucursales — reduce fricción cuando solo existe la Casa Matriz,
   // queda editable si el tenant ya tiene más de una.
-  useEffect(() => {
-    if (initial || form.branchId || branches.length === 0) return;
+  const [branchDefaulted, setBranchDefaulted] = useState(false);
+  if (!initial && !branchDefaulted && branches.length > 0) {
+    setBranchDefaulted(true);
     const main = branches.find((b) => b.isMain) ?? branches[0];
-    if (main) set('branchId', main.id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [branches, initial]);
+    if (main && !form.branchId) set('branchId', main.id);
+  }
 
   const saveMutation = useMutation<Employee | { employee: Employee; tempPassword?: string }, Error, void>({
     mutationFn: () => {

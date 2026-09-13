@@ -24,6 +24,7 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
+import { daysOverdue } from '@/lib/overdue';
 
 
 const DOC_TYPES: DocType[] = ['INTERNAL', 'CONTRACT', 'COMPLIANCE'];
@@ -50,9 +51,7 @@ function DocumentCard({
       ? (doc.variables?.length ?? 0)
       : countTemplateVariables(doc.content)
     : 0;
-  const isExpiringSoon = doc.expiresAt
-    ? (new Date(doc.expiresAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24) <= 30
-    : false;
+  const isExpiringSoon = doc.expiresAt ? -daysOverdue(doc.expiresAt) <= 30 : false;
 
   return (
     <div className="group flex flex-col gap-3 rounded-2xl border border-border bg-card p-4 transition-all hover:border-border-strong hover:shadow-sm">

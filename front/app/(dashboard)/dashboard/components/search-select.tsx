@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { ChevronDown, Plus, Search, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -37,6 +37,7 @@ export function SearchSelect<T>({
 }: SearchSelectProps<T>) {
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
+  const listboxId = useId();
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -76,6 +77,8 @@ export function SearchSelect<T>({
       <div
         role="combobox"
         aria-expanded={open}
+        aria-controls={listboxId}
+        aria-haspopup="listbox"
         onClick={() => !disabled && setOpen(true)}
         className={cn(
           'flex items-center gap-2 w-full rounded-lg border px-3 py-2 text-sm transition-colors',
@@ -141,7 +144,7 @@ export function SearchSelect<T>({
       {/* Dropdown */}
       {open && (
         <div className="absolute z-50 mt-1 w-full rounded-lg border border-border bg-card shadow-xl overflow-hidden">
-          <ul className="max-h-56 overflow-y-auto py-1">
+          <ul id={listboxId} role="listbox" className="max-h-56 overflow-y-auto py-1">
             {filtered.length === 0 ? (
               <li className="px-3 py-2.5 text-sm text-muted-foreground/60">{emptyMessage}</li>
             ) : (

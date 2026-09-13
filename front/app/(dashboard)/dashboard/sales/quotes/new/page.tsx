@@ -148,6 +148,9 @@ export default function NewQuotePage() {
     sessionStorage.removeItem(DRAFT_CUSTOMER_KEY);
     try {
       const draft: QuoteDraft = JSON.parse(rawDraft);
+    // Lectura de sessionStorage al montar: es sincronizar con un sistema
+    // externo (no derivable en el render, que también corre en el servidor).
+    // eslint-disable-next-line react-hooks/set-state-in-effect
       setLines(draft.lines.map((l) => ({ ...l, product: products.find((p) => p.id === l.productId) ?? null })));
       setNotes(draft.notes);
       setCustomerId(newCustomerId);

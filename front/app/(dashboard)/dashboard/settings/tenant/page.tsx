@@ -23,31 +23,32 @@ import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/u
 function LogoUploader({ tenant, canEdit }: { tenant: TenantResponse; canEdit: boolean }) {
   const queryClient = useQueryClient();
   const inputRef = useRef<HTMLInputElement>(null);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [loadingPreview, setLoadingPreview] = useState(false);
+  // Vista previa del último archivo descargado; vale solo si es el logo
+  // vigente. Mientras no coincide, se está descargando.
+  const [preview, setPreview] = useState<{ fileId: string; url: string | null } | null>(null);
+  const logoFileId = tenant.logoFileId;
+  const previewUrl = logoFileId && preview?.fileId === logoFileId ? preview.url : null;
+  const loadingPreview = !!logoFileId && preview?.fileId !== logoFileId;
 
   useEffect(() => {
-    if (!tenant.logoFileId) {
-      setPreviewUrl(null);
-      return;
-    }
+    if (!logoFileId) return;
     let objectUrl: string | null = null;
     let cancelled = false;
-    setLoadingPreview(true);
     filesApi
-      .downloadBlob(tenant.logoFileId)
+      .downloadBlob(logoFileId)
       .then((blob) => {
         if (cancelled) return;
         objectUrl = URL.createObjectURL(blob);
-        setPreviewUrl(objectUrl);
+        setPreview({ fileId: logoFileId, url: objectUrl });
       })
-      .catch(() => { if (!cancelled) setPreviewUrl(null); })
-      .finally(() => { if (!cancelled) setLoadingPreview(false); });
+      .catch(() => {
+        if (!cancelled) setPreview({ fileId: logoFileId, url: null });
+      });
     return () => {
       cancelled = true;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [tenant.logoFileId]);
+  }, [logoFileId]);
 
   const uploadMutation = useMutation({
     mutationFn: async (file: File) => {
@@ -236,12 +237,14 @@ export default function TenantPage() {
   const [success, setSuccess] = useState(false);
   const [serverError, setServerError] = useState('');
 
-  useEffect(() => {
-    if (tenant) {
-      setForm(fromTenant(tenant));
-      setActividades(tenant.actividadesEconomicas ?? []);
-    }
-  }, [tenant]);
+  // Copia los datos de la empresa a los campos editables cada vez que llegan
+  // (carga inicial o refetch después de guardar), durante el render.
+  const [syncedTenant, setSyncedTenant] = useState(tenant);
+  if (tenant && tenant !== syncedTenant) {
+    setSyncedTenant(tenant);
+    setForm(fromTenant(tenant));
+    setActividades(tenant.actividadesEconomicas ?? []);
+  }
 
   const isDirty = tenant
     ? JSON.stringify(form) !== JSON.stringify(fromTenant(tenant)) ||

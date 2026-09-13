@@ -124,6 +124,9 @@ export function DocumentEditorForm({
     if (initial) return;
     const seed = consumeDuplicateSeed();
     if (!seed) return;
+    // consumeDuplicateSeed lee y borra sessionStorage: tiene que correr una
+    // sola vez después de montar, no durante el render.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (seed.type) setType(seed.type);
     if (seed.title) setTitle(seed.title);
     if (seed.description !== undefined) setDescription(seed.description);

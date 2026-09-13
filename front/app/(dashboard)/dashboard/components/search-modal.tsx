@@ -91,9 +91,13 @@ function ResultRow({
 export function SearchModal({ onClose }: { onClose: () => void }) {
   const [query, setQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
-  const [products, setProducts] = useState<Product[]>([]);
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  const [loading, setLoading] = useState(false);
+  // Resultados de la última búsqueda resuelta. Se muestran solo si
+  // corresponden al texto actual; mientras no llegan, se está cargando.
+  const [results, setResults] = useState<{
+    query: string;
+    products: Product[];
+    customers: Customer[];
+  }>({ query: '', products: [], customers: [] });
   const inputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
 
@@ -115,31 +119,36 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
 
   // Fetch on debounced query
   useEffect(() => {
-    if (!debouncedQuery) {
-      setProducts([]);
-      setCustomers([]);
-      return;
-    }
-    setLoading(true);
+    if (!debouncedQuery) return;
+    let cancelled = false;
 
-    Promise.allSettled([
+    void Promise.allSettled([
       inventoryApi.listProducts({ search: debouncedQuery }),
       salesApi.listCustomers(),
     ]).then(([prodsResult, custsResult]) => {
-      setProducts(
-        prodsResult.status === 'fulfilled' ? prodsResult.value.slice(0, MAX_PER_SECTION) : [],
-      );
+      if (cancelled) return;
       const q = debouncedQuery.toLowerCase();
       const allCustomers = custsResult.status === 'fulfilled' ? custsResult.value : [];
-      setCustomers(
-        allCustomers
+      setResults({
+        query: debouncedQuery,
+        products:
+          prodsResult.status === 'fulfilled' ? prodsResult.value.slice(0, MAX_PER_SECTION) : [],
+        customers: allCustomers
           .filter((c) =>
             `${c.firstName} ${c.lastName} ${c.documentNumber ?? ''}`.toLowerCase().includes(q),
           )
           .slice(0, MAX_PER_SECTION),
-      );
-    }).finally(() => setLoading(false));
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [debouncedQuery]);
+
+  const isCurrent = debouncedQuery !== '' && results.query === debouncedQuery;
+  const products = isCurrent ? results.products : [];
+  const customers = isCurrent ? results.customers : [];
+  const loading = debouncedQuery !== '' && !isCurrent;
 
   function navigate(href: string) {
     router.push(href);

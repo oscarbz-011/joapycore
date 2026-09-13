@@ -2,7 +2,7 @@
 
 import { apiErrorMessage } from '@/lib/api/api-error';
 
-import { useEffect, useState, type ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, Printer, Send, AlertTriangle } from 'lucide-react';
@@ -107,8 +107,10 @@ export default function InvoiceDetailPage() {
   // concreta ya resuelta que se manda al backend.
   const [selectedDay, setSelectedDay] = useState<number>(dueDayOfMonth);
 
-  useEffect(() => {
-    if (!invoice || formReady) return;
+  // Inicialización única cuando llega la factura. Se hace durante el render
+  // (patrón "ajustar estado a partir de props" de React) y no en un efecto,
+  // para no pintar un render con el formulario vacío y re-renderizar.
+  if (invoice && !formReady) {
     const isCredit = invoice.saleOrder.saleType === 'CREDIT';
     setForm({
       paymentCondition: isCredit ? 'CREDIT' : 'CASH',
@@ -122,7 +124,7 @@ export default function InvoiceDetailPage() {
       setSelectedDay(invoice.dueDate ? (parseISODate(invoice.dueDate)?.getUTCDate() ?? dueDayOfMonth) : dueDayOfMonth);
     }
     setFormReady(true);
-  }, [invoice, formReady, dueDayOfMonth]);
+  }
 
   // Solo recalcula la fecha concreta cuando el usuario cambia el día — si ya
   // había un dueDate real guardado y no lo tocó, se manda tal cual (recalcular

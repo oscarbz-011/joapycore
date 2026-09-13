@@ -69,6 +69,9 @@ async function retryAfterRenewingSession(error: AxiosError, original: RetriableC
     const latest = renewedElsewhere();
     if (latest) return retryWith(latest);
     tokenStore.clear();
+    // Fuera de React no hay router: recarga completa a /login, que además
+    // descarta todo el estado en memoria de la sesión que terminó.
+    // eslint-disable-next-line @next/next/no-location-assign-relative-destination
     if (typeof window !== 'undefined') window.location.href = '/login';
     throw toApiError(error);
   }

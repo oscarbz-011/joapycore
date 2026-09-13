@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { UserPlus } from 'lucide-react';
 import { usersApi, type UserResponse } from '../../../../../lib/api/users';
 import { UserStatusBadge } from './_components/user-status-badge';

@@ -136,7 +136,7 @@ function PayInstallmentForm({
         </div>
         <div className="flex-1 space-y-1">
           <Label>Método de pago</Label>
-          <Select value={paymentMethod} onValueChange={setPaymentMethod}>
+          <Select value={paymentMethod} onValueChange={(v) => v && setPaymentMethod(v)}>
             <SelectTrigger className="w-full">
               <span className="flex-1 text-left text-sm truncate">{PAY_LABELS[paymentMethod] ?? paymentMethod}</span>
             </SelectTrigger>

@@ -73,14 +73,16 @@ function RolePermissionsPanel({
   const toggle = (key: string) =>
     setSelected((prev) => {
       const next = new Set(prev);
-      next.has(key) ? next.delete(key) : next.add(key);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
       return next;
     });
 
   const toggleGroup = (module: string) =>
     setOpenGroups((prev) => {
       const next = new Set(prev);
-      next.has(module) ? next.delete(module) : next.add(module);
+      if (next.has(module)) next.delete(module);
+      else next.add(module);
       return next;
     });
 

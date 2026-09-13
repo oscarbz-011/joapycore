@@ -286,7 +286,7 @@ export default function CombosSettingsPage() {
             <div>
               <p className="text-sm font-medium text-foreground">Combos habilitados</p>
               <p className="text-xs text-muted-foreground/60 mt-0.5">
-                Permite elegir "Combo" al armar un pedido en vez de agregar producto por producto.
+                Permite elegir “Combo” al armar un pedido en vez de agregar producto por producto.
               </p>
             </div>
             <button
@@ -365,7 +365,7 @@ export default function CombosSettingsPage() {
           {!enabled && (
             <div className="rounded-xl bg-amber-50 border border-amber-200 px-4 py-3 dark:bg-amber-950/30 dark:border-amber-800/30">
               <p className="text-xs text-amber-700 dark:text-amber-300">
-                Los combos están deshabilitados. El modal de "Nuevo pedido" solo permite agregar productos individuales.
+                Los combos están deshabilitados. El modal de “Nuevo pedido” solo permite agregar productos individuales.
               </p>
             </div>
           )}

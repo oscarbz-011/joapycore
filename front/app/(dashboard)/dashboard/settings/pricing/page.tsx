@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Check, Info, Save, Tag } from 'lucide-react';
 import { settingsApi, type MarkupMethod } from '../../../../../lib/api/settings';
@@ -23,12 +23,14 @@ export default function PricingSettingsPage() {
   const [previewCost, setPreviewCost] = useState<number>(1000);
   const [flashSaved, setFlashSaved] = useState(false);
 
-  useEffect(() => {
-    if (config) {
-      setMethod(config.markupMethod);
-      setMarkup(config.defaultMarkup);
-    }
-  }, [config]);
+  // Cada vez que llega una config nueva (carga o refetch tras guardar) se
+  // copia a los campos editables, durante el render.
+  const [syncedConfig, setSyncedConfig] = useState(config);
+  if (config && config !== syncedConfig) {
+    setSyncedConfig(config);
+    setMethod(config.markupMethod);
+    setMarkup(config.defaultMarkup);
+  }
 
   const mutation = useMutation({
     mutationFn: () =>
