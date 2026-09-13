@@ -27,6 +27,7 @@ import { GuarantorsRepository } from '../repositories/guarantors.repository';
 import { SaleOrdersRepository } from '../repositories/sale-orders.repository';
 import { CreditEvaluationService } from './credit-evaluation.service';
 import type { AuditLogEvent } from '../../../audit/audit-log.event';
+import { assertStockAvailable } from '../../../common/utils/stock-availability.util';
 
 const PRODUCT_STATUS_LABEL: Record<ProductStatus, string> = {
   DRAFT: 'borrador',
@@ -783,6 +784,75 @@ export class SaleOrdersService {
     }
   }
 
+  // Los serializados se controlan por unidad (IN_STOCK) al asignar números de
+  // serie; acá solo se valida la cantidad de los no serializados.
+  private async assertItemsInStock(
+    tx: Prisma.TransactionClient,
+    tenantId: string,
+    items: Array<Pick<CreatedItemInfo, 'productId' | 'quantity' | 'isSerialized'>>,
+    productMap: Map<string, Pick<Product, 'name'>>,
+  ): Promise<void> {
+    await assertStockAvailable(
+      tx,
+      tenantId,
+      items
+        .filter((i) => i.productId && !i.isSerialized)
+        .map((i) => ({
+          productId: i.productId!,
+          quantity: i.quantity,
+          name: productMap.get(i.productId!)?.name,
+        })),
+    );
+  }
+
+  // Cuánto sigue reservado por cada ítem: los movimientos RESERVED de un ítem
+  // se crean negativos al reservar y positivos al liberar, así que la suma
+  // negativa es la reserva vigente. Decidir por esto y no por saleType evita
+  // liberar dos veces o no liberar nunca cuando el camino de reserva cambia.
+  private async findActiveReservations(
+    tx: Prisma.TransactionClient,
+    tenantId: string,
+    itemIds: string[],
+  ): Promise<Map<string, number>> {
+    if (itemIds.length === 0) return new Map();
+    const sums = await tx.stockMovement.groupBy({
+      by: ['referenceId'],
+      where: { tenantId, type: 'RESERVED', referenceId: { in: itemIds } },
+      _sum: { quantity: true },
+    });
+    return new Map(
+      sums
+        .filter((s) => s.referenceId && (s._sum.quantity ?? 0) < 0)
+        .map((s) => [s.referenceId!, -(s._sum.quantity ?? 0)]),
+    );
+  }
+
+  private async releaseReservations(
+    tx: Prisma.TransactionClient,
+    tenantId: string,
+    items: Array<{ id: string; productId: string | null; warehouseId?: string | null }>,
+  ): Promise<void> {
+    const reserved = await this.findActiveReservations(
+      tx,
+      tenantId,
+      items.filter((i) => i.productId).map((i) => i.id),
+    );
+    for (const item of items) {
+      const quantity = reserved.get(item.id);
+      if (!item.productId || !quantity) continue;
+      await tx.stockMovement.create({
+        data: {
+          tenantId,
+          productId: item.productId,
+          warehouseId: item.warehouseId ?? null,
+          type: 'RESERVED',
+          quantity, // positive = reverses the reservation
+          referenceId: item.id,
+        },
+      });
+    }
+  }
+
   private async markSerializedUnitsSold(
     tx: Prisma.TransactionClient,
     tenantId: string,
@@ -982,6 +1052,7 @@ export class SaleOrdersService {
 
       // For non-QUOTE cash orders, reserve stock immediately so it's visible as committed
       if (!isQuote && !isCreditSale) {
+        await this.assertItemsInStock(tx, tenantId, createdItems, productMap);
         await this.applyStockMovements(tx, tenantId, createdItems, 'RESERVE');
       }
 
@@ -1101,15 +1172,47 @@ export class SaleOrdersService {
   // Both cash (PENDING) and credit (CREDIT_APPROVED) → CONFIRMED.
   // sale.order.completed triggers billing to create the invoice for both flows.
   async confirm(tenantId: string, id: string, userId?: string) {
-    const transitioned = await this.prisma.saleOrder.updateMany({
-      where: { id, tenantId, status: { in: ['PENDING', 'CREDIT_APPROVED'] } },
-      data: { status: 'CONFIRMED' },
-    });
-    if (transitioned.count === 0) {
-      throw new UnprocessableEntityException(
-        'El pedido no puede confirmarse en su estado actual',
+    await this.prisma.$transaction(async (tx) => {
+      const transitioned = await tx.saleOrder.updateMany({
+        where: { id, tenantId, status: { in: ['PENDING', 'CREDIT_APPROVED'] } },
+        data: { status: 'CONFIRMED' },
+      });
+      if (transitioned.count === 0) {
+        throw new UnprocessableEntityException(
+          'El pedido no puede confirmarse en su estado actual',
+        );
+      }
+
+      // Los pedidos contado ya reservaron al crearse. Los de crédito no (el
+      // stock no se compromete mientras se evalúa el crédito): se reservan
+      // acá, validando disponibilidad. Si no alcanza, la transacción revierte
+      // también el cambio de estado.
+      const items = await tx.saleOrderItem.findMany({
+        where: { saleOrderId: id, productId: { not: null } },
+        include: { product: { select: { name: true, isSerialized: true } } },
+      });
+      const reserved = await this.findActiveReservations(
+        tx,
+        tenantId,
+        items.map((i) => i.id),
       );
-    }
+      const toReserve = items
+        .filter((i) => !reserved.has(i.id))
+        .map((i) => ({
+          saleItemId: i.id,
+          productId: i.productId,
+          quantity: i.quantity,
+          warehouseId: i.warehouseId ?? null,
+          isSerialized: !!i.product?.isSerialized,
+        }));
+      await this.assertItemsInStock(
+        tx,
+        tenantId,
+        toReserve,
+        new Map(items.map((i) => [i.productId!, { name: i.product?.name ?? '' }])),
+      );
+      await this.applyStockMovements(tx, tenantId, toReserve, 'RESERVE');
+    });
 
     const confirmed = await this.saleOrdersRepository.findById(tenantId, id);
 
@@ -1162,24 +1265,13 @@ export class SaleOrdersService {
     tx: Prisma.TransactionClient,
     tenantId: string,
     order: Awaited<ReturnType<SaleOrdersService['findOne']>>,
-    isCashOrder: boolean,
   ) {
+    // Libera la reserva vigente de cada ítem (contado: desde la creación;
+    // crédito: desde la confirmación; pedidos viejos de crédito: ninguna).
+    await this.releaseReservations(tx, tenantId, order.items);
+
     for (const item of order.items) {
       if (!item.productId) continue; // free-text / service lines have no stock
-
-      if (isCashOrder) {
-        // Cash only: release the RESERVED movement created at order creation
-        await tx.stockMovement.create({
-          data: {
-            tenantId,
-            productId: item.productId,
-            warehouseId: item.warehouseId ?? null,
-            type: 'RESERVED',
-            quantity: item.quantity, // positive = reverses the reservation
-            referenceId: item.id,
-          },
-        });
-      }
 
       // All orders (cash + credit): create the real OUT movement
       await tx.stockMovement.create({
@@ -1216,10 +1308,9 @@ export class SaleOrdersService {
     });
 
     const order = await this.findOne(tenantId, saleOrderId);
-    const isCashOrder = order.saleType === 'CASH';
 
     await this.prisma.$transaction((tx) =>
-      this.applyDeliveryStockOut(tx, tenantId, order, isCashOrder),
+      this.applyDeliveryStockOut(tx, tenantId, order),
     );
     this.eventEmitter.emit('sale.order.stock_out', { tenantId, saleOrderId });
 
@@ -1248,10 +1339,9 @@ export class SaleOrdersService {
     }
 
     const order = await this.findOne(tenantId, id);
-    const isCashOrder = order.saleType === 'CASH';
 
     await this.prisma.$transaction((tx) =>
-      this.applyDeliveryStockOut(tx, tenantId, order, isCashOrder),
+      this.applyDeliveryStockOut(tx, tenantId, order),
     );
     this.eventEmitter.emit('sale.order.stock_out', {
       tenantId,
@@ -1282,22 +1372,8 @@ export class SaleOrdersService {
         data: { status: 'CANCELLED' },
       });
 
-      // Release stock reservations for cancelled cash orders
-      if (order.saleType === 'CASH' && order.status === 'PENDING') {
-        for (const item of order.items) {
-          if (!item.productId) continue;
-          await tx.stockMovement.create({
-            data: {
-              tenantId,
-              productId: item.productId,
-              warehouseId: item.warehouseId ?? null,
-              type: 'RESERVED',
-              quantity: item.quantity, // positive = reverses the reservation
-              referenceId: item.id,
-            },
-          });
-        }
-      }
+      // Release whatever is still reserved for this order
+      await this.releaseReservations(tx, tenantId, order.items);
     });
 
     this.eventEmitter.emit('audit.log', {
@@ -1384,6 +1460,7 @@ export class SaleOrdersService {
 
       // No RESERVED step — the sale is handed over at the counter in this
       // same transaction, so it goes straight to a real OUT movement.
+      await this.assertItemsInStock(tx, tenantId, createdItems, productMap);
       await this.applyStockMovements(tx, tenantId, createdItems, 'CONSUME');
       for (const item of createdItems) {
         if (item.isSerialized) {

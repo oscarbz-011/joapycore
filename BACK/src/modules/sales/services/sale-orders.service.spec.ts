@@ -85,6 +85,7 @@ describe('SaleOrdersService', () => {
     installment: { count: jest.Mock };
     customer: { findFirst: jest.Mock };
     loan: { findMany: jest.Mock };
+    deliveryNote: { upsert: jest.Mock };
   };
 
   let tx: any;
@@ -132,11 +133,13 @@ describe('SaleOrdersService', () => {
           .fn()
           .mockResolvedValue(makeOrder({ status: 'DELIVERED' })),
         update: jest.fn().mockResolvedValue(makeOrder({ status: 'CANCELLED' })),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
       },
       saleOrderItem: {
         create: jest.fn().mockResolvedValue(makeOrderItem()),
         update: jest.fn(),
         deleteMany: jest.fn(),
+        findMany: jest.fn().mockResolvedValue([]),
       },
       productUnit: {
         findFirst: jest.fn(),
@@ -144,7 +147,23 @@ describe('SaleOrdersService', () => {
         updateMany: jest.fn(),
         findMany: jest.fn().mockResolvedValue([]),
       },
-      stockMovement: { create: jest.fn() },
+      $executeRaw: jest.fn().mockResolvedValue(1),
+      stockMovement: {
+        create: jest.fn(),
+        // Por defecto: stock de sobra y ninguna reserva previa. Los tests de
+        // stock sobreescriben esto.
+        groupBy: jest.fn().mockImplementation(
+          ({ by, where }: { by: string[]; where: { productId?: { in: string[] } } }) =>
+            Promise.resolve(
+              by[0] === 'productId'
+                ? (where.productId?.in ?? []).map((productId) => ({
+                    productId,
+                    _sum: { quantity: 1000 },
+                  }))
+                : [],
+            ),
+        ),
+      },
       posSession: {
         findFirst: jest
           .fn()
@@ -172,6 +191,9 @@ describe('SaleOrdersService', () => {
         findFirst: jest.fn().mockResolvedValue({ creditLimit: null }),
       },
       loan: { findMany: jest.fn().mockResolvedValue([]) },
+      deliveryNote: {
+        upsert: jest.fn().mockResolvedValue({ id: 'dn-1', status: 'PENDING' }),
+      },
     };
 
     service = new SaleOrdersService(
@@ -506,6 +528,20 @@ describe('SaleOrdersService', () => {
       );
     });
 
+    it('rejects the sale when there is not enough stock', async () => {
+      productsRepository.findManyByIds.mockResolvedValue([
+        makeProduct({ isSerialized: false }),
+      ]);
+      tx.stockMovement.groupBy.mockResolvedValue([
+        { productId: 'prod-1', _sum: { quantity: 1 } },
+      ]);
+
+      await expect(
+        service.createPosSale('tenant-1', baseDto, 'session-1', 'user-1'),
+      ).rejects.toThrow('Heladera Samsung (disponible 1, pedido 2)');
+      expect(tx.stockMovement.create).not.toHaveBeenCalled();
+    });
+
     it('rejects when the POS session is not OPEN (closed mid-request)', async () => {
       productsRepository.findManyByIds.mockResolvedValue([
         makeProduct({ isSerialized: false }),
@@ -604,34 +640,90 @@ describe('SaleOrdersService', () => {
 
   describe('confirm', () => {
     it('throws UnprocessableEntityException when order is not in a confirmable status', async () => {
-      prisma.saleOrder.updateMany.mockResolvedValue({ count: 0 });
+      tx.saleOrder.updateMany.mockResolvedValue({ count: 0 });
 
       await expect(
         service.confirm('tenant-1', 'order-1'),
       ).rejects.toBeInstanceOf(UnprocessableEntityException);
+      expect(tx.stockMovement.create).not.toHaveBeenCalled();
     });
 
-    it('confirms a PENDING order with non-serialized products and emits event', async () => {
-      const order = makeOrder({
-        status: 'PENDING',
-        items: [makeOrderItem()],
-      });
-      saleOrdersRepository.findById
-        .mockResolvedValueOnce(order) // findOne inside confirm
-        .mockResolvedValueOnce(makeOrder({ status: 'CONFIRMED' })); // final fetch
-
-      productsRepository.findManyByIds.mockResolvedValue([
-        makeProduct({ isSerialized: false }),
-      ]);
+    it('confirms a PENDING order and emits event', async () => {
+      saleOrdersRepository.findById.mockResolvedValue(
+        makeOrder({ status: 'CONFIRMED', items: [makeOrderItem()] }),
+      );
 
       await service.confirm('tenant-1', 'order-1');
 
+      expect(tx.saleOrder.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ tenantId: 'tenant-1' }),
+          data: { status: 'CONFIRMED' },
+        }),
+      );
       expect(eventEmitter.emit).toHaveBeenCalledWith(
         'sale.order.completed',
         expect.objectContaining({
           tenantId: 'tenant-1',
           saleOrderId: 'order-1',
         }),
+      );
+    });
+
+    it('reserves stock for a credit order that has no reservation yet', async () => {
+      tx.saleOrderItem.findMany.mockResolvedValue([
+        { ...makeOrderItem(), warehouseId: null, product: { name: 'Heladera', isSerialized: false } },
+      ]);
+      saleOrdersRepository.findById.mockResolvedValue(makeOrder({ status: 'CONFIRMED' }));
+
+      await service.confirm('tenant-1', 'order-1');
+
+      expect(tx.stockMovement.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          type: 'RESERVED',
+          quantity: -2,
+          referenceId: 'item-1',
+        }),
+      });
+    });
+
+    it('does not reserve again items that already have a reservation (cash orders)', async () => {
+      tx.saleOrderItem.findMany.mockResolvedValue([
+        { ...makeOrderItem(), warehouseId: null, product: { name: 'Heladera', isSerialized: false } },
+      ]);
+      tx.stockMovement.groupBy.mockImplementation(({ by }: { by: string[] }) =>
+        Promise.resolve(
+          by[0] === 'referenceId'
+            ? [{ referenceId: 'item-1', _sum: { quantity: -2 } }]
+            : [],
+        ),
+      );
+      saleOrdersRepository.findById.mockResolvedValue(makeOrder({ status: 'CONFIRMED' }));
+
+      await service.confirm('tenant-1', 'order-1');
+
+      expect(tx.stockMovement.create).not.toHaveBeenCalled();
+    });
+
+    it('rejects the confirmation when there is not enough stock to reserve', async () => {
+      tx.saleOrderItem.findMany.mockResolvedValue([
+        { ...makeOrderItem({ quantity: 5 }), warehouseId: null, product: { name: 'Heladera', isSerialized: false } },
+      ]);
+      tx.stockMovement.groupBy.mockImplementation(({ by }: { by: string[] }) =>
+        Promise.resolve(
+          by[0] === 'productId'
+            ? [{ productId: 'prod-1', _sum: { quantity: 3 } }]
+            : [],
+        ),
+      );
+
+      await expect(service.confirm('tenant-1', 'order-1')).rejects.toThrow(
+        'No hay stock suficiente de: Heladera (disponible 3, pedido 5)',
+      );
+      expect(tx.stockMovement.create).not.toHaveBeenCalled();
+      expect(eventEmitter.emit).not.toHaveBeenCalledWith(
+        'sale.order.completed',
+        expect.anything(),
       );
     });
   });
@@ -649,17 +741,57 @@ describe('SaleOrdersService', () => {
       ).rejects.toBeInstanceOf(UnprocessableEntityException);
     });
 
-    it('cancels a PENDING order', async () => {
+    it('cancels a PENDING order and releases its active reservation', async () => {
       saleOrdersRepository.findById.mockResolvedValue(
-        makeOrder({ status: 'PENDING' }),
+        makeOrder({ status: 'PENDING', items: [makeOrderItem()] }),
       );
+      tx.stockMovement.groupBy.mockResolvedValue([
+        { referenceId: 'item-1', _sum: { quantity: -2 } },
+      ]);
 
       const result = await service.cancel('tenant-1', 'order-1');
 
-      expect(prisma.saleOrder.update).toHaveBeenCalledWith(
+      expect(tx.saleOrder.update).toHaveBeenCalledWith(
         expect.objectContaining({ data: { status: 'CANCELLED' } }),
       );
+      expect(tx.stockMovement.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ type: 'RESERVED', quantity: 2, referenceId: 'item-1' }),
+      });
       expect(result).toBeDefined();
+    });
+
+    it('does not create a release when nothing is reserved', async () => {
+      saleOrdersRepository.findById.mockResolvedValue(
+        makeOrder({ status: 'PENDING', items: [makeOrderItem()] }),
+      );
+      tx.stockMovement.groupBy.mockResolvedValue([]);
+
+      await service.cancel('tenant-1', 'order-1');
+
+      expect(tx.stockMovement.create).not.toHaveBeenCalled();
+    });
+  });
+
+  // ── deliver ────────────────────────────────────────────────────────────────
+
+  describe('deliver', () => {
+    it('releases the reservation and creates the OUT movement', async () => {
+      saleOrdersRepository.findById.mockResolvedValue(
+        makeOrder({ status: 'DELIVERED', saleType: 'CREDIT', items: [makeOrderItem()] }),
+      );
+      tx.stockMovement.groupBy.mockResolvedValue([
+        { referenceId: 'item-1', _sum: { quantity: -2 } },
+      ]);
+
+      await service.deliver('tenant-1', 'order-1');
+
+      const types = tx.stockMovement.create.mock.calls.map(
+        (c: [{ data: { type: string; quantity: number } }]) => [c[0].data.type, c[0].data.quantity],
+      );
+      expect(types).toEqual([
+        ['RESERVED', 2],
+        ['OUT', -2],
+      ]);
     });
   });
 
@@ -667,7 +799,9 @@ describe('SaleOrdersService', () => {
 
   describe('approveCredit', () => {
     it('throws UnprocessableEntityException when order is not pending approval', async () => {
-      prisma.saleOrder.updateMany.mockResolvedValue({ count: 0 });
+      saleOrdersRepository.findById.mockResolvedValue(
+        makeOrder({ status: 'CONFIRMED' }),
+      );
 
       await expect(
         service.approveCredit('tenant-1', 'order-1'),
@@ -676,9 +810,9 @@ describe('SaleOrdersService', () => {
 
     it('approves a PENDING_CREDIT_APPROVAL order', async () => {
       prisma.saleOrder.updateMany.mockResolvedValue({ count: 1 });
-      saleOrdersRepository.findById.mockResolvedValue(
-        makeOrder({ status: 'CREDIT_APPROVED' }),
-      );
+      saleOrdersRepository.findById
+        .mockResolvedValueOnce(makeOrder({ status: 'PENDING_CREDIT_APPROVAL' }))
+        .mockResolvedValue(makeOrder({ status: 'CREDIT_APPROVED' }));
 
       const result = await service.approveCredit(
         'tenant-1',
