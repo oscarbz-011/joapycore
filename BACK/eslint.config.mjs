@@ -33,4 +33,20 @@ export default tseslint.config(
       "prettier/prettier": ["error", { endOfLine: "auto" }],
     },
   },
+  {
+    // Los tests construyen servicios con mocks parciales (`as any`) y pasan
+    // métodos de jest.fn() sin bind: las reglas no-unsafe-* y unbound-method
+    // solo generan ruido acá. Se mantienen activas en el código de producción.
+    files: ['**/*.spec.ts', 'test/**/*.ts'],
+    rules: {
+      '@typescript-eslint/no-unsafe-argument': 'off',
+      '@typescript-eslint/no-unsafe-assignment': 'off',
+      '@typescript-eslint/no-unsafe-member-access': 'off',
+      '@typescript-eslint/no-unsafe-call': 'off',
+      '@typescript-eslint/no-unsafe-return': 'off',
+      '@typescript-eslint/unbound-method': 'off',
+      // En tests un await olvidado hace que la aserción no espere: error.
+      '@typescript-eslint/no-floating-promises': 'error',
+    },
+  },
 );

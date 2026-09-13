@@ -72,9 +72,9 @@ describe('PayablesService', () => {
   // ── findAll ────────────────────────────────────────────────────────────────
 
   describe('findAll', () => {
-    it('delegates to repository', () => {
+    it('delegates to repository', async () => {
       apRepository.findAll.mockResolvedValue([makeAP()]);
-      service.findAll('tenant-1');
+      await service.findAll('tenant-1');
       expect(apRepository.findAll).toHaveBeenCalledWith('tenant-1');
     });
   });

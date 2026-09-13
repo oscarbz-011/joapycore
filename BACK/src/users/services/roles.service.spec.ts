@@ -55,9 +55,9 @@ describe('RolesService', () => {
   // ── list ───────────────────────────────────────────────────────────────────
 
   describe('list', () => {
-    it('delegates to repository', () => {
+    it('delegates to repository', async () => {
       repo.findAllForTenant.mockResolvedValue([makeRole()]);
-      service.list('tenant-1');
+      await service.list('tenant-1');
       expect(repo.findAllForTenant).toHaveBeenCalledWith('tenant-1');
     });
   });

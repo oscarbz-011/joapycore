@@ -102,11 +102,11 @@ describe('ProductsService', () => {
   // ── findAll ────────────────────────────────────────────────────────────────
 
   describe('findAll', () => {
-    it('delegates filters to repository', () => {
+    it('delegates filters to repository', async () => {
       const filters = { search: 'heladera', categoryId: 'cat-1' };
       productsRepository.findAll.mockResolvedValue([makeProduct()]);
 
-      service.findAll('tenant-1', filters);
+      await service.findAll('tenant-1', filters);
 
       expect(productsRepository.findAll).toHaveBeenCalledWith(
         'tenant-1',

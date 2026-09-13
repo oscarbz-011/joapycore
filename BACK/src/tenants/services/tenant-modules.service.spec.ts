@@ -1,6 +1,5 @@
 import {
   BadRequestException,
-  NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { TenantModulesService } from './tenant-modules.service';

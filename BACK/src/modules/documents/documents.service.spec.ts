@@ -169,7 +169,7 @@ describe('DocumentsService', () => {
       emailService as any,
       prisma as any,
       eventEmitter as any,
-      docxTemplateService as any,
+      docxTemplateService,
     );
   });
 

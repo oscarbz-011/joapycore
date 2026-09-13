@@ -85,9 +85,9 @@ describe('InvoicesService', () => {
   // ── findAll ────────────────────────────────────────────────────────────────
 
   describe('findAll', () => {
-    it('delegates to repository', () => {
+    it('delegates to repository', async () => {
       invoicesRepository.findAll.mockResolvedValue([makeInvoice()]);
-      service.findAll('tenant-1');
+      await service.findAll('tenant-1');
       expect(invoicesRepository.findAll).toHaveBeenCalledWith('tenant-1');
     });
   });

@@ -193,7 +193,7 @@ describe('DeliveryTrackingService', () => {
       );
       trackingEventsRepository.create.mockResolvedValue({ id: 'evt-1' });
 
-      await service.recordTrackingEvent('tenant-1', 'note-1', {} as any, 'user-2', ['logistics:manage']);
+      await service.recordTrackingEvent('tenant-1', 'note-1', {}, 'user-2', ['logistics:manage']);
 
       expect(prisma.employee.findUnique).not.toHaveBeenCalled();
       expect(trackingEventsRepository.create).toHaveBeenCalled();
@@ -208,7 +208,7 @@ describe('DeliveryTrackingService', () => {
       await service.recordTrackingEvent(
         'tenant-1',
         'note-1',
-        { locationConfirmed: false, latitude: -25.3, longitude: -57.6 } as any,
+        { locationConfirmed: false, latitude: -25.3, longitude: -57.6 },
         'user-1',
         ['logistics:manage'],
       );
@@ -228,7 +228,7 @@ describe('DeliveryTrackingService', () => {
       await service.recordTrackingEvent(
         'tenant-1',
         'note-1',
-        { locationConfirmed: true, latitude: -25.3, longitude: -57.6 } as any,
+        { locationConfirmed: true, latitude: -25.3, longitude: -57.6 },
         'user-1',
         ['logistics:manage'],
       );

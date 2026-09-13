@@ -209,18 +209,18 @@ describe('SaleOrdersService', () => {
   // ── findAll ────────────────────────────────────────────────────────────────
 
   describe('findAll', () => {
-    it('delegates to repository without seller filter for managers', () => {
+    it('delegates to repository without seller filter for managers', async () => {
       saleOrdersRepository.findAll.mockResolvedValue([makeOrder()]);
-      service.findAll('tenant-1');
+      await service.findAll('tenant-1');
       expect(saleOrdersRepository.findAll).toHaveBeenCalledWith(
         'tenant-1',
         undefined,
       );
     });
 
-    it('passes sellerId filter for non-managers', () => {
+    it('passes sellerId filter for non-managers', async () => {
       saleOrdersRepository.findAll.mockResolvedValue([makeOrder()]);
-      service.findAll('tenant-1', 'user-42');
+      await service.findAll('tenant-1', 'user-42');
       expect(saleOrdersRepository.findAll).toHaveBeenCalledWith(
         'tenant-1',
         'user-42',

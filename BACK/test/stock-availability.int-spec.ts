@@ -58,7 +58,7 @@ describe('assertStockAvailable (PostgreSQL)', () => {
     const failed = results.filter((r) => r.status === 'rejected');
     expect(ok).toHaveLength(1);
     expect(failed).toHaveLength(1);
-    expect(String((failed[0] as PromiseRejectedResult).reason)).toContain(
+    expect(String((failed[0]).reason)).toContain(
       'No hay stock suficiente de: Última unidad (disponible 0, pedido 1)',
     );
 

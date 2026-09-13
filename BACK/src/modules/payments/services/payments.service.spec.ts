@@ -81,9 +81,9 @@ describe('PaymentsService', () => {
   // ── findAll ────────────────────────────────────────────────────────────────
 
   describe('findAll', () => {
-    it('delegates to repository', () => {
+    it('delegates to repository', async () => {
       arRepository.findAll.mockResolvedValue([makeAR()]);
-      service.findAll('tenant-1');
+      await service.findAll('tenant-1');
       expect(arRepository.findAll).toHaveBeenCalledWith('tenant-1');
     });
   });

@@ -41,9 +41,9 @@ describe('BranchesService', () => {
   // ── findAll ────────────────────────────────────────────────────────────────
 
   describe('findAll', () => {
-    it('delegates to repository', () => {
+    it('delegates to repository', async () => {
       branchesRepository.findAll.mockResolvedValue([makeBranch()]);
-      service.findAll('tenant-1');
+      await service.findAll('tenant-1');
       expect(branchesRepository.findAll).toHaveBeenCalledWith('tenant-1');
     });
   });
@@ -66,10 +66,10 @@ describe('BranchesService', () => {
   // ── create ─────────────────────────────────────────────────────────────────
 
   describe('create', () => {
-    it('delegates to repository with tenantId and dto', () => {
+    it('delegates to repository with tenantId and dto', async () => {
       const dto = { name: 'Sucursal Norte', address: 'Av. Artigas 567' };
       branchesRepository.create.mockResolvedValue(makeBranch({ ...dto, id: 'branch-2', isMain: false }));
-      service.create('tenant-1', dto as any);
+      await service.create('tenant-1', dto);
       expect(branchesRepository.create).toHaveBeenCalledWith('tenant-1', dto);
     });
   });

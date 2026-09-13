@@ -27,9 +27,9 @@ describe('CategoriesService', () => {
   // ── findAll ────────────────────────────────────────────────────────────────
 
   describe('findAll', () => {
-    it('delegates to repository', () => {
+    it('delegates to repository', async () => {
       repo.findAll.mockResolvedValue([makeCategory()]);
-      service.findAll('tenant-1');
+      await service.findAll('tenant-1');
       expect(repo.findAll).toHaveBeenCalledWith('tenant-1');
     });
   });

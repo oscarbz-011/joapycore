@@ -34,10 +34,10 @@ describe('AreasService', () => {
   // ── list ───────────────────────────────────────────────────────────────────
 
   describe('list', () => {
-    it('delegates to areasRepository.findAll', () => {
+    it('delegates to areasRepository.findAll', async () => {
       areasRepository.findAll.mockResolvedValue([makeArea()]);
 
-      service.list('tenant-1');
+      await service.list('tenant-1');
 
       expect(areasRepository.findAll).toHaveBeenCalledWith('tenant-1');
     });

@@ -47,9 +47,9 @@ describe('SuppliersService', () => {
   // ── findAll ────────────────────────────────────────────────────────────────
 
   describe('findAll', () => {
-    it('delegates to repository', () => {
+    it('delegates to repository', async () => {
       suppliersRepository.findAll.mockResolvedValue([makeSupplier()]);
-      service.findAll('tenant-1');
+      await service.findAll('tenant-1');
       expect(suppliersRepository.findAll).toHaveBeenCalledWith('tenant-1');
     });
   });
@@ -76,7 +76,7 @@ describe('SuppliersService', () => {
       const dto = { name: 'Importadora ABC', isImporter: true };
       suppliersRepository.create.mockResolvedValue(makeSupplier());
 
-      await service.create('tenant-1', dto as any);
+      await service.create('tenant-1', dto);
 
       expect(suppliersRepository.create).toHaveBeenCalledWith('tenant-1', dto);
     });

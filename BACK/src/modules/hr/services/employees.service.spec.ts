@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
+ 
 import {
   ConflictException,
   NotFoundException,
@@ -109,11 +109,11 @@ describe('EmployeesService', () => {
   // ── list ───────────────────────────────────────────────────────────────────
 
   describe('list', () => {
-    it('delegates to repository', () => {
+    it('delegates to repository', async () => {
       const employees = [makeEmployee()];
       employeesRepository.findAll.mockResolvedValue(employees);
 
-      service.list('tenant-1');
+      await service.list('tenant-1');
 
       expect(employeesRepository.findAll).toHaveBeenCalledWith('tenant-1');
     });

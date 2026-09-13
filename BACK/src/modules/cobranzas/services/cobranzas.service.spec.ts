@@ -42,9 +42,9 @@ describe('CobranzasService — Morosos', () => {
   });
 
   describe('findAllDelinquencyReports', () => {
-    it('delegates to the repository with the status filter', () => {
+    it('delegates to the repository with the status filter', async () => {
       delinquencyReportsRepo.findAll.mockResolvedValue([makeReport()]);
-      service.findAllDelinquencyReports('tenant-1', 'PENDING_REVIEW');
+      await service.findAllDelinquencyReports('tenant-1', 'PENDING_REVIEW');
       expect(delinquencyReportsRepo.findAll).toHaveBeenCalledWith(
         'tenant-1',
         'PENDING_REVIEW',

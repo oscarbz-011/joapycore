@@ -73,9 +73,9 @@ describe('PurchaseOrdersService', () => {
   // ── findAll ────────────────────────────────────────────────────────────────
 
   describe('findAll', () => {
-    it('delegates to repository', () => {
+    it('delegates to repository', async () => {
       purchaseOrdersRepository.findAll.mockResolvedValue([makeOrder()]);
-      service.findAll('tenant-1');
+      await service.findAll('tenant-1');
       expect(purchaseOrdersRepository.findAll).toHaveBeenCalledWith('tenant-1');
     });
   });

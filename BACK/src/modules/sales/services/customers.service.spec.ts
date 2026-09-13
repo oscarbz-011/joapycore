@@ -59,9 +59,9 @@ describe('CustomersService', () => {
   // ── findAll ────────────────────────────────────────────────────────────────
 
   describe('findAll', () => {
-    it('delegates to repository', () => {
+    it('delegates to repository', async () => {
       customersRepository.findAll.mockResolvedValue([makeCustomer()]);
-      service.findAll('tenant-1');
+      await service.findAll('tenant-1');
       expect(customersRepository.findAll).toHaveBeenCalledWith('tenant-1');
     });
   });

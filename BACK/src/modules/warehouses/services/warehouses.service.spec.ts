@@ -37,9 +37,9 @@ describe('WarehousesService', () => {
   });
 
   describe('findAll', () => {
-    it('delegates to repository', () => {
+    it('delegates to repository', async () => {
       repo.findAll.mockResolvedValue([makeWarehouse()]);
-      service.findAll('tenant-1');
+      await service.findAll('tenant-1');
       expect(repo.findAll).toHaveBeenCalledWith('tenant-1');
     });
   });
@@ -58,10 +58,10 @@ describe('WarehousesService', () => {
   });
 
   describe('create', () => {
-    it('delegates to repository with tenantId and dto', () => {
+    it('delegates to repository with tenantId and dto', async () => {
       const dto = { name: 'Depósito Norte', branchId: 'branch-2' };
       repo.create.mockResolvedValue(makeWarehouse({ ...dto, id: 'wh-2', isDefault: false }));
-      service.create('tenant-1', dto as any);
+      await service.create('tenant-1', dto);
       expect(repo.create).toHaveBeenCalledWith('tenant-1', dto);
     });
   });

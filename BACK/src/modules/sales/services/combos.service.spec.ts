@@ -58,7 +58,7 @@ describe('CombosService', () => {
         'tenant-1',
         {
           name: 'Combo Cocina',
-          priceMode: 'FIXED' as any,
+          priceMode: 'FIXED',
           fixedPrice: 2000000,
           items: [{ productId: 'prod-1', quantity: 1 }],
         },
