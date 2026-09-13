@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { InstallmentStatus, PaymentMethod } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { PrismaClientOrTx } from '../../../prisma/types';
+import { startOfBusinessDay } from '../../../common/utils/business-date.util';
 
 @Injectable()
 export class InstallmentsRepository {
@@ -51,7 +52,7 @@ export class InstallmentsRepository {
         // cuanto el cron corre — justo cuando recalculateInterestCharges()
         // empieza a generarle cargos de mora, dejándolos invisibles acá.
         status: { in: ['PENDING', 'PARTIAL', 'OVERDUE'] },
-        dueDate: { lt: new Date() },
+        dueDate: { lt: startOfBusinessDay() },
       },
       include: {
         loan: {
@@ -81,11 +82,15 @@ export class InstallmentsRepository {
     });
   }
 
-  markAllOverdue() {
+  // Vencida = el día de vencimiento ya terminó en Paraguay. Comparar contra
+  // "ahora" marcaba la cuota como vencida desde las 00:00 del mismo día en que
+  // vence (dueDate es medianoche UTC de ese día), cuando el cliente todavía
+  // tenía todo el día para pagar.
+  markAllOverdue(now: Date = new Date()) {
     return this.prisma.installment.updateMany({
       where: {
         status: { in: ['PENDING', 'PARTIAL'] },
-        dueDate: { lt: new Date() },
+        dueDate: { lt: startOfBusinessDay(now) },
       },
       data: { status: 'OVERDUE' },
     });

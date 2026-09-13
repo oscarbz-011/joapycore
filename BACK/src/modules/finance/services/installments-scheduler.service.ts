@@ -3,6 +3,7 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { InstallmentsRepository } from '../repositories/installments.repository';
 import { InterestCalcService } from './interest-calc.service';
+import { BUSINESS_TIMEZONE } from '../../../common/utils/business-date.util';
 
 function toNum(value: unknown): number {
   if (typeof value === 'object' && value !== null && 'toNumber' in value) {
@@ -21,7 +22,7 @@ export class InstallmentsSchedulerService {
     private readonly interestCalc: InterestCalcService,
   ) {}
 
-  @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
+  @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT, { timeZone: BUSINESS_TIMEZONE })
   async markOverdueInstallments() {
     const result = await this.installmentsRepository.markAllOverdue();
     if (result.count > 0) {
@@ -36,7 +37,7 @@ export class InstallmentsSchedulerService {
   // cambio de configuración (activar/desactivar un componente, cambiar el
   // %) se refleja correctamente la próxima corrida sin arrastrar valores
   // viejos.
-  @Cron(CronExpression.EVERY_DAY_AT_1AM)
+  @Cron(CronExpression.EVERY_DAY_AT_1AM, { timeZone: BUSINESS_TIMEZONE })
   async recalculateInterestCharges() {
     const overdue = await this.installmentsRepository.findAllOverdueForMora();
     if (!overdue.length) return;
@@ -105,7 +106,7 @@ export class InstallmentsSchedulerService {
   // todavía no existe uno para ese préstamo. Nunca pisa uno ya revisado
   // (REPORTED/EXCLUDED) — la detección automática solo alimenta la cola de
   // revisión, un analista decide qué hacer con cada caso.
-  @Cron(CronExpression.EVERY_DAY_AT_1AM)
+  @Cron(CronExpression.EVERY_DAY_AT_1AM, { timeZone: BUSINESS_TIMEZONE })
   async detectDelinquentCustomers() {
     const configs = await this.prisma.creditConfig.findMany({
       where: { delinquencyThresholdMonths: { not: null } },

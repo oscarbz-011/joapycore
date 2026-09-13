@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { SaleOrderStatus } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
+import { startOfBusinessDay } from '../../../common/utils/business-date.util';
 
 @Injectable()
 export class ReportsService {
@@ -169,7 +170,9 @@ export class ReportsService {
       orderBy: { createdAt: 'desc' },
     });
 
-    const now = new Date();
+    // Vencimientos = días de calendario: se comparan contra el día de hoy en
+    // Paraguay, no contra el instante actual.
+    const today = startOfBusinessDay();
     const DUE_SOON_DAYS = 5;
     // AccountsReceivable solo existe para facturas de venta (invoiceType
     // SALE) — las de intereses moratorios se crean ya PAID, sin AR — así que
@@ -183,7 +186,7 @@ export class ReportsService {
         const isCredit = saleOrder.saleType === 'CREDIT';
         let dueDate = ar.dueDate;
         let isOverdue = ar.dueDate
-          ? ar.dueDate < now && ar.status !== 'PAID'
+          ? ar.dueDate < today && ar.status !== 'PAID'
           : false;
         let isDueSoon = false;
 
@@ -199,10 +202,10 @@ export class ReportsService {
             // seguiría en PENDING. Se respalda con la fecha directamente para
             // que la detección sea tan inmediata como siempre fue.
             isOverdue =
-              nextUnpaid.status === 'OVERDUE' || nextUnpaid.dueDate < now;
+              nextUnpaid.status === 'OVERDUE' || nextUnpaid.dueDate < today;
             if (!isOverdue) {
               const daysUntil = Math.ceil(
-                (nextUnpaid.dueDate.getTime() - now.getTime()) / 86_400_000,
+                (nextUnpaid.dueDate.getTime() - today.getTime()) / 86_400_000,
               );
               isDueSoon = daysUntil >= 0 && daysUntil <= DUE_SOON_DAYS;
             }
