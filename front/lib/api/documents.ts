@@ -152,9 +152,6 @@ export const documentsApi = {
   templateKinds: (): Promise<{ key: TemplateKind; label: string; variables: TemplateVariable[] }[]> =>
     apiClient.get('/documents/template-kinds').then((r) => r.data),
 
-  preview: (id: string): Promise<{ html: string }> =>
-    apiClient.post(`/documents/${id}/preview`, {}).then((r) => r.data),
-
   sendEmail: (id: string, to?: string): Promise<void> =>
     apiClient
       .post(`/documents/${id}/email`, { to }, { timeout: LONG_REQUEST_TIMEOUT_MS })
