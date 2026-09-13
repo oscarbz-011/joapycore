@@ -58,7 +58,8 @@ describe('BrandsService', () => {
       repo.findByName.mockResolvedValue(null);
       repo.create.mockResolvedValue(makeBrand());
       await service.create('tenant-1', { name: 'Samsung' });
-      expect(repo.create).toHaveBeenCalledWith('tenant-1', 'Samsung');
+      // Regla de diseño: marcas en MAYÚSCULAS.
+      expect(repo.create).toHaveBeenCalledWith('tenant-1', 'SAMSUNG');
     });
 
     it('throws ConflictException when brand name already exists', async () => {

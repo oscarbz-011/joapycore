@@ -29,6 +29,7 @@ describe('CustomersService', () => {
     findAll: jest.Mock;
     findById: jest.Mock;
     findLastCode: jest.Mock;
+    findByEmail: jest.Mock;
     create: jest.Mock;
     update: jest.Mock;
     softDelete: jest.Mock;
@@ -40,6 +41,7 @@ describe('CustomersService', () => {
       findAll: jest.fn(),
       findById: jest.fn(),
       findLastCode: jest.fn().mockResolvedValue(null),
+      findByEmail: jest.fn().mockResolvedValue(null),
       create: jest.fn(),
       update: jest.fn(),
       softDelete: jest.fn(),
@@ -82,7 +84,7 @@ describe('CustomersService', () => {
   // ── create ─────────────────────────────────────────────────────────────────
 
   describe('create', () => {
-    it('auto-generates CLI-001 for the first customer and delegates to repository', async () => {
+    it('auto-generates CLI-YY-000001 for the first customer and delegates to repository', async () => {
       const dto = {
         firstName: 'María',
         lastName: 'González',
@@ -97,25 +99,30 @@ describe('CustomersService', () => {
         'tenant-1',
         expect.objectContaining({
           firstName: 'María',
-          customerCode: 'CLI-001',
+          customerCode: `CLI-${String(new Date().getFullYear()).slice(-2)}-000001`,
         }),
       );
     });
 
     it('increments the customer code when prior customers exist', async () => {
       const dto = { firstName: 'Ana', lastName: 'López' };
+      const year = String(new Date().getFullYear()).slice(-2);
       customersRepository.findLastCode.mockResolvedValue({
-        customerCode: 'CLI-003',
+        customerCode: `CLI-${year}-000003`,
       });
       customersRepository.create.mockResolvedValue(
-        makeCustomer({ customerCode: 'CLI-004' }),
+        makeCustomer({ customerCode: `CLI-${year}-000004` }),
       );
 
       await service.create('tenant-1', dto);
 
       expect(customersRepository.create).toHaveBeenCalledWith(
         'tenant-1',
-        expect.objectContaining({ customerCode: 'CLI-004' }),
+        expect.objectContaining({
+          customerCode: `CLI-${year}-000004`,
+          // Regresión: la tilde no parte la palabra ("LóPez").
+          lastName: 'López',
+        }),
       );
     });
   });

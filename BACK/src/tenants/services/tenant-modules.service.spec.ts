@@ -61,16 +61,25 @@ describe('TenantModulesService', () => {
       expect(repo.setActive).not.toHaveBeenCalled();
     });
 
-    it('throws NotFoundException when module is not configured for tenant', async () => {
+    it('backfills missing module rows before activating, so a module without a row can be turned on', async () => {
       // sales has no inactive deps when inventory is active
       repo.findAllForTenant.mockResolvedValue([
         makeModule('inventory', true),
         makeModule('sales', false),
       ]);
-      repo.setActive.mockResolvedValue(0);
-      await expect(
-        service.setActive('tenant-1', 'sales', true),
-      ).rejects.toBeInstanceOf(NotFoundException);
+      const order: string[] = [];
+      repo.backfillMissing.mockImplementation(() => {
+        order.push('backfill');
+        return Promise.resolve();
+      });
+      repo.setActive.mockImplementation(() => {
+        order.push('setActive');
+        return Promise.resolve(1);
+      });
+
+      await service.setActive('tenant-1', 'sales', true);
+
+      expect(order).toEqual(['backfill', 'setActive']);
     });
 
     it('throws UnprocessableEntityException when activating a module with inactive dependencies', async () => {

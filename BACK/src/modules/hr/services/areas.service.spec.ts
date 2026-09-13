@@ -51,8 +51,9 @@ describe('AreasService', () => {
 
       const result = await service.create('tenant-1', { name: 'Ventas' });
 
+      // Regla de diseño: nombres de áreas normalizados a MAYÚSCULAS.
       expect(areasRepository.create).toHaveBeenCalledWith('tenant-1', {
-        name: 'Ventas',
+        name: 'VENTAS',
       });
       expect(result.name).toBe('Ventas');
     });
@@ -84,7 +85,7 @@ describe('AreasService', () => {
       expect(areasRepository.update).toHaveBeenCalledWith(
         'tenant-1',
         'area-1',
-        { name: 'Marketing' },
+        { name: 'MARKETING' },
       );
       expect(result?.name).toBe('Marketing');
     });

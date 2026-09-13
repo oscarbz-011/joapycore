@@ -65,7 +65,7 @@ describe('PaymentsOnInstallmentListener', () => {
     listener = new PaymentsOnInstallmentListener(
       prisma as any,
       arRepository as any,
-      eventEmitter as EventEmitter2,
+      eventEmitter as unknown as EventEmitter2,
     );
   });
 
@@ -106,7 +106,7 @@ describe('PaymentsOnInstallmentListener', () => {
       expect(arRepository.updateStatus).toHaveBeenCalledWith(AR_ID, 'PAID');
       expect(eventEmitter.emit).toHaveBeenCalledWith(
         'payment.ar.completed',
-        expect.objectContaining({ tenantId: TENANT, accountsReceivableId: AR_ID }),
+        expect.objectContaining({ tenantId: TENANT, arId: AR_ID }),
       );
     });
 

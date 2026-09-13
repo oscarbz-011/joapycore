@@ -56,7 +56,7 @@ describe('CategoriesService', () => {
       repo.findAll.mockResolvedValue([]);
       repo.create.mockResolvedValue(makeCategory());
       await service.create('tenant-1', { name: 'Televisores' });
-      expect(repo.create).toHaveBeenCalledWith('tenant-1', 'Televisores');
+      expect(repo.create).toHaveBeenCalledWith('tenant-1', 'TELEVISORES');
     });
 
     it('throws ConflictException when name already exists (case-insensitive)', async () => {

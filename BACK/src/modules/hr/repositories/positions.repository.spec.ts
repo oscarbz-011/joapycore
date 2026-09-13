@@ -63,8 +63,8 @@ describe('PositionsRepository', () => {
 
       expect(prisma.position.upsert).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { tenantId_name: { tenantId: 'tenant-1', name: 'Vendedor' } },
-          create: { name: 'Vendedor', tenantId: 'tenant-1' },
+          where: { tenantId_name: { tenantId: 'tenant-1', name: 'VENDEDOR' } },
+          create: { name: 'VENDEDOR', tenantId: 'tenant-1' },
           update: expect.objectContaining({ isActive: true }),
         }),
       );
