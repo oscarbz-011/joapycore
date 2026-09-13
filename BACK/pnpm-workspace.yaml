@@ -1,0 +1,13 @@
+# Parches de seguridad para dependencias transitivas (pnpm audit, 13/09/2026).
+# Acotados a la misma versión mayor que ya resolvía el lockfile: los rangos
+# abiertos que genera `pnpm audit --fix` suben de major y rompen a quien los usa.
+# deepmerge-ts 7→8 sí cambia de major: solo lo usa @prisma/config (CLI de
+# Prisma, no el runtime) y se verificó `prisma validate` + `prisma generate`.
+overrides:
+  brace-expansion@<1.1.18: ^1.1.18
+  brace-expansion@>=2.0.0 <2.1.4: ^2.1.4
+  deepmerge-ts@<8.0.0: ^8.0.2
+  fast-uri@<3.1.6: ^3.1.6
+  js-yaml@>=4.0.0 <4.3.2: ^4.3.2
+  multer@<2.3.0: ^2.3.0
+  mysql2@<3.22.0: ^3.22.0
