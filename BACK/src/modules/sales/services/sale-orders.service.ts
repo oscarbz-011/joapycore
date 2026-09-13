@@ -70,8 +70,39 @@ export class SaleOrdersService {
     private readonly eventEmitter: EventEmitter2,
   ) {}
 
-  findAll(tenantId: string, sellerId?: string) {
-    return this.saleOrdersRepository.findAll(tenantId, sellerId);
+  /**
+   * Qué órdenes puede leer el usuario: todas (sales:read), solo presupuestos
+   * (sales:quotes:read) o ninguna.
+   */
+  readScope(permissions: string[]): 'ALL' | 'QUOTES' {
+    if (permissions.includes('sales:read')) return 'ALL';
+    if (permissions.includes('sales:quotes:read')) return 'QUOTES';
+    throw new ForbiddenException('Insufficient permissions');
+  }
+
+  findAll(
+    tenantId: string,
+    sellerId?: string,
+    scope: 'ALL' | 'QUOTES' = 'ALL',
+  ) {
+    return this.saleOrdersRepository.findAll(
+      tenantId,
+      sellerId,
+      scope === 'QUOTES' ? 'QUOTE' : undefined,
+    );
+  }
+
+  async findOneForReader(
+    tenantId: string,
+    id: string,
+    scope: 'ALL' | 'QUOTES',
+  ) {
+    const order = await this.findOne(tenantId, id);
+    // Sin sales:read, una orden que no es presupuesto se trata como inexistente.
+    if (scope === 'QUOTES' && order.orderType !== 'QUOTE') {
+      throw new NotFoundException('Pedido no encontrado');
+    }
+    return order;
   }
 
   findPendingApprovals(tenantId: string) {

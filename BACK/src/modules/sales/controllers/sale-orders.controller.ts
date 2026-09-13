@@ -30,13 +30,19 @@ import { SaleOrdersService } from '../services/sale-orders.service';
 export class SaleOrdersController {
   constructor(private readonly saleOrdersService: SaleOrdersService) {}
 
+  // Sin @Permissions estático: con sales:read se listan todas las órdenes;
+  // con solo sales:quotes:read, únicamente los presupuestos (la pantalla de
+  // Presupuestos se habilita con ese permiso y antes recibía 403).
   @Get()
-  @Permissions('sales:read')
   @ApiOperation({ summary: 'Listar órdenes de venta' })
   findAll(@CurrentTenant() tenantId: string, @CurrentUser() user: JwtPayload) {
     const canManage = user.permissions.includes('sales:manage');
     const sellerId = canManage ? undefined : user.sub;
-    return this.saleOrdersService.findAll(tenantId, sellerId);
+    return this.saleOrdersService.findAll(
+      tenantId,
+      sellerId,
+      this.saleOrdersService.readScope(user.permissions),
+    );
   }
 
   @Get('pending-approvals')
@@ -49,10 +55,17 @@ export class SaleOrdersController {
   }
 
   @Get(':id')
-  @Permissions('sales:read')
   @ApiOperation({ summary: 'Obtener orden de venta por ID' })
-  findOne(@CurrentTenant() tenantId: string, @Param('id') id: string) {
-    return this.saleOrdersService.findOne(tenantId, id);
+  findOne(
+    @CurrentTenant() tenantId: string,
+    @CurrentUser() user: JwtPayload,
+    @Param('id') id: string,
+  ) {
+    return this.saleOrdersService.findOneForReader(
+      tenantId,
+      id,
+      this.saleOrdersService.readScope(user.permissions),
+    );
   }
 
   // create() no declara @Permissions() a nivel de ruta a propósito: la misma

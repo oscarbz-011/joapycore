@@ -216,12 +216,61 @@ describe('SaleOrdersService', () => {
 
   // ── findAll ────────────────────────────────────────────────────────────────
 
+  describe('readScope', () => {
+    it('lets sales:read see every order', () => {
+      expect(service.readScope(['sales:read', 'sales:quotes:read'])).toBe(
+        'ALL',
+      );
+    });
+
+    it('limits sales:quotes:read to quotes', () => {
+      expect(service.readScope(['sales:quotes:read'])).toBe('QUOTES');
+    });
+
+    it('rejects users without either permission', () => {
+      expect(() => service.readScope(['billing:read'])).toThrow(
+        ForbiddenException,
+      );
+    });
+  });
+
+  describe('findOneForReader', () => {
+    it('hides non-quote orders from quote-only readers', async () => {
+      saleOrdersRepository.findById.mockResolvedValue(
+        makeOrder({ orderType: 'STANDARD' }),
+      );
+      await expect(
+        service.findOneForReader('tenant-1', 'order-1', 'QUOTES'),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('returns quotes to quote-only readers', async () => {
+      saleOrdersRepository.findById.mockResolvedValue(
+        makeOrder({ orderType: 'QUOTE' }),
+      );
+      await expect(
+        service.findOneForReader('tenant-1', 'order-1', 'QUOTES'),
+      ).resolves.toMatchObject({ orderType: 'QUOTE' });
+    });
+
+    it('filters the list to quotes for quote-only readers', async () => {
+      saleOrdersRepository.findAll.mockResolvedValue([]);
+      await service.findAll('tenant-1', 'user-1', 'QUOTES');
+      expect(saleOrdersRepository.findAll).toHaveBeenCalledWith(
+        'tenant-1',
+        'user-1',
+        'QUOTE',
+      );
+    });
+  });
+
   describe('findAll', () => {
     it('delegates to repository without seller filter for managers', async () => {
       saleOrdersRepository.findAll.mockResolvedValue([makeOrder()]);
       await service.findAll('tenant-1');
       expect(saleOrdersRepository.findAll).toHaveBeenCalledWith(
         'tenant-1',
+        undefined,
         undefined,
       );
     });
@@ -232,6 +281,7 @@ describe('SaleOrdersService', () => {
       expect(saleOrdersRepository.findAll).toHaveBeenCalledWith(
         'tenant-1',
         'user-42',
+        undefined,
       );
     });
   });

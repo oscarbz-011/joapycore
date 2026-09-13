@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { Prisma, OrderType } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { PrismaClientOrTx } from '../../../prisma/types';
 
@@ -33,10 +33,11 @@ export class SaleOrdersRepository {
     });
   }
 
-  findAll(tenantId: string, sellerId?: string) {
+  findAll(tenantId: string, sellerId?: string, orderType?: OrderType) {
     return this.prisma.saleOrder.findMany({
       where: {
         tenantId,
+        ...(orderType ? { orderType } : {}),
         ...(sellerId
           ? { OR: [{ sellerId }, { sellerId: null, createdById: sellerId }] }
           : {}),
