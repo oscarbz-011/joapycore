@@ -93,7 +93,10 @@ export class CombosService {
         'Los combos con precio fijo requieren fixedPrice',
       );
     }
-    if (dto.priceMode === 'SUM_WITH_DISCOUNT' && dto.discountPercentage == null) {
+    if (
+      dto.priceMode === 'SUM_WITH_DISCOUNT' &&
+      dto.discountPercentage == null
+    ) {
       throw new UnprocessableEntityException(
         'Los combos con suma de componentes requieren discountPercentage (puede ser 0)',
       );

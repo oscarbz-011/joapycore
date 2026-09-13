@@ -53,14 +53,18 @@ describe('WarehousesService', () => {
 
     it('throws NotFoundException when warehouse does not exist', async () => {
       repo.findById.mockResolvedValue(null);
-      await expect(service.findOne('tenant-1', 'ghost')).rejects.toBeInstanceOf(NotFoundException);
+      await expect(service.findOne('tenant-1', 'ghost')).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
     });
   });
 
   describe('create', () => {
     it('delegates to repository with tenantId and dto', async () => {
       const dto = { name: 'Depósito Norte', branchId: 'branch-2' };
-      repo.create.mockResolvedValue(makeWarehouse({ ...dto, id: 'wh-2', isDefault: false }));
+      repo.create.mockResolvedValue(
+        makeWarehouse({ ...dto, id: 'wh-2', isDefault: false }),
+      );
       await service.create('tenant-1', dto);
       expect(repo.create).toHaveBeenCalledWith('tenant-1', dto);
     });
@@ -69,7 +73,9 @@ describe('WarehousesService', () => {
   describe('update', () => {
     it('throws NotFoundException when warehouse does not exist', async () => {
       repo.findById.mockResolvedValue(null);
-      await expect(service.update('tenant-1', 'ghost', { name: 'X' })).rejects.toBeInstanceOf(NotFoundException);
+      await expect(
+        service.update('tenant-1', 'ghost', { name: 'X' }),
+      ).rejects.toBeInstanceOf(NotFoundException);
       expect(repo.update).not.toHaveBeenCalled();
     });
 
@@ -78,9 +84,13 @@ describe('WarehousesService', () => {
       repo.findById.mockResolvedValue(makeWarehouse());
       repo.update.mockResolvedValue(updated);
 
-      const result = await service.update('tenant-1', 'wh-1', { name: 'Depósito Renovado' });
+      const result = await service.update('tenant-1', 'wh-1', {
+        name: 'Depósito Renovado',
+      });
 
-      expect(repo.update).toHaveBeenCalledWith('tenant-1', 'wh-1', { name: 'Depósito Renovado' });
+      expect(repo.update).toHaveBeenCalledWith('tenant-1', 'wh-1', {
+        name: 'Depósito Renovado',
+      });
       expect(result.name).toBe('Depósito Renovado');
     });
 
@@ -88,9 +98,13 @@ describe('WarehousesService', () => {
       repo.findById.mockResolvedValue(makeWarehouse());
       repo.update.mockResolvedValue(makeWarehouse({ isActive: false }));
 
-      const result = await service.update('tenant-1', 'wh-1', { isActive: false });
+      const result = await service.update('tenant-1', 'wh-1', {
+        isActive: false,
+      });
 
-      expect(repo.update).toHaveBeenCalledWith('tenant-1', 'wh-1', { isActive: false });
+      expect(repo.update).toHaveBeenCalledWith('tenant-1', 'wh-1', {
+        isActive: false,
+      });
       expect(result.isActive).toBe(false);
     });
   });

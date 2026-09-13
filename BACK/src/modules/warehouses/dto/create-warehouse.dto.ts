@@ -1,5 +1,11 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsBoolean, IsOptional, IsString, IsUUID, MinLength } from 'class-validator';
+import {
+  IsBoolean,
+  IsOptional,
+  IsString,
+  IsUUID,
+  MinLength,
+} from 'class-validator';
 
 export class CreateWarehouseDto {
   @ApiProperty({ example: 'Depósito Principal' })
@@ -7,7 +13,9 @@ export class CreateWarehouseDto {
   @MinLength(1)
   name: string;
 
-  @ApiPropertyOptional({ description: 'ID de la sucursal a la que pertenece este depósito' })
+  @ApiPropertyOptional({
+    description: 'ID de la sucursal a la que pertenece este depósito',
+  })
   @IsOptional()
   @IsUUID()
   branchId?: string;

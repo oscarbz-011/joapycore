@@ -14,10 +14,7 @@ export class AuditController {
   @Get('logs')
   @Permissions('audit:read')
   @ApiOperation({ summary: 'Listar logs de auditoría del tenant' })
-  findAll(
-    @CurrentTenant() tenantId: string,
-    @Query() filters: FilterAuditDto,
-  ) {
+  findAll(@CurrentTenant() tenantId: string, @Query() filters: FilterAuditDto) {
     return this.auditService.findAll(tenantId, filters);
   }
 }

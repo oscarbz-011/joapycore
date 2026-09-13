@@ -68,7 +68,13 @@ export class SaleOrdersController {
     @Body() dto: CreateSaleOrderDto,
   ) {
     const canManage = user.permissions.includes('sales:manage');
-    return this.saleOrdersService.create(tenantId, dto, user.sub, canManage, user.permissions);
+    return this.saleOrdersService.create(
+      tenantId,
+      dto,
+      user.sub,
+      canManage,
+      user.permissions,
+    );
   }
 
   @Post(':id/confirm')

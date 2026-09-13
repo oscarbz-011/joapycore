@@ -1,5 +1,12 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsBoolean, IsEmail, IsInt, IsOptional, IsString, MinLength } from 'class-validator';
+import {
+  IsBoolean,
+  IsEmail,
+  IsInt,
+  IsOptional,
+  IsString,
+  MinLength,
+} from 'class-validator';
 
 export class CreateBranchDto {
   @ApiProperty({ example: 'Sucursal Central' })
@@ -39,17 +46,24 @@ export class CreateBranchDto {
 
   // ── SIFEN — establecimiento ───────────────────────────────────────────────
 
-  @ApiPropertyOptional({ description: 'Código de establecimiento ante SET (ej. "001")' })
+  @ApiPropertyOptional({
+    description: 'Código de establecimiento ante SET (ej. "001")',
+  })
   @IsOptional()
   @IsString()
   codigoEstablecimiento?: string;
 
-  @ApiPropertyOptional({ description: 'Punto de expedición (ej. "001")', default: '001' })
+  @ApiPropertyOptional({
+    description: 'Punto de expedición (ej. "001")',
+    default: '001',
+  })
   @IsOptional()
   @IsString()
   puntoExpedicion?: string;
 
-  @ApiPropertyOptional({ description: 'Código de departamento según catálogo SET' })
+  @ApiPropertyOptional({
+    description: 'Código de departamento según catálogo SET',
+  })
   @IsOptional()
   @IsInt()
   departamentoCodigo?: number;

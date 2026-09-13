@@ -20,7 +20,9 @@ describe('assertStockAvailable (PostgreSQL)', () => {
   beforeAll(async () => {
     prisma = new PrismaService(new ConfigService(process.env));
     await prisma.$connect();
-    const tenant = await prisma.tenant.findFirstOrThrow({ select: { id: true } });
+    const tenant = await prisma.tenant.findFirstOrThrow({
+      select: { id: true },
+    });
     tenantId = tenant.id;
     const product = await prisma.product.create({
       data: {
@@ -43,7 +45,9 @@ describe('assertStockAvailable (PostgreSQL)', () => {
 
   const sellOne = () =>
     prisma.$transaction(async (tx) => {
-      await assertStockAvailable(tx, tenantId, [{ productId, quantity: 1, name: 'Última unidad' }]);
+      await assertStockAvailable(tx, tenantId, [
+        { productId, quantity: 1, name: 'Última unidad' },
+      ]);
       // Ventana amplia entre leer y escribir: sin lock, ambas pasarían.
       await new Promise((r) => setTimeout(r, 300));
       await tx.stockMovement.create({
@@ -58,7 +62,7 @@ describe('assertStockAvailable (PostgreSQL)', () => {
     const failed = results.filter((r) => r.status === 'rejected');
     expect(ok).toHaveLength(1);
     expect(failed).toHaveLength(1);
-    expect(String((failed[0]).reason)).toContain(
+    expect(String(failed[0].reason)).toContain(
       'No hay stock suficiente de: Última unidad (disponible 0, pedido 1)',
     );
 

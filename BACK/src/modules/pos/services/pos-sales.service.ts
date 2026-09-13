@@ -2,7 +2,10 @@ import { Injectable, UnprocessableEntityException } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { SaleOrdersService } from '../../sales/services/sale-orders.service';
 import { CreatePosSaleDto } from '../dto/create-pos-sale.dto';
-import { PosSalesHistoryFilters, PosSalesRepository } from '../repositories/pos-sales.repository';
+import {
+  PosSalesHistoryFilters,
+  PosSalesRepository,
+} from '../repositories/pos-sales.repository';
 import { PosSessionsRepository } from '../repositories/pos-sessions.repository';
 
 @Injectable()
@@ -15,14 +18,22 @@ export class PosSalesService {
   ) {}
 
   async create(tenantId: string, dto: CreatePosSaleDto, cashierId: string) {
-    const session = await this.posSessionsRepository.findActiveByCashier(tenantId, cashierId);
+    const session = await this.posSessionsRepository.findActiveByCashier(
+      tenantId,
+      cashierId,
+    );
     if (!session) {
       throw new UnprocessableEntityException(
         'No tenés una sesión de caja abierta. Abrí la caja antes de vender.',
       );
     }
 
-    const order = await this.saleOrdersService.createPosSale(tenantId, dto, session.id, cashierId);
+    const order = await this.saleOrdersService.createPosSale(
+      tenantId,
+      dto,
+      session.id,
+      cashierId,
+    );
 
     this.eventEmitter.emit('pos.sale.created', {
       tenantId,

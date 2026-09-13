@@ -10,15 +10,22 @@ describe('SeedDefaultCategoriesOnModuleActivatedListener', () => {
       findAll: jest.fn().mockResolvedValue([]),
       create: jest.fn().mockResolvedValue({ id: 'cat-1' }),
     };
-    listener = new SeedDefaultCategoriesOnModuleActivatedListener(categoriesRepository as any);
+    listener = new SeedDefaultCategoriesOnModuleActivatedListener(
+      categoriesRepository as any,
+    );
   });
 
   it('seeds the default categories when the documents module is activated for the first time', async () => {
     await listener.handle({ tenantId: 'tenant-1', moduleName: 'documents' });
 
-    expect(categoriesRepository.create).toHaveBeenCalledTimes(DEFAULT_DOCUMENT_CATEGORIES.length);
+    expect(categoriesRepository.create).toHaveBeenCalledTimes(
+      DEFAULT_DOCUMENT_CATEGORIES.length,
+    );
     for (const name of DEFAULT_DOCUMENT_CATEGORIES) {
-      expect(categoriesRepository.create).toHaveBeenCalledWith('tenant-1', name);
+      expect(categoriesRepository.create).toHaveBeenCalledWith(
+        'tenant-1',
+        name,
+      );
     }
   });
 

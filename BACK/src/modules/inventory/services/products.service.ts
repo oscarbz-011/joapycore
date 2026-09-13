@@ -130,9 +130,7 @@ export class ProductsService {
       unit: dto.unit ?? 'unidad',
       costPrice: dto.costPrice,
       salePrice: dto.salePrice,
-      status: missing.length
-        ? ProductStatus.DRAFT
-        : ProductStatus.ACTIVE,
+      status: missing.length ? ProductStatus.DRAFT : ProductStatus.ACTIVE,
     });
   }
 

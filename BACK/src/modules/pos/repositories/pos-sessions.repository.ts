@@ -47,7 +47,10 @@ export class PosSessionsRepository {
     });
   }
 
-  findAll(tenantId: string, filters: { terminalId?: string; status?: PosSessionStatus } = {}) {
+  findAll(
+    tenantId: string,
+    filters: { terminalId?: string; status?: PosSessionStatus } = {},
+  ) {
     return this.prisma.posSession.findMany({
       where: {
         tenantId,

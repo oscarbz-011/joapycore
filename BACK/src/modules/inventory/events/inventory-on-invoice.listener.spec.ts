@@ -37,7 +37,10 @@ describe('InventoryOnInvoiceListener', () => {
   });
 
   it('does nothing when invoice has no linked saleOrder', async () => {
-    prisma.invoice.findUnique.mockResolvedValue({ saleOrderId: null, saleOrder: null });
+    prisma.invoice.findUnique.mockResolvedValue({
+      saleOrderId: null,
+      saleOrder: null,
+    });
 
     await listener.handle({ tenantId: 'tenant-1', invoiceId: 'inv-1' });
 

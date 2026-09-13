@@ -1,8 +1,16 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsNumber, IsOptional, IsPositive, IsString, IsUUID } from 'class-validator';
+import {
+  IsNumber,
+  IsOptional,
+  IsPositive,
+  IsString,
+  IsUUID,
+} from 'class-validator';
 
 export class CreateProductComponentDto {
-  @ApiProperty({ description: 'Producto que se consume (materia prima o insumo)' })
+  @ApiProperty({
+    description: 'Producto que se consume (materia prima o insumo)',
+  })
   @IsUUID()
   componentId: string;
 

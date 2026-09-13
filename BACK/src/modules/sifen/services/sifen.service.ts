@@ -15,7 +15,8 @@ function getEncryptionKey(): Buffer {
   const raw = process.env['SIFEN_ENCRYPTION_KEY'] ?? '';
   if (!raw) {
     // Derive a key from APP_SECRET as fallback (not ideal for production)
-    const secret = process.env['JWT_SECRET'] ?? 'fallback-dev-key-change-in-prod';
+    const secret =
+      process.env['JWT_SECRET'] ?? 'fallback-dev-key-change-in-prod';
     return crypto.createHash('sha256').update(secret).digest();
   }
   return Buffer.from(raw, 'hex').subarray(0, KEY_LEN);
@@ -84,7 +85,9 @@ export class SifenService {
   }
 
   async updateSettings(tenantId: string, dto: UpdateSifenSettingsDto) {
-    await this.sifenRepository.upsert(tenantId, { environment: dto.environment });
+    await this.sifenRepository.upsert(tenantId, {
+      environment: dto.environment,
+    });
     return this.getConfig(tenantId);
   }
 
@@ -135,7 +138,9 @@ export class SifenService {
   async uploadCaCertificate(tenantId: string, file: Express.Multer.File) {
     const ext = file.originalname.split('.').pop()?.toLowerCase() ?? '';
     if (!['cer', 'crt', 'pem'].includes(ext)) {
-      throw new BadRequestException('Use un archivo .cer, .crt o .pem para el certificado CA');
+      throw new BadRequestException(
+        'Use un archivo .cer, .crt o .pem para el certificado CA',
+      );
     }
 
     const encryptedData = encrypt(file.buffer);
@@ -158,7 +163,8 @@ export class SifenService {
 
   async downloadCertificate(tenantId: string) {
     const cfg = await this.sifenRepository.findByTenant(tenantId);
-    if (!cfg?.certData) throw new NotFoundException('No hay certificado cargado');
+    if (!cfg?.certData)
+      throw new NotFoundException('No hay certificado cargado');
     return {
       filename: cfg.certFilename ?? 'certificado',
       data: decrypt(cfg.certData as Buffer),
@@ -169,15 +175,24 @@ export class SifenService {
   async testConnection(tenantId: string) {
     const cfg = await this.sifenRepository.findByTenant(tenantId);
     if (!cfg?.isConfigured) {
-      throw new BadRequestException('Configure el certificado antes de probar la conexión');
+      throw new BadRequestException(
+        'Configure el certificado antes de probar la conexión',
+      );
     }
 
     // Placeholder — integración real con el web service de SET Paraguay pendiente
     const ok = true;
     const now = new Date();
-    await this.sifenRepository.upsert(tenantId, { lastTestedAt: now, lastTestOk: ok });
+    await this.sifenRepository.upsert(tenantId, {
+      lastTestedAt: now,
+      lastTestOk: ok,
+    });
 
-    return { ok, testedAt: now, message: ok ? 'Conexión exitosa (modo simulación)' : 'Error de conexión' };
+    return {
+      ok,
+      testedAt: now,
+      message: ok ? 'Conexión exitosa (modo simulación)' : 'Error de conexión',
+    };
   }
 
   // Internal helper: decrypt certificate password (used by the signing service)

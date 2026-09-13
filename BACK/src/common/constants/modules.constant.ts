@@ -90,14 +90,16 @@ export const MODULE_CATALOG: Record<string, ModuleDefinition> = {
   },
   projects: {
     displayName: 'Proyectos',
-    description: 'Gestión de proyectos, tareas, timesheet y asignación de recursos',
+    description:
+      'Gestión de proyectos, tareas, timesheet y asignación de recursos',
     icon: 'FolderKanban',
     dependencies: [],
     isStable: false,
   },
   assets: {
     displayName: 'Activos Fijos',
-    description: 'Registro, asignación y mantenimiento de activos empresariales',
+    description:
+      'Registro, asignación y mantenimiento de activos empresariales',
     icon: 'Boxes',
     dependencies: [],
     isStable: false,

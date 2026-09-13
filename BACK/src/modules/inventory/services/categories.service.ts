@@ -31,7 +31,11 @@ export class CategoriesService {
 
   async update(tenantId: string, id: string, dto: UpdateCategoryDto) {
     await this.findOne(tenantId, id);
-    await this.categoriesRepository.update(tenantId, id, dto.name ? { ...dto, name: toUpperNorm(dto.name) } : dto);
+    await this.categoriesRepository.update(
+      tenantId,
+      id,
+      dto.name ? { ...dto, name: toUpperNorm(dto.name) } : dto,
+    );
     return this.categoriesRepository.findById(tenantId, id);
   }
 

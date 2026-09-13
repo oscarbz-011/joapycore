@@ -10,33 +10,33 @@ export class AuditRepository {
   create(data: AuditLogEvent) {
     return this.prisma.auditLog.create({
       data: {
-        tenantId:   data.tenantId,
-        userId:     data.userId,
-        module:     data.module,
-        action:     data.action,
+        tenantId: data.tenantId,
+        userId: data.userId,
+        module: data.module,
+        action: data.action,
         resourceId: data.resourceId,
-        before:     data.before ?? undefined,
-        after:      data.after ?? undefined,
-        ipAddress:  data.ipAddress,
+        before: data.before ?? undefined,
+        after: data.after ?? undefined,
+        ipAddress: data.ipAddress,
       },
     });
   }
 
   async findAll(tenantId: string, filters: FilterAuditDto) {
-    const page  = Number(filters.page  ?? 1);
+    const page = Number(filters.page ?? 1);
     const limit = Math.min(Number(filters.limit ?? 50), 100);
-    const skip  = (page - 1) * limit;
+    const skip = (page - 1) * limit;
 
     const where = {
       tenantId,
-      ...(filters.module     && { module:     filters.module }),
-      ...(filters.action     && { action:     { contains: filters.action } }),
-      ...(filters.userId     && { userId:     filters.userId }),
+      ...(filters.module && { module: filters.module }),
+      ...(filters.action && { action: { contains: filters.action } }),
+      ...(filters.userId && { userId: filters.userId }),
       ...(filters.resourceId && { resourceId: filters.resourceId }),
       ...((filters.dateFrom || filters.dateTo) && {
         createdAt: {
           ...(filters.dateFrom && { gte: new Date(filters.dateFrom) }),
-          ...(filters.dateTo   && { lte: new Date(filters.dateTo) }),
+          ...(filters.dateTo && { lte: new Date(filters.dateTo) }),
         },
       }),
     };
@@ -45,7 +45,9 @@ export class AuditRepository {
       this.prisma.auditLog.findMany({
         where,
         include: {
-          user: { select: { id: true, firstName: true, lastName: true, email: true } },
+          user: {
+            select: { id: true, firstName: true, lastName: true, email: true },
+          },
         },
         orderBy: { createdAt: 'desc' },
         skip,

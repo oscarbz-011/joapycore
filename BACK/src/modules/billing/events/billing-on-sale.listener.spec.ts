@@ -17,14 +17,20 @@ function makeItem(overrides: Record<string, unknown> = {}) {
 
 describe('BillingOnSaleListener', () => {
   let prisma: { loan: { findUnique: jest.Mock }; $transaction: jest.Mock };
-  let invoicesRepository: { findBySaleOrder: jest.Mock; create: jest.Mock; createItem: jest.Mock };
+  let invoicesRepository: {
+    findBySaleOrder: jest.Mock;
+    create: jest.Mock;
+    createItem: jest.Mock;
+  };
   let eventEmitter: { emit: jest.Mock };
   let listener: BillingOnSaleListener;
 
   beforeEach(() => {
     prisma = {
       loan: { findUnique: jest.fn().mockResolvedValue(null) },
-      $transaction: jest.fn().mockImplementation((cb: (tx: unknown) => unknown) => cb({})),
+      $transaction: jest
+        .fn()
+        .mockImplementation((cb: (tx: unknown) => unknown) => cb({})),
     };
     invoicesRepository = {
       findBySaleOrder: jest.fn().mockResolvedValue(null),
@@ -33,13 +39,23 @@ describe('BillingOnSaleListener', () => {
     };
     eventEmitter = { emit: jest.fn() };
 
-    listener = new BillingOnSaleListener(prisma as any, invoicesRepository as any, eventEmitter as any);
+    listener = new BillingOnSaleListener(
+      prisma as any,
+      invoicesRepository as any,
+      eventEmitter as any,
+    );
   });
 
   it('is idempotent — does nothing if an invoice already exists for the order', async () => {
-    invoicesRepository.findBySaleOrder.mockResolvedValue({ id: 'existing-invoice' });
+    invoicesRepository.findBySaleOrder.mockResolvedValue({
+      id: 'existing-invoice',
+    });
 
-    await listener.handle({ tenantId: TENANT, saleOrderId: ORDER_ID, order: { saleType: 'CASH', items: [] } });
+    await listener.handle({
+      tenantId: TENANT,
+      saleOrderId: ORDER_ID,
+      order: { saleType: 'CASH', items: [] },
+    });
 
     expect(invoicesRepository.create).not.toHaveBeenCalled();
   });
@@ -48,7 +64,10 @@ describe('BillingOnSaleListener', () => {
     await listener.handle({
       tenantId: TENANT,
       saleOrderId: ORDER_ID,
-      order: { saleType: 'CASH', items: [makeItem({ quantity: 2, unitPrice: 500_000 })] },
+      order: {
+        saleType: 'CASH',
+        items: [makeItem({ quantity: 2, unitPrice: 500_000 })],
+      },
     });
 
     expect(invoicesRepository.create).toHaveBeenCalledWith(
@@ -69,7 +88,13 @@ describe('BillingOnSaleListener', () => {
       saleOrderId: ORDER_ID,
       order: {
         saleType: 'CREDIT',
-        items: [makeItem({ quantity: 2, unitPrice: 500_000, financedUnitPrice: 600_000 })],
+        items: [
+          makeItem({
+            quantity: 2,
+            unitPrice: 500_000,
+            financedUnitPrice: 600_000,
+          }),
+        ],
       },
     });
 
@@ -87,7 +112,13 @@ describe('BillingOnSaleListener', () => {
       saleOrderId: ORDER_ID,
       order: {
         saleType: 'CREDIT',
-        items: [makeItem({ quantity: 2, unitPrice: 500_000, financedUnitPrice: 600_000 })],
+        items: [
+          makeItem({
+            quantity: 2,
+            unitPrice: 500_000,
+            financedUnitPrice: 600_000,
+          }),
+        ],
       },
     });
 
@@ -105,7 +136,13 @@ describe('BillingOnSaleListener', () => {
       saleOrderId: ORDER_ID,
       order: {
         saleType: 'CREDIT',
-        items: [makeItem({ quantity: 2, unitPrice: 500_000, financedUnitPrice: null })],
+        items: [
+          makeItem({
+            quantity: 2,
+            unitPrice: 500_000,
+            financedUnitPrice: null,
+          }),
+        ],
       },
     });
 
@@ -123,7 +160,13 @@ describe('BillingOnSaleListener', () => {
       saleOrderId: ORDER_ID,
       order: {
         saleType: 'CREDIT',
-        items: [makeItem({ quantity: 2, unitPrice: 500_000, financedUnitPrice: 600_000 })],
+        items: [
+          makeItem({
+            quantity: 2,
+            unitPrice: 500_000,
+            financedUnitPrice: 600_000,
+          }),
+        ],
       },
     });
 
@@ -142,7 +185,11 @@ describe('BillingOnSaleListener', () => {
 
     expect(eventEmitter.emit).toHaveBeenCalledWith(
       'audit.log',
-      expect.objectContaining({ tenantId: TENANT, module: 'billing', action: 'invoice.created' }),
+      expect.objectContaining({
+        tenantId: TENANT,
+        module: 'billing',
+        action: 'invoice.created',
+      }),
     );
   });
 });

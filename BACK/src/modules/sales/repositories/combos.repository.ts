@@ -4,7 +4,13 @@ import { CreateComboDto } from '../dto/create-combo.dto';
 import { UpdateComboDto } from '../dto/update-combo.dto';
 
 const itemsInclude = {
-  items: { include: { product: { select: { id: true, name: true, salePrice: true, isSerialized: true } } } },
+  items: {
+    include: {
+      product: {
+        select: { id: true, name: true, salePrice: true, isSerialized: true },
+      },
+    },
+  },
 } as const;
 
 @Injectable()
@@ -13,7 +19,11 @@ export class CombosRepository {
 
   findAll(tenantId: string, onlyActive = false) {
     return this.prisma.saleCombo.findMany({
-      where: { tenantId, deletedAt: null, ...(onlyActive ? { isActive: true } : {}) },
+      where: {
+        tenantId,
+        deletedAt: null,
+        ...(onlyActive ? { isActive: true } : {}),
+      },
       include: itemsInclude,
       orderBy: { name: 'asc' },
     });
@@ -35,7 +45,12 @@ export class CombosRepository {
         priceMode: dto.priceMode,
         fixedPrice: dto.fixedPrice,
         discountPercentage: dto.discountPercentage,
-        items: { create: dto.items.map((i) => ({ productId: i.productId, quantity: i.quantity })) },
+        items: {
+          create: dto.items.map((i) => ({
+            productId: i.productId,
+            quantity: i.quantity,
+          })),
+        },
       },
       include: itemsInclude,
     });
@@ -56,7 +71,14 @@ export class CombosRepository {
           discountPercentage: dto.discountPercentage,
           isActive: dto.isActive,
           ...(dto.items
-            ? { items: { create: dto.items.map((i) => ({ productId: i.productId, quantity: i.quantity })) } }
+            ? {
+                items: {
+                  create: dto.items.map((i) => ({
+                    productId: i.productId,
+                    quantity: i.quantity,
+                  })),
+                },
+              }
             : {}),
         },
         include: itemsInclude,

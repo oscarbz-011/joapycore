@@ -26,7 +26,11 @@ describe('StockEntryService', () => {
     decrementRemaining: jest.Mock;
   };
   let prisma: {
-    stockMovement: { create: jest.Mock; findFirst: jest.Mock; delete: jest.Mock };
+    stockMovement: {
+      create: jest.Mock;
+      findFirst: jest.Mock;
+      delete: jest.Mock;
+    };
   };
 
   beforeEach(() => {
@@ -223,7 +227,13 @@ describe('StockEntryService', () => {
       ]);
       prisma.stockMovement.findFirst.mockResolvedValue({ id: 'sales-out-1' });
 
-      await service.consumeFifo('tenant-1', 'prod-1', 6, 'sale-item-1', prisma as any);
+      await service.consumeFifo(
+        'tenant-1',
+        'prod-1',
+        6,
+        'sale-item-1',
+        prisma as any,
+      );
 
       expect(prisma.stockMovement.findFirst).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -235,15 +245,21 @@ describe('StockEntryService', () => {
           }),
         }),
       );
-      expect(prisma.stockMovement.delete).toHaveBeenCalledWith({ where: { id: 'sales-out-1' } });
+      expect(prisma.stockMovement.delete).toHaveBeenCalledWith({
+        where: { id: 'sales-out-1' },
+      });
       expect(prisma.stockMovement.create).toHaveBeenCalledTimes(2);
       expect(prisma.stockMovement.create).toHaveBeenNthCalledWith(
         1,
-        expect.objectContaining({ data: expect.objectContaining({ batchId: 'batch-old', quantity: -4 }) }),
+        expect.objectContaining({
+          data: expect.objectContaining({ batchId: 'batch-old', quantity: -4 }),
+        }),
       );
       expect(prisma.stockMovement.create).toHaveBeenNthCalledWith(
         2,
-        expect.objectContaining({ data: expect.objectContaining({ batchId: 'batch-new', quantity: -2 }) }),
+        expect.objectContaining({
+          data: expect.objectContaining({ batchId: 'batch-new', quantity: -2 }),
+        }),
       );
       // El total descontado (4+2=6) es exactamente lo que ya había descontado
       // el movimiento combinado que se borró — nunca se resta stock dos veces.

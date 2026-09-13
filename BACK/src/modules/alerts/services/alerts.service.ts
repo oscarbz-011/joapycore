@@ -13,9 +13,9 @@ export class AlertsService {
   upsert(tenantId: string, dto: UpsertAlertDto) {
     return this.alertsRepository.upsert(tenantId, {
       tenantId,
-      type:      dto.type,
-      channel:   dto.channel,
-      isActive:  dto.isActive,
+      type: dto.type,
+      channel: dto.channel,
+      isActive: dto.isActive,
       threshold: dto.threshold,
     });
   }

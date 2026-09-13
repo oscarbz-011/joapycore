@@ -8,7 +8,9 @@ const ORDER_INCLUDE = {
   warehouse: { select: { id: true, name: true } },
   items: {
     include: {
-      component: { select: { id: true, name: true, unit: true, costPrice: true } },
+      component: {
+        select: { id: true, name: true, unit: true, costPrice: true },
+      },
     },
   },
 } as const;
@@ -25,7 +27,11 @@ export class ProductionOrdersRepository {
     });
   }
 
-  findById(tenantId: string, id: string, client: PrismaClientOrTx = this.prisma) {
+  findById(
+    tenantId: string,
+    id: string,
+    client: PrismaClientOrTx = this.prisma,
+  ) {
     return client.productionOrder.findFirst({
       where: { tenantId, id },
       include: ORDER_INCLUDE,
@@ -33,7 +39,10 @@ export class ProductionOrdersRepository {
   }
 
   // Correlativo por tenant — mismo criterio que PurchaseReceipt.receiptNumber.
-  async nextOrderNumber(tenantId: string, client: PrismaClientOrTx = this.prisma) {
+  async nextOrderNumber(
+    tenantId: string,
+    client: PrismaClientOrTx = this.prisma,
+  ) {
     const last = await client.productionOrder.findFirst({
       where: { tenantId },
       orderBy: { orderNumber: 'desc' },

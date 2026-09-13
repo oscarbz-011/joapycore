@@ -17,7 +17,10 @@ export class UpsertAlertDto {
   @IsBoolean()
   isActive?: boolean;
 
-  @ApiPropertyOptional({ description: 'STOCK_LOW: unidades mínimas; PAYMENT_DUE / INVOICE_OVERDUE: días' })
+  @ApiPropertyOptional({
+    description:
+      'STOCK_LOW: unidades mínimas; PAYMENT_DUE / INVOICE_OVERDUE: días',
+  })
   @IsOptional()
   @IsInt()
   @Min(1)

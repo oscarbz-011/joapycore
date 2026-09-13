@@ -55,8 +55,13 @@ export class PositionsRepository {
       roleId?: string | null;
     },
   ) {
-    const normalized = data.name ? { ...data, name: toUpperNorm(data.name) } : data;
-    await this.prisma.position.updateMany({ where: { id, tenantId }, data: normalized });
+    const normalized = data.name
+      ? { ...data, name: toUpperNorm(data.name) }
+      : data;
+    await this.prisma.position.updateMany({
+      where: { id, tenantId },
+      data: normalized,
+    });
     return this.findById(tenantId, id);
   }
 }

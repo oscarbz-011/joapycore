@@ -2,7 +2,13 @@ import { ConflictException, NotFoundException } from '@nestjs/common';
 import { BrandsService } from './brands.service';
 
 function makeBrand(overrides = {}) {
-  return { id: 'brand-1', tenantId: 'tenant-1', name: 'Samsung', isActive: true, ...overrides };
+  return {
+    id: 'brand-1',
+    tenantId: 'tenant-1',
+    name: 'Samsung',
+    isActive: true,
+    ...overrides,
+  };
 }
 
 describe('BrandsService', () => {
@@ -47,7 +53,9 @@ describe('BrandsService', () => {
 
     it('throws NotFoundException when brand does not exist', async () => {
       repo.findById.mockResolvedValue(null);
-      await expect(service.findOne('tenant-1', 'x')).rejects.toBeInstanceOf(NotFoundException);
+      await expect(service.findOne('tenant-1', 'x')).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
     });
   });
 
@@ -64,7 +72,9 @@ describe('BrandsService', () => {
 
     it('throws ConflictException when brand name already exists', async () => {
       repo.findByName.mockResolvedValue(makeBrand());
-      await expect(service.create('tenant-1', { name: 'Samsung' })).rejects.toBeInstanceOf(ConflictException);
+      await expect(
+        service.create('tenant-1', { name: 'Samsung' }),
+      ).rejects.toBeInstanceOf(ConflictException);
       expect(repo.create).not.toHaveBeenCalled();
     });
   });
@@ -74,23 +84,33 @@ describe('BrandsService', () => {
   describe('update', () => {
     it('throws NotFoundException when brand does not exist', async () => {
       repo.findById.mockResolvedValue(null);
-      await expect(service.update('tenant-1', 'x', { name: 'X' })).rejects.toBeInstanceOf(NotFoundException);
+      await expect(
+        service.update('tenant-1', 'x', { name: 'X' }),
+      ).rejects.toBeInstanceOf(NotFoundException);
       expect(repo.update).not.toHaveBeenCalled();
     });
 
     it('updates and returns brand when found', async () => {
       const updated = makeBrand({ name: 'LG' });
-      repo.findById.mockResolvedValueOnce(makeBrand()).mockResolvedValueOnce(updated);
+      repo.findById
+        .mockResolvedValueOnce(makeBrand())
+        .mockResolvedValueOnce(updated);
       repo.update.mockResolvedValue(undefined);
-      const result = await service.update('tenant-1', 'brand-1', { name: 'LG' });
+      const result = await service.update('tenant-1', 'brand-1', {
+        name: 'LG',
+      });
       expect(result?.name).toBe('LG');
     });
 
     it('can toggle isActive on a brand', async () => {
       const inactive = makeBrand({ isActive: false });
-      repo.findById.mockResolvedValueOnce(makeBrand()).mockResolvedValueOnce(inactive);
+      repo.findById
+        .mockResolvedValueOnce(makeBrand())
+        .mockResolvedValueOnce(inactive);
       repo.update.mockResolvedValue(undefined);
-      const result = await service.update('tenant-1', 'brand-1', { isActive: false });
+      const result = await service.update('tenant-1', 'brand-1', {
+        isActive: false,
+      });
       expect(result?.isActive).toBe(false);
     });
   });

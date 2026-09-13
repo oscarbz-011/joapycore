@@ -50,7 +50,7 @@ describe('PaymentsOnInstallmentListener', () => {
       accountsReceivable: {
         findUnique: jest.fn().mockResolvedValue({
           id: AR_ID,
-          amount: INSTALLMENT_AMOUNT,        // one cuota paid out of six
+          amount: INSTALLMENT_AMOUNT, // one cuota paid out of six
           paidAmount: INSTALLMENT_AMOUNT,
         }),
       },
@@ -73,7 +73,10 @@ describe('PaymentsOnInstallmentListener', () => {
     it('increments AR paidAmount by the installment payment amount', async () => {
       await listener.handle(baseEvent);
 
-      expect(arRepository.incrementPaid).toHaveBeenCalledWith(AR_ID, INSTALLMENT_AMOUNT);
+      expect(arRepository.incrementPaid).toHaveBeenCalledWith(
+        AR_ID,
+        INSTALLMENT_AMOUNT,
+      );
     });
 
     it('marks AR as PARTIAL when payment does not cover the full financed total', async () => {
@@ -162,7 +165,9 @@ describe('PaymentsOnInstallmentListener', () => {
     });
 
     it('returns early when AR is CANCELLED', async () => {
-      arRepository.findByInvoice.mockResolvedValue(makeAR({ status: 'CANCELLED' }));
+      arRepository.findByInvoice.mockResolvedValue(
+        makeAR({ status: 'CANCELLED' }),
+      );
 
       await listener.handle(baseEvent);
 
@@ -170,7 +175,9 @@ describe('PaymentsOnInstallmentListener', () => {
     });
 
     it('does not propagate errors (handler is wrapped in try/catch)', async () => {
-      prisma.invoice.findFirst.mockRejectedValue(new Error('DB connection lost'));
+      prisma.invoice.findFirst.mockRejectedValue(
+        new Error('DB connection lost'),
+      );
 
       await expect(listener.handle(baseEvent)).resolves.toBeUndefined();
     });

@@ -23,7 +23,8 @@ export class TenantsService {
 
   async update(tenantId: string, dto: UpdateTenantDto) {
     const tenant = await this.getById(tenantId);
-    const { actividadesEconomicas, timbradoFecha, timbradoFechaFin, ...rest } = dto;
+    const { actividadesEconomicas, timbradoFecha, timbradoFechaFin, ...rest } =
+      dto;
     const data: Prisma.TenantUncheckedUpdateInput = {
       ...rest,
       ...(actividadesEconomicas !== undefined

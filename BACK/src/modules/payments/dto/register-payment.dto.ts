@@ -1,6 +1,12 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { PaymentMethod } from '@prisma/client';
-import { IsDateString, IsEnum, IsOptional, IsPositive, IsString } from 'class-validator';
+import {
+  IsDateString,
+  IsEnum,
+  IsOptional,
+  IsPositive,
+  IsString,
+} from 'class-validator';
 
 export class RegisterPaymentDto {
   @ApiProperty({ description: 'Monto del pago (PYG)', example: 1000000 })
@@ -15,7 +21,9 @@ export class RegisterPaymentDto {
   @IsDateString()
   paymentDate: string;
 
-  @ApiPropertyOptional({ description: 'Número de transferencia, cheque u otro comprobante' })
+  @ApiPropertyOptional({
+    description: 'Número de transferencia, cheque u otro comprobante',
+  })
   @IsOptional()
   @IsString()
   reference?: string;

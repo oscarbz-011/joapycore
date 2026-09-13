@@ -1,4 +1,7 @@
-import { NotFoundException, UnprocessableEntityException } from '@nestjs/common';
+import {
+  NotFoundException,
+  UnprocessableEntityException,
+} from '@nestjs/common';
 import { PosSessionsService } from './pos-sessions.service';
 
 function makeSession(overrides = {}) {
@@ -42,7 +45,9 @@ describe('PosSessionsService', () => {
       create: jest.fn(),
       close: jest.fn(),
     };
-    posTerminalsService = { findOne: jest.fn().mockResolvedValue({ id: 'terminal-1' }) };
+    posTerminalsService = {
+      findOne: jest.fn().mockResolvedValue({ id: 'terminal-1' }),
+    };
     eventEmitter = { emit: jest.fn() };
 
     service = new PosSessionsService(
@@ -54,10 +59,16 @@ describe('PosSessionsService', () => {
 
   describe('open', () => {
     it('throws when the terminal already has an OPEN session', async () => {
-      posSessionsRepository.findActiveByTerminal.mockResolvedValue(makeSession());
+      posSessionsRepository.findActiveByTerminal.mockResolvedValue(
+        makeSession(),
+      );
 
       await expect(
-        service.open('tenant-1', { terminalId: 'terminal-1', openingCash: 500_000 }, 'user-1'),
+        service.open(
+          'tenant-1',
+          { terminalId: 'terminal-1', openingCash: 500_000 },
+          'user-1',
+        ),
       ).rejects.toBeInstanceOf(UnprocessableEntityException);
 
       expect(posSessionsRepository.create).not.toHaveBeenCalled();
@@ -81,7 +92,10 @@ describe('PosSessionsService', () => {
       });
       expect(eventEmitter.emit).toHaveBeenCalledWith(
         'pos.session.opened',
-        expect.objectContaining({ tenantId: 'tenant-1', sessionId: 'session-1' }),
+        expect.objectContaining({
+          tenantId: 'tenant-1',
+          sessionId: 'session-1',
+        }),
       );
     });
   });
@@ -96,17 +110,30 @@ describe('PosSessionsService', () => {
     });
 
     it('throws when the session is already closed', async () => {
-      posSessionsRepository.findById.mockResolvedValue(makeSession({ status: 'CLOSED' }));
+      posSessionsRepository.findById.mockResolvedValue(
+        makeSession({ status: 'CLOSED' }),
+      );
 
       await expect(
-        service.close('tenant-1', 'session-1', { closingCash: 500_000 }, 'user-1'),
+        service.close(
+          'tenant-1',
+          'session-1',
+          { closingCash: 500_000 },
+          'user-1',
+        ),
       ).rejects.toBeInstanceOf(UnprocessableEntityException);
     });
 
     it('closes as CLOSED when counted cash matches expected cash exactly', async () => {
-      posSessionsRepository.findById.mockResolvedValue(makeSession({ openingCash: 500_000 }));
-      posSessionsRepository.sumCashPayments.mockResolvedValue({ _sum: { amount: 150_000 } });
-      posSessionsRepository.close.mockImplementation((id, data) => Promise.resolve({ id, ...data }));
+      posSessionsRepository.findById.mockResolvedValue(
+        makeSession({ openingCash: 500_000 }),
+      );
+      posSessionsRepository.sumCashPayments.mockResolvedValue({
+        _sum: { amount: 150_000 },
+      });
+      posSessionsRepository.close.mockImplementation((id, data) =>
+        Promise.resolve({ id, ...data }),
+      );
 
       const result = await service.close(
         'tenant-1',
@@ -117,15 +144,25 @@ describe('PosSessionsService', () => {
 
       expect(posSessionsRepository.close).toHaveBeenCalledWith(
         'session-1',
-        expect.objectContaining({ expectedCash: 650_000, difference: 0, status: 'CLOSED' }),
+        expect.objectContaining({
+          expectedCash: 650_000,
+          difference: 0,
+          status: 'CLOSED',
+        }),
       );
       expect(result.status).toBe('CLOSED');
     });
 
     it('closes as DISCREPANCY when counted cash differs from expected cash', async () => {
-      posSessionsRepository.findById.mockResolvedValue(makeSession({ openingCash: 500_000 }));
-      posSessionsRepository.sumCashPayments.mockResolvedValue({ _sum: { amount: 150_000 } });
-      posSessionsRepository.close.mockImplementation((id, data) => Promise.resolve({ id, ...data }));
+      posSessionsRepository.findById.mockResolvedValue(
+        makeSession({ openingCash: 500_000 }),
+      );
+      posSessionsRepository.sumCashPayments.mockResolvedValue({
+        _sum: { amount: 150_000 },
+      });
+      posSessionsRepository.close.mockImplementation((id, data) =>
+        Promise.resolve({ id, ...data }),
+      );
 
       const result = await service.close(
         'tenant-1',
@@ -136,7 +173,11 @@ describe('PosSessionsService', () => {
 
       expect(posSessionsRepository.close).toHaveBeenCalledWith(
         'session-1',
-        expect.objectContaining({ expectedCash: 650_000, difference: 200, status: 'DISCREPANCY' }),
+        expect.objectContaining({
+          expectedCash: 650_000,
+          difference: 200,
+          status: 'DISCREPANCY',
+        }),
       );
       expect(result.status).toBe('DISCREPANCY');
       expect(eventEmitter.emit).toHaveBeenCalledWith(

@@ -66,13 +66,16 @@ describe('CombosService', () => {
       );
 
       expect(combosRepository.create).toHaveBeenCalled();
-      expect(eventEmitter.emit).toHaveBeenCalledWith('audit.log', expect.objectContaining({
-        tenantId: 'tenant-1',
-        userId: 'user-1',
-        module: 'sales',
-        action: 'sale_combo.created',
-        resourceId: created.id,
-      }));
+      expect(eventEmitter.emit).toHaveBeenCalledWith(
+        'audit.log',
+        expect.objectContaining({
+          tenantId: 'tenant-1',
+          userId: 'user-1',
+          module: 'sales',
+          action: 'sale_combo.created',
+          resourceId: created.id,
+        }),
+      );
       expect(result.id).toBe('combo-1');
     });
 
@@ -80,7 +83,11 @@ describe('CombosService', () => {
       await expect(
         service.create(
           'tenant-1',
-          { name: 'Combo', priceMode: 'FIXED' as any, items: [{ productId: 'prod-1', quantity: 1 }] },
+          {
+            name: 'Combo',
+            priceMode: 'FIXED' as any,
+            items: [{ productId: 'prod-1', quantity: 1 }],
+          },
           'user-1',
         ),
       ).rejects.toBeInstanceOf(UnprocessableEntityException);
@@ -92,7 +99,11 @@ describe('CombosService', () => {
       await expect(
         service.create(
           'tenant-1',
-          { name: 'Combo', priceMode: 'SUM_WITH_DISCOUNT' as any, items: [{ productId: 'prod-1', quantity: 1 }] },
+          {
+            name: 'Combo',
+            priceMode: 'SUM_WITH_DISCOUNT' as any,
+            items: [{ productId: 'prod-1', quantity: 1 }],
+          },
           'user-1',
         ),
       ).rejects.toBeInstanceOf(UnprocessableEntityException);
@@ -101,7 +112,9 @@ describe('CombosService', () => {
     });
 
     it('allows SUM_WITH_DISCOUNT with discountPercentage 0', async () => {
-      combosRepository.create.mockResolvedValue(makeCombo({ priceMode: 'SUM_WITH_DISCOUNT', discountPercentage: 0 }));
+      combosRepository.create.mockResolvedValue(
+        makeCombo({ priceMode: 'SUM_WITH_DISCOUNT', discountPercentage: 0 }),
+      );
 
       await expect(
         service.create(
@@ -127,7 +140,9 @@ describe('CombosService', () => {
 
     it('throws NotFoundException when the combo does not exist', async () => {
       combosRepository.findById.mockResolvedValue(null);
-      await expect(service.findOne('tenant-1', 'ghost')).rejects.toBeInstanceOf(NotFoundException);
+      await expect(service.findOne('tenant-1', 'ghost')).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
     });
   });
 
@@ -135,24 +150,50 @@ describe('CombosService', () => {
     it('updates and emits audit.log', async () => {
       const existing = makeCombo();
       combosRepository.findById.mockResolvedValue(existing);
-      combosRepository.update.mockResolvedValue({ ...existing, name: 'Combo Renombrado' });
+      combosRepository.update.mockResolvedValue({
+        ...existing,
+        name: 'Combo Renombrado',
+      });
 
-      const result = await service.update('tenant-1', 'combo-1', { name: 'Combo Renombrado' }, 'user-1');
+      const result = await service.update(
+        'tenant-1',
+        'combo-1',
+        { name: 'Combo Renombrado' },
+        'user-1',
+      );
 
-      expect(combosRepository.update).toHaveBeenCalledWith('tenant-1', 'combo-1', { name: 'Combo Renombrado' });
-      expect(eventEmitter.emit).toHaveBeenCalledWith('audit.log', expect.objectContaining({
-        action: 'sale_combo.updated',
-        resourceId: 'combo-1',
-      }));
+      expect(combosRepository.update).toHaveBeenCalledWith(
+        'tenant-1',
+        'combo-1',
+        { name: 'Combo Renombrado' },
+      );
+      expect(eventEmitter.emit).toHaveBeenCalledWith(
+        'audit.log',
+        expect.objectContaining({
+          action: 'sale_combo.updated',
+          resourceId: 'combo-1',
+        }),
+      );
       expect(result.name).toBe('Combo Renombrado');
     });
 
     it('re-validates price mode using the existing combo when dto omits price fields', async () => {
-      combosRepository.findById.mockResolvedValue(makeCombo({ priceMode: 'SUM_WITH_DISCOUNT', fixedPrice: null, discountPercentage: 15 }));
+      combosRepository.findById.mockResolvedValue(
+        makeCombo({
+          priceMode: 'SUM_WITH_DISCOUNT',
+          fixedPrice: null,
+          discountPercentage: 15,
+        }),
+      );
       combosRepository.update.mockResolvedValue(makeCombo());
 
       await expect(
-        service.update('tenant-1', 'combo-1', { name: 'Nuevo nombre' }, 'user-1'),
+        service.update(
+          'tenant-1',
+          'combo-1',
+          { name: 'Nuevo nombre' },
+          'user-1',
+        ),
       ).resolves.toBeDefined();
     });
 
@@ -170,16 +211,24 @@ describe('CombosService', () => {
 
       await service.remove('tenant-1', 'combo-1', 'user-1');
 
-      expect(combosRepository.softDelete).toHaveBeenCalledWith('tenant-1', 'combo-1');
-      expect(eventEmitter.emit).toHaveBeenCalledWith('audit.log', expect.objectContaining({
-        action: 'sale_combo.deleted',
-        resourceId: 'combo-1',
-      }));
+      expect(combosRepository.softDelete).toHaveBeenCalledWith(
+        'tenant-1',
+        'combo-1',
+      );
+      expect(eventEmitter.emit).toHaveBeenCalledWith(
+        'audit.log',
+        expect.objectContaining({
+          action: 'sale_combo.deleted',
+          resourceId: 'combo-1',
+        }),
+      );
     });
 
     it('throws NotFoundException when the combo does not exist', async () => {
       combosRepository.findById.mockResolvedValue(null);
-      await expect(service.remove('tenant-1', 'ghost', 'user-1')).rejects.toBeInstanceOf(NotFoundException);
+      await expect(
+        service.remove('tenant-1', 'ghost', 'user-1'),
+      ).rejects.toBeInstanceOf(NotFoundException);
       expect(combosRepository.softDelete).not.toHaveBeenCalled();
     });
   });

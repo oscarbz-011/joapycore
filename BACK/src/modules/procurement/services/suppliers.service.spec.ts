@@ -65,7 +65,9 @@ describe('SuppliersService', () => {
 
     it('throws NotFoundException when supplier does not exist', async () => {
       suppliersRepository.findById.mockResolvedValue(null);
-      await expect(service.findOne('tenant-1', 'ghost')).rejects.toBeInstanceOf(NotFoundException);
+      await expect(service.findOne('tenant-1', 'ghost')).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
     });
   });
 
@@ -102,7 +104,9 @@ describe('SuppliersService', () => {
         .mockResolvedValueOnce(updated);
       suppliersRepository.update.mockResolvedValue(undefined);
 
-      const result = await service.update('tenant-1', 'sup-1', { name: 'Nuevo nombre' });
+      const result = await service.update('tenant-1', 'sup-1', {
+        name: 'Nuevo nombre',
+      });
 
       expect(suppliersRepository.update).toHaveBeenCalledWith(
         'tenant-1',
@@ -119,7 +123,9 @@ describe('SuppliersService', () => {
     it('throws NotFoundException if supplier does not exist', async () => {
       suppliersRepository.findById.mockResolvedValue(null);
 
-      await expect(service.delete('tenant-1', 'ghost')).rejects.toBeInstanceOf(NotFoundException);
+      await expect(service.delete('tenant-1', 'ghost')).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
 
       expect(suppliersRepository.softDelete).not.toHaveBeenCalled();
     });
@@ -129,7 +135,10 @@ describe('SuppliersService', () => {
 
       await service.delete('tenant-1', 'sup-1');
 
-      expect(suppliersRepository.softDelete).toHaveBeenCalledWith('tenant-1', 'sup-1');
+      expect(suppliersRepository.softDelete).toHaveBeenCalledWith(
+        'tenant-1',
+        'sup-1',
+      );
     });
   });
 });

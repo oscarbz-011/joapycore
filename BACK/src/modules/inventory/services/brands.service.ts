@@ -31,7 +31,11 @@ export class BrandsService {
 
   async update(tenantId: string, id: string, dto: UpdateBrandDto) {
     await this.findOne(tenantId, id);
-    await this.brandsRepository.update(tenantId, id, dto.name ? { ...dto, name: toUpperNorm(dto.name) } : dto);
+    await this.brandsRepository.update(
+      tenantId,
+      id,
+      dto.name ? { ...dto, name: toUpperNorm(dto.name) } : dto,
+    );
     return this.brandsRepository.findById(tenantId, id);
   }
 }

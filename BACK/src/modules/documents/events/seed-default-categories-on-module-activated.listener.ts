@@ -12,9 +12,13 @@ interface TenantModuleActivatedEvent {
 // módulo Documentos. Best-effort: nunca debe romper la activación del módulo.
 @Injectable()
 export class SeedDefaultCategoriesOnModuleActivatedListener {
-  private readonly logger = new Logger(SeedDefaultCategoriesOnModuleActivatedListener.name);
+  private readonly logger = new Logger(
+    SeedDefaultCategoriesOnModuleActivatedListener.name,
+  );
 
-  constructor(private readonly categoriesRepository: DocumentCategoriesRepository) {}
+  constructor(
+    private readonly categoriesRepository: DocumentCategoriesRepository,
+  ) {}
 
   @OnEvent('tenant.module.activated')
   async handle(event: TenantModuleActivatedEvent) {

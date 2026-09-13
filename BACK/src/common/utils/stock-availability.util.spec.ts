@@ -10,12 +10,13 @@ function makeTx(sums: Record<string, number>) {
       return Promise.resolve(1);
     }),
     stockMovement: {
-      groupBy: jest.fn(({ where }: { where: { productId: { in: string[] } } }) =>
-        Promise.resolve(
-          where.productId.in
-            .filter((id) => id in sums)
-            .map((id) => ({ productId: id, _sum: { quantity: sums[id] } })),
-        ),
+      groupBy: jest.fn(
+        ({ where }: { where: { productId: { in: string[] } } }) =>
+          Promise.resolve(
+            where.productId.in
+              .filter((id) => id in sums)
+              .map((id) => ({ productId: id, _sum: { quantity: sums[id] } })),
+          ),
       ),
     },
   };
@@ -46,14 +47,18 @@ describe('assertStockAvailable', () => {
   it('treats a product without movements as zero stock', async () => {
     const { tx } = makeTx({});
     await expect(
-      assertStockAvailable(tx, 't1', [{ productId: 'x', quantity: 1, name: 'Tornillo' }]),
+      assertStockAvailable(tx, 't1', [
+        { productId: 'x', quantity: 1, name: 'Tornillo' },
+      ]),
     ).rejects.toBeInstanceOf(UnprocessableEntityException);
   });
 
   it('never reports negative availability in the message', async () => {
     const { tx } = makeTx({ a: -2 });
     await expect(
-      assertStockAvailable(tx, 't1', [{ productId: 'a', quantity: 1, name: 'A' }]),
+      assertStockAvailable(tx, 't1', [
+        { productId: 'a', quantity: 1, name: 'A' },
+      ]),
     ).rejects.toThrow('A (disponible 0, pedido 1)');
   });
 

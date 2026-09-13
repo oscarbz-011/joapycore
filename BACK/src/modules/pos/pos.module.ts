@@ -12,7 +12,11 @@ import { PosTerminalsService } from './services/pos-terminals.service';
 
 @Module({
   imports: [SalesModule],
-  controllers: [PosTerminalsController, PosSessionsController, PosSalesController],
+  controllers: [
+    PosTerminalsController,
+    PosSessionsController,
+    PosSalesController,
+  ],
   providers: [
     PosTerminalsService,
     PosSessionsService,

@@ -29,7 +29,10 @@ describe('PaymentsOnInvoiceListener', () => {
       create: jest.fn().mockResolvedValue({ id: 'ar-1' }),
       updateStatus: jest.fn().mockResolvedValue(undefined),
     };
-    listener = new PaymentsOnInvoiceListener(prisma as any, arRepository as any);
+    listener = new PaymentsOnInvoiceListener(
+      prisma as any,
+      arRepository as any,
+    );
   });
 
   // ── invoice.issued → create AR ─────────────────────────────────────────────
@@ -43,10 +46,18 @@ describe('PaymentsOnInvoiceListener', () => {
         saleOrder: { saleType: 'CASH', loan: null },
       });
 
-      await listener.handle({ tenantId: 'tenant-1', invoiceId: 'inv-1', saleOrderId: 'order-1' });
+      await listener.handle({
+        tenantId: 'tenant-1',
+        invoiceId: 'inv-1',
+        saleOrderId: 'order-1',
+      });
 
       expect(arRepository.create).toHaveBeenCalledWith(
-        expect.objectContaining({ tenantId: 'tenant-1', invoiceId: 'inv-1', amount: 2_500_000 }),
+        expect.objectContaining({
+          tenantId: 'tenant-1',
+          invoiceId: 'inv-1',
+          amount: 2_500_000,
+        }),
       );
     });
 
@@ -58,7 +69,11 @@ describe('PaymentsOnInvoiceListener', () => {
         saleOrder: { saleType: 'CREDIT', loan: { totalAmount: 2_875_000 } },
       });
 
-      await listener.handle({ tenantId: 'tenant-1', invoiceId: 'inv-1', saleOrderId: 'order-1' });
+      await listener.handle({
+        tenantId: 'tenant-1',
+        invoiceId: 'inv-1',
+        saleOrderId: 'order-1',
+      });
 
       expect(arRepository.create).toHaveBeenCalledWith(
         expect.objectContaining({ amount: 2_875_000 }),
@@ -73,7 +88,11 @@ describe('PaymentsOnInvoiceListener', () => {
         saleOrder: { saleType: 'CREDIT', loan: null },
       });
 
-      await listener.handle({ tenantId: 'tenant-1', invoiceId: 'inv-1', saleOrderId: 'order-1' });
+      await listener.handle({
+        tenantId: 'tenant-1',
+        invoiceId: 'inv-1',
+        saleOrderId: 'order-1',
+      });
 
       expect(arRepository.create).toHaveBeenCalledWith(
         expect.objectContaining({ amount: 2_500_000 }),
@@ -83,7 +102,11 @@ describe('PaymentsOnInvoiceListener', () => {
     it('skips creation when AR already exists (idempotency)', async () => {
       arRepository.findByInvoice.mockResolvedValue(makeAR());
 
-      await listener.handle({ tenantId: 'tenant-1', invoiceId: 'inv-1', saleOrderId: 'order-1' });
+      await listener.handle({
+        tenantId: 'tenant-1',
+        invoiceId: 'inv-1',
+        saleOrderId: 'order-1',
+      });
 
       expect(arRepository.create).not.toHaveBeenCalled();
     });
@@ -92,7 +115,11 @@ describe('PaymentsOnInvoiceListener', () => {
       arRepository.findByInvoice.mockResolvedValue(null);
       prisma.invoice.findUnique.mockResolvedValue(null);
 
-      await listener.handle({ tenantId: 'tenant-1', invoiceId: 'inv-1', saleOrderId: 'order-1' });
+      await listener.handle({
+        tenantId: 'tenant-1',
+        invoiceId: 'inv-1',
+        saleOrderId: 'order-1',
+      });
 
       expect(arRepository.create).not.toHaveBeenCalled();
     });
@@ -102,25 +129,41 @@ describe('PaymentsOnInvoiceListener', () => {
 
   describe('handleCancelled (invoice.cancelled)', () => {
     it('cancels the AR when invoice is cancelled', async () => {
-      arRepository.findByInvoice.mockResolvedValue(makeAR({ status: 'PENDING' }));
+      arRepository.findByInvoice.mockResolvedValue(
+        makeAR({ status: 'PENDING' }),
+      );
 
-      await listener.handleCancelled({ tenantId: 'tenant-1', invoiceId: 'inv-1' });
+      await listener.handleCancelled({
+        tenantId: 'tenant-1',
+        invoiceId: 'inv-1',
+      });
 
-      expect(arRepository.updateStatus).toHaveBeenCalledWith('ar-1', 'CANCELLED');
+      expect(arRepository.updateStatus).toHaveBeenCalledWith(
+        'ar-1',
+        'CANCELLED',
+      );
     });
 
     it('skips when no AR exists for the invoice', async () => {
       arRepository.findByInvoice.mockResolvedValue(null);
 
-      await listener.handleCancelled({ tenantId: 'tenant-1', invoiceId: 'inv-1' });
+      await listener.handleCancelled({
+        tenantId: 'tenant-1',
+        invoiceId: 'inv-1',
+      });
 
       expect(arRepository.updateStatus).not.toHaveBeenCalled();
     });
 
     it('skips when AR is already cancelled (idempotency)', async () => {
-      arRepository.findByInvoice.mockResolvedValue(makeAR({ status: 'CANCELLED' }));
+      arRepository.findByInvoice.mockResolvedValue(
+        makeAR({ status: 'CANCELLED' }),
+      );
 
-      await listener.handleCancelled({ tenantId: 'tenant-1', invoiceId: 'inv-1' });
+      await listener.handleCancelled({
+        tenantId: 'tenant-1',
+        invoiceId: 'inv-1',
+      });
 
       expect(arRepository.updateStatus).not.toHaveBeenCalled();
     });
@@ -130,9 +173,15 @@ describe('PaymentsOnInvoiceListener', () => {
         makeAR({ status: 'PARTIAL', paidAmount: 1_000_000 }),
       );
 
-      await listener.handleCancelled({ tenantId: 'tenant-1', invoiceId: 'inv-1' });
+      await listener.handleCancelled({
+        tenantId: 'tenant-1',
+        invoiceId: 'inv-1',
+      });
 
-      expect(arRepository.updateStatus).toHaveBeenCalledWith('ar-1', 'CANCELLED');
+      expect(arRepository.updateStatus).toHaveBeenCalledWith(
+        'ar-1',
+        'CANCELLED',
+      );
     });
   });
 });

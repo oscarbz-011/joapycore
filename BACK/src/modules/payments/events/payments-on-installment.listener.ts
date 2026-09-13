@@ -32,7 +32,10 @@ export class PaymentsOnInstallmentListener {
       if (!invoice) return;
 
       // Find AR for this invoice
-      const ar = await this.arRepository.findByInvoice(event.tenantId, invoice.id);
+      const ar = await this.arRepository.findByInvoice(
+        event.tenantId,
+        invoice.id,
+      );
       if (!ar || ar.status === 'PAID' || ar.status === 'CANCELLED') return;
 
       // Atomic increment of paid amount

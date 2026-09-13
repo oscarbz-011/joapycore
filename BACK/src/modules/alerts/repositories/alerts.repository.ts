@@ -24,8 +24,8 @@ export class AlertsRepository {
       where: { tenantId_type: { tenantId, type: data.type } },
       create: { ...data, tenantId },
       update: {
-        channel:   data.channel,
-        isActive:  data.isActive,
+        channel: data.channel,
+        isActive: data.isActive,
         threshold: data.threshold,
       },
     });

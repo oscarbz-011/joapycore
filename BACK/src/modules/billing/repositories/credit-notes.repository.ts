@@ -14,7 +14,18 @@ export class CreditNotesRepository {
           select: {
             id: true,
             total: true,
-            saleOrder: { select: { customer: { select: { id: true, firstName: true, lastName: true, email: true } } } },
+            saleOrder: {
+              select: {
+                customer: {
+                  select: {
+                    id: true,
+                    firstName: true,
+                    lastName: true,
+                    email: true,
+                  },
+                },
+              },
+            },
           },
         },
       },

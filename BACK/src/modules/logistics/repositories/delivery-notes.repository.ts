@@ -8,16 +8,27 @@ const include = {
       customer: true,
       seller: { select: { id: true, firstName: true, lastName: true } },
       items: {
-        include: { product: { select: { id: true, name: true, isSerialized: true } } },
+        include: {
+          product: { select: { id: true, name: true, isSerialized: true } },
+        },
       },
     },
   },
   assignedEmployee: {
-    select: { id: true, firstName: true, lastName: true, phone: true, mobilePhone: true, contractType: true },
+    select: {
+      id: true,
+      firstName: true,
+      lastName: true,
+      phone: true,
+      mobilePhone: true,
+      contractType: true,
+    },
   },
   trackingEvents: {
     orderBy: { recordedAt: 'asc' as const },
-    include: { recordedBy: { select: { id: true, firstName: true, lastName: true } } },
+    include: {
+      recordedBy: { select: { id: true, firstName: true, lastName: true } },
+    },
   },
 } as const;
 
@@ -42,7 +53,11 @@ export class DeliveryNotesRepository {
 
   findMine(tenantId: string, employeeId: string, status?: DeliveryNoteStatus) {
     return this.prisma.deliveryNote.findMany({
-      where: { tenantId, assignedEmployeeId: employeeId, ...(status ? { status } : {}) },
+      where: {
+        tenantId,
+        assignedEmployeeId: employeeId,
+        ...(status ? { status } : {}),
+      },
       include,
       orderBy: { createdAt: 'desc' },
     });

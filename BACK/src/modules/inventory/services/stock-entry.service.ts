@@ -157,7 +157,11 @@ export class StockEntryService {
     }
 
     for (const { batchId, take } of allocations) {
-      await this.productBatchesRepository.decrementRemaining(batchId, take, client);
+      await this.productBatchesRepository.decrementRemaining(
+        batchId,
+        take,
+        client,
+      );
     }
 
     const existing = await client.stockMovement.findFirst({

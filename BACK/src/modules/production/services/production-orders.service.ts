@@ -4,7 +4,11 @@ import {
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
-import { ProductKind, ProductStatus, ProductionOrderStatus } from '@prisma/client';
+import {
+  ProductKind,
+  ProductStatus,
+  ProductionOrderStatus,
+} from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { ProductionOrdersRepository } from '../repositories/production-orders.repository';
 import { CreateProductionOrderDto } from '../dto/create-production-order.dto';
@@ -33,11 +37,16 @@ export class ProductionOrdersService {
 
   async findOne(tenantId: string, id: string) {
     const order = await this.repository.findById(tenantId, id);
-    if (!order) throw new NotFoundException('Orden de producción no encontrada');
+    if (!order)
+      throw new NotFoundException('Orden de producción no encontrada');
     return order;
   }
 
-  async create(tenantId: string, userId: string, dto: CreateProductionOrderDto) {
+  async create(
+    tenantId: string,
+    userId: string,
+    dto: CreateProductionOrderDto,
+  ) {
     const product = await this.repository.findProduct(tenantId, dto.productId);
     if (!product) throw new NotFoundException('Producto no encontrado');
 
@@ -156,7 +165,8 @@ export class ProductionOrdersService {
       itemId: item.id,
       componentId: item.componentId,
       componentName: item.component.name,
-      quantity: byComponent.get(item.componentId) ?? toNum(item.plannedQuantity),
+      quantity:
+        byComponent.get(item.componentId) ?? toNum(item.plannedQuantity),
     }));
 
     await this.assertEnoughStock(tenantId, order, consumed);
@@ -238,8 +248,18 @@ export class ProductionOrdersService {
   // entre medio pudo consumirse en otra orden o venderse.
   private async assertEnoughStock(
     tenantId: string,
-    order: { items: { componentId: string; plannedQuantity: unknown; component: { name: string } }[] },
-    consumed?: { componentId: string; componentName: string; quantity: number }[],
+    order: {
+      items: {
+        componentId: string;
+        plannedQuantity: unknown;
+        component: { name: string };
+      }[];
+    },
+    consumed?: {
+      componentId: string;
+      componentName: string;
+      quantity: number;
+    }[],
   ) {
     const lines =
       consumed ??
@@ -255,7 +275,9 @@ export class ProductionOrdersService {
     );
 
     const missing = lines
-      .filter((l) => l.quantity > 0 && (stock.get(l.componentId) ?? 0) < l.quantity)
+      .filter(
+        (l) => l.quantity > 0 && (stock.get(l.componentId) ?? 0) < l.quantity,
+      )
       .map(
         (l) =>
           `${l.componentName} (necesita ${l.quantity}, hay ${stock.get(l.componentId) ?? 0})`,

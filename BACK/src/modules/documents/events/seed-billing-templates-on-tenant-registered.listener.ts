@@ -19,7 +19,9 @@ interface TenantRegisteredEvent {
 // que el módulo "documents" esté activo: facturación no es opcional.
 @Injectable()
 export class SeedBillingTemplatesOnTenantRegisteredListener {
-  private readonly logger = new Logger(SeedBillingTemplatesOnTenantRegisteredListener.name);
+  private readonly logger = new Logger(
+    SeedBillingTemplatesOnTenantRegisteredListener.name,
+  );
 
   constructor(private readonly documentsRepository: DocumentsRepository) {}
 
@@ -30,7 +32,8 @@ export class SeedBillingTemplatesOnTenantRegisteredListener {
         tenantId: event.tenantId,
         type: 'BILLING',
         title: 'Factura (plantilla)',
-        description: 'Plantilla usada para generar el PDF al emitir una factura.',
+        description:
+          'Plantilla usada para generar el PDF al emitir una factura.',
         visibility: 'PUBLIC',
         isTemplate: true,
         templateKind: TemplateKind.INVOICE,

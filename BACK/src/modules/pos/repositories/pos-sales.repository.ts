@@ -32,7 +32,9 @@ export class PosSalesRepository {
       where: {
         tenantId,
         channel: 'POS',
-        ...(filters.terminalId && { posSession: { terminalId: filters.terminalId } }),
+        ...(filters.terminalId && {
+          posSession: { terminalId: filters.terminalId },
+        }),
         ...(filters.from || filters.to
           ? {
               orderDate: {

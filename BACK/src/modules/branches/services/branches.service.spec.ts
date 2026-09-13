@@ -59,7 +59,9 @@ describe('BranchesService', () => {
 
     it('throws NotFoundException when branch does not exist', async () => {
       branchesRepository.findById.mockResolvedValue(null);
-      await expect(service.findOne('tenant-1', 'ghost')).rejects.toBeInstanceOf(NotFoundException);
+      await expect(service.findOne('tenant-1', 'ghost')).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
     });
   });
 
@@ -68,7 +70,9 @@ describe('BranchesService', () => {
   describe('create', () => {
     it('delegates to repository with tenantId and dto', async () => {
       const dto = { name: 'Sucursal Norte', address: 'Av. Artigas 567' };
-      branchesRepository.create.mockResolvedValue(makeBranch({ ...dto, id: 'branch-2', isMain: false }));
+      branchesRepository.create.mockResolvedValue(
+        makeBranch({ ...dto, id: 'branch-2', isMain: false }),
+      );
       await service.create('tenant-1', dto);
       expect(branchesRepository.create).toHaveBeenCalledWith('tenant-1', dto);
     });
@@ -79,7 +83,9 @@ describe('BranchesService', () => {
   describe('update', () => {
     it('throws NotFoundException when branch does not exist', async () => {
       branchesRepository.findById.mockResolvedValue(null);
-      await expect(service.update('tenant-1', 'ghost', { name: 'X' })).rejects.toBeInstanceOf(NotFoundException);
+      await expect(
+        service.update('tenant-1', 'ghost', { name: 'X' }),
+      ).rejects.toBeInstanceOf(NotFoundException);
       expect(branchesRepository.update).not.toHaveBeenCalled();
     });
 
@@ -88,19 +94,33 @@ describe('BranchesService', () => {
       branchesRepository.findById.mockResolvedValue(makeBranch());
       branchesRepository.update.mockResolvedValue(updated);
 
-      const result = await service.update('tenant-1', 'branch-1', { name: 'Central Renovada' });
+      const result = await service.update('tenant-1', 'branch-1', {
+        name: 'Central Renovada',
+      });
 
-      expect(branchesRepository.update).toHaveBeenCalledWith('tenant-1', 'branch-1', { name: 'Central Renovada' });
+      expect(branchesRepository.update).toHaveBeenCalledWith(
+        'tenant-1',
+        'branch-1',
+        { name: 'Central Renovada' },
+      );
       expect(result.name).toBe('Central Renovada');
     });
 
     it('can toggle isActive to false (deactivate)', async () => {
       branchesRepository.findById.mockResolvedValue(makeBranch());
-      branchesRepository.update.mockResolvedValue(makeBranch({ isActive: false }));
+      branchesRepository.update.mockResolvedValue(
+        makeBranch({ isActive: false }),
+      );
 
-      const result = await service.update('tenant-1', 'branch-1', { isActive: false });
+      const result = await service.update('tenant-1', 'branch-1', {
+        isActive: false,
+      });
 
-      expect(branchesRepository.update).toHaveBeenCalledWith('tenant-1', 'branch-1', { isActive: false });
+      expect(branchesRepository.update).toHaveBeenCalledWith(
+        'tenant-1',
+        'branch-1',
+        { isActive: false },
+      );
       expect(result.isActive).toBe(false);
     });
   });

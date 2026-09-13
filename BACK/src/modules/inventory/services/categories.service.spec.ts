@@ -2,7 +2,13 @@ import { ConflictException, NotFoundException } from '@nestjs/common';
 import { CategoriesService } from './categories.service';
 
 function makeCategory(overrides = {}) {
-  return { id: 'cat-1', tenantId: 'tenant-1', name: 'Televisores', isActive: true, ...overrides };
+  return {
+    id: 'cat-1',
+    tenantId: 'tenant-1',
+    name: 'Televisores',
+    isActive: true,
+    ...overrides,
+  };
 }
 
 describe('CategoriesService', () => {
@@ -45,7 +51,9 @@ describe('CategoriesService', () => {
 
     it('throws NotFoundException when category does not exist', async () => {
       repo.findById.mockResolvedValue(null);
-      await expect(service.findOne('tenant-1', 'x')).rejects.toBeInstanceOf(NotFoundException);
+      await expect(service.findOne('tenant-1', 'x')).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
     });
   });
 
@@ -61,7 +69,9 @@ describe('CategoriesService', () => {
 
     it('throws ConflictException when name already exists (case-insensitive)', async () => {
       repo.findAll.mockResolvedValue([makeCategory({ name: 'televisores' })]);
-      await expect(service.create('tenant-1', { name: 'TELEVISORES' })).rejects.toBeInstanceOf(ConflictException);
+      await expect(
+        service.create('tenant-1', { name: 'TELEVISORES' }),
+      ).rejects.toBeInstanceOf(ConflictException);
       expect(repo.create).not.toHaveBeenCalled();
     });
   });
@@ -71,15 +81,21 @@ describe('CategoriesService', () => {
   describe('update', () => {
     it('throws NotFoundException when category does not exist', async () => {
       repo.findById.mockResolvedValue(null);
-      await expect(service.update('tenant-1', 'x', { name: 'X' })).rejects.toBeInstanceOf(NotFoundException);
+      await expect(
+        service.update('tenant-1', 'x', { name: 'X' }),
+      ).rejects.toBeInstanceOf(NotFoundException);
       expect(repo.update).not.toHaveBeenCalled();
     });
 
     it('updates and returns category when found', async () => {
       const updated = makeCategory({ name: 'Aires Acondicionados' });
-      repo.findById.mockResolvedValueOnce(makeCategory()).mockResolvedValueOnce(updated);
+      repo.findById
+        .mockResolvedValueOnce(makeCategory())
+        .mockResolvedValueOnce(updated);
       repo.update.mockResolvedValue(undefined);
-      const result = await service.update('tenant-1', 'cat-1', { name: 'Aires Acondicionados' });
+      const result = await service.update('tenant-1', 'cat-1', {
+        name: 'Aires Acondicionados',
+      });
       expect(result?.name).toBe('Aires Acondicionados');
     });
   });

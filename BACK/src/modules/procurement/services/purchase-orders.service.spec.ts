@@ -47,11 +47,14 @@ describe('PurchaseOrdersService', () => {
       updateItemReceivedQty: jest.fn(),
       // Por defecto, ficha completa: los tests que no van sobre el estado del
       // producto no tienen que saber que esta validación existe.
-      findProductStatuses: jest
-        .fn()
-        .mockResolvedValue([
-          { id: 'prod-1', name: 'Heladera Samsung', status: 'ACTIVE', isPurchasable: true },
-        ]),
+      findProductStatuses: jest.fn().mockResolvedValue([
+        {
+          id: 'prod-1',
+          name: 'Heladera Samsung',
+          status: 'ACTIVE',
+          isPurchasable: true,
+        },
+      ]),
     };
     eventEmitter = { emit: jest.fn() };
 
@@ -117,7 +120,12 @@ describe('PurchaseOrdersService', () => {
       'refuses to buy a product in %s',
       async (status) => {
         purchaseOrdersRepository.findProductStatuses.mockResolvedValue([
-          { id: 'prod-1', name: 'Heladera Samsung', status, isPurchasable: true },
+          {
+            id: 'prod-1',
+            name: 'Heladera Samsung',
+            status,
+            isPurchasable: true,
+          },
         ]);
 
         await expect(

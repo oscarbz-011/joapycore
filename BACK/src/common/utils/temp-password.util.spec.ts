@@ -1,7 +1,4 @@
-import {
-  decryptTempPassword,
-  encryptTempPassword,
-} from './temp-password.util';
+import { decryptTempPassword, encryptTempPassword } from './temp-password.util';
 import { validateEnv } from '../../config/env.validation';
 
 describe('temp-password.util', () => {

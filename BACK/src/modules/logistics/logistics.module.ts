@@ -42,7 +42,9 @@ export class LogisticsModule implements OnApplicationBootstrap {
 
       if (orders.length === 0) return;
 
-      this.logger.log(`Backfilling ${orders.length} delivery note(s) for confirmed orders without one`);
+      this.logger.log(
+        `Backfilling ${orders.length} delivery note(s) for confirmed orders without one`,
+      );
 
       for (const order of orders) {
         await this.prisma.deliveryNote.create({
@@ -55,7 +57,9 @@ export class LogisticsModule implements OnApplicationBootstrap {
         });
       }
     } catch (err) {
-      this.logger.warn(`Delivery note backfill skipped: ${(err as Error).message}`);
+      this.logger.warn(
+        `Delivery note backfill skipped: ${(err as Error).message}`,
+      );
     }
   }
 }

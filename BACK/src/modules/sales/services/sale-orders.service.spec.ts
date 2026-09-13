@@ -152,17 +152,25 @@ describe('SaleOrdersService', () => {
         create: jest.fn(),
         // Por defecto: stock de sobra y ninguna reserva previa. Los tests de
         // stock sobreescriben esto.
-        groupBy: jest.fn().mockImplementation(
-          ({ by, where }: { by: string[]; where: { productId?: { in: string[] } } }) =>
-            Promise.resolve(
-              by[0] === 'productId'
-                ? (where.productId?.in ?? []).map((productId) => ({
-                    productId,
-                    _sum: { quantity: 1000 },
-                  }))
-                : [],
-            ),
-        ),
+        groupBy: jest
+          .fn()
+          .mockImplementation(
+            ({
+              by,
+              where,
+            }: {
+              by: string[];
+              where: { productId?: { in: string[] } };
+            }) =>
+              Promise.resolve(
+                by[0] === 'productId'
+                  ? (where.productId?.in ?? []).map((productId) => ({
+                      productId,
+                      _sum: { quantity: 1000 },
+                    }))
+                  : [],
+              ),
+          ),
       },
       posSession: {
         findFirst: jest
@@ -258,7 +266,13 @@ describe('SaleOrdersService', () => {
         makeProduct({ isSerialized: false }),
       ]);
 
-      const result = await service.create('tenant-1', baseDto, undefined, false, ['sales:create']);
+      const result = await service.create(
+        'tenant-1',
+        baseDto,
+        undefined,
+        false,
+        ['sales:create'],
+      );
 
       expect(result).toBeDefined();
       expect(prisma.$transaction).toHaveBeenCalled();
@@ -353,12 +367,18 @@ describe('SaleOrdersService', () => {
       ]);
       prisma.creditPlan.findFirst.mockResolvedValue({ interestRate: 20 });
 
-      await service.create('tenant-1', {
-        customerId: 'cust-1',
-        saleType: 'CREDIT',
-        installments: 10,
-        items: [{ productId: 'prod-1', quantity: 2, unitPrice: 2_500_000 }],
-      }, undefined, false, ['sales:create']);
+      await service.create(
+        'tenant-1',
+        {
+          customerId: 'cust-1',
+          saleType: 'CREDIT',
+          installments: 10,
+          items: [{ productId: 'prod-1', quantity: 2, unitPrice: 2_500_000 }],
+        },
+        undefined,
+        false,
+        ['sales:create'],
+      );
 
       expect(tx.saleOrderItem.create).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -372,7 +392,9 @@ describe('SaleOrdersService', () => {
         makeProduct({ isSerialized: false }),
       ]);
 
-      await service.create('tenant-1', baseDto, undefined, false, ['sales:create']);
+      await service.create('tenant-1', baseDto, undefined, false, [
+        'sales:create',
+      ]);
 
       expect(tx.saleOrderItem.create).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -387,7 +409,9 @@ describe('SaleOrdersService', () => {
       ]);
       prisma.user.findUnique.mockResolvedValue({ branchId: 'branch-user' });
 
-      await service.create('tenant-1', baseDto, 'user-1', false, ['sales:create']);
+      await service.create('tenant-1', baseDto, 'user-1', false, [
+        'sales:create',
+      ]);
 
       expect(prisma.user.findUnique).toHaveBeenCalledWith({
         where: { id: 'user-1' },
@@ -408,7 +432,9 @@ describe('SaleOrdersService', () => {
       prisma.user.findUnique.mockResolvedValue({ branchId: null });
       prisma.branch.findFirst.mockResolvedValue({ id: 'branch-main' });
 
-      await service.create('tenant-1', baseDto, 'user-1', false, ['sales:create']);
+      await service.create('tenant-1', baseDto, 'user-1', false, [
+        'sales:create',
+      ]);
 
       expect(prisma.branch.findFirst).toHaveBeenCalledWith({
         where: { tenantId: 'tenant-1', isMain: true },
@@ -426,7 +452,9 @@ describe('SaleOrdersService', () => {
         makeProduct({ isSerialized: false }),
       ]);
 
-      await service.create('tenant-1', baseDto, undefined, false, ['sales:create']);
+      await service.create('tenant-1', baseDto, undefined, false, [
+        'sales:create',
+      ]);
 
       expect(prisma.user.findUnique).not.toHaveBeenCalled();
       expect(tx.saleOrder.create).toHaveBeenCalledWith(
@@ -438,7 +466,9 @@ describe('SaleOrdersService', () => {
 
     it('throws ForbiddenException when creating a STANDARD order without sales:create', async () => {
       await expect(
-        service.create('tenant-1', baseDto, undefined, false, ['sales:quotes:manage']),
+        service.create('tenant-1', baseDto, undefined, false, [
+          'sales:quotes:manage',
+        ]),
       ).rejects.toBeInstanceOf(ForbiddenException);
 
       expect(prisma.$transaction).not.toHaveBeenCalled();
@@ -478,10 +508,13 @@ describe('SaleOrdersService', () => {
           data: expect.objectContaining({ quoteNumber: `PRES-${year}-000001` }),
         }),
       );
-      expect(eventEmitter.emit).toHaveBeenCalledWith('sale.order.quoted', expect.objectContaining({
-        tenantId: 'tenant-1',
-        issuedById: 'user-1',
-      }));
+      expect(eventEmitter.emit).toHaveBeenCalledWith(
+        'sale.order.quoted',
+        expect.objectContaining({
+          tenantId: 'tenant-1',
+          issuedById: 'user-1',
+        }),
+      );
       expect(result).toBeDefined();
     });
   });
@@ -672,9 +705,15 @@ describe('SaleOrdersService', () => {
 
     it('reserves stock for a credit order that has no reservation yet', async () => {
       tx.saleOrderItem.findMany.mockResolvedValue([
-        { ...makeOrderItem(), warehouseId: null, product: { name: 'Heladera', isSerialized: false } },
+        {
+          ...makeOrderItem(),
+          warehouseId: null,
+          product: { name: 'Heladera', isSerialized: false },
+        },
       ]);
-      saleOrdersRepository.findById.mockResolvedValue(makeOrder({ status: 'CONFIRMED' }));
+      saleOrdersRepository.findById.mockResolvedValue(
+        makeOrder({ status: 'CONFIRMED' }),
+      );
 
       await service.confirm('tenant-1', 'order-1');
 
@@ -689,7 +728,11 @@ describe('SaleOrdersService', () => {
 
     it('does not reserve again items that already have a reservation (cash orders)', async () => {
       tx.saleOrderItem.findMany.mockResolvedValue([
-        { ...makeOrderItem(), warehouseId: null, product: { name: 'Heladera', isSerialized: false } },
+        {
+          ...makeOrderItem(),
+          warehouseId: null,
+          product: { name: 'Heladera', isSerialized: false },
+        },
       ]);
       tx.stockMovement.groupBy.mockImplementation(({ by }: { by: string[] }) =>
         Promise.resolve(
@@ -698,7 +741,9 @@ describe('SaleOrdersService', () => {
             : [],
         ),
       );
-      saleOrdersRepository.findById.mockResolvedValue(makeOrder({ status: 'CONFIRMED' }));
+      saleOrdersRepository.findById.mockResolvedValue(
+        makeOrder({ status: 'CONFIRMED' }),
+      );
 
       await service.confirm('tenant-1', 'order-1');
 
@@ -707,7 +752,11 @@ describe('SaleOrdersService', () => {
 
     it('rejects the confirmation when there is not enough stock to reserve', async () => {
       tx.saleOrderItem.findMany.mockResolvedValue([
-        { ...makeOrderItem({ quantity: 5 }), warehouseId: null, product: { name: 'Heladera', isSerialized: false } },
+        {
+          ...makeOrderItem({ quantity: 5 }),
+          warehouseId: null,
+          product: { name: 'Heladera', isSerialized: false },
+        },
       ]);
       tx.stockMovement.groupBy.mockImplementation(({ by }: { by: string[] }) =>
         Promise.resolve(
@@ -755,7 +804,11 @@ describe('SaleOrdersService', () => {
         expect.objectContaining({ data: { status: 'CANCELLED' } }),
       );
       expect(tx.stockMovement.create).toHaveBeenCalledWith({
-        data: expect.objectContaining({ type: 'RESERVED', quantity: 2, referenceId: 'item-1' }),
+        data: expect.objectContaining({
+          type: 'RESERVED',
+          quantity: 2,
+          referenceId: 'item-1',
+        }),
       });
       expect(result).toBeDefined();
     });
@@ -777,7 +830,11 @@ describe('SaleOrdersService', () => {
   describe('deliver', () => {
     it('releases the reservation and creates the OUT movement', async () => {
       saleOrdersRepository.findById.mockResolvedValue(
-        makeOrder({ status: 'DELIVERED', saleType: 'CREDIT', items: [makeOrderItem()] }),
+        makeOrder({
+          status: 'DELIVERED',
+          saleType: 'CREDIT',
+          items: [makeOrderItem()],
+        }),
       );
       tx.stockMovement.groupBy.mockResolvedValue([
         { referenceId: 'item-1', _sum: { quantity: -2 } },
@@ -786,7 +843,10 @@ describe('SaleOrdersService', () => {
       await service.deliver('tenant-1', 'order-1');
 
       const types = tx.stockMovement.create.mock.calls.map(
-        (c: [{ data: { type: string; quantity: number } }]) => [c[0].data.type, c[0].data.quantity],
+        (c: [{ data: { type: string; quantity: number } }]) => [
+          c[0].data.type,
+          c[0].data.quantity,
+        ],
       );
       expect(types).toEqual([
         ['RESERVED', 2],
@@ -926,7 +986,9 @@ describe('SaleOrdersService', () => {
 
       await service.approveCredit('tenant-1', 'order-1');
 
-      expect(creditEvaluationService.evaluateIncomeCapacity).toHaveBeenCalledWith(
+      expect(
+        creditEvaluationService.evaluateIncomeCapacity,
+      ).toHaveBeenCalledWith(
         'tenant-1',
         'cust-1',
         expect.any(Number),

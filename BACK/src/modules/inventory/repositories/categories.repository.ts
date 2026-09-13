@@ -64,9 +64,7 @@ export class CategoriesRepository {
     industry: Industry | null | undefined,
     client: PrismaClientOrTx = this.prisma,
   ) {
-    const names = industry
-      ? DEFAULT_CATEGORIES[industry]
-      : FALLBACK_CATEGORIES;
+    const names = industry ? DEFAULT_CATEGORIES[industry] : FALLBACK_CATEGORIES;
     if (names.length === 0) return Promise.resolve();
     return client.category.createMany({
       data: names.map((name) => ({ tenantId, name })),

@@ -1,5 +1,10 @@
 import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBearerAuth,
+  ApiOperation,
+  ApiQuery,
+  ApiTags,
+} from '@nestjs/swagger';
 import { ProductionOrderStatus } from '@prisma/client';
 import { CurrentTenant } from '../../../common/decorators/current-tenant.decorator';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
@@ -50,7 +55,9 @@ export class ProductionOrdersController {
 
   @Post(':id/start')
   @Permissions('production:orders:manage')
-  @ApiOperation({ summary: 'Iniciar la producción (valida stock de materia prima)' })
+  @ApiOperation({
+    summary: 'Iniciar la producción (valida stock de materia prima)',
+  })
   start(
     @CurrentTenant() tenantId: string,
     @CurrentUser() user: JwtPayload,
@@ -62,7 +69,8 @@ export class ProductionOrdersController {
   @Post(':id/complete')
   @Permissions('production:orders:manage')
   @ApiOperation({
-    summary: 'Completar la producción: consume la materia prima y da de alta lo fabricado',
+    summary:
+      'Completar la producción: consume la materia prima y da de alta lo fabricado',
   })
   complete(
     @CurrentTenant() tenantId: string,

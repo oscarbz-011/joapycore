@@ -37,7 +37,8 @@ export function encryptTempPassword(plaintext: string): string {
 
 export function decryptTempPassword(data: string): string {
   const parts = data.split(':');
-  if (parts.length !== 3) throw new Error('Invalid encrypted temp password format');
+  if (parts.length !== 3)
+    throw new Error('Invalid encrypted temp password format');
   const [ivHex, tagHex, encHex] = parts;
   const key = deriveKey();
   const iv = Buffer.from(ivHex, 'hex');

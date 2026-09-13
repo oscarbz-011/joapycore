@@ -1,5 +1,12 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsDateString, IsEnum, IsNumber, IsOptional, IsPositive, IsString } from 'class-validator';
+import {
+  IsDateString,
+  IsEnum,
+  IsNumber,
+  IsOptional,
+  IsPositive,
+  IsString,
+} from 'class-validator';
 import { AdvancePaymentMode, PaymentMethod } from '@prisma/client';
 
 export class AdvancePaymentDto {
@@ -16,7 +23,10 @@ export class AdvancePaymentDto {
   @IsEnum(AdvancePaymentMode)
   mode: AdvancePaymentMode;
 
-  @ApiProperty({ enum: PaymentMethod, description: 'Método de pago del adelanto' })
+  @ApiProperty({
+    enum: PaymentMethod,
+    description: 'Método de pago del adelanto',
+  })
   @IsEnum(PaymentMethod)
   paymentMethod: PaymentMethod;
 

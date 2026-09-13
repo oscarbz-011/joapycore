@@ -1,6 +1,13 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { DeliveryCheckpoint } from '@prisma/client';
-import { IsBoolean, IsEnum, IsLatitude, IsLongitude, IsOptional, IsString } from 'class-validator';
+import {
+  IsBoolean,
+  IsEnum,
+  IsLatitude,
+  IsLongitude,
+  IsOptional,
+  IsString,
+} from 'class-validator';
 
 export class RecordTrackingEventDto {
   @ApiPropertyOptional({ enum: DeliveryCheckpoint })
@@ -19,7 +26,8 @@ export class RecordTrackingEventDto {
   longitude?: number;
 
   @ApiPropertyOptional({
-    description: 'true = la ubicación registrada era correcta; false = se corrigió',
+    description:
+      'true = la ubicación registrada era correcta; false = se corrigió',
   })
   @IsOptional()
   @IsBoolean()

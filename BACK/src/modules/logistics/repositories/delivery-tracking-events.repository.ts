@@ -14,14 +14,18 @@ export class DeliveryTrackingEventsRepository {
   ) {
     return client.deliveryTrackingEvent.create({
       data: { ...data, tenantId },
-      include: { recordedBy: { select: { id: true, firstName: true, lastName: true } } },
+      include: {
+        recordedBy: { select: { id: true, firstName: true, lastName: true } },
+      },
     });
   }
 
   findByDeliveryNote(tenantId: string, deliveryNoteId: string) {
     return this.prisma.deliveryTrackingEvent.findMany({
       where: { tenantId, deliveryNoteId },
-      include: { recordedBy: { select: { id: true, firstName: true, lastName: true } } },
+      include: {
+        recordedBy: { select: { id: true, firstName: true, lastName: true } },
+      },
       orderBy: { recordedAt: 'asc' },
     });
   }

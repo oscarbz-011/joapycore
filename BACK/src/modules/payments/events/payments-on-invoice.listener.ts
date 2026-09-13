@@ -18,7 +18,10 @@ export class PaymentsOnInvoiceListener {
 
   @OnEvent('invoice.cancelled')
   async handleCancelled(event: { tenantId: string; invoiceId: string }) {
-    const ar = await this.arRepository.findByInvoice(event.tenantId, event.invoiceId);
+    const ar = await this.arRepository.findByInvoice(
+      event.tenantId,
+      event.invoiceId,
+    );
     if (!ar || ar.status === 'CANCELLED') return;
     await this.arRepository.updateStatus(ar.id, 'CANCELLED');
   }
@@ -27,7 +30,10 @@ export class PaymentsOnInvoiceListener {
   async handle(event: InvoiceIssuedEvent) {
     // Idempotency: skip if an AR already exists for this invoice.
     // Prevents duplicate accounts receivable if the event fires more than once.
-    const existing = await this.arRepository.findByInvoice(event.tenantId, event.invoiceId);
+    const existing = await this.arRepository.findByInvoice(
+      event.tenantId,
+      event.invoiceId,
+    );
     if (existing) return;
 
     const invoice = await this.prisma.invoice.findUnique({

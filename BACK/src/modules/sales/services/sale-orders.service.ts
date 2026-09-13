@@ -6,12 +6,7 @@ import {
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
-import {
-  MarkupType,
-  Prisma,
-  Product,
-  ProductStatus,
-} from '@prisma/client';
+import { MarkupType, Prisma, Product, ProductStatus } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { ProductsRepository } from '../../inventory/repositories/products.repository';
 import { AdjustOrderDto } from '../dto/adjust-order.dto';
@@ -789,7 +784,9 @@ export class SaleOrdersService {
   private async assertItemsInStock(
     tx: Prisma.TransactionClient,
     tenantId: string,
-    items: Array<Pick<CreatedItemInfo, 'productId' | 'quantity' | 'isSerialized'>>,
+    items: Array<
+      Pick<CreatedItemInfo, 'productId' | 'quantity' | 'isSerialized'>
+    >,
     productMap: Map<string, Pick<Product, 'name'>>,
   ): Promise<void> {
     await assertStockAvailable(
@@ -830,7 +827,11 @@ export class SaleOrdersService {
   private async releaseReservations(
     tx: Prisma.TransactionClient,
     tenantId: string,
-    items: Array<{ id: string; productId: string | null; warehouseId?: string | null }>,
+    items: Array<{
+      id: string;
+      productId: string | null;
+      warehouseId?: string | null;
+    }>,
   ): Promise<void> {
     const reserved = await this.findActiveReservations(
       tx,
@@ -1209,7 +1210,9 @@ export class SaleOrdersService {
         tx,
         tenantId,
         toReserve,
-        new Map(items.map((i) => [i.productId!, { name: i.product?.name ?? '' }])),
+        new Map(
+          items.map((i) => [i.productId!, { name: i.product?.name ?? '' }]),
+        ),
       );
       await this.applyStockMovements(tx, tenantId, toReserve, 'RESERVE');
     });

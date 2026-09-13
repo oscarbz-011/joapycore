@@ -40,7 +40,12 @@ export class ProductComponentsRepository {
 
   create(
     tenantId: string,
-    data: { productId: string; componentId: string; quantity: number; notes?: string },
+    data: {
+      productId: string;
+      componentId: string;
+      quantity: number;
+      notes?: string;
+    },
   ) {
     return this.prisma.productComponent.create({
       data: { ...data, tenantId },

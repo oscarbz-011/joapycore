@@ -18,7 +18,8 @@ export class CreateProductionOrderDto {
   quantity: number;
 
   @ApiPropertyOptional({
-    description: 'Depósito del que sale la materia prima y al que entra lo fabricado',
+    description:
+      'Depósito del que sale la materia prima y al que entra lo fabricado',
   })
   @IsOptional()
   @IsUUID()

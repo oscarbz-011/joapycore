@@ -26,7 +26,8 @@ export class CompleteProductionOrderDto {
   // planificado; si se manda, se registra el consumo real de esos componentes.
   @ApiPropertyOptional({
     type: [ProductionConsumptionDto],
-    description: 'Consumo real por componente. Si se omite, se usa lo planificado',
+    description:
+      'Consumo real por componente. Si se omite, se usa lo planificado',
   })
   @IsOptional()
   @IsArray()

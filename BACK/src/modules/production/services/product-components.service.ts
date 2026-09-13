@@ -99,7 +99,10 @@ export class ProductComponentsService {
       if (visited.has(current)) continue;
       visited.add(current);
 
-      const children = await this.repository.findComponentIds(tenantId, current);
+      const children = await this.repository.findComponentIds(
+        tenantId,
+        current,
+      );
       pending.push(...children.map((c) => c.componentId));
     }
   }

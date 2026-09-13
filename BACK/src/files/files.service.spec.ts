@@ -204,7 +204,9 @@ describe('FilesService', () => {
         record.key,
         300,
         expect.objectContaining({
-          contentDisposition: expect.stringMatching(/^(inline|attachment); filename=/),
+          contentDisposition: expect.stringMatching(
+            /^(inline|attachment); filename=/,
+          ),
         }),
       );
     });

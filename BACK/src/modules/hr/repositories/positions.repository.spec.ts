@@ -1,5 +1,3 @@
- 
- 
 import { PositionsRepository } from './positions.repository';
 
 describe('PositionsRepository', () => {

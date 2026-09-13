@@ -79,7 +79,10 @@ describe('ProductionOrdersService', () => {
       // Stock de sobra por defecto.
       getStock: jest.fn().mockResolvedValue(new Map([['tablero-1', 100]])),
     };
-    eventEmitter = { emit: jest.fn(), emitAsync: jest.fn().mockResolvedValue([]) };
+    eventEmitter = {
+      emit: jest.fn(),
+      emitAsync: jest.fn().mockResolvedValue([]),
+    };
     const tx = {};
     prisma = { $transaction: jest.fn().mockImplementation((cb) => cb(tx)) };
 
@@ -115,9 +118,9 @@ describe('ProductionOrdersService', () => {
       async (kind) => {
         repository.findProduct.mockResolvedValue(makeProduct({ kind }));
 
-        await expect(
-          service.create('tenant-1', 'user-1', dto),
-        ).rejects.toThrow(/Solo se puede producir un producto fabricado/);
+        await expect(service.create('tenant-1', 'user-1', dto)).rejects.toThrow(
+          /Solo se puede producir un producto fabricado/,
+        );
       },
     );
 
@@ -140,7 +143,9 @@ describe('ProductionOrdersService', () => {
     });
 
     it('refuses a product that is not ACTIVE', async () => {
-      repository.findProduct.mockResolvedValue(makeProduct({ status: 'DRAFT' }));
+      repository.findProduct.mockResolvedValue(
+        makeProduct({ status: 'DRAFT' }),
+      );
 
       await expect(
         service.create('tenant-1', 'user-1', dto),
@@ -184,9 +189,9 @@ describe('ProductionOrdersService', () => {
         makeOrder({ status: 'IN_PROGRESS' }),
       );
 
-      await expect(
-        service.start('tenant-1', 'po-1'),
-      ).rejects.toBeInstanceOf(UnprocessableEntityException);
+      await expect(service.start('tenant-1', 'po-1')).rejects.toBeInstanceOf(
+        UnprocessableEntityException,
+      );
     });
   });
 
@@ -194,7 +199,9 @@ describe('ProductionOrdersService', () => {
 
   describe('complete', () => {
     beforeEach(() => {
-      repository.findById.mockResolvedValue(makeOrder({ status: 'IN_PROGRESS' }));
+      repository.findById.mockResolvedValue(
+        makeOrder({ status: 'IN_PROGRESS' }),
+      );
     });
 
     it('consumes the planned quantity when no real consumption is sent', async () => {
@@ -263,11 +270,9 @@ describe('ProductionOrdersService', () => {
     it('cancels a DRAFT order', async () => {
       await service.cancel('tenant-1', 'po-1', 'user-1');
 
-      expect(repository.updateStatus).toHaveBeenCalledWith(
-        'tenant-1',
-        'po-1',
-        { status: 'CANCELLED' },
-      );
+      expect(repository.updateStatus).toHaveBeenCalledWith('tenant-1', 'po-1', {
+        status: 'CANCELLED',
+      });
     });
 
     it('refuses to cancel a COMPLETED order — ya movió stock', async () => {

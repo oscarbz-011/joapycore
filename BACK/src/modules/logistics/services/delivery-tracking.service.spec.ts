@@ -1,4 +1,8 @@
-import { ForbiddenException, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
+import {
+  ForbiddenException,
+  NotFoundException,
+  UnprocessableEntityException,
+} from '@nestjs/common';
 import { DeliveryTrackingService } from './delivery-tracking.service';
 
 function makeNote(overrides = {}) {
@@ -17,21 +21,43 @@ function makeNote(overrides = {}) {
 describe('DeliveryTrackingService', () => {
   let service: DeliveryTrackingService;
   let prisma: {
-    employee: { findMany: jest.Mock; findFirst: jest.Mock; findUnique: jest.Mock };
+    employee: {
+      findMany: jest.Mock;
+      findFirst: jest.Mock;
+      findUnique: jest.Mock;
+    };
     customer: { updateMany: jest.Mock };
   };
-  let deliveryNotesRepository: { findById: jest.Mock; findMine: jest.Mock; assign: jest.Mock };
-  let trackingEventsRepository: { create: jest.Mock; findByDeliveryNote: jest.Mock };
+  let deliveryNotesRepository: {
+    findById: jest.Mock;
+    findMine: jest.Mock;
+    assign: jest.Mock;
+  };
+  let trackingEventsRepository: {
+    create: jest.Mock;
+    findByDeliveryNote: jest.Mock;
+  };
   let deliveryNotesService: { markDelivered: jest.Mock };
   let eventEmitter: { emit: jest.Mock };
 
   beforeEach(() => {
     prisma = {
-      employee: { findMany: jest.fn(), findFirst: jest.fn(), findUnique: jest.fn() },
+      employee: {
+        findMany: jest.fn(),
+        findFirst: jest.fn(),
+        findUnique: jest.fn(),
+      },
       customer: { updateMany: jest.fn() },
     };
-    deliveryNotesRepository = { findById: jest.fn(), findMine: jest.fn(), assign: jest.fn() };
-    trackingEventsRepository = { create: jest.fn(), findByDeliveryNote: jest.fn() };
+    deliveryNotesRepository = {
+      findById: jest.fn(),
+      findMine: jest.fn(),
+      assign: jest.fn(),
+    };
+    trackingEventsRepository = {
+      create: jest.fn(),
+      findByDeliveryNote: jest.fn(),
+    };
     deliveryNotesService = { markDelivered: jest.fn() };
     eventEmitter = { emit: jest.fn() };
 
@@ -49,21 +75,31 @@ describe('DeliveryTrackingService', () => {
       deliveryNotesRepository.findById.mockResolvedValue(null);
 
       await expect(
-        service.assign('tenant-1', 'ghost', { assignmentMode: 'INTERNAL_EMPLOYEE' } as any),
+        service.assign('tenant-1', 'ghost', {
+          assignmentMode: 'INTERNAL_EMPLOYEE',
+        } as any),
       ).rejects.toBeInstanceOf(NotFoundException);
     });
 
     it('rejects assigning a DELIVERED note', async () => {
-      deliveryNotesRepository.findById.mockResolvedValue(makeNote({ status: 'DELIVERED' }));
+      deliveryNotesRepository.findById.mockResolvedValue(
+        makeNote({ status: 'DELIVERED' }),
+      );
 
       await expect(
-        service.assign('tenant-1', 'note-1', { assignmentMode: 'INTERNAL_EMPLOYEE' } as any),
+        service.assign('tenant-1', 'note-1', {
+          assignmentMode: 'INTERNAL_EMPLOYEE',
+        } as any),
       ).rejects.toBeInstanceOf(UnprocessableEntityException);
     });
 
     it('resolves the employee name into carrier for INTERNAL_EMPLOYEE', async () => {
       deliveryNotesRepository.findById.mockResolvedValue(makeNote());
-      prisma.employee.findFirst.mockResolvedValue({ id: 'emp-1', firstName: 'Juan', lastName: 'Pérez' });
+      prisma.employee.findFirst.mockResolvedValue({
+        id: 'emp-1',
+        firstName: 'Juan',
+        lastName: 'Pérez',
+      });
 
       await service.assign('tenant-1', 'note-1', {
         assignmentMode: 'INTERNAL_EMPLOYEE',
@@ -73,7 +109,10 @@ describe('DeliveryTrackingService', () => {
       expect(deliveryNotesRepository.assign).toHaveBeenCalledWith(
         'tenant-1',
         'note-1',
-        expect.objectContaining({ assignedEmployeeId: 'emp-1', carrier: 'Juan Pérez' }),
+        expect.objectContaining({
+          assignedEmployeeId: 'emp-1',
+          carrier: 'Juan Pérez',
+        }),
       );
     });
 
@@ -120,7 +159,10 @@ describe('DeliveryTrackingService', () => {
     });
 
     it('returns an empty list when the linked employee belongs to another tenant', async () => {
-      prisma.employee.findUnique.mockResolvedValue({ id: 'emp-1', tenantId: 'other-tenant' });
+      prisma.employee.findUnique.mockResolvedValue({
+        id: 'emp-1',
+        tenantId: 'other-tenant',
+      });
 
       const result = await service.findMine('tenant-1', 'user-1');
 
@@ -128,19 +170,28 @@ describe('DeliveryTrackingService', () => {
     });
 
     it('lists notes assigned to the caller employee', async () => {
-      prisma.employee.findUnique.mockResolvedValue({ id: 'emp-1', tenantId: 'tenant-1' });
+      prisma.employee.findUnique.mockResolvedValue({
+        id: 'emp-1',
+        tenantId: 'tenant-1',
+      });
       deliveryNotesRepository.findMine.mockResolvedValue([makeNote()]);
 
       const result = await service.findMine('tenant-1', 'user-1');
 
-      expect(deliveryNotesRepository.findMine).toHaveBeenCalledWith('tenant-1', 'emp-1', undefined);
+      expect(deliveryNotesRepository.findMine).toHaveBeenCalledWith(
+        'tenant-1',
+        'emp-1',
+        undefined,
+      );
       expect(result).toHaveLength(1);
     });
   });
 
   describe('recordTrackingEvent', () => {
     it('throws ForbiddenException when the caller has neither logistics:manage nor logistics:track', async () => {
-      deliveryNotesRepository.findById.mockResolvedValue(makeNote({ assignmentMode: 'INTERNAL_EMPLOYEE' }));
+      deliveryNotesRepository.findById.mockResolvedValue(
+        makeNote({ assignmentMode: 'INTERNAL_EMPLOYEE' }),
+      );
 
       await expect(
         service.recordTrackingEvent('tenant-1', 'note-1', {}, 'user-1', []),
@@ -148,29 +199,47 @@ describe('DeliveryTrackingService', () => {
     });
 
     it('rejects tracking on a note assigned to an external courier company', async () => {
-      deliveryNotesRepository.findById.mockResolvedValue(makeNote({ assignmentMode: 'EXTERNAL_COMPANY' }));
+      deliveryNotesRepository.findById.mockResolvedValue(
+        makeNote({ assignmentMode: 'EXTERNAL_COMPANY' }),
+      );
 
       await expect(
-        service.recordTrackingEvent('tenant-1', 'note-1', {}, 'user-1', ['logistics:manage']),
+        service.recordTrackingEvent('tenant-1', 'note-1', {}, 'user-1', [
+          'logistics:manage',
+        ]),
       ).rejects.toBeInstanceOf(UnprocessableEntityException);
     });
 
     it('rejects a logistics:track caller who is not the assigned employee', async () => {
       deliveryNotesRepository.findById.mockResolvedValue(
-        makeNote({ assignmentMode: 'INTERNAL_EMPLOYEE', assignedEmployeeId: 'emp-1' }),
+        makeNote({
+          assignmentMode: 'INTERNAL_EMPLOYEE',
+          assignedEmployeeId: 'emp-1',
+        }),
       );
-      prisma.employee.findUnique.mockResolvedValue({ id: 'emp-2', tenantId: 'tenant-1' });
+      prisma.employee.findUnique.mockResolvedValue({
+        id: 'emp-2',
+        tenantId: 'tenant-1',
+      });
 
       await expect(
-        service.recordTrackingEvent('tenant-1', 'note-1', {}, 'user-1', ['logistics:track']),
+        service.recordTrackingEvent('tenant-1', 'note-1', {}, 'user-1', [
+          'logistics:track',
+        ]),
       ).rejects.toBeInstanceOf(ForbiddenException);
     });
 
     it('allows the assigned employee to record a checkpoint', async () => {
       deliveryNotesRepository.findById.mockResolvedValue(
-        makeNote({ assignmentMode: 'INTERNAL_EMPLOYEE', assignedEmployeeId: 'emp-1' }),
+        makeNote({
+          assignmentMode: 'INTERNAL_EMPLOYEE',
+          assignedEmployeeId: 'emp-1',
+        }),
       );
-      prisma.employee.findUnique.mockResolvedValue({ id: 'emp-1', tenantId: 'tenant-1' });
+      prisma.employee.findUnique.mockResolvedValue({
+        id: 'emp-1',
+        tenantId: 'tenant-1',
+      });
       trackingEventsRepository.create.mockResolvedValue({ id: 'evt-1' });
 
       await service.recordTrackingEvent(
@@ -183,17 +252,26 @@ describe('DeliveryTrackingService', () => {
 
       expect(trackingEventsRepository.create).toHaveBeenCalledWith(
         'tenant-1',
-        expect.objectContaining({ deliveryNoteId: 'note-1', checkpoint: 'LEFT_WAREHOUSE', recordedById: 'user-1' }),
+        expect.objectContaining({
+          deliveryNoteId: 'note-1',
+          checkpoint: 'LEFT_WAREHOUSE',
+          recordedById: 'user-1',
+        }),
       );
     });
 
     it('allows a logistics:manage caller regardless of assignment', async () => {
       deliveryNotesRepository.findById.mockResolvedValue(
-        makeNote({ assignmentMode: 'INTERNAL_EMPLOYEE', assignedEmployeeId: 'emp-1' }),
+        makeNote({
+          assignmentMode: 'INTERNAL_EMPLOYEE',
+          assignedEmployeeId: 'emp-1',
+        }),
       );
       trackingEventsRepository.create.mockResolvedValue({ id: 'evt-1' });
 
-      await service.recordTrackingEvent('tenant-1', 'note-1', {}, 'user-2', ['logistics:manage']);
+      await service.recordTrackingEvent('tenant-1', 'note-1', {}, 'user-2', [
+        'logistics:manage',
+      ]);
 
       expect(prisma.employee.findUnique).not.toHaveBeenCalled();
       expect(trackingEventsRepository.create).toHaveBeenCalled();
@@ -201,7 +279,10 @@ describe('DeliveryTrackingService', () => {
 
     it('syncs the customer location when locationConfirmed=false with new coordinates', async () => {
       deliveryNotesRepository.findById.mockResolvedValue(
-        makeNote({ assignmentMode: 'INTERNAL_EMPLOYEE', assignedEmployeeId: 'emp-1' }),
+        makeNote({
+          assignmentMode: 'INTERNAL_EMPLOYEE',
+          assignedEmployeeId: 'emp-1',
+        }),
       );
       trackingEventsRepository.create.mockResolvedValue({ id: 'evt-1' });
 
@@ -221,7 +302,10 @@ describe('DeliveryTrackingService', () => {
 
     it('does not touch the customer when locationConfirmed=true', async () => {
       deliveryNotesRepository.findById.mockResolvedValue(
-        makeNote({ assignmentMode: 'INTERNAL_EMPLOYEE', assignedEmployeeId: 'emp-1' }),
+        makeNote({
+          assignmentMode: 'INTERNAL_EMPLOYEE',
+          assignedEmployeeId: 'emp-1',
+        }),
       );
       trackingEventsRepository.create.mockResolvedValue({ id: 'evt-1' });
 
@@ -238,7 +322,10 @@ describe('DeliveryTrackingService', () => {
 
     it('delegates to DeliveryNotesService.markDelivered when checkpoint=DELIVERED', async () => {
       deliveryNotesRepository.findById.mockResolvedValue(
-        makeNote({ assignmentMode: 'INTERNAL_EMPLOYEE', assignedEmployeeId: 'emp-1' }),
+        makeNote({
+          assignmentMode: 'INTERNAL_EMPLOYEE',
+          assignedEmployeeId: 'emp-1',
+        }),
       );
       trackingEventsRepository.create.mockResolvedValue({ id: 'evt-1' });
 
@@ -250,12 +337,19 @@ describe('DeliveryTrackingService', () => {
         ['logistics:manage'],
       );
 
-      expect(deliveryNotesService.markDelivered).toHaveBeenCalledWith('tenant-1', 'note-1', 'user-1');
+      expect(deliveryNotesService.markDelivered).toHaveBeenCalledWith(
+        'tenant-1',
+        'note-1',
+        'user-1',
+      );
     });
 
     it('does not call markDelivered for a non-DELIVERED checkpoint', async () => {
       deliveryNotesRepository.findById.mockResolvedValue(
-        makeNote({ assignmentMode: 'INTERNAL_EMPLOYEE', assignedEmployeeId: 'emp-1' }),
+        makeNote({
+          assignmentMode: 'INTERNAL_EMPLOYEE',
+          assignedEmployeeId: 'emp-1',
+        }),
       );
       trackingEventsRepository.create.mockResolvedValue({ id: 'evt-1' });
 
@@ -273,11 +367,16 @@ describe('DeliveryTrackingService', () => {
 
   describe('listTrackingEvents', () => {
     it('delegates to the repository', async () => {
-      trackingEventsRepository.findByDeliveryNote.mockResolvedValue([{ id: 'evt-1' }]);
+      trackingEventsRepository.findByDeliveryNote.mockResolvedValue([
+        { id: 'evt-1' },
+      ]);
 
       const result = await service.listTrackingEvents('tenant-1', 'note-1');
 
-      expect(trackingEventsRepository.findByDeliveryNote).toHaveBeenCalledWith('tenant-1', 'note-1');
+      expect(trackingEventsRepository.findByDeliveryNote).toHaveBeenCalledWith(
+        'tenant-1',
+        'note-1',
+      );
       expect(result).toEqual([{ id: 'evt-1' }]);
     });
   });

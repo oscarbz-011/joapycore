@@ -1,5 +1,3 @@
- 
- 
 import { AreasRepository } from './areas.repository';
 
 describe('AreasRepository', () => {

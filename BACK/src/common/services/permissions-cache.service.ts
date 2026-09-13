@@ -4,7 +4,10 @@ const CACHE_TTL_MS = 5 * 60 * 1000;
 
 @Injectable()
 export class PermissionsCache {
-  private readonly store = new Map<string, { keys: string[]; expiresAt: number }>();
+  private readonly store = new Map<
+    string,
+    { keys: string[]; expiresAt: number }
+  >();
 
   get(userId: string): string[] | null {
     const entry = this.store.get(userId);

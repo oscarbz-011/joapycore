@@ -35,16 +35,20 @@ export class FinanceOnArPaidListener {
         if (!pending.length) return;
 
         for (const inst of pending) {
-          const amount = typeof inst.amount === 'object'
-            ? (inst.amount as { toNumber(): number }).toNumber()
-            : Number(inst.amount);
+          const amount =
+            typeof inst.amount === 'object'
+              ? (inst.amount as { toNumber(): number }).toNumber()
+              : Number(inst.amount);
           await tx.installment.update({
             where: { id: inst.id },
             data: { paidAmount: amount, status: 'PAID', paidAt: now },
           });
         }
 
-        await tx.loan.update({ where: { id: loanId }, data: { status: 'PAID' } });
+        await tx.loan.update({
+          where: { id: loanId },
+          data: { status: 'PAID' },
+        });
       });
     } catch (err) {
       this.logger.error('Error closing installments on AR paid event', err);

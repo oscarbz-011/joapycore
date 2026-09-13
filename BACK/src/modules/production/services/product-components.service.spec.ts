@@ -53,7 +53,11 @@ describe('ProductComponentsService', () => {
       repository.findProduct
         .mockResolvedValueOnce(makeProduct())
         .mockResolvedValueOnce(
-          makeProduct({ id: 'tablero-1', name: 'Tablero MDF', kind: 'RAW_MATERIAL' }),
+          makeProduct({
+            id: 'tablero-1',
+            name: 'Tablero MDF',
+            kind: 'RAW_MATERIAL',
+          }),
         );
 
       await service.addComponent('tenant-1', 'mesa-1', dto);
@@ -93,7 +97,9 @@ describe('ProductComponentsService', () => {
     it('refuses a duplicate component instead of creating a second row', async () => {
       repository.findProduct
         .mockResolvedValueOnce(makeProduct())
-        .mockResolvedValueOnce(makeProduct({ id: 'tablero-1', name: 'Tablero MDF' }));
+        .mockResolvedValueOnce(
+          makeProduct({ id: 'tablero-1', name: 'Tablero MDF' }),
+        );
       repository.findExisting.mockResolvedValue({ id: 'pc-existing' });
 
       await expect(
