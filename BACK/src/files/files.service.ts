@@ -5,8 +5,12 @@ import { createHash, randomUUID } from 'node:crypto';
 import * as path from 'node:path';
 import type { StorageDriverName } from '../config/storage.config';
 import { FilesRepository } from './files.repository';
-import { STORAGE_DRIVERS, type StorageDriverRegistry } from './storage/storage.constants';
+import {
+  STORAGE_DRIVERS,
+  type StorageDriverRegistry,
+} from './storage/storage.constants';
 import type { StorageDriver } from './storage/storage.interface';
+import { downloadHeaders } from '../common/utils/download-headers.util';
 
 // Subconjunto de Express.Multer.File que realmente usa upload() — permite
 // llamarlo también desde código que genera archivos programáticamente
@@ -38,7 +42,8 @@ export class FilesService {
     file: UploadableFile,
     meta: { module: string; entityType: string; entityId?: string },
   ) {
-    const driverName = this.configService.get<StorageDriverName>('storage.driver') ?? 'local';
+    const driverName =
+      this.configService.get<StorageDriverName>('storage.driver') ?? 'local';
     const driver = this.getDriver(driverName);
 
     const ext = path.extname(file.originalname);
@@ -84,8 +89,15 @@ export class FilesService {
     return this.getDriver(record.bucket).get(record.key);
   }
 
-  getSignedDownloadUrl(record: FileRecord, expiresInSeconds = 300): Promise<string> {
-    return this.getDriver(record.bucket).getSignedUrl(record.key, expiresInSeconds);
+  getSignedDownloadUrl(
+    record: FileRecord,
+    expiresInSeconds = 300,
+  ): Promise<string> {
+    return this.getDriver(record.bucket).getSignedUrl(
+      record.key,
+      expiresInSeconds,
+      downloadHeaders(record.mimeType, record.originalName),
+    );
   }
 
   async delete(tenantId: string, id: string) {

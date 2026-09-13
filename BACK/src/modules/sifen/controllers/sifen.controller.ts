@@ -22,6 +22,7 @@ import { CurrentTenant } from '../../../common/decorators/current-tenant.decorat
 import { Permissions } from '../../../common/decorators/permissions.decorator';
 import { UpdateSifenSettingsDto } from '../dto/update-sifen-settings.dto';
 import { SifenService } from '../services/sifen.service';
+import { contentDisposition } from '../../../common/utils/download-headers.util';
 
 const memStorage = memoryStorage();
 
@@ -52,7 +53,9 @@ export class SifenController {
   @Permissions('sifen:manage')
   @UseInterceptors(FileInterceptor('file', { storage: memStorage }))
   @ApiConsumes('multipart/form-data')
-  @ApiOperation({ summary: 'Cargar certificado de firma (.p12 / .pfx / .cer / .crt)' })
+  @ApiOperation({
+    summary: 'Cargar certificado de firma (.p12 / .pfx / .cer / .crt)',
+  })
   uploadCertificate(
     @CurrentTenant() tenantId: string,
     @UploadedFile() file: Express.Multer.File,
@@ -89,13 +92,19 @@ export class SifenController {
 
   @Get('config/certificate/download')
   @Permissions('sifen:manage')
-  @ApiOperation({ summary: 'Descargar copia del certificado de firma (backup)' })
+  @ApiOperation({
+    summary: 'Descargar copia del certificado de firma (backup)',
+  })
   async downloadCertificate(
     @CurrentTenant() tenantId: string,
     @Res() res: Response,
   ) {
-    const { filename, data, mimeType } = await this.sifenService.downloadCertificate(tenantId);
-    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    const { filename, data, mimeType } =
+      await this.sifenService.downloadCertificate(tenantId);
+    res.setHeader(
+      'Content-Disposition',
+      contentDisposition('attachment', filename),
+    );
     res.setHeader('Content-Type', mimeType);
     res.send(data);
   }

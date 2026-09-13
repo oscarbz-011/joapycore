@@ -2,7 +2,9 @@ import { NotFoundException } from '@nestjs/common';
 import { createHash } from 'node:crypto';
 import { FilesService } from './files.service';
 
-function makeMulterFile(overrides: Partial<Express.Multer.File> = {}): Express.Multer.File {
+function makeMulterFile(
+  overrides: Partial<Express.Multer.File> = {},
+): Express.Multer.File {
   return {
     originalname: 'contrato.pdf',
     mimetype: 'application/pdf',
@@ -35,15 +37,36 @@ function makeFileRecord(overrides = {}) {
 
 describe('FilesService', () => {
   let service: FilesService;
-  let filesRepository: { create: jest.Mock; findById: jest.Mock; findByEntity: jest.Mock; delete: jest.Mock };
+  let filesRepository: {
+    create: jest.Mock;
+    findById: jest.Mock;
+    findByEntity: jest.Mock;
+    delete: jest.Mock;
+  };
   let configService: { get: jest.Mock };
-  let localDriver: { put: jest.Mock; get: jest.Mock; delete: jest.Mock; exists: jest.Mock; getSignedUrl: jest.Mock };
-  let s3Driver: { put: jest.Mock; get: jest.Mock; delete: jest.Mock; exists: jest.Mock; getSignedUrl: jest.Mock };
+  let localDriver: {
+    put: jest.Mock;
+    get: jest.Mock;
+    delete: jest.Mock;
+    exists: jest.Mock;
+    getSignedUrl: jest.Mock;
+  };
+  let s3Driver: {
+    put: jest.Mock;
+    get: jest.Mock;
+    delete: jest.Mock;
+    exists: jest.Mock;
+    getSignedUrl: jest.Mock;
+  };
   let drivers: Map<string, unknown>;
 
   beforeEach(() => {
     filesRepository = {
-      create: jest.fn().mockImplementation((data) => Promise.resolve({ id: 'file-1', ...data })),
+      create: jest
+        .fn()
+        .mockImplementation((data) =>
+          Promise.resolve({ id: 'file-1', ...data }),
+        ),
       findById: jest.fn(),
       findByEntity: jest.fn(),
       delete: jest.fn(),
@@ -61,14 +84,20 @@ describe('FilesService', () => {
       get: jest.fn().mockResolvedValue(Buffer.from('s3-bytes')),
       delete: jest.fn(),
       exists: jest.fn(),
-      getSignedUrl: jest.fn().mockResolvedValue('https://s3.example.com/signed'),
+      getSignedUrl: jest
+        .fn()
+        .mockResolvedValue('https://s3.example.com/signed'),
     };
     drivers = new Map([
       ['local', localDriver],
       ['s3', s3Driver],
     ]);
 
-    service = new FilesService(filesRepository as any, configService as any, drivers as any);
+    service = new FilesService(
+      filesRepository as any,
+      configService as any,
+      drivers as any,
+    );
   });
 
   describe('upload', () => {
@@ -82,22 +111,35 @@ describe('FilesService', () => {
       });
 
       expect(localDriver.put).toHaveBeenCalledWith(
-        expect.stringMatching(/^tenant-1\/hr\/employee\/emp-1\/[0-9a-f-]+\.pdf$/),
+        expect.stringMatching(
+          /^tenant-1\/hr\/employee\/emp-1\/[0-9a-f-]+\.pdf$/,
+        ),
         file.buffer,
         { contentType: 'application/pdf' },
       );
       expect(s3Driver.put).not.toHaveBeenCalled();
       expect(result.bucket).toBe('local');
       expect(filesRepository.create).toHaveBeenCalledWith(
-        expect.objectContaining({ tenantId: 'tenant-1', bucket: 'local', module: 'hr', entityType: 'employee', entityId: 'emp-1' }),
+        expect.objectContaining({
+          tenantId: 'tenant-1',
+          bucket: 'local',
+          module: 'hr',
+          entityType: 'employee',
+          entityId: 'emp-1',
+        }),
       );
     });
 
     it('falls back to "general" when entityId is omitted', async () => {
-      await service.upload('tenant-1', 'user-1', makeMulterFile(), { module: 'hr', entityType: 'employee' });
+      await service.upload('tenant-1', 'user-1', makeMulterFile(), {
+        module: 'hr',
+        entityType: 'employee',
+      });
 
       expect(localDriver.put).toHaveBeenCalledWith(
-        expect.stringMatching(/^tenant-1\/hr\/employee\/general\/[0-9a-f-]+\.pdf$/),
+        expect.stringMatching(
+          /^tenant-1\/hr\/employee\/general\/[0-9a-f-]+\.pdf$/,
+        ),
         expect.anything(),
         expect.anything(),
       );
@@ -105,9 +147,14 @@ describe('FilesService', () => {
 
     it('computes a SHA-256 checksum of the file buffer', async () => {
       const file = makeMulterFile();
-      const expectedChecksum = createHash('sha256').update(file.buffer).digest('hex');
+      const expectedChecksum = createHash('sha256')
+        .update(file.buffer)
+        .digest('hex');
 
-      await service.upload('tenant-1', 'user-1', file, { module: 'hr', entityType: 'employee' });
+      await service.upload('tenant-1', 'user-1', file, {
+        module: 'hr',
+        entityType: 'employee',
+      });
 
       expect(filesRepository.create).toHaveBeenCalledWith(
         expect.objectContaining({ checksum: expectedChecksum }),
@@ -117,10 +164,15 @@ describe('FilesService', () => {
     it('uses the s3 driver and records bucket="s3" when STORAGE_DRIVER=s3', async () => {
       configService.get.mockReturnValue('s3');
 
-      const result = await service.upload('tenant-1', 'user-1', makeMulterFile(), {
-        module: 'hr',
-        entityType: 'employee',
-      });
+      const result = await service.upload(
+        'tenant-1',
+        'user-1',
+        makeMulterFile(),
+        {
+          module: 'hr',
+          entityType: 'employee',
+        },
+      );
 
       expect(s3Driver.put).toHaveBeenCalled();
       expect(localDriver.put).not.toHaveBeenCalled();
@@ -146,15 +198,27 @@ describe('FilesService', () => {
       const url = await service.getSignedDownloadUrl(record as any);
 
       expect(url).toBe('https://s3.example.com/signed');
-      expect(s3Driver.getSignedUrl).toHaveBeenCalledWith(record.key, 300);
+      // Las cabeceras de respuesta evitan que el bucket sirva HTML/SVG
+      // renderizable con el tipo con que se subió.
+      expect(s3Driver.getSignedUrl).toHaveBeenCalledWith(
+        record.key,
+        300,
+        expect.objectContaining({
+          contentDisposition: expect.stringMatching(/^(inline|attachment); filename=/),
+        }),
+      );
     });
 
-    it('delete() removes the object from the record\'s own driver and then the DB row', async () => {
-      filesRepository.findById.mockResolvedValue(makeFileRecord({ bucket: 'local' }));
+    it("delete() removes the object from the record's own driver and then the DB row", async () => {
+      filesRepository.findById.mockResolvedValue(
+        makeFileRecord({ bucket: 'local' }),
+      );
 
       await service.delete('tenant-1', 'file-1');
 
-      expect(localDriver.delete).toHaveBeenCalledWith('tenant-1/hr/employee/emp-1/uuid.pdf');
+      expect(localDriver.delete).toHaveBeenCalledWith(
+        'tenant-1/hr/employee/emp-1/uuid.pdf',
+      );
       expect(filesRepository.delete).toHaveBeenCalledWith('tenant-1', 'file-1');
     });
   });
@@ -163,7 +227,9 @@ describe('FilesService', () => {
     it('throws NotFoundException when the record does not exist', async () => {
       filesRepository.findById.mockResolvedValue(null);
 
-      await expect(service.getById('tenant-1', 'ghost')).rejects.toBeInstanceOf(NotFoundException);
+      await expect(service.getById('tenant-1', 'ghost')).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
     });
   });
 });

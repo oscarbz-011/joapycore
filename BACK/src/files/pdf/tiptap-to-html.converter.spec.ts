@@ -1,4 +1,7 @@
-import { convertTiptapToHtml, type TiptapNode } from './tiptap-to-html.converter';
+import {
+  convertTiptapToHtml,
+  type TiptapNode,
+} from './tiptap-to-html.converter';
 
 const noVars = () => undefined;
 const noTables = () => undefined;
@@ -10,7 +13,9 @@ describe('convertTiptapToHtml', () => {
       content: [
         {
           type: 'paragraph',
-          content: [{ type: 'text', text: 'Hola {{cliente.nombre}}, gracias.' }],
+          content: [
+            { type: 'text', text: 'Hola {{cliente.nombre}}, gracias.' },
+          ],
         },
       ],
     };
@@ -27,7 +32,12 @@ describe('convertTiptapToHtml', () => {
   it('leaves unresolved tokens untouched', () => {
     const doc: TiptapNode = {
       type: 'doc',
-      content: [{ type: 'paragraph', content: [{ type: 'text', text: '{{ghost.key}}' }] }],
+      content: [
+        {
+          type: 'paragraph',
+          content: [{ type: 'text', text: '{{ghost.key}}' }],
+        },
+      ],
     };
 
     const html = convertTiptapToHtml(doc, noVars, noTables);
@@ -38,12 +48,21 @@ describe('convertTiptapToHtml', () => {
     const doc: TiptapNode = {
       type: 'doc',
       content: [
-        { type: 'paragraph', content: [{ type: 'text', text: 'Precio & condiciones: {{monto}}' }] },
+        {
+          type: 'paragraph',
+          content: [{ type: 'text', text: 'Precio & condiciones: {{monto}}' }],
+        },
       ],
     };
 
-    const html = convertTiptapToHtml(doc, (key) => (key === 'monto' ? '<script>x</script>' : undefined), noTables);
-    expect(html).toBe('<p>Precio &amp; condiciones: &lt;script&gt;x&lt;/script&gt;</p>');
+    const html = convertTiptapToHtml(
+      doc,
+      (key) => (key === 'monto' ? '<script>x</script>' : undefined),
+      noTables,
+    );
+    expect(html).toBe(
+      '<p>Precio &amp; condiciones: &lt;script&gt;x&lt;/script&gt;</p>',
+    );
   });
 
   it('applies bold/italic/strike/code marks', () => {
@@ -63,15 +82,25 @@ describe('convertTiptapToHtml', () => {
     };
 
     const html = convertTiptapToHtml(doc, noVars, noTables);
-    expect(html).toBe('<p><strong>bold</strong><em>italic</em><s>strike</s><code>code</code></p>');
+    expect(html).toBe(
+      '<p><strong>bold</strong><em>italic</em><s>strike</s><code>code</code></p>',
+    );
   });
 
   it('converts headings to their tag level, capped at h3', () => {
     const doc: TiptapNode = {
       type: 'doc',
       content: [
-        { type: 'heading', attrs: { level: 1 }, content: [{ type: 'text', text: 'Título' }] },
-        { type: 'heading', attrs: { level: 5 }, content: [{ type: 'text', text: 'Sub' }] },
+        {
+          type: 'heading',
+          attrs: { level: 1 },
+          content: [{ type: 'text', text: 'Título' }],
+        },
+        {
+          type: 'heading',
+          attrs: { level: 5 },
+          content: [{ type: 'text', text: 'Sub' }],
+        },
       ],
     };
 
@@ -86,8 +115,18 @@ describe('convertTiptapToHtml', () => {
         {
           type: 'bulletList',
           content: [
-            { type: 'listItem', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Uno' }] }] },
-            { type: 'listItem', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Dos' }] }] },
+            {
+              type: 'listItem',
+              content: [
+                { type: 'paragraph', content: [{ type: 'text', text: 'Uno' }] },
+              ],
+            },
+            {
+              type: 'listItem',
+              content: [
+                { type: 'paragraph', content: [{ type: 'text', text: 'Dos' }] },
+              ],
+            },
           ],
         },
       ],
@@ -98,7 +137,10 @@ describe('convertTiptapToHtml', () => {
   });
 
   it('renders a horizontal rule', () => {
-    const doc: TiptapNode = { type: 'doc', content: [{ type: 'horizontalRule' }] };
+    const doc: TiptapNode = {
+      type: 'doc',
+      content: [{ type: 'horizontalRule' }],
+    };
     expect(convertTiptapToHtml(doc, noVars, noTables)).toBe('<hr>');
   });
 
@@ -107,11 +149,18 @@ describe('convertTiptapToHtml', () => {
   it('renders a paragraph containing only {{venta.items}} as a table (no surrounding <p>)', () => {
     const doc: TiptapNode = {
       type: 'doc',
-      content: [{ type: 'paragraph', content: [{ type: 'text', text: '{{venta.items}}' }] }],
+      content: [
+        {
+          type: 'paragraph',
+          content: [{ type: 'text', text: '{{venta.items}}' }],
+        },
+      ],
     };
 
     const html = convertTiptapToHtml(doc, noVars, (key) =>
-      key === 'venta.items' ? { headers: ['Producto', 'Cantidad'], rows: [['Heladera', '1']] } : undefined,
+      key === 'venta.items'
+        ? { headers: ['Producto', 'Cantidad'], rows: [['Heladera', '1']] }
+        : undefined,
     );
 
     expect(html).toBe(
@@ -125,13 +174,20 @@ describe('convertTiptapToHtml', () => {
       content: [
         {
           type: 'paragraph',
-          content: [{ type: 'text', text: 'El Vendedor transfiere al Comprador el articulo {{venta.items}}.' }],
+          content: [
+            {
+              type: 'text',
+              text: 'El Vendedor transfiere al Comprador el articulo {{venta.items}}.',
+            },
+          ],
         },
       ],
     };
 
     const html = convertTiptapToHtml(doc, noVars, (key) =>
-      key === 'venta.items' ? { headers: ['Producto'], rows: [['Heladera']] } : undefined,
+      key === 'venta.items'
+        ? { headers: ['Producto'], rows: [['Heladera']] }
+        : undefined,
     );
 
     expect(html).toBe(
@@ -144,7 +200,12 @@ describe('convertTiptapToHtml', () => {
   it('falls back to literal text when the table variable is not provided', () => {
     const doc: TiptapNode = {
       type: 'doc',
-      content: [{ type: 'paragraph', content: [{ type: 'text', text: '{{venta.items}}' }] }],
+      content: [
+        {
+          type: 'paragraph',
+          content: [{ type: 'text', text: '{{venta.items}}' }],
+        },
+      ],
     };
 
     const html = convertTiptapToHtml(doc, noVars, noTables);
@@ -163,15 +224,47 @@ describe('convertTiptapToHtml', () => {
             {
               type: 'tableRow',
               content: [
-                { type: 'tableHeader', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Col A' }] }] },
-                { type: 'tableHeader', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Col B' }] }] },
+                {
+                  type: 'tableHeader',
+                  content: [
+                    {
+                      type: 'paragraph',
+                      content: [{ type: 'text', text: 'Col A' }],
+                    },
+                  ],
+                },
+                {
+                  type: 'tableHeader',
+                  content: [
+                    {
+                      type: 'paragraph',
+                      content: [{ type: 'text', text: 'Col B' }],
+                    },
+                  ],
+                },
               ],
             },
             {
               type: 'tableRow',
               content: [
-                { type: 'tableCell', content: [{ type: 'paragraph', content: [{ type: 'text', text: '1' }] }] },
-                { type: 'tableCell', content: [{ type: 'paragraph', content: [{ type: 'text', text: '2' }] }] },
+                {
+                  type: 'tableCell',
+                  content: [
+                    {
+                      type: 'paragraph',
+                      content: [{ type: 'text', text: '1' }],
+                    },
+                  ],
+                },
+                {
+                  type: 'tableCell',
+                  content: [
+                    {
+                      type: 'paragraph',
+                      content: [{ type: 'text', text: '2' }],
+                    },
+                  ],
+                },
               ],
             },
           ],

@@ -30,7 +30,9 @@ export interface PdfTableVariable {
 }
 
 export type VariableResolver = (key: string) => string | undefined;
-export type TableVariableResolver = (key: string) => PdfTableVariable | undefined;
+export type TableVariableResolver = (
+  key: string,
+) => PdfTableVariable | undefined;
 
 const TOKEN_RE = /\{\{([\w.]+)\}\}/g;
 
@@ -55,7 +57,10 @@ function interpolate(text: string, resolve: VariableResolver): string {
   });
 }
 
-function convertTextNodeToHtml(node: TiptapNode, resolve: VariableResolver): string {
+function convertTextNodeToHtml(
+  node: TiptapNode,
+  resolve: VariableResolver,
+): string {
   let html = interpolate(node.text ?? '', resolve);
   for (const mark of node.marks ?? []) {
     switch (mark.type) {
@@ -76,7 +81,10 @@ function convertTextNodeToHtml(node: TiptapNode, resolve: VariableResolver): str
   return html;
 }
 
-function convertInlineToHtml(nodes: TiptapNode[] = [], resolve: VariableResolver): string {
+function convertInlineToHtml(
+  nodes: TiptapNode[] = [],
+  resolve: VariableResolver,
+): string {
   return nodes
     .map((node) => {
       if (node.type === 'text') return convertTextNodeToHtml(node, resolve);
@@ -121,7 +129,8 @@ function splitParagraphOnTableTokens(
       matched = true;
 
       const before = node.text.slice(lastIndex, match.index);
-      if (before) current.push({ type: 'text', text: before, marks: node.marks });
+      if (before)
+        current.push({ type: 'text', text: before, marks: node.marks });
       if (current.length > 0) {
         segments.push({ kind: 'inline', nodes: current });
         current = [];
@@ -145,7 +154,10 @@ function splitParagraphOnTableTokens(
 function convertDataTableHtml(table: PdfTableVariable): string {
   const headerRow = `<tr>${table.headers.map((h) => `<th>${escapeHtml(h)}</th>`).join('')}</tr>`;
   const bodyRows = table.rows
-    .map((row) => `<tr>${row.map((cell) => `<td>${escapeHtml(cell)}</td>`).join('')}</tr>`)
+    .map(
+      (row) =>
+        `<tr>${row.map((cell) => `<td>${escapeHtml(cell)}</td>`).join('')}</tr>`,
+    )
     .join('');
   return `<table class="data-table"><thead>${headerRow}</thead><tbody>${bodyRows}</tbody></table>`;
 }
@@ -196,7 +208,10 @@ function convertBlockNode(
 ): string[] {
   switch (node.type) {
     case 'paragraph': {
-      const segments = splitParagraphOnTableTokens(node.content ?? [], resolveTable);
+      const segments = splitParagraphOnTableTokens(
+        node.content ?? [],
+        resolveTable,
+      );
       const hasTable = segments.some((s) => s.kind === 'table');
       if (!hasTable) {
         return [`<p>${convertInlineToHtml(node.content, resolve)}</p>`];
@@ -209,7 +224,9 @@ function convertBlockNode(
     }
     case 'heading': {
       const level = Math.min(Number(node.attrs?.level ?? 1), 3);
-      return [`<h${level}>${convertInlineToHtml(node.content, resolve)}</h${level}>`];
+      return [
+        `<h${level}>${convertInlineToHtml(node.content, resolve)}</h${level}>`,
+      ];
     }
     case 'bulletList':
       return [
@@ -237,5 +254,7 @@ export function convertTiptapToHtml(
   resolve: VariableResolver,
   resolveTable: TableVariableResolver,
 ): string {
-  return (doc.content ?? []).flatMap((node) => convertBlockNode(node, resolve, resolveTable)).join('');
+  return (doc.content ?? [])
+    .flatMap((node) => convertBlockNode(node, resolve, resolveTable))
+    .join('');
 }

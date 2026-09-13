@@ -10,7 +10,12 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { ApiBearerAuth, ApiConsumes, ApiOperation, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBearerAuth,
+  ApiConsumes,
+  ApiOperation,
+  ApiTags,
+} from '@nestjs/swagger';
 import type { Response } from 'express';
 import { memoryStorage } from 'multer';
 import { CurrentTenant } from '../common/decorators/current-tenant.decorator';
@@ -19,6 +24,7 @@ import { Permissions } from '../common/decorators/permissions.decorator';
 import type { JwtPayload } from '../common/types/jwt-payload.interface';
 import { UploadFileDto } from './dto/upload-file.dto';
 import { FilesService } from './files.service';
+import { downloadHeaders } from '../common/utils/download-headers.util';
 
 const MAX_UPLOAD_BYTES = 25 * 1024 * 1024; // 25MB — el archivo se buffere en memoria antes de subirse al driver
 
@@ -31,7 +37,10 @@ export class FilesController {
   @Post('upload')
   @Permissions('files:upload')
   @UseInterceptors(
-    FileInterceptor('file', { storage: memoryStorage(), limits: { fileSize: MAX_UPLOAD_BYTES } }),
+    FileInterceptor('file', {
+      storage: memoryStorage(),
+      limits: { fileSize: MAX_UPLOAD_BYTES },
+    }),
   )
   @ApiConsumes('multipart/form-data')
   @ApiOperation({ summary: 'Subir un archivo' })
@@ -85,8 +94,12 @@ export class FilesController {
     }
 
     const buffer = await this.filesService.getFileBuffer(record);
-    res.setHeader('Content-Disposition', `inline; filename="${record.originalName}"`);
-    res.setHeader('Content-Type', record.mimeType);
+    const headers = downloadHeaders(record.mimeType, record.originalName);
+    res.setHeader('Content-Disposition', headers.contentDisposition);
+    res.setHeader('Content-Type', headers.contentType);
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    // Aunque el navegador llegara a renderizarlo, sin permiso para scripts.
+    res.setHeader('Content-Security-Policy', "sandbox; default-src 'none'");
     res.send(buffer);
   }
 

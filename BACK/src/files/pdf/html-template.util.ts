@@ -22,7 +22,10 @@ function escapeHtml(text: string): string {
 function convertDataTableHtml(table: PdfTableVariable): string {
   const headerRow = `<tr>${table.headers.map((h) => `<th>${escapeHtml(h)}</th>`).join('')}</tr>`;
   const bodyRows = table.rows
-    .map((row) => `<tr>${row.map((cell) => `<td>${escapeHtml(cell)}</td>`).join('')}</tr>`)
+    .map(
+      (row) =>
+        `<tr>${row.map((cell) => `<td>${escapeHtml(cell)}</td>`).join('')}</tr>`,
+    )
     .join('');
   return `<table class="data-table"><thead>${headerRow}</thead><tbody>${bodyRows}</tbody></table>`;
 }
@@ -41,7 +44,8 @@ export function interpolateHtmlTemplate(
   rawVariables: Record<string, string> = {},
 ): string {
   return html.replace(TOKEN_RE, (match, key: string) => {
-    if (hasOwn(tableVariables, key)) return convertDataTableHtml(tableVariables[key]);
+    if (hasOwn(tableVariables, key))
+      return convertDataTableHtml(tableVariables[key]);
     if (hasOwn(rawVariables, key)) return rawVariables[key];
     if (hasOwn(variables, key)) return escapeHtml(variables[key]);
     return match;

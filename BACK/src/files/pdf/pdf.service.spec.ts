@@ -14,7 +14,9 @@ describe('buildHeaderHtml', () => {
 
   it('renders only the logo image when no company name is given', () => {
     const html = buildHeaderHtml({ logoDataUri: 'data:image/png;base64,abc' });
-    expect(html).toContain('<img src="data:image/png;base64,abc" alt="Logo" />');
+    expect(html).toContain(
+      '<img src="data:image/png;base64,abc" alt="Logo" />',
+    );
     expect(html).not.toContain('company-name');
   });
 
@@ -25,8 +27,13 @@ describe('buildHeaderHtml', () => {
   });
 
   it('renders both the logo and the company name when both are given', () => {
-    const html = buildHeaderHtml({ logoDataUri: 'data:image/png;base64,abc', companyName: 'Mi Empresa SA' });
-    expect(html).toContain('<img src="data:image/png;base64,abc" alt="Logo" />');
+    const html = buildHeaderHtml({
+      logoDataUri: 'data:image/png;base64,abc',
+      companyName: 'Mi Empresa SA',
+    });
+    expect(html).toContain(
+      '<img src="data:image/png;base64,abc" alt="Logo" />',
+    );
     expect(html).toContain('<span class="company-name">Mi Empresa SA</span>');
   });
 });

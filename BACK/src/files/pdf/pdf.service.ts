@@ -68,8 +68,12 @@ function pageStyles(pageSize: PdfPageSize): string {
 
 export function buildHeaderHtml(options?: PdfHeaderOptions): string {
   if (!options?.logoDataUri && !options?.companyName) return '';
-  const logo = options.logoDataUri ? `<img src="${options.logoDataUri}" alt="Logo" />` : '';
-  const name = options.companyName ? `<span class="company-name">${options.companyName}</span>` : '';
+  const logo = options.logoDataUri
+    ? `<img src="${options.logoDataUri}" alt="Logo" />`
+    : '';
+  const name = options.companyName
+    ? `<span class="company-name">${options.companyName}</span>`
+    : '';
   return `<div class="doc-header">${logo}${name}</div>`;
 }
 
@@ -118,7 +122,12 @@ ${bodyHtml}
     rawVariables: Record<string, string> = {},
     pageSize: PdfPageSize = 'A4',
   ): Promise<Buffer> {
-    const resolved = interpolateHtmlTemplate(contentHtml, variables, tableVariables, rawVariables);
+    const resolved = interpolateHtmlTemplate(
+      contentHtml,
+      variables,
+      tableVariables,
+      rawVariables,
+    );
     const html = resolved.includes('<html')
       ? resolved
       : `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body>${resolved}</body></html>`;
@@ -126,7 +135,10 @@ ${bodyHtml}
     return this.renderHtmlToPdf(html, pageSize);
   }
 
-  private async renderHtmlToPdf(html: string, pageSize: PdfPageSize): Promise<Buffer> {
+  private async renderHtmlToPdf(
+    html: string,
+    pageSize: PdfPageSize,
+  ): Promise<Buffer> {
     // `puppeteer` distribuye su entrypoint como ESM puro (`export * from
     // 'puppeteer-core'`) — un `import` estático se transpila a `require()` y
     // rompe tanto en ts-jest como en Nest en runtime. El import dinámico usa
@@ -139,7 +151,9 @@ ${bodyHtml}
       // data: URI — no hay actividad de red que esperar, 'load' alcanza.
       await page.setContent(html, { waitUntil: 'load' });
       const pdfBuffer = await page.pdf({
-        ...(pageSize === 'A4' ? { format: 'A4' as const } : { width: pageSize.width, height: pageSize.height }),
+        ...(pageSize === 'A4'
+          ? { format: 'A4' as const }
+          : { width: pageSize.width, height: pageSize.height }),
         printBackground: true,
         margin: { top: '0', bottom: '0', left: '0', right: '0' },
       });
