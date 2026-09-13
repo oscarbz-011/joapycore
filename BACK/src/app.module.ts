@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import emailConfig from './config/email.config';
 import storageConfig from './config/storage.config';
+import { validateEnv } from './config/env.validation';
 import { APP_GUARD } from '@nestjs/core';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { ScheduleModule } from '@nestjs/schedule';
@@ -40,6 +41,7 @@ import { UsersModule } from './users/users.module';
     ConfigModule.forRoot({
       isGlobal: true,
       load: [storageConfig, emailConfig],
+      validate: validateEnv,
     }),
     EventEmitterModule.forRoot(),
     ScheduleModule.forRoot(),

@@ -8,8 +8,14 @@ import {
 const ALGORITHM = 'aes-256-gcm';
 export const TEMP_PASSWORD_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 
+// Clave propia y sin fallback. Antes leía JWT_SECRET, una variable que nunca
+// existió, así que siempre caía en una constante escrita en el código: con
+// acceso a la base cualquiera podía descifrar las contraseñas temporales.
+// env.validation.ts exige la variable al arrancar, así que acá no debería
+// faltar nunca.
 function deriveKey(): Buffer {
-  const secret = process.env.JWT_SECRET ?? 'dev-fallback-secret';
+  const secret = process.env.TEMP_PASSWORD_KEY;
+  if (!secret) throw new Error('TEMP_PASSWORD_KEY no está configurada');
   return createHash('sha256').update(secret).digest(); // 32 bytes for AES-256
 }
 
