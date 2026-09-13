@@ -27,6 +27,11 @@ export class CustomersService {
   }
 
   async create(tenantId: string, dto: CreateCustomerDto, userId?: string) {
+    await this.assertDocumentAvailable(
+      tenantId,
+      dto.documentType ?? null,
+      dto.documentNumber,
+    );
     if (dto.email) {
       const existing = await this.customersRepository.findByEmail(
         tenantId,
@@ -70,6 +75,14 @@ export class CustomersService {
     userId?: string,
   ) {
     const before = await this.findOne(tenantId, id);
+    if (dto.documentNumber !== undefined || dto.documentType !== undefined) {
+      await this.assertDocumentAvailable(
+        tenantId,
+        dto.documentType ?? before.documentType ?? null,
+        dto.documentNumber ?? before.documentNumber,
+        id,
+      );
+    }
     if (dto.email) {
       const existing = await this.customersRepository.findByEmail(
         tenantId,
@@ -113,6 +126,31 @@ export class CustomersService {
     } satisfies AuditLogEvent);
 
     return customer;
+  }
+
+  // El mismo documento no puede identificar a dos clientes activos: se
+  // duplicaban historiales de crédito y cuentas por cobrar de una misma
+  // persona. No es un índice único en la base porque ya existen duplicados
+  // que hay que resolver a mano.
+  private async assertDocumentAvailable(
+    tenantId: string,
+    documentType: CreateCustomerDto['documentType'] | null,
+    documentNumber: string | null | undefined,
+    excludeId?: string,
+  ) {
+    const number = documentNumber?.trim();
+    if (!number) return;
+    const existing = await this.customersRepository.findByDocument(
+      tenantId,
+      documentType ?? null,
+      number,
+      excludeId,
+    );
+    if (existing) {
+      throw new ConflictException(
+        `Ya existe un cliente con ese documento${existing.customerCode ? ` (${existing.customerCode})` : ''}`,
+      );
+    }
   }
 
   private async generateCustomerCode(tenantId: string): Promise<string> {

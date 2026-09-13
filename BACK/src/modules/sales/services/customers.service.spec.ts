@@ -30,6 +30,7 @@ describe('CustomersService', () => {
     findById: jest.Mock;
     findLastCode: jest.Mock;
     findByEmail: jest.Mock;
+    findByDocument: jest.Mock;
     create: jest.Mock;
     update: jest.Mock;
     softDelete: jest.Mock;
@@ -42,6 +43,7 @@ describe('CustomersService', () => {
       findById: jest.fn(),
       findLastCode: jest.fn().mockResolvedValue(null),
       findByEmail: jest.fn().mockResolvedValue(null),
+      findByDocument: jest.fn().mockResolvedValue(null),
       create: jest.fn(),
       update: jest.fn(),
       softDelete: jest.fn(),
@@ -124,6 +126,58 @@ describe('CustomersService', () => {
           lastName: 'López',
         }),
       );
+    });
+  });
+
+  // ── documento duplicado ────────────────────────────────────────────────────
+
+  describe('document number uniqueness', () => {
+    it('rejects creating a customer with a document already used by an active one', async () => {
+      customersRepository.findByDocument.mockResolvedValue({
+        id: 'cust-9',
+        customerCode: 'CLI-26-000009',
+      });
+
+      await expect(
+        service.create('tenant-1', {
+          firstName: 'Ana',
+          lastName: 'Pérez',
+          documentType: 'CI',
+          documentNumber: ' 1234567 ',
+        } as any),
+      ).rejects.toThrow(
+        'Ya existe un cliente con ese documento (CLI-26-000009)',
+      );
+      expect(customersRepository.findByDocument).toHaveBeenCalledWith(
+        'tenant-1',
+        'CI',
+        '1234567',
+        undefined,
+      );
+      expect(customersRepository.create).not.toHaveBeenCalled();
+    });
+
+    it('checks the merged type+number on update, excluding the customer itself', async () => {
+      customersRepository.findById.mockResolvedValue(makeCustomer());
+      customersRepository.update.mockResolvedValue(makeCustomer());
+
+      await service.update('tenant-1', 'cust-1', { documentNumber: '7654321' });
+
+      expect(customersRepository.findByDocument).toHaveBeenCalledWith(
+        'tenant-1',
+        'CI',
+        '7654321',
+        'cust-1',
+      );
+    });
+
+    it('does not check when the document is not being changed', async () => {
+      customersRepository.findById.mockResolvedValue(makeCustomer());
+      customersRepository.update.mockResolvedValue(makeCustomer());
+
+      await service.update('tenant-1', 'cust-1', { firstName: 'Ana' });
+
+      expect(customersRepository.findByDocument).not.toHaveBeenCalled();
     });
   });
 

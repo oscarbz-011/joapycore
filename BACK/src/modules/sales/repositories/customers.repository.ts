@@ -1,3 +1,4 @@
+import type { DocumentType } from '@prisma/client';
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { CreateCustomerDto } from '../dto/create-customer.dto';
@@ -16,6 +17,25 @@ export class CustomersRepository {
   findById(tenantId: string, id: string) {
     return this.prisma.customer.findFirst({
       where: { id, tenantId, deletedAt: null },
+    });
+  }
+
+  // Mismo tipo y número de documento entre clientes activos del tenant.
+  findByDocument(
+    tenantId: string,
+    documentType: DocumentType | null,
+    documentNumber: string,
+    excludeId?: string,
+  ) {
+    return this.prisma.customer.findFirst({
+      where: {
+        tenantId,
+        documentType,
+        documentNumber,
+        deletedAt: null,
+        ...(excludeId ? { id: { not: excludeId } } : {}),
+      },
+      select: { id: true, customerCode: true },
     });
   }
 

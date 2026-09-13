@@ -1222,6 +1222,7 @@ model Customer {
   delinquencyReports DelinquencyReport[]
 
   @@unique([tenantId, customerCode])
+  @@index([tenantId, documentNumber])
   @@map("customers")
 }
 
