@@ -1,3 +1,4 @@
+import { NotImplementedException } from '@nestjs/common';
 import { CreditBureauCheckResult } from '@prisma/client';
 
 export interface CreditBureauCheckInput {
@@ -28,7 +29,7 @@ export class ManualCreditBureauProvider implements CreditBureauProvider {
   readonly name = 'manual';
 
   checkCustomer(): Promise<CreditBureauCheckOutput> {
-    throw new Error(
+    throw new NotImplementedException(
       'El proveedor "manual" no realiza consultas automáticas — el resultado se carga a mano vía recordCheck().',
     );
   }

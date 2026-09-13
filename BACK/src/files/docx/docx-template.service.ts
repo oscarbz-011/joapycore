@@ -1,4 +1,8 @@
-import { Injectable } from '@nestjs/common';
+import {
+  BadGatewayException,
+  Injectable,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import Docxtemplater from 'docxtemplater';
 import PizZip from 'pizzip';
 import type { TemplateVariableDef } from '../../modules/documents/constants/template-variables.constant';
@@ -123,14 +127,14 @@ export class DocxTemplateService {
         signal: AbortSignal.timeout(30_000),
       });
     } catch (error) {
-      throw new Error(
+      throw new ServiceUnavailableException(
         `No se pudo conectar con el conversor de documentos (Gotenberg, ${url}): ${(error as Error).message}. ¿Está corriendo? ("docker compose up -d gotenberg")`,
       );
     }
 
     if (!response.ok) {
       const detail = await response.text().catch(() => '');
-      throw new Error(
+      throw new BadGatewayException(
         `El conversor de documentos (Gotenberg) devolvió un error (${response.status}): ${detail.slice(0, 500)}`,
       );
     }

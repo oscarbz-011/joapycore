@@ -1,4 +1,8 @@
-import { Injectable, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createTransport, type Transporter } from 'nodemailer';
 import type { EmailConfig } from '../config/email.config';
@@ -45,7 +49,11 @@ export class EmailService {
       this.logger.warn(
         `SMTP no está configurado (SMTP_HOST vacío) — no se envió el email a ${input.to}`,
       );
-      throw new Error('El servidor de correo no está configurado (SMTP_HOST)');
+      // 503 con el motivo: con un Error crudo el usuario veía un 500 genérico
+      // sin saber que falta configurar el correo.
+      throw new ServiceUnavailableException(
+        'El servidor de correo no está configurado (SMTP_HOST)',
+      );
     }
 
     await this.getTransporter().sendMail({
