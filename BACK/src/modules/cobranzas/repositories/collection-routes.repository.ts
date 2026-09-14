@@ -77,6 +77,43 @@ export class CollectionRoutesRepository {
     return this.prisma.collectionRoute.create({ data, include: this.include });
   }
 
+  // Ajusta los totales acumulados (deltas positivos o negativos).
+  adjustTotals(id: string, delta: { planned?: number; collected?: number }) {
+    return this.prisma.collectionRoute.update({
+      where: { id },
+      data: {
+        ...(delta.planned !== undefined && {
+          totalPlanned: { increment: delta.planned },
+        }),
+        ...(delta.collected !== undefined && {
+          totalCollected: { increment: delta.collected },
+        }),
+      },
+    });
+  }
+
+  countOpen(tenantId: string) {
+    return this.prisma.collectionRoute.count({
+      where: { tenantId, status: 'OPEN' },
+    });
+  }
+
+  // routeDate es un día calendario (@db.Date).
+  countOnDate(tenantId: string, day: Date) {
+    const next = new Date(day.getTime() + 24 * 60 * 60 * 1000);
+    return this.prisma.collectionRoute.count({
+      where: { tenantId, routeDate: { gte: day, lt: next } },
+    });
+  }
+
+  async sumCollectedOfClosed(tenantId: string) {
+    const result = await this.prisma.collectionRoute.aggregate({
+      where: { tenantId, status: 'CLOSED' },
+      _sum: { totalCollected: true },
+    });
+    return result._sum.totalCollected;
+  }
+
   update(id: string, data: Prisma.CollectionRouteUncheckedUpdateInput) {
     return this.prisma.collectionRoute.update({
       where: { id },

@@ -22,6 +22,13 @@ const WITH_RELATIONS = {
 export class DelinquencyReportsRepository {
   constructor(private readonly prisma: PrismaService) {}
 
+  // Cuotas vencidas (dato de Finanzas) para los KPIs de cobranzas.
+  countOverdueInstallments(tenantId: string) {
+    return this.prisma.installment.count({
+      where: { tenantId, status: 'OVERDUE' },
+    });
+  }
+
   findAll(tenantId: string, status?: DelinquencyReportStatus) {
     return this.prisma.delinquencyReport.findMany({
       where: { tenantId, ...(status ? { status } : {}) },

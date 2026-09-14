@@ -22,6 +22,12 @@ export class PaymentAgreementsRepository {
     };
   }
 
+  countActive(tenantId: string) {
+    return this.prisma.paymentAgreement.count({
+      where: { tenantId, status: 'ACTIVE' },
+    });
+  }
+
   findAll(tenantId: string, customerId?: string) {
     return this.prisma.paymentAgreement.findMany({
       where: { tenantId, ...(customerId ? { customerId } : {}) },

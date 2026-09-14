@@ -4,7 +4,7 @@ import {
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
-import { PrismaService } from '../../../prisma/prisma.service';
+import { startOfBusinessDay } from '../../../common/utils/business-date.util';
 import type { AuditLogEvent } from '../../../audit/audit-log.event';
 import { CollectionRoutesRepository } from '../repositories/collection-routes.repository';
 import { CollectionVisitsRepository } from '../repositories/collection-visits.repository';
@@ -29,7 +29,6 @@ function toNum(value: unknown): number {
 @Injectable()
 export class CobranzasService {
   constructor(
-    private readonly prisma: PrismaService,
     private readonly routesRepo: CollectionRoutesRepository,
     private readonly visitsRepo: CollectionVisitsRepository,
     private readonly agreementsRepo: PaymentAgreementsRepository,
@@ -140,10 +139,7 @@ export class CobranzasService {
       visitOrder: dto.visitOrder ?? 0,
     });
     // Update totalPlanned
-    await this.prisma.collectionRoute.update({
-      where: { id: routeId },
-      data: { totalPlanned: { increment: dto.plannedAmount } },
-    });
+    await this.routesRepo.adjustTotals(routeId, { planned: dto.plannedAmount });
     this.eventEmitter.emit('audit.log', {
       tenantId,
       userId,
@@ -171,9 +167,8 @@ export class CobranzasService {
       );
     }
     await this.visitsRepo.delete(visitId);
-    await this.prisma.collectionRoute.update({
-      where: { id: routeId },
-      data: { totalPlanned: { decrement: toNum(visit.plannedAmount) } },
+    await this.routesRepo.adjustTotals(routeId, {
+      planned: -toNum(visit.plannedAmount),
     });
     this.eventEmitter.emit('audit.log', {
       tenantId,
@@ -211,10 +206,7 @@ export class CobranzasService {
 
     const delta = newCollected - prevCollected;
     if (delta !== 0) {
-      await this.prisma.collectionRoute.update({
-        where: { id: routeId },
-        data: { totalCollected: { increment: delta } },
-      });
+      await this.routesRepo.adjustTotals(routeId, { collected: delta });
     }
 
     this.eventEmitter.emit('audit.log', {
@@ -364,37 +356,20 @@ export class CobranzasService {
   async getKpis(tenantId: string) {
     const [openRoutes, routesToday, activeAgreements, overdueInstallments] =
       await Promise.all([
-        this.prisma.collectionRoute.count({
-          where: { tenantId, status: 'OPEN' },
-        }),
-        this.prisma.collectionRoute.count({
-          where: {
-            tenantId,
-            routeDate: {
-              gte: new Date(new Date().setHours(0, 0, 0, 0)),
-              lt: new Date(new Date().setHours(23, 59, 59, 999)),
-            },
-          },
-        }),
-        this.prisma.paymentAgreement.count({
-          where: { tenantId, status: 'ACTIVE' },
-        }),
-        this.prisma.installment.count({
-          where: { tenantId, status: 'OVERDUE' },
-        }),
+        this.routesRepo.countOpen(tenantId),
+        this.routesRepo.countOnDate(tenantId, startOfBusinessDay()),
+        this.agreementsRepo.countActive(tenantId),
+        this.delinquencyReportsRepo.countOverdueInstallments(tenantId),
       ]);
 
-    const totalCollectedResult = await this.prisma.collectionRoute.aggregate({
-      where: { tenantId, status: 'CLOSED' },
-      _sum: { totalCollected: true },
-    });
+    const totalCollected = await this.routesRepo.sumCollectedOfClosed(tenantId);
 
     return {
       openRoutes,
       routesToday,
       activeAgreements,
       overdueInstallments,
-      totalCollected: toNum(totalCollectedResult._sum.totalCollected ?? 0),
+      totalCollected: toNum(totalCollected ?? 0),
     };
   }
 }

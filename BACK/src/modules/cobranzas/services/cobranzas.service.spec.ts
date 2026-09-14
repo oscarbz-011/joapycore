@@ -1,5 +1,8 @@
 import { NotFoundException } from '@nestjs/common';
 import { CobranzasService } from './cobranzas.service';
+import { CollectionRoutesRepository } from '../repositories/collection-routes.repository';
+import { DelinquencyReportsRepository } from '../repositories/delinquency-reports.repository';
+import { PaymentAgreementsRepository } from '../repositories/payment-agreements.repository';
 
 function makeReport(overrides = {}) {
   return {
@@ -31,7 +34,6 @@ describe('CobranzasService — Morosos', () => {
     eventEmitter = { emit: jest.fn() };
 
     service = new CobranzasService(
-      {} as any, // prisma
       {} as any, // routesRepo
       {} as any, // visitsRepo
       {} as any, // agreementsRepo
@@ -147,6 +149,52 @@ describe('CobranzasService — Morosos', () => {
         ),
       ).rejects.toBeInstanceOf(NotFoundException);
       expect(delinquencyReportsRepo.updateStatus).not.toHaveBeenCalled();
+    });
+  });
+});
+
+describe('CobranzasService — KPIs', () => {
+  afterEach(() => jest.useRealTimers());
+
+  it('cuenta las rutas de "hoy" según el día en Asunción, no el del servidor', async () => {
+    // 02:00 UTC del 10/09 = 23:00 del 09/09 en Asunción (UTC-3).
+    jest.useFakeTimers().setSystemTime(new Date(Date.UTC(2026, 8, 10, 2, 0)));
+    const prisma = {
+      collectionRoute: {
+        count: jest.fn().mockResolvedValue(0),
+        aggregate: jest
+          .fn()
+          .mockResolvedValue({ _sum: { totalCollected: 150_000 } }),
+      },
+      paymentAgreement: { count: jest.fn().mockResolvedValue(2) },
+      installment: { count: jest.fn().mockResolvedValue(5) },
+    };
+    const service = new CobranzasService(
+      new CollectionRoutesRepository(prisma as any),
+      {} as any, // visitsRepo
+      new PaymentAgreementsRepository(prisma as any),
+      {} as any, // notesRepo
+      new DelinquencyReportsRepository(prisma as any),
+      { emit: jest.fn() } as any,
+    );
+
+    const kpis = await service.getKpis('tenant-1');
+
+    expect(prisma.collectionRoute.count).toHaveBeenCalledWith({
+      where: {
+        tenantId: 'tenant-1',
+        routeDate: {
+          gte: new Date('2026-09-09T00:00:00.000Z'),
+          lt: new Date('2026-09-10T00:00:00.000Z'),
+        },
+      },
+    });
+    expect(kpis).toEqual({
+      openRoutes: 0,
+      routesToday: 0,
+      activeAgreements: 2,
+      overdueInstallments: 5,
+      totalCollected: 150_000,
     });
   });
 });
