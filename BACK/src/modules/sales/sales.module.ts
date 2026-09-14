@@ -1,5 +1,5 @@
-import { Module } from '@nestjs/common';
-import { InventoryModule } from '../inventory/inventory.module';
+import { Global, Module } from '@nestjs/common';
+import { SALES_GATEWAY } from '../../common/contracts/sales-gateway.contract';
 import { CombosController } from './controllers/combos.controller';
 import { CustomersController } from './controllers/customers.controller';
 import { SaleOrdersController } from './controllers/sale-orders.controller';
@@ -17,8 +17,10 @@ import { CustomersService } from './services/customers.service';
 import { SaleOrdersService } from './services/sale-orders.service';
 import { SaleTargetsService } from './services/sale-targets.service';
 
+// Global solo para exponer SALES_GATEWAY (lo usa POS sin importar este
+// módulo). Inventario llega por los contratos de InventoryContractsModule.
+@Global()
 @Module({
-  imports: [InventoryModule],
   controllers: [
     CustomersController,
     SaleOrdersController,
@@ -38,7 +40,8 @@ import { SaleTargetsService } from './services/sale-targets.service';
     CombosRepository,
     SalesOnDeliveryListener,
     SalesOnInvoiceListener,
+    { provide: SALES_GATEWAY, useExisting: SaleOrdersService },
   ],
-  exports: [SaleOrdersRepository, SaleOrdersService],
+  exports: [SALES_GATEWAY],
 })
 export class SalesModule {}

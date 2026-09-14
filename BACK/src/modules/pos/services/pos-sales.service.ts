@@ -1,6 +1,13 @@
-import { Injectable, UnprocessableEntityException } from '@nestjs/common';
+import {
+  Inject,
+  Injectable,
+  UnprocessableEntityException,
+} from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
-import { SaleOrdersService } from '../../sales/services/sale-orders.service';
+import {
+  SALES_GATEWAY,
+  type SalesGateway,
+} from '../../../common/contracts/sales-gateway.contract';
 import { CreatePosSaleDto } from '../dto/create-pos-sale.dto';
 import {
   PosSalesHistoryFilters,
@@ -11,7 +18,7 @@ import { PosSessionsRepository } from '../repositories/pos-sessions.repository';
 @Injectable()
 export class PosSalesService {
   constructor(
-    private readonly saleOrdersService: SaleOrdersService,
+    @Inject(SALES_GATEWAY) private readonly salesGateway: SalesGateway,
     private readonly posSessionsRepository: PosSessionsRepository,
     private readonly posSalesRepository: PosSalesRepository,
     private readonly eventEmitter: EventEmitter2,
@@ -28,7 +35,7 @@ export class PosSalesService {
       );
     }
 
-    const order = await this.saleOrdersService.createPosSale(
+    const order = await this.salesGateway.createPosSale(
       tenantId,
       dto,
       session.id,

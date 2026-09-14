@@ -1,16 +1,7 @@
 import { TemplateKind } from '@prisma/client';
+import type { TemplateVariableDef } from '../../../common/types/template-variable.interface';
 
-export interface TemplateVariableDef {
-  key: string;
-  label: string;
-  type: 'text' | 'table';
-  // Solo para type 'table': una etiqueta por columna, en el mismo orden que
-  // arma el listener correspondiente (PdfTableVariable.headers). Sirve para
-  // que el frontend arme la fila con loop de Word ({{#tag}}{{col1}}...
-  // {{colN}}{{/tag}}, ver DocxTemplateService) con la cantidad exacta de
-  // columnas — si cambian los headers del listener, actualizar acá también.
-  columns?: string[];
-}
+export type { TemplateVariableDef } from '../../../common/types/template-variable.interface';
 
 export interface TemplateKindDef {
   key: TemplateKind;

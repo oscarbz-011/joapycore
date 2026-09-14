@@ -1,5 +1,4 @@
 import { Module } from '@nestjs/common';
-import { SalesModule } from '../sales/sales.module';
 import { PosSalesController } from './controllers/pos-sales.controller';
 import { PosSessionsController } from './controllers/pos-sessions.controller';
 import { PosTerminalsController } from './controllers/pos-terminals.controller';
@@ -11,7 +10,6 @@ import { PosSessionsService } from './services/pos-sessions.service';
 import { PosTerminalsService } from './services/pos-terminals.service';
 
 @Module({
-  imports: [SalesModule],
   controllers: [
     PosTerminalsController,
     PosSessionsController,

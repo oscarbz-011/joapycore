@@ -23,6 +23,7 @@ import { FinanceModule } from './modules/finance/finance.module';
 import { WarehousesModule } from './modules/warehouses/warehouses.module';
 import { HrModule } from './modules/hr/hr.module';
 import { InventoryModule } from './modules/inventory/inventory.module';
+import { InventoryContractsModule } from './modules/inventory/inventory-contracts.module';
 import { PaymentsModule } from './modules/payments/payments.module';
 import { PosModule } from './modules/pos/pos.module';
 import { ProcurementModule } from './modules/procurement/procurement.module';
@@ -58,6 +59,7 @@ import { UsersModule } from './users/users.module';
     TenantsModule,
     AuditModule,
     InventoryModule,
+    InventoryContractsModule,
     ProcurementModule,
     ProductionModule,
     SalesModule,

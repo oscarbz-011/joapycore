@@ -1,6 +1,7 @@
 import {
   ConflictException,
   ForbiddenException,
+  Inject,
   Injectable,
   NotFoundException,
   UnprocessableEntityException,
@@ -8,7 +9,6 @@ import {
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { MarkupType, Prisma, Product, ProductStatus } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
-import { ProductsRepository } from '../../inventory/repositories/products.repository';
 import { AdjustOrderDto } from '../dto/adjust-order.dto';
 import { CollectPaymentDto } from '../dto/collect-payment.dto';
 import { CreateGuarantorDto } from '../dto/create-guarantor.dto';
@@ -22,7 +22,19 @@ import { GuarantorsRepository } from '../repositories/guarantors.repository';
 import { SaleOrdersRepository } from '../repositories/sale-orders.repository';
 import { CreditEvaluationService } from './credit-evaluation.service';
 import type { AuditLogEvent } from '../../../audit/audit-log.event';
-import { assertStockAvailable } from '../../../common/utils/stock-availability.util';
+import {
+  PRODUCT_CATALOG,
+  type ProductCatalog,
+} from '../../../common/contracts/product-catalog.contract';
+import type {
+  QuickSaleInput,
+  SalesGateway,
+} from '../../../common/contracts/sales-gateway.contract';
+import {
+  STOCK_LEDGER,
+  type StockLedger,
+  type StockLine,
+} from '../../../common/contracts/stock-ledger.contract';
 
 const PRODUCT_STATUS_LABEL: Record<ProductStatus, string> = {
   DRAFT: 'borrador',
@@ -38,36 +50,23 @@ function toNum(value: unknown): number {
   return Number(value);
 }
 
-interface CreatedItemInfo {
-  saleItemId: string;
-  productId: string | null;
-  quantity: number;
-  warehouseId: string | null;
-  isSerialized: boolean;
-}
+type CreatedItemInfo = StockLine;
 
-// Minimal shape needed to place an order from a "quick sale" flow (POS today,
-// potentially other short-path channels later). Deliberately excludes
-// customerId as required — walk-in sales resolve a default customer.
-export interface QuickSaleDto {
-  customerId?: string;
-  items: SaleOrderItemDto[];
-  payments: Array<{
-    amount: number;
-    paymentMethod: string;
-    reference?: string;
-  }>;
-}
+// Venta rápida (POS): el shape vive en common/contracts como QuickSaleInput.
+export type QuickSaleDto = QuickSaleInput;
 
 @Injectable()
-export class SaleOrdersService {
+export class SaleOrdersService implements SalesGateway {
   constructor(
     private readonly prisma: PrismaService,
     private readonly saleOrdersRepository: SaleOrdersRepository,
-    private readonly productsRepository: ProductsRepository,
+    // Inventario por contrato (common/contracts): Ventas no importa
+    // InventoryModule ni escribe stock_movements/product_units directamente.
+    @Inject(PRODUCT_CATALOG) private readonly productCatalog: ProductCatalog,
     private readonly guarantorsRepository: GuarantorsRepository,
     private readonly creditEvaluationService: CreditEvaluationService,
     private readonly eventEmitter: EventEmitter2,
+    @Inject(STOCK_LEDGER) private readonly stockLedger: StockLedger,
   ) {}
 
   /**
@@ -491,7 +490,7 @@ export class SaleOrdersService {
       const productIds = dto.items
         .map((i) => i.productId)
         .filter((pid): pid is string => !!pid);
-      const products = await this.productsRepository.findManyByIds(
+      const products = await this.productCatalog.findManyByIds(
         tenantId,
         productIds,
       );
@@ -515,10 +514,7 @@ export class SaleOrdersService {
     await this.prisma.$transaction(async (tx) => {
       if (dto.items) {
         const oldItemIds = order.items.map((i) => i.id);
-        await tx.productUnit.updateMany({
-          where: { saleOrderItemId: { in: oldItemIds } },
-          data: { saleOrderItemId: null },
-        });
+        await this.stockLedger.detachSerialUnits(tx, oldItemIds);
         await tx.saleOrderItem.deleteMany({
           where: { saleOrderId: id },
         });
@@ -746,26 +742,13 @@ export class SaleOrdersService {
       });
 
       if (product?.isSerialized && (item.serialNumbers?.length ?? 0) > 0) {
-        for (const serial of item.serialNumbers!) {
-          const unit = await tx.productUnit.findFirst({
-            where: {
-              tenantId,
-              productId: item.productId!,
-              serialNumber: serial,
-            },
-          });
-          if (!unit)
-            throw new NotFoundException(`Serial number "${serial}" not found`);
-          if (unit.status !== 'IN_STOCK') {
-            throw new UnprocessableEntityException(
-              `Serial "${serial}" is not available (status: ${unit.status})`,
-            );
-          }
-          await tx.productUnit.update({
-            where: { id: unit.id },
-            data: { saleOrderItemId: saleItem.id },
-          });
-        }
+        await this.stockLedger.assignSerialUnits(
+          tx,
+          tenantId,
+          item.productId!,
+          item.serialNumbers!,
+          saleItem.id,
+        );
       }
 
       created.push({
@@ -780,36 +763,6 @@ export class SaleOrdersService {
     return created;
   }
 
-  // RESERVE = commit stock without releasing it yet (long path: create() reserves,
-  //           deliver() later turns the reservation into a real OUT movement).
-  // CONSUME = go straight to a real OUT movement (short path: nothing to reserve
-  //           because the sale is created and handed over in the same step).
-  private async applyStockMovements(
-    tx: Prisma.TransactionClient,
-    tenantId: string,
-    items: Array<{
-      saleItemId: string;
-      productId: string | null;
-      quantity: number;
-      warehouseId: string | null;
-    }>,
-    mode: 'RESERVE' | 'CONSUME',
-  ): Promise<void> {
-    for (const item of items) {
-      if (!item.productId) continue; // free-text / service lines never touch stock
-      await tx.stockMovement.create({
-        data: {
-          tenantId,
-          productId: item.productId,
-          warehouseId: item.warehouseId,
-          type: mode === 'RESERVE' ? 'RESERVED' : 'OUT',
-          quantity: -item.quantity,
-          referenceId: item.saleItemId,
-        },
-      });
-    }
-  }
-
   // Los serializados se controlan por unidad (IN_STOCK) al asignar números de
   // serie; acá solo se valida la cantidad de los no serializados.
   private async assertItemsInStock(
@@ -820,7 +773,7 @@ export class SaleOrdersService {
     >,
     productMap: Map<string, Pick<Product, 'name'>>,
   ): Promise<void> {
-    await assertStockAvailable(
+    await this.stockLedger.assertAvailable(
       tx,
       tenantId,
       items
@@ -831,74 +784,6 @@ export class SaleOrdersService {
           name: productMap.get(i.productId!)?.name,
         })),
     );
-  }
-
-  // Cuánto sigue reservado por cada ítem: los movimientos RESERVED de un ítem
-  // se crean negativos al reservar y positivos al liberar, así que la suma
-  // negativa es la reserva vigente. Decidir por esto y no por saleType evita
-  // liberar dos veces o no liberar nunca cuando el camino de reserva cambia.
-  private async findActiveReservations(
-    tx: Prisma.TransactionClient,
-    tenantId: string,
-    itemIds: string[],
-  ): Promise<Map<string, number>> {
-    if (itemIds.length === 0) return new Map();
-    const sums = await tx.stockMovement.groupBy({
-      by: ['referenceId'],
-      where: { tenantId, type: 'RESERVED', referenceId: { in: itemIds } },
-      _sum: { quantity: true },
-    });
-    return new Map(
-      sums
-        .filter((s) => s.referenceId && (s._sum.quantity ?? 0) < 0)
-        .map((s) => [s.referenceId!, -(s._sum.quantity ?? 0)]),
-    );
-  }
-
-  private async releaseReservations(
-    tx: Prisma.TransactionClient,
-    tenantId: string,
-    items: Array<{
-      id: string;
-      productId: string | null;
-      warehouseId?: string | null;
-    }>,
-  ): Promise<void> {
-    const reserved = await this.findActiveReservations(
-      tx,
-      tenantId,
-      items.filter((i) => i.productId).map((i) => i.id),
-    );
-    for (const item of items) {
-      const quantity = reserved.get(item.id);
-      if (!item.productId || !quantity) continue;
-      await tx.stockMovement.create({
-        data: {
-          tenantId,
-          productId: item.productId,
-          warehouseId: item.warehouseId ?? null,
-          type: 'RESERVED',
-          quantity, // positive = reverses the reservation
-          referenceId: item.id,
-        },
-      });
-    }
-  }
-
-  private async markSerializedUnitsSold(
-    tx: Prisma.TransactionClient,
-    tenantId: string,
-    saleItemId: string,
-  ): Promise<void> {
-    const units = await tx.productUnit.findMany({
-      where: { saleOrderItemId: saleItemId, tenantId },
-    });
-    for (const unit of units) {
-      await tx.productUnit.update({
-        where: { id: unit.id },
-        data: { status: 'SOLD' },
-      });
-    }
   }
 
   // Resuelve la sucursal de la venta a partir del usuario logueado. Si el
@@ -989,7 +874,7 @@ export class SaleOrdersService {
     const productIds = dto.items
       .map((i) => i.productId)
       .filter((id): id is string => !!id);
-    const products = await this.productsRepository.findManyByIds(
+    const products = await this.productCatalog.findManyByIds(
       tenantId,
       productIds,
     );
@@ -1085,7 +970,7 @@ export class SaleOrdersService {
       // For non-QUOTE cash orders, reserve stock immediately so it's visible as committed
       if (!isQuote && !isCreditSale) {
         await this.assertItemsInStock(tx, tenantId, createdItems, productMap);
-        await this.applyStockMovements(tx, tenantId, createdItems, 'RESERVE');
+        await this.stockLedger.reserve(tx, tenantId, createdItems);
       }
 
       const fullOrder = await tx.saleOrder.findUnique({
@@ -1223,7 +1108,7 @@ export class SaleOrdersService {
         where: { saleOrderId: id, productId: { not: null } },
         include: { product: { select: { name: true, isSerialized: true } } },
       });
-      const reserved = await this.findActiveReservations(
+      const reserved = await this.stockLedger.findActiveReservations(
         tx,
         tenantId,
         items.map((i) => i.id),
@@ -1245,35 +1130,13 @@ export class SaleOrdersService {
           items.map((i) => [i.productId!, { name: i.product?.name ?? '' }]),
         ),
       );
-      await this.applyStockMovements(tx, tenantId, toReserve, 'RESERVE');
+      await this.stockLedger.reserve(tx, tenantId, toReserve);
     });
 
     const confirmed = await this.saleOrdersRepository.findById(tenantId, id);
 
-    // Create delivery note in PENDING state so logistics can pick it up.
-    // Upsert guards against re-confirming an order that already has a note.
-    const deliveryNote = await this.prisma.deliveryNote.upsert({
-      where: { saleOrderId: id },
-      create: {
-        tenantId,
-        saleOrderId: id,
-        status: 'PENDING',
-        issuedAt: new Date(),
-      },
-      update: {},
-    });
-    // Solo la primera confirmación crea la nota — un upsert repetido (re-confirmar
-    // un pedido que ya tenía nota) no debe reabrir el badge de "pendiente de
-    // despacho" en logística si esa nota ya avanzó de estado.
-    if (deliveryNote.status === 'PENDING') {
-      this.eventEmitter.emit('delivery.note.created', {
-        tenantId,
-        saleOrderId: id,
-        deliveryNoteId: deliveryNote.id,
-      });
-    }
-
-    // Invoice is created by BillingOnSaleListener on this event
+    // Invoice is created by BillingOnSaleListener and the delivery note by
+    // LogisticsOnSaleCompletedListener on this event
     this.eventEmitter.emit('sale.order.completed', {
       tenantId,
       saleOrderId: id,
@@ -1302,26 +1165,25 @@ export class SaleOrdersService {
   ) {
     // Libera la reserva vigente de cada ítem (contado: desde la creación;
     // crédito: desde la confirmación; pedidos viejos de crédito: ninguna).
-    await this.releaseReservations(tx, tenantId, order.items);
+    await this.stockLedger.releaseReservations(tx, tenantId, order.items);
 
     for (const item of order.items) {
       if (!item.productId) continue; // free-text / service lines have no stock
 
       // All orders (cash + credit): create the real OUT movement
-      await tx.stockMovement.create({
-        data: {
-          tenantId,
+      await this.stockLedger.consume(tx, tenantId, [
+        {
+          saleItemId: item.id,
           productId: item.productId,
+          quantity: item.quantity,
           warehouseId: item.warehouseId ?? null,
-          type: 'OUT',
-          quantity: -item.quantity,
-          referenceId: item.id,
+          isSerialized: !!item.product?.isSerialized,
         },
-      });
+      ]);
 
       // All orders: mark serialized units as SOLD
       if (item.product?.isSerialized) {
-        await this.markSerializedUnitsSold(tx, tenantId, item.id);
+        await this.stockLedger.markSerialUnitsSold(tx, tenantId, item.id);
       }
     }
   }
@@ -1407,7 +1269,7 @@ export class SaleOrdersService {
       });
 
       // Release whatever is still reserved for this order
-      await this.releaseReservations(tx, tenantId, order.items);
+      await this.stockLedger.releaseReservations(tx, tenantId, order.items);
     });
 
     this.eventEmitter.emit('audit.log', {
@@ -1441,7 +1303,7 @@ export class SaleOrdersService {
     const productIds = dto.items
       .map((i) => i.productId)
       .filter((id): id is string => !!id);
-    const products = await this.productsRepository.findManyByIds(
+    const products = await this.productCatalog.findManyByIds(
       tenantId,
       productIds,
     );
@@ -1495,10 +1357,14 @@ export class SaleOrdersService {
       // No RESERVED step — the sale is handed over at the counter in this
       // same transaction, so it goes straight to a real OUT movement.
       await this.assertItemsInStock(tx, tenantId, createdItems, productMap);
-      await this.applyStockMovements(tx, tenantId, createdItems, 'CONSUME');
+      await this.stockLedger.consume(tx, tenantId, createdItems);
       for (const item of createdItems) {
         if (item.isSerialized) {
-          await this.markSerializedUnitsSold(tx, tenantId, item.saleItemId);
+          await this.stockLedger.markSerialUnitsSold(
+            tx,
+            tenantId,
+            item.saleItemId,
+          );
         }
       }
 
@@ -1507,7 +1373,7 @@ export class SaleOrdersService {
           tenantId,
           saleOrderId: created.id,
           amount: p.amount,
-          paymentMethod: p.paymentMethod as never,
+          paymentMethod: p.paymentMethod,
           paymentDate: new Date(),
           reference: p.reference ?? null,
           collectedById: userId,

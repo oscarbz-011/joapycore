@@ -11,7 +11,7 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { PaymentMethod } from '@prisma/client';
-import { SaleOrderItemDto } from '../../sales/dto/create-sale-order.dto';
+import { SaleOrderItemDto } from '../../../common/contracts/sale-order-item.dto';
 
 export class PosPaymentEntryDto {
   @ApiProperty()

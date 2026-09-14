@@ -36,6 +36,30 @@ const include = {
 export class DeliveryNotesRepository {
   constructor(private readonly prisma: PrismaService) {}
 
+  /** Crea la nota PENDING del pedido si todavía no tiene una. */
+  async ensurePendingForOrder(
+    tenantId: string,
+    saleOrderId: string,
+  ): Promise<{ id: string; created: boolean }> {
+    const existing = await this.prisma.deliveryNote.findFirst({
+      where: { tenantId, saleOrderId },
+      select: { id: true },
+    });
+    if (existing) return { id: existing.id, created: false };
+    const note = await this.prisma.deliveryNote.upsert({
+      where: { saleOrderId },
+      create: {
+        tenantId,
+        saleOrderId,
+        status: 'PENDING',
+        issuedAt: new Date(),
+      },
+      update: {},
+      select: { id: true },
+    });
+    return { id: note.id, created: true };
+  }
+
   findAll(tenantId: string, status?: DeliveryNoteStatus) {
     return this.prisma.deliveryNote.findMany({
       where: { tenantId, ...(status ? { status } : {}) },

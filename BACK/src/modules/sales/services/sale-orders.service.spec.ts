@@ -3,6 +3,7 @@ import {
   NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
+import { StockLedgerService } from '../../inventory/services/stock-ledger.service';
 import { SaleOrdersService } from './sale-orders.service';
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
@@ -207,10 +208,13 @@ describe('SaleOrdersService', () => {
     service = new SaleOrdersService(
       prisma as any,
       saleOrdersRepository as any,
-      productsRepository as any,
+      productsRepository,
       guarantorsRepository as any,
       creditEvaluationService as any,
       eventEmitter as any,
+      // Implementación real sobre el tx simulado: las aserciones sobre
+      // tx.stockMovement/tx.productUnit siguen valiendo.
+      new StockLedgerService(),
     );
   });
 
@@ -574,7 +578,7 @@ describe('SaleOrdersService', () => {
   describe('createPosSale', () => {
     const baseDto = {
       items: [{ productId: 'prod-1', quantity: 2, unitPrice: 2_500_000 }],
-      payments: [{ amount: 5_000_000, paymentMethod: 'CASH' }],
+      payments: [{ amount: 5_000_000, paymentMethod: 'CASH' as const }],
     };
 
     it('creates a DELIVERED order in one transaction and emits sale.payment.collected', async () => {
@@ -675,7 +679,7 @@ describe('SaleOrdersService', () => {
             serialNumbers: ['SN001'],
           },
         ],
-        payments: [{ amount: 5_000_000, paymentMethod: 'CASH' }],
+        payments: [{ amount: 5_000_000, paymentMethod: 'CASH' as const }],
       };
 
       await expect(

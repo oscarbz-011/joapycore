@@ -6,6 +6,7 @@ import { DeliveryNotesService } from './services/delivery-notes.service';
 import { DeliveryTrackingService } from './services/delivery-tracking.service';
 import { DeliveryNotesController } from './controllers/delivery-notes.controller';
 import { DeliveryTrackingController } from './controllers/delivery-tracking.controller';
+import { LogisticsOnSaleCompletedListener } from './events/logistics-on-sale-completed.listener';
 
 // Orden de controllers importa: DeliveryTrackingController declara rutas
 // literales bajo /logistics/deliveries/* (p.ej. GET .../mine) que Express
@@ -21,6 +22,7 @@ import { DeliveryTrackingController } from './controllers/delivery-tracking.cont
     DeliveryTrackingService,
     DeliveryNotesRepository,
     DeliveryTrackingEventsRepository,
+    LogisticsOnSaleCompletedListener,
   ],
 })
 export class LogisticsModule implements OnApplicationBootstrap {

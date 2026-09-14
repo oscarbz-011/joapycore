@@ -5,7 +5,7 @@ import {
 } from '@nestjs/common';
 import Docxtemplater from 'docxtemplater';
 import PizZip from 'pizzip';
-import type { TemplateVariableDef } from '../../modules/documents/constants/template-variables.constant';
+import type { TemplateVariableDef } from '../../common/types/template-variable.interface';
 
 const DELIMITERS = { start: '{{', end: '}}' } as const;
 
