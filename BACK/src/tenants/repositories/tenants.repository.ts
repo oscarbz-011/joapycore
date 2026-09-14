@@ -18,6 +18,25 @@ export class TenantsRepository {
     return client.tenant.create({ data });
   }
 
+  // Casa Matriz + Depósito Principal que todo tenant nuevo necesita.
+  async createHeadquarters(
+    tenantId: string,
+    client: PrismaClientOrTx = this.prisma,
+  ) {
+    const branch = await client.branch.create({
+      data: { tenantId, name: 'Casa Matriz', isMain: true },
+    });
+    const warehouse = await client.warehouse.create({
+      data: {
+        tenantId,
+        branchId: branch.id,
+        name: 'Depósito Principal',
+        isDefault: true,
+      },
+    });
+    return { branch, warehouse };
+  }
+
   findById(id: string) {
     return this.prisma.tenant.findUnique({ where: { id } });
   }

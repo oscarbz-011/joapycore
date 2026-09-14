@@ -5,6 +5,7 @@ import { Industry, TenantStatus, UserStatus } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 import { createHash } from 'node:crypto';
 import { AuthService } from './auth.service';
+import { TenantsRepository } from '../tenants/repositories/tenants.repository';
 
 jest.mock('bcryptjs');
 
@@ -34,7 +35,11 @@ describe('AuthService', () => {
     create: jest.Mock;
     attachPermissions: jest.Mock;
   };
-  let tenantsRepository: { create: jest.Mock; findById: jest.Mock };
+  let tenantsRepository: {
+    create: jest.Mock;
+    findById: jest.Mock;
+    createHeadquarters: jest.Mock;
+  };
   let tenantModulesRepository: {
     seedDefaults: jest.Mock;
     findActiveModuleNames: jest.Mock;
@@ -99,6 +104,10 @@ describe('AuthService', () => {
     };
     tenantsRepository = {
       create: jest.fn(),
+      // Implementación real: crea sobre el tx mockeado.
+      createHeadquarters: jest.fn((tenantId: string, client: any) =>
+        new TenantsRepository({} as any).createHeadquarters(tenantId, client),
+      ),
       findById: jest.fn().mockResolvedValue({
         id: 'tenant-1',
         name: 'Acme',
