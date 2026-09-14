@@ -6,17 +6,6 @@ import { InvoicesRepository } from '../repositories/invoices.repository';
 interface SaleOrderCompletedEvent {
   tenantId: string;
   saleOrderId: string;
-  order: {
-    saleType?: string;
-    items: Array<{
-      id: string;
-      productId: string;
-      quantity: number;
-      unitPrice: number | { toNumber(): number };
-      financedUnitPrice?: number | { toNumber(): number } | null;
-      product: { name: string };
-    }>;
-  };
 }
 
 function toNum(value: number | { toNumber(): number }): number {
@@ -44,11 +33,12 @@ export class BillingOnSaleListener {
   ) {}
 
   // Credit sales: invoice created when order is confirmed (CONFIRMED status)
-  @OnEvent('sale.order.completed')
+  // suppressErrors: false — lo despacha el outbox, que reintenta si falla.
+  @OnEvent('sale.order.completed', { suppressErrors: false })
   // Cash sales: invoice created when payment is collected (PAYMENT_RECEIVED status)
-  @OnEvent('sale.payment.collected')
+  @OnEvent('sale.payment.collected', { suppressErrors: false })
   async handle(event: SaleOrderCompletedEvent) {
-    const { tenantId, saleOrderId, order } = event;
+    const { tenantId, saleOrderId } = event;
 
     // Idempotency: skip if an invoice already exists for this order.
     // Prevents duplicate invoices if the event fires more than once.
@@ -57,6 +47,25 @@ export class BillingOnSaleListener {
       saleOrderId,
     );
     if (existing) return;
+
+    // Se lee el pedido de la base (no del payload): en un reintento del
+    // outbox los datos tienen que ser los actuales.
+    const order = await this.prisma.saleOrder.findFirst({
+      where: { id: saleOrderId, tenantId },
+      select: {
+        saleType: true,
+        items: {
+          select: {
+            quantity: true,
+            unitPrice: true,
+            financedUnitPrice: true,
+            description: true,
+            product: { select: { name: true } },
+          },
+        },
+      },
+    });
+    if (!order) return;
 
     // For credit sales, the invoice total is the full financed amount (principal + interest),
     // which lives in the Loan created when credit was approved. For cash sales, sum the items.
@@ -90,7 +99,7 @@ export class BillingOnSaleListener {
         await this.invoicesRepository.createItem(
           {
             invoiceId: inv.id,
-            description: item.product.name,
+            description: item.product?.name ?? item.description ?? 'Ítem',
             quantity: item.quantity,
             unitPrice,
             total: unitPrice * item.quantity,

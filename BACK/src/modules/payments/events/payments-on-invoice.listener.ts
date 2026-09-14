@@ -26,7 +26,7 @@ export class PaymentsOnInvoiceListener {
     await this.arRepository.updateStatus(ar.id, 'CANCELLED');
   }
 
-  @OnEvent('invoice.issued')
+  @OnEvent('invoice.issued', { suppressErrors: false })
   async handle(event: InvoiceIssuedEvent) {
     // Idempotency: skip if an AR already exists for this invoice.
     // Prevents duplicate accounts receivable if the event fires more than once.

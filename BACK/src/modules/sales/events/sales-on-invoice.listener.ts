@@ -12,7 +12,7 @@ interface InvoiceIssuedEvent {
 export class SalesOnInvoiceListener {
   constructor(private readonly prisma: PrismaService) {}
 
-  @OnEvent('invoice.issued')
+  @OnEvent('invoice.issued', { suppressErrors: false })
   async handle(event: InvoiceIssuedEvent) {
     if (!event.saleOrderId) return;
     // Move the sale order to INVOICED so the seller can see the billing state

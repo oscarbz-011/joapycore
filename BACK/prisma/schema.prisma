@@ -2532,3 +2532,33 @@ model PosSession {
   @@index([tenantId, terminalId])
   @@map("pos_sessions")
 }
+
+// ─── Outbox ───────────────────────────────────────────────────────────────────
+
+enum OutboxStatus {
+  PENDING
+  PROCESSING
+  DONE
+  FAILED
+}
+
+// Eventos críticos entre módulos (sale.order.completed, invoice.issued, …)
+// guardados en la misma transacción que el cambio que los origina y
+// despachados después, con reintentos: si un listener falla, el efecto
+// (factura, cuenta por cobrar, préstamo) no se pierde.
+model OutboxEvent {
+  id            String       @id @default(uuid())
+  tenantId      String       @map("tenant_id")
+  eventName     String       @map("event_name")
+  payload       Json
+  status        OutboxStatus @default(PENDING)
+  attempts      Int          @default(0)
+  lastError     String?      @map("last_error")
+  nextAttemptAt DateTime     @default(now()) @map("next_attempt_at")
+  createdAt     DateTime     @default(now()) @map("created_at")
+  processedAt   DateTime?    @map("processed_at")
+
+  @@index([status, nextAttemptAt])
+  @@index([tenantId])
+  @@map("outbox_events")
+}

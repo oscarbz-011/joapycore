@@ -90,6 +90,7 @@ describe('SaleOrdersService', () => {
   };
 
   let tx: any;
+  let outbox: { enqueue: jest.Mock; dispatch: jest.Mock };
 
   beforeEach(() => {
     saleOrdersRepository = {
@@ -125,6 +126,10 @@ describe('SaleOrdersService', () => {
         .mockResolvedValue({ required: false, latestResult: null }),
     };
     eventEmitter = { emit: jest.fn() };
+    outbox = {
+      enqueue: jest.fn().mockResolvedValue('event-1'),
+      dispatch: jest.fn().mockResolvedValue(true),
+    };
 
     tx = {
       saleOrder: {
@@ -215,7 +220,11 @@ describe('SaleOrdersService', () => {
       // Implementación real sobre el tx simulado: las aserciones sobre
       // tx.stockMovement/tx.productUnit siguen valiendo.
       new StockLedgerService(),
+      outbox as any,
     );
+    // approveCredit y collectPayment transicionan dentro de la transacción:
+    // mismo mock para no duplicar los setups existentes.
+    tx.saleOrder.updateMany = prisma.saleOrder.updateMany;
   });
 
   // ── findAll ────────────────────────────────────────────────────────────────
@@ -609,10 +618,14 @@ describe('SaleOrdersService', () => {
         }),
       );
       expect(tx.salePayment.createMany).toHaveBeenCalled();
-      expect(eventEmitter.emit).toHaveBeenCalledWith(
+      expect(outbox.enqueue).toHaveBeenCalledWith(
+        tx,
+        'tenant-1',
         'sale.payment.collected',
         expect.objectContaining({ tenantId: 'tenant-1' }),
       );
+      expect(outbox.dispatch).toHaveBeenCalledWith('event-1');
+      expect(result).not.toHaveProperty('eventId');
     });
 
     it('rejects the sale when there is not enough stock', async () => {
@@ -748,13 +761,13 @@ describe('SaleOrdersService', () => {
           data: { status: 'CONFIRMED' },
         }),
       );
-      expect(eventEmitter.emit).toHaveBeenCalledWith(
+      expect(outbox.enqueue).toHaveBeenCalledWith(
+        tx,
+        'tenant-1',
         'sale.order.completed',
-        expect.objectContaining({
-          tenantId: 'tenant-1',
-          saleOrderId: 'order-1',
-        }),
+        { tenantId: 'tenant-1', saleOrderId: 'order-1' },
       );
+      expect(outbox.dispatch).toHaveBeenCalledWith('event-1');
     });
 
     it('reserves stock for a credit order that has no reservation yet', async () => {
@@ -824,10 +837,7 @@ describe('SaleOrdersService', () => {
         'No hay stock suficiente de: Heladera (disponible 3, pedido 5)',
       );
       expect(tx.stockMovement.create).not.toHaveBeenCalled();
-      expect(eventEmitter.emit).not.toHaveBeenCalledWith(
-        'sale.order.completed',
-        expect.anything(),
-      );
+      expect(outbox.enqueue).not.toHaveBeenCalled();
     });
   });
 

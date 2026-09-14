@@ -16,7 +16,11 @@ function makeItem(overrides: Record<string, unknown> = {}) {
 }
 
 describe('BillingOnSaleListener', () => {
-  let prisma: { loan: { findUnique: jest.Mock }; $transaction: jest.Mock };
+  let prisma: {
+    loan: { findUnique: jest.Mock };
+    saleOrder: { findFirst: jest.Mock };
+    $transaction: jest.Mock;
+  };
   let invoicesRepository: {
     findBySaleOrder: jest.Mock;
     create: jest.Mock;
@@ -28,6 +32,7 @@ describe('BillingOnSaleListener', () => {
   beforeEach(() => {
     prisma = {
       loan: { findUnique: jest.fn().mockResolvedValue(null) },
+      saleOrder: { findFirst: jest.fn().mockResolvedValue(null) },
       $transaction: jest
         .fn()
         .mockImplementation((cb: (tx: unknown) => unknown) => cb({})),
@@ -51,24 +56,21 @@ describe('BillingOnSaleListener', () => {
       id: 'existing-invoice',
     });
 
-    await listener.handle({
-      tenantId: TENANT,
-      saleOrderId: ORDER_ID,
-      order: { saleType: 'CASH', items: [] },
+    prisma.saleOrder.findFirst.mockResolvedValue({
+      saleType: 'CASH',
+      items: [],
     });
+    await listener.handle({ tenantId: TENANT, saleOrderId: ORDER_ID });
 
     expect(invoicesRepository.create).not.toHaveBeenCalled();
   });
 
   it('sums item cash prices for a CASH sale', async () => {
-    await listener.handle({
-      tenantId: TENANT,
-      saleOrderId: ORDER_ID,
-      order: {
-        saleType: 'CASH',
-        items: [makeItem({ quantity: 2, unitPrice: 500_000 })],
-      },
+    prisma.saleOrder.findFirst.mockResolvedValue({
+      saleType: 'CASH',
+      items: [makeItem({ quantity: 2, unitPrice: 500_000 })],
     });
+    await listener.handle({ tenantId: TENANT, saleOrderId: ORDER_ID });
 
     expect(invoicesRepository.create).toHaveBeenCalledWith(
       expect.objectContaining({ total: 1_000_000 }),
@@ -83,20 +85,17 @@ describe('BillingOnSaleListener', () => {
   it('uses Loan.totalAmount as the invoice total for a CREDIT sale', async () => {
     prisma.loan.findUnique.mockResolvedValue({ totalAmount: 1_200_000 });
 
-    await listener.handle({
-      tenantId: TENANT,
-      saleOrderId: ORDER_ID,
-      order: {
-        saleType: 'CREDIT',
-        items: [
-          makeItem({
-            quantity: 2,
-            unitPrice: 500_000,
-            financedUnitPrice: 600_000,
-          }),
-        ],
-      },
+    prisma.saleOrder.findFirst.mockResolvedValue({
+      saleType: 'CREDIT',
+      items: [
+        makeItem({
+          quantity: 2,
+          unitPrice: 500_000,
+          financedUnitPrice: 600_000,
+        }),
+      ],
     });
+    await listener.handle({ tenantId: TENANT, saleOrderId: ORDER_ID });
 
     expect(invoicesRepository.create).toHaveBeenCalledWith(
       expect.objectContaining({ total: 1_200_000 }),
@@ -107,20 +106,17 @@ describe('BillingOnSaleListener', () => {
   it('uses financedUnitPrice (not the cash unitPrice) for CREDIT sale invoice items', async () => {
     prisma.loan.findUnique.mockResolvedValue({ totalAmount: 1_200_000 });
 
-    await listener.handle({
-      tenantId: TENANT,
-      saleOrderId: ORDER_ID,
-      order: {
-        saleType: 'CREDIT',
-        items: [
-          makeItem({
-            quantity: 2,
-            unitPrice: 500_000,
-            financedUnitPrice: 600_000,
-          }),
-        ],
-      },
+    prisma.saleOrder.findFirst.mockResolvedValue({
+      saleType: 'CREDIT',
+      items: [
+        makeItem({
+          quantity: 2,
+          unitPrice: 500_000,
+          financedUnitPrice: 600_000,
+        }),
+      ],
     });
+    await listener.handle({ tenantId: TENANT, saleOrderId: ORDER_ID });
 
     expect(invoicesRepository.createItem).toHaveBeenCalledWith(
       expect.objectContaining({ unitPrice: 600_000, total: 1_200_000 }),
@@ -131,20 +127,17 @@ describe('BillingOnSaleListener', () => {
   it('falls back to the cash unitPrice for CREDIT sale items with no financedUnitPrice (legacy items)', async () => {
     prisma.loan.findUnique.mockResolvedValue({ totalAmount: 1_000_000 });
 
-    await listener.handle({
-      tenantId: TENANT,
-      saleOrderId: ORDER_ID,
-      order: {
-        saleType: 'CREDIT',
-        items: [
-          makeItem({
-            quantity: 2,
-            unitPrice: 500_000,
-            financedUnitPrice: null,
-          }),
-        ],
-      },
+    prisma.saleOrder.findFirst.mockResolvedValue({
+      saleType: 'CREDIT',
+      items: [
+        makeItem({
+          quantity: 2,
+          unitPrice: 500_000,
+          financedUnitPrice: null,
+        }),
+      ],
     });
+    await listener.handle({ tenantId: TENANT, saleOrderId: ORDER_ID });
 
     expect(invoicesRepository.createItem).toHaveBeenCalledWith(
       expect.objectContaining({ unitPrice: 500_000, total: 1_000_000 }),
@@ -155,20 +148,17 @@ describe('BillingOnSaleListener', () => {
   it('falls back to summing effective item prices when saleType is CREDIT but no Loan exists yet', async () => {
     prisma.loan.findUnique.mockResolvedValue(null);
 
-    await listener.handle({
-      tenantId: TENANT,
-      saleOrderId: ORDER_ID,
-      order: {
-        saleType: 'CREDIT',
-        items: [
-          makeItem({
-            quantity: 2,
-            unitPrice: 500_000,
-            financedUnitPrice: 600_000,
-          }),
-        ],
-      },
+    prisma.saleOrder.findFirst.mockResolvedValue({
+      saleType: 'CREDIT',
+      items: [
+        makeItem({
+          quantity: 2,
+          unitPrice: 500_000,
+          financedUnitPrice: 600_000,
+        }),
+      ],
     });
+    await listener.handle({ tenantId: TENANT, saleOrderId: ORDER_ID });
 
     expect(invoicesRepository.create).toHaveBeenCalledWith(
       expect.objectContaining({ total: 1_200_000 }),
@@ -177,11 +167,11 @@ describe('BillingOnSaleListener', () => {
   });
 
   it('emits audit.log after creating the invoice', async () => {
-    await listener.handle({
-      tenantId: TENANT,
-      saleOrderId: ORDER_ID,
-      order: { saleType: 'CASH', items: [makeItem()] },
+    prisma.saleOrder.findFirst.mockResolvedValue({
+      saleType: 'CASH',
+      items: [makeItem()],
     });
+    await listener.handle({ tenantId: TENANT, saleOrderId: ORDER_ID });
 
     expect(eventEmitter.emit).toHaveBeenCalledWith(
       'audit.log',

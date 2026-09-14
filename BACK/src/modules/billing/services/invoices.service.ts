@@ -9,6 +9,7 @@ import { CreditNotesRepository } from '../repositories/credit-notes.repository';
 import { InvoicesRepository } from '../repositories/invoices.repository';
 import type { AuditLogEvent } from '../../../audit/audit-log.event';
 import { IssueInvoiceDto } from '../dto/issue-invoice.dto';
+import { OutboxService } from '../../../outbox/outbox.service';
 
 @Injectable()
 export class InvoicesService {
@@ -17,6 +18,7 @@ export class InvoicesService {
     private readonly invoicesRepository: InvoicesRepository,
     private readonly creditNotesRepository: CreditNotesRepository,
     private readonly eventEmitter: EventEmitter2,
+    private readonly outbox: OutboxService,
   ) {}
 
   findAll(tenantId: string) {
@@ -146,15 +148,26 @@ export class InvoicesService {
     // emitAsync (no emit): payments/sales reaccionan de forma síncrona
     // (cuenta por cobrar, stock) — para esta altura el PDF ya existe, así
     // que esto solo dispara efectos de negocio que no dependen de él.
-    await this.eventEmitter.emitAsync('invoice.issued', {
+    //
+    // Va por el outbox: si un listener falla (p.ej. se cae la base al crear
+    // la cuenta por cobrar) se reintenta en vez de quedar la factura emitida
+    // sin su cuenta por cobrar. Se encola recién acá, con el PDF ya generado,
+    // porque antes la emisión todavía puede revertirse a borrador.
+    const issuedEvent = await this.outbox.enqueue(
+      this.prisma,
       tenantId,
-      invoiceId: id,
-      saleOrderId: invoice.saleOrderId,
-      paymentCondition: dto.paymentCondition,
-      total: Number(invoice.total),
-      dueDate: dto.dueDate ?? null,
-      issuedById: userId,
-    });
+      'invoice.issued',
+      {
+        tenantId,
+        invoiceId: id,
+        saleOrderId: invoice.saleOrderId,
+        paymentCondition: dto.paymentCondition,
+        total: Number(invoice.total),
+        dueDate: dto.dueDate ?? null,
+        issuedById: userId,
+      },
+    );
+    await this.outbox.dispatch(issuedEvent);
 
     this.eventEmitter.emit('audit.log', {
       tenantId,

@@ -40,6 +40,7 @@ describe('InvoicesService', () => {
     generateNumber: jest.Mock;
   };
   let eventEmitter: { emit: jest.Mock; emitAsync: jest.Mock };
+  let outbox: { enqueue: jest.Mock; dispatch: jest.Mock };
   let prisma: { $transaction: jest.Mock };
   let invoiceFindFirstMock: jest.Mock;
   let branchFindUniqueMock: jest.Mock;
@@ -74,11 +75,16 @@ describe('InvoicesService', () => {
       $transaction: jest.fn().mockImplementation((cb) => cb(tx)),
     };
 
+    outbox = {
+      enqueue: jest.fn().mockResolvedValue('event-1'),
+      dispatch: jest.fn().mockResolvedValue(true),
+    };
     service = new InvoicesService(
       prisma as any,
       invoicesRepository as any,
       creditNotesRepository as any,
       eventEmitter as any,
+      outbox as any,
     );
   });
 
@@ -222,7 +228,7 @@ describe('InvoicesService', () => {
       );
     });
 
-    it('awaits invoice.pdf.requested and invoice.issued via emitAsync before returning', async () => {
+    it('awaits invoice.pdf.requested and delivers invoice.issued through the outbox before returning', async () => {
       invoicesRepository.findById.mockResolvedValue(makeInvoice());
 
       await service.issue('tenant-1', 'inv-1', {
@@ -234,10 +240,13 @@ describe('InvoicesService', () => {
         'invoice.pdf.requested',
         expect.objectContaining({ tenantId: 'tenant-1', invoiceId: 'inv-1' }),
       );
-      expect(eventEmitter.emitAsync).toHaveBeenCalledWith(
+      expect(outbox.enqueue).toHaveBeenCalledWith(
+        prisma,
+        'tenant-1',
         'invoice.issued',
         expect.objectContaining({ tenantId: 'tenant-1', invoiceId: 'inv-1' }),
       );
+      expect(outbox.dispatch).toHaveBeenCalledWith('event-1');
       expect(eventEmitter.emit).not.toHaveBeenCalledWith(
         'invoice.issued',
         expect.anything(),
@@ -286,10 +295,7 @@ describe('InvoicesService', () => {
       );
       // 'invoice.issued' must never fire — payments/sales react to it with
       // irreversible side effects (AR, stock) that we can't safely undo.
-      expect(eventEmitter.emitAsync).not.toHaveBeenCalledWith(
-        'invoice.issued',
-        expect.anything(),
-      );
+      expect(outbox.enqueue).not.toHaveBeenCalled();
     });
 
     it('reverts to PENDING and throws when the credit due-date reschedule fails, without ever requesting the PDF', async () => {
@@ -311,10 +317,7 @@ describe('InvoicesService', () => {
         'invoice.pdf.requested',
         expect.anything(),
       );
-      expect(eventEmitter.emitAsync).not.toHaveBeenCalledWith(
-        'invoice.issued',
-        expect.anything(),
-      );
+      expect(outbox.enqueue).not.toHaveBeenCalled();
     });
   });
 

@@ -19,7 +19,7 @@ export class FinanceOnSaleListener {
 
   constructor(private readonly loansService: LoansService) {}
 
-  @OnEvent('sale.credit.approved')
+  @OnEvent('sale.credit.approved', { suppressErrors: false })
   async handle(event: SaleCreditApprovedEvent) {
     await this.loansService.createFromOrder(event.tenantId, event.saleOrderId);
   }

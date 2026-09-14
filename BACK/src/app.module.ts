@@ -35,6 +35,7 @@ import { SalesModule } from './modules/sales/sales.module';
 import { EmailModule } from './email/email.module';
 import { FilesModule } from './files/files.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import { OutboxModule } from './outbox/outbox.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { TenantsModule } from './tenants/tenants.module';
 import { UsersModule } from './users/users.module';
@@ -54,6 +55,7 @@ import { UsersModule } from './users/users.module';
     EventEmitterModule.forRoot(),
     ScheduleModule.forRoot(),
     PrismaModule,
+    OutboxModule,
     AuthModule,
     UsersModule,
     TenantsModule,

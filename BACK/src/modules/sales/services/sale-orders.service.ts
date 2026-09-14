@@ -22,6 +22,7 @@ import { GuarantorsRepository } from '../repositories/guarantors.repository';
 import { SaleOrdersRepository } from '../repositories/sale-orders.repository';
 import { CreditEvaluationService } from './credit-evaluation.service';
 import type { AuditLogEvent } from '../../../audit/audit-log.event';
+import { OutboxService } from '../../../outbox/outbox.service';
 import {
   PRODUCT_CATALOG,
   type ProductCatalog,
@@ -67,6 +68,9 @@ export class SaleOrdersService implements SalesGateway {
     private readonly creditEvaluationService: CreditEvaluationService,
     private readonly eventEmitter: EventEmitter2,
     @Inject(STOCK_LEDGER) private readonly stockLedger: StockLedger,
+    // Eventos críticos (préstamo, factura, nota de entrega) con entrega
+    // garantizada: se guardan en la misma transacción que el cambio.
+    private readonly outbox: OutboxService,
   ) {}
 
   /**
@@ -204,25 +208,27 @@ export class SaleOrdersService implements SalesGateway {
     }
 
     // Atomic transition — TOCTOU-safe because status is the guard
-    const result = await this.prisma.saleOrder.updateMany({
-      where: { id, tenantId, status: 'PENDING_CREDIT_APPROVAL' },
-      data: {
-        status: 'CREDIT_APPROVED',
-        approvedById: userId ?? null,
-        approvedAt: new Date(),
-      },
+    const creditApprovedEvent = await this.prisma.$transaction(async (tx) => {
+      const result = await tx.saleOrder.updateMany({
+        where: { id, tenantId, status: 'PENDING_CREDIT_APPROVAL' },
+        data: {
+          status: 'CREDIT_APPROVED',
+          approvedById: userId ?? null,
+          approvedAt: new Date(),
+        },
+      });
+      if (result.count === 0) {
+        throw new UnprocessableEntityException(
+          'El pedido fue modificado por otra operación concurrente. Por favor, recargue e intente de nuevo.',
+        );
+      }
+      // Triggers Loan + Installment creation in FinanceModule
+      return this.outbox.enqueue(tx, tenantId, 'sale.credit.approved', {
+        tenantId,
+        saleOrderId: id,
+      });
     });
-    if (result.count === 0) {
-      throw new UnprocessableEntityException(
-        'El pedido fue modificado por otra operación concurrente. Por favor, recargue e intente de nuevo.',
-      );
-    }
-
-    // Triggers Loan + Installment creation in FinanceModule via event
-    this.eventEmitter.emit('sale.credit.approved', {
-      tenantId,
-      saleOrderId: id,
-    });
+    await this.outbox.dispatch(creditApprovedEvent);
     this.eventEmitter.emit('audit.log', {
       tenantId,
       userId,
@@ -1045,36 +1051,39 @@ export class SaleOrdersService implements SalesGateway {
     dto: CollectPaymentDto,
     userId?: string,
   ) {
-    const transitioned = await this.prisma.saleOrder.updateMany({
-      where: { id, tenantId, status: 'PENDING', saleType: 'CASH' },
-      data: { status: 'PAYMENT_RECEIVED' },
-    });
-    if (transitioned.count === 0) {
-      throw new UnprocessableEntityException(
-        'Solo pedidos contado en estado PENDIENTE pueden registrar cobro',
-      );
-    }
+    const paymentCollectedEvent = await this.prisma.$transaction(async (tx) => {
+      const transitioned = await tx.saleOrder.updateMany({
+        where: { id, tenantId, status: 'PENDING', saleType: 'CASH' },
+        data: { status: 'PAYMENT_RECEIVED' },
+      });
+      if (transitioned.count === 0) {
+        throw new UnprocessableEntityException(
+          'Solo pedidos contado en estado PENDIENTE pueden registrar cobro',
+        );
+      }
 
-    await this.prisma.salePayment.createMany({
-      data: dto.payments.map((p) => ({
+      await tx.salePayment.createMany({
+        data: dto.payments.map((p) => ({
+          tenantId,
+          saleOrderId: id,
+          amount: p.amount,
+          paymentMethod: p.paymentMethod,
+          paymentDate: new Date(p.paymentDate),
+          reference: p.reference ?? null,
+          notes: p.notes ?? null,
+          collectedById: userId ?? null,
+        })),
+      });
+
+      // Triggers invoice creation in billing module for cash sales
+      return this.outbox.enqueue(tx, tenantId, 'sale.payment.collected', {
         tenantId,
         saleOrderId: id,
-        amount: p.amount,
-        paymentMethod: p.paymentMethod,
-        paymentDate: new Date(p.paymentDate),
-        reference: p.reference ?? null,
-        notes: p.notes ?? null,
-        collectedById: userId ?? null,
-      })),
+      });
     });
+    await this.outbox.dispatch(paymentCollectedEvent);
 
     const order = await this.saleOrdersRepository.findById(tenantId, id);
-    // Triggers invoice creation in billing module for cash sales
-    this.eventEmitter.emit('sale.payment.collected', {
-      tenantId,
-      saleOrderId: id,
-      order,
-    });
     this.eventEmitter.emit('audit.log', {
       tenantId,
       userId,
@@ -1089,7 +1098,7 @@ export class SaleOrdersService implements SalesGateway {
   // Both cash (PENDING) and credit (CREDIT_APPROVED) → CONFIRMED.
   // sale.order.completed triggers billing to create the invoice for both flows.
   async confirm(tenantId: string, id: string, userId?: string) {
-    await this.prisma.$transaction(async (tx) => {
+    const completedEvent = await this.prisma.$transaction(async (tx) => {
       const transitioned = await tx.saleOrder.updateMany({
         where: { id, tenantId, status: { in: ['PENDING', 'CREDIT_APPROVED'] } },
         data: { status: 'CONFIRMED' },
@@ -1131,17 +1140,17 @@ export class SaleOrdersService implements SalesGateway {
         ),
       );
       await this.stockLedger.reserve(tx, tenantId, toReserve);
+
+      // Invoice is created by BillingOnSaleListener and the delivery note by
+      // LogisticsOnSaleCompletedListener on this event
+      return this.outbox.enqueue(tx, tenantId, 'sale.order.completed', {
+        tenantId,
+        saleOrderId: id,
+      });
     });
+    await this.outbox.dispatch(completedEvent);
 
     const confirmed = await this.saleOrdersRepository.findById(tenantId, id);
-
-    // Invoice is created by BillingOnSaleListener and the delivery note by
-    // LogisticsOnSaleCompletedListener on this event
-    this.eventEmitter.emit('sale.order.completed', {
-      tenantId,
-      saleOrderId: id,
-      order: confirmed,
-    });
     this.eventEmitter.emit('audit.log', {
       tenantId,
       userId,
@@ -1388,28 +1397,33 @@ export class SaleOrdersService implements SalesGateway {
         data: { status: 'DELIVERED' },
       });
 
-      return tx.saleOrder.findUniqueOrThrow({
+      // Reuses BillingOnSaleListener — channel-agnostic and idempotent per
+      // saleOrderId.
+      const eventId = await this.outbox.enqueue(
+        tx,
+        tenantId,
+        'sale.payment.collected',
+        { tenantId, saleOrderId: created.id },
+      );
+
+      const saved = await tx.saleOrder.findUniqueOrThrow({
         where: { id: created.id },
         include: { customer: true, items: { include: { product: true } } },
       });
+      return Object.assign(saved, { eventId });
     });
 
-    // Reuses BillingOnSaleListener as-is — it's already channel-agnostic and
-    // idempotent per saleOrderId, so no changes needed in billing.
-    this.eventEmitter.emit('sale.payment.collected', {
-      tenantId,
-      saleOrderId: order.id,
-      order,
-    });
+    const { eventId: paymentCollectedEvent, ...posOrder } = order;
+    await this.outbox.dispatch(paymentCollectedEvent);
     this.eventEmitter.emit('audit.log', {
       tenantId,
       userId,
       module: 'sales',
       action: 'sale.order.created',
-      resourceId: order.id,
-      after: order,
+      resourceId: posOrder.id,
+      after: posOrder,
     } satisfies AuditLogEvent);
 
-    return order;
+    return posOrder;
   }
 }

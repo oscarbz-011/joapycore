@@ -18,7 +18,7 @@ export class LogisticsOnSaleCompletedListener {
     private readonly eventEmitter: EventEmitter2,
   ) {}
 
-  @OnEvent('sale.order.completed')
+  @OnEvent('sale.order.completed', { suppressErrors: false })
   async handle(event: SaleOrderCompletedEvent): Promise<void> {
     const note = await this.deliveryNotesRepository.ensurePendingForOrder(
       event.tenantId,
