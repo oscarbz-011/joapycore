@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import * as bcrypt from 'bcryptjs';
+import { EmployeeAccountsRepository } from '../repositories/employee-accounts.repository';
 import { EmployeesRepository } from '../repositories/employees.repository';
 import { CreateEmployeeDto } from '../dto/create-employee.dto';
 import { UpdateEmployeeDto } from '../dto/update-employee.dto';
@@ -31,8 +32,10 @@ const SALT_ROUNDS = 10;
 export class EmployeesService {
   constructor(
     private readonly employeesRepository: EmployeesRepository,
+    // Solo para abrir transacciones; los accesos a datos van por repositorios.
     private readonly prisma: PrismaService,
     private readonly eventEmitter: EventEmitter2,
+    private readonly accounts: EmployeeAccountsRepository,
   ) {}
 
   list(tenantId: string) {
@@ -62,29 +65,24 @@ export class EmployeesService {
       let tempPassword: string | undefined;
 
       if (dto.email) {
-        const existing = await tx.user.findUnique({
-          where: { email: dto.email },
-        });
+        const existing = await this.accounts.findUserByEmail(dto.email, tx);
         if (existing) throw new ConflictException('El email ya está en uso');
 
         // Auto-generate unique username: jose.benitez → jose.benitez2 …
         const usernameBase = buildUsernameBase(firstName, lastName);
-        const takenMatches = await tx.user.findMany({
-          where: { username: { startsWith: usernameBase } },
-          select: { username: true },
-        });
-        const username = resolveUsername(
+        const taken = await this.accounts.findUsernamesStartingWith(
           usernameBase,
-          takenMatches.map((u) => u.username).filter(Boolean) as string[],
+          tx,
         );
+        const username = resolveUsername(usernameBase, taken);
 
         tempPassword = generateTempPassword();
         const passwordHash = await bcrypt.hash(tempPassword, SALT_ROUNDS);
         const tempPasswordEncrypted = encryptTempPassword(tempPassword);
         const tempPasswordExpiresAt = buildTempPasswordExpiry();
 
-        const user = await tx.user.create({
-          data: {
+        const user = await this.accounts.createUser(
+          {
             tenantId,
             branchId: dto.branchId,
             email: dto.email,
@@ -96,25 +94,23 @@ export class EmployeesService {
             tempPasswordEncrypted,
             tempPasswordExpiresAt,
           },
-        });
+          tx,
+        );
         userId = user.id;
 
         // Auto-assign the role linked to the employee's position
         if (dto.positionId) {
-          const position = await tx.position.findFirst({
-            where: { id: dto.positionId, tenantId },
-            select: { roleId: true },
-          });
-          if (position?.roleId) {
-            await tx.userRole.create({
-              data: { userId: user.id, roleId: position.roleId },
-            });
-          }
+          await this.accounts.assignPositionRole(
+            tenantId,
+            user.id,
+            dto.positionId,
+            tx,
+          );
         }
       }
 
-      const employee = await tx.employee.create({
-        data: {
+      const employee = await this.employeesRepository.create(
+        {
           tenantId,
           employeeNumber,
           employeeCode,
@@ -149,21 +145,8 @@ export class EmployeesService {
           bankName: dto.bankName,
           bankAccount: dto.bankAccount,
         },
-        include: {
-          user: {
-            select: {
-              id: true,
-              email: true,
-              status: true,
-              mustChangePassword: true,
-            },
-          },
-          area: { select: { id: true, name: true } },
-          position: { select: { id: true, name: true } },
-          manager: { select: { id: true, firstName: true, lastName: true } },
-          branch: { select: { id: true, name: true } },
-        },
-      });
+        tx,
+      );
 
       this.eventEmitter.emit('audit.log', {
         tenantId,
@@ -190,9 +173,8 @@ export class EmployeesService {
     // Employee.branchId — hay que mantenerlos en sincronía si el empleado
     // tiene una cuenta de usuario vinculada.
     if (dto.branchId !== undefined && employee.userId) {
-      await this.prisma.user.update({
-        where: { id: employee.userId },
-        data: { branchId: dto.branchId || null },
+      await this.accounts.updateUser(employee.userId, {
+        branchId: dto.branchId || null,
       });
     }
 
@@ -209,16 +191,10 @@ export class EmployeesService {
     const date = terminationDate ? new Date(terminationDate) : new Date();
 
     await this.prisma.$transaction(async (tx) => {
-      await tx.employee.updateMany({
-        where: { id, tenantId },
-        data: { terminationDate: date, isActive: false },
-      });
+      await this.employeesRepository.terminate(tenantId, id, date, tx);
 
       if (employee.userId) {
-        await tx.user.updateMany({
-          where: { id: employee.userId, tenantId },
-          data: { status: 'INACTIVE', sessionsValidAfter: new Date() },
-        });
+        await this.accounts.deactivateUser(tenantId, employee.userId, tx);
       }
     });
     if (employee.userId) {
@@ -254,15 +230,12 @@ export class EmployeesService {
     const tempPasswordEncrypted = encryptTempPassword(tempPassword);
     const tempPasswordExpiresAt = buildTempPasswordExpiry();
 
-    await this.prisma.user.update({
-      where: { id: employee.userId },
-      data: {
-        passwordHash,
-        mustChangePassword: true,
-        tempPasswordEncrypted,
-        tempPasswordExpiresAt,
-        sessionsValidAfter: new Date(),
-      },
+    await this.accounts.updateUser(employee.userId, {
+      passwordHash,
+      mustChangePassword: true,
+      tempPasswordEncrypted,
+      tempPasswordExpiresAt,
+      sessionsValidAfter: new Date(),
     });
     this.eventEmitter.emit(SESSION_INVALIDATE_EVENT, {
       userId: employee.userId,
@@ -274,7 +247,7 @@ export class EmployeesService {
   async linkUser(tenantId: string, id: string, email: string) {
     await this.getById(tenantId, id);
 
-    const existing = await this.prisma.user.findUnique({ where: { email } });
+    const existing = await this.accounts.findUserByEmail(email);
     if (!existing)
       throw new NotFoundException('Usuario no encontrado con ese email');
     if (existing.tenantId !== tenantId)
@@ -299,12 +272,8 @@ export class EmployeesService {
   ): Promise<string> {
     let branchNum = '00';
     if (branchId) {
-      const branches = await this.prisma.branch.findMany({
-        where: { tenantId },
-        orderBy: { createdAt: 'asc' },
-        select: { id: true },
-      });
-      const idx = branches.findIndex((b) => b.id === branchId);
+      const branchIds = await this.accounts.findBranchIdsInOrder(tenantId);
+      const idx = branchIds.indexOf(branchId);
       if (idx >= 0) branchNum = String(idx + 1).padStart(2, '0');
     }
     return `EMP-${branchNum}-${String(employeeNumber).padStart(6, '0')}`;

@@ -5,6 +5,8 @@ import {
 } from '@nestjs/common';
 import * as bcrypt from 'bcryptjs';
 import { EmployeesService } from './employees.service';
+import { EmployeeAccountsRepository } from '../repositories/employee-accounts.repository';
+import { EmployeesRepository } from '../repositories/employees.repository';
 
 jest.mock('bcryptjs');
 
@@ -45,6 +47,7 @@ describe('EmployeesService', () => {
     findByUserId: jest.Mock;
     nextEmployeeNumber: jest.Mock;
     create: jest.Mock;
+    terminate: jest.Mock;
     update: jest.Mock;
     linkUser: jest.Mock;
   };
@@ -92,7 +95,13 @@ describe('EmployeesService', () => {
       findById: jest.fn(),
       findByUserId: jest.fn(),
       nextEmployeeNumber: jest.fn().mockResolvedValue(1),
-      create: jest.fn(),
+      // create/terminate: implementación real sobre el mock de Prisma.
+      create: jest.fn((data: any, client: any) =>
+        new EmployeesRepository(prisma as any).create(data, client),
+      ),
+      terminate: jest.fn((...args: [string, string, Date, any]) =>
+        new EmployeesRepository(prisma as any).terminate(...args),
+      ),
       update: jest.fn(),
       linkUser: jest.fn(),
     };
@@ -102,6 +111,7 @@ describe('EmployeesService', () => {
       employeesRepository as any,
       prisma as any,
       eventEmitter as any,
+      new EmployeeAccountsRepository(prisma as any),
     );
   });
 

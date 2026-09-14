@@ -4,6 +4,7 @@ import { EmployeesController } from './controllers/employees.controller';
 import { LeavesController } from './controllers/leaves.controller';
 import { PayrollController } from './controllers/payroll.controller';
 import { AreasRepository } from './repositories/areas.repository';
+import { EmployeeAccountsRepository } from './repositories/employee-accounts.repository';
 import { EmployeesRepository } from './repositories/employees.repository';
 import { LeavesRepository } from './repositories/leaves.repository';
 import { PayrollRepository } from './repositories/payroll.repository';
@@ -24,6 +25,7 @@ import { PayrollService } from './services/payroll.service';
     AreasRepository,
     PositionsRepository,
     EmployeesRepository,
+    EmployeeAccountsRepository,
     LeavesRepository,
     PayrollRepository,
     AreasService,

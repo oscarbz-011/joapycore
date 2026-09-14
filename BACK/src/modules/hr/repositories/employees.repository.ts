@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
+import { PrismaClientOrTx } from '../../../prisma/types';
 
 const WITH_RELATIONS = {
   user: {
@@ -44,8 +45,23 @@ export class EmployeesRepository {
     return this.prisma.employee.findUnique({ where: { userId } });
   }
 
-  create(data: Prisma.EmployeeUncheckedCreateInput) {
-    return this.prisma.employee.create({ data, include: WITH_RELATIONS });
+  create(
+    data: Prisma.EmployeeUncheckedCreateInput,
+    client: PrismaClientOrTx = this.prisma,
+  ) {
+    return client.employee.create({ data, include: WITH_RELATIONS });
+  }
+
+  terminate(
+    tenantId: string,
+    id: string,
+    terminationDate: Date,
+    client: PrismaClientOrTx = this.prisma,
+  ) {
+    return client.employee.updateMany({
+      where: { id, tenantId },
+      data: { terminationDate, isActive: false },
+    });
   }
 
   async update(
