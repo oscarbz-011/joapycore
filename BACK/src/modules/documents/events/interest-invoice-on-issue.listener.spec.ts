@@ -1,4 +1,5 @@
 import { InterestInvoiceOnIssueListener } from './interest-invoice-on-issue.listener';
+import { DocumentSourcesRepository } from '../repositories/document-sources.repository';
 
 const TENANT = 'tenant-1';
 const INVOICE_ID = 'invoice-1';
@@ -83,7 +84,7 @@ describe('InterestInvoiceOnIssueListener', () => {
     };
 
     listener = new InterestInvoiceOnIssueListener(
-      prisma as any,
+      new DocumentSourcesRepository(prisma as any),
       documentsRepository as any,
       filesService as any,
       pdfService as any,

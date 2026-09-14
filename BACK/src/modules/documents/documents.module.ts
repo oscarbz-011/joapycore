@@ -10,6 +10,7 @@ import { SaleContractOnInvoiceListener } from './events/sale-contract-on-invoice
 import { SeedBillingTemplatesOnTenantRegisteredListener } from './events/seed-billing-templates-on-tenant-registered.listener';
 import { SeedDefaultCategoriesOnModuleActivatedListener } from './events/seed-default-categories-on-module-activated.listener';
 import { DocumentCategoriesRepository } from './repositories/document-categories.repository';
+import { DocumentSourcesRepository } from './repositories/document-sources.repository';
 import { DocumentsRepository } from './repositories/documents.repository';
 import { DocumentsService } from './services/documents.service';
 
@@ -19,6 +20,7 @@ import { DocumentsService } from './services/documents.service';
   providers: [
     DocumentsService,
     DocumentsRepository,
+    DocumentSourcesRepository,
     DocumentCategoriesRepository,
     SaleContractOnInvoiceListener,
     SeedDefaultCategoriesOnModuleActivatedListener,

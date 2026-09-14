@@ -1,5 +1,6 @@
 import { DocType, DocVisibility, TemplateKind } from '@prisma/client';
 import { SaleContractOnInvoiceListener } from './sale-contract-on-invoice.listener';
+import { DocumentSourcesRepository } from '../repositories/document-sources.repository';
 
 const TENANT = 'tenant-1';
 const SALE_ORDER_ID = 'order-1';
@@ -131,7 +132,7 @@ describe('SaleContractOnInvoiceListener', () => {
     };
 
     listener = new SaleContractOnInvoiceListener(
-      prisma as any,
+      new DocumentSourcesRepository(prisma as any),
       documentsRepository as any,
       filesService as any,
       pdfService as any,

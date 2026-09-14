@@ -6,7 +6,7 @@ import { unflattenVariables } from '../../../files/docx/docx-variables.util';
 import { FilesService } from '../../../files/files.service';
 import { PdfService } from '../../../files/pdf/pdf.service';
 import type { PdfTableVariable } from '../../../files/pdf/tiptap-to-html.converter';
-import { PrismaService } from '../../../prisma/prisma.service';
+import { DocumentSourcesRepository } from '../repositories/document-sources.repository';
 import { numberToWordsEs } from '../../../common/utils/number-to-words.util';
 import { DocumentsRepository } from '../repositories/documents.repository';
 
@@ -134,7 +134,7 @@ export class SaleContractOnInvoiceListener {
   private readonly logger = new Logger(SaleContractOnInvoiceListener.name);
 
   constructor(
-    private readonly prisma: PrismaService,
+    private readonly sources: DocumentSourcesRepository,
     private readonly documentsRepository: DocumentsRepository,
     private readonly filesService: FilesService,
     private readonly pdfService: PdfService,
@@ -155,19 +155,10 @@ export class SaleContractOnInvoiceListener {
   private async generate(event: InvoiceIssuedEvent) {
     if (!event.saleOrderId) return;
 
-    const saleOrder = await this.prisma.saleOrder.findFirst({
-      where: { id: event.saleOrderId, tenantId: event.tenantId },
-      include: {
-        tenant: true,
-        customer: true,
-        branch: true,
-        items: { include: { product: true } },
-        loan: { include: { installments: { orderBy: { number: 'asc' } } } },
-        downPayment: true,
-        invoice: true,
-        guarantors: { orderBy: { createdAt: 'asc' } },
-      },
-    });
+    const saleOrder = await this.sources.findSaleOrderForContract(
+      event.tenantId,
+      event.saleOrderId,
+    );
 
     // Robusto ante el paymentCondition del propio evento: se decide por el
     // tipo real de la venta, no por lo que declaró quien emitió la factura.

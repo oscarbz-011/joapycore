@@ -7,7 +7,7 @@ import { unflattenVariables } from '../../../files/docx/docx-variables.util';
 import { FilesService } from '../../../files/files.service';
 import type { PdfTableVariable } from '../../../files/pdf/tiptap-to-html.converter';
 import { PdfService } from '../../../files/pdf/pdf.service';
-import { PrismaService } from '../../../prisma/prisma.service';
+import { DocumentSourcesRepository } from '../repositories/document-sources.repository';
 import { DEFAULT_INVOICE_TEMPLATE } from '../constants/default-templates.constant';
 import { DocumentsRepository } from '../repositories/documents.repository';
 
@@ -74,7 +74,7 @@ export class InvoiceOnIssueListener {
   private readonly logger = new Logger(InvoiceOnIssueListener.name);
 
   constructor(
-    private readonly prisma: PrismaService,
+    private readonly sources: DocumentSourcesRepository,
     private readonly documentsRepository: DocumentsRepository,
     private readonly filesService: FilesService,
     private readonly pdfService: PdfService,
@@ -94,25 +94,10 @@ export class InvoiceOnIssueListener {
   }
 
   private async generate(event: InvoicePdfRequestedEvent) {
-    const invoice = await this.prisma.invoice.findFirst({
-      where: { id: event.invoiceId, tenantId: event.tenantId },
-      include: {
-        tenant: true,
-        items: true,
-        saleOrder: {
-          include: {
-            customer: true,
-            branch: true,
-            downPayment: true,
-            loan: {
-              include: {
-                installments: { orderBy: { number: 'asc' }, take: 1 },
-              },
-            },
-          },
-        },
-      },
-    });
+    const invoice = await this.sources.findInvoiceForPdf(
+      event.tenantId,
+      event.invoiceId,
+    );
     // saleOrder es null para facturas de intereses moratorios (invoiceType
     // INTEREST) — pero esas nunca emiten 'invoice.issued' (ver
     // interest-invoice-on-issue.listener.ts, evento separado), así que este
@@ -288,9 +273,6 @@ export class InvoiceOnIssueListener {
       { module: 'billing', entityType: 'invoice', entityId: invoice.id },
     );
 
-    await this.prisma.invoice.updateMany({
-      where: { id: invoice.id, tenantId: event.tenantId },
-      data: { pdfFileId: fileRecord.id },
-    });
+    await this.sources.setInvoicePdf(event.tenantId, invoice.id, fileRecord.id);
   }
 }

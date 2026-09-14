@@ -14,7 +14,7 @@ import { EmailService } from '../../../email/email.service';
 import { DocxTemplateService } from '../../../files/docx/docx-template.service';
 import { unflattenVariables } from '../../../files/docx/docx-variables.util';
 import { FilesService } from '../../../files/files.service';
-import { PrismaService } from '../../../prisma/prisma.service';
+import { DocumentSourcesRepository } from '../repositories/document-sources.repository';
 import { getTemplateKindDefs } from '../constants/template-variables.constant';
 import { CreateDocumentCategoryDto } from '../dto/create-document-category.dto';
 import { CreateDocumentDto } from '../dto/create-document.dto';
@@ -33,7 +33,7 @@ export class DocumentsService {
     private readonly categoriesRepository: DocumentCategoriesRepository,
     private readonly filesService: FilesService,
     private readonly emailService: EmailService,
-    private readonly prisma: PrismaService,
+    private readonly sources: DocumentSourcesRepository,
     private readonly eventEmitter: EventEmitter2,
     private readonly docxTemplateService: DocxTemplateService,
   ) {}
@@ -367,17 +367,15 @@ export class DocumentsService {
     if (!entityType || !entityId) return undefined;
 
     if (entityType === 'customer') {
-      const customer = await this.prisma.customer.findFirst({
-        where: { id: entityId, tenantId },
-      });
+      const customer = await this.sources.findCustomer(tenantId, entityId);
       return customer?.email ?? undefined;
     }
 
     if (entityType === 'sale_order') {
-      const saleOrder = await this.prisma.saleOrder.findFirst({
-        where: { id: entityId, tenantId },
-        include: { customer: true },
-      });
+      const saleOrder = await this.sources.findSaleOrderWithCustomer(
+        tenantId,
+        entityId,
+      );
       return saleOrder?.customer.email ?? undefined;
     }
 

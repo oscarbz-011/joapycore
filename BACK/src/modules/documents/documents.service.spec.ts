@@ -13,6 +13,7 @@ import {
   TemplateKind,
 } from '@prisma/client';
 import { DocumentsService } from './services/documents.service';
+import { DocumentSourcesRepository } from './repositories/document-sources.repository';
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 
@@ -167,7 +168,7 @@ describe('DocumentsService', () => {
       categoriesRepo as any,
       filesService as any,
       emailService as any,
-      prisma as any,
+      new DocumentSourcesRepository(prisma as any),
       eventEmitter as any,
       docxTemplateService,
     );

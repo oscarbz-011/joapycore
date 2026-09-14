@@ -7,7 +7,7 @@ import { unflattenVariables } from '../../../files/docx/docx-variables.util';
 import { FilesService } from '../../../files/files.service';
 import type { PdfTableVariable } from '../../../files/pdf/tiptap-to-html.converter';
 import { PdfService } from '../../../files/pdf/pdf.service';
-import { PrismaService } from '../../../prisma/prisma.service';
+import { DocumentSourcesRepository } from '../repositories/document-sources.repository';
 import { DEFAULT_INTEREST_INVOICE_TEMPLATE } from '../constants/default-templates.constant';
 import { DocumentsRepository } from '../repositories/documents.repository';
 
@@ -61,7 +61,7 @@ export class InterestInvoiceOnIssueListener {
   private readonly logger = new Logger(InterestInvoiceOnIssueListener.name);
 
   constructor(
-    private readonly prisma: PrismaService,
+    private readonly sources: DocumentSourcesRepository,
     private readonly documentsRepository: DocumentsRepository,
     private readonly filesService: FilesService,
     private readonly pdfService: PdfService,
@@ -80,14 +80,10 @@ export class InterestInvoiceOnIssueListener {
   }
 
   private async generate(event: InterestInvoiceIssuedEvent) {
-    const invoice = await this.prisma.invoice.findFirst({
-      where: { id: event.invoiceId, tenantId: event.tenantId },
-      include: {
-        tenant: true,
-        items: true,
-        paymentReceipt: { include: { customer: true } },
-      },
-    });
+    const invoice = await this.sources.findInterestInvoiceForPdf(
+      event.tenantId,
+      event.invoiceId,
+    );
     if (!invoice || !invoice.paymentReceipt) return;
 
     const customer = invoice.paymentReceipt.customer;
@@ -232,9 +228,6 @@ export class InterestInvoiceOnIssueListener {
       { module: 'billing', entityType: 'invoice', entityId: invoice.id },
     );
 
-    await this.prisma.invoice.updateMany({
-      where: { id: invoice.id, tenantId: event.tenantId },
-      data: { pdfFileId: fileRecord.id },
-    });
+    await this.sources.setInvoicePdf(event.tenantId, invoice.id, fileRecord.id);
   }
 }

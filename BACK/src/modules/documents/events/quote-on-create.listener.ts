@@ -7,7 +7,7 @@ import { unflattenVariables } from '../../../files/docx/docx-variables.util';
 import { FilesService } from '../../../files/files.service';
 import type { PdfTableVariable } from '../../../files/pdf/tiptap-to-html.converter';
 import { PdfService } from '../../../files/pdf/pdf.service';
-import { PrismaService } from '../../../prisma/prisma.service';
+import { DocumentSourcesRepository } from '../repositories/document-sources.repository';
 import { DEFAULT_QUOTE_TEMPLATE } from '../constants/default-templates.constant';
 import { DocumentsRepository } from '../repositories/documents.repository';
 
@@ -42,7 +42,7 @@ export class QuoteOnCreateListener {
   private readonly logger = new Logger(QuoteOnCreateListener.name);
 
   constructor(
-    private readonly prisma: PrismaService,
+    private readonly sources: DocumentSourcesRepository,
     private readonly documentsRepository: DocumentsRepository,
     private readonly filesService: FilesService,
     private readonly pdfService: PdfService,
@@ -61,14 +61,10 @@ export class QuoteOnCreateListener {
   }
 
   private async generate(event: SaleOrderQuotedEvent) {
-    const order = await this.prisma.saleOrder.findFirst({
-      where: { id: event.saleOrderId, tenantId: event.tenantId },
-      include: {
-        tenant: true,
-        customer: true,
-        items: { include: { product: true } },
-      },
-    });
+    const order = await this.sources.findQuoteForPdf(
+      event.tenantId,
+      event.saleOrderId,
+    );
     if (!order) return;
 
     const customerName = [
@@ -184,9 +180,6 @@ export class QuoteOnCreateListener {
       { module: 'documents', entityType: 'sale_order', entityId: order.id },
     );
 
-    await this.prisma.saleOrder.updateMany({
-      where: { id: order.id, tenantId: event.tenantId },
-      data: { quotePdfFileId: fileRecord.id },
-    });
+    await this.sources.setQuotePdf(event.tenantId, order.id, fileRecord.id);
   }
 }

@@ -7,7 +7,7 @@ import { unflattenVariables } from '../../../files/docx/docx-variables.util';
 import { FilesService } from '../../../files/files.service';
 import type { PdfTableVariable } from '../../../files/pdf/tiptap-to-html.converter';
 import { PdfService } from '../../../files/pdf/pdf.service';
-import { PrismaService } from '../../../prisma/prisma.service';
+import { DocumentSourcesRepository } from '../repositories/document-sources.repository';
 import { DEFAULT_PAYMENT_RECEIPT_TEMPLATE } from '../constants/default-templates.constant';
 import { DocumentsRepository } from '../repositories/documents.repository';
 
@@ -48,7 +48,7 @@ export class ReceiptOnPaymentListener {
   private readonly logger = new Logger(ReceiptOnPaymentListener.name);
 
   constructor(
-    private readonly prisma: PrismaService,
+    private readonly sources: DocumentSourcesRepository,
     private readonly documentsRepository: DocumentsRepository,
     private readonly filesService: FilesService,
     private readonly pdfService: PdfService,
@@ -67,16 +67,10 @@ export class ReceiptOnPaymentListener {
   }
 
   private async generate(event: PaymentReceiptCreatedEvent) {
-    const receipt = await this.prisma.paymentReceipt.findFirst({
-      where: { id: event.receiptId, tenantId: event.tenantId },
-      include: {
-        tenant: true,
-        customer: true,
-        branch: true,
-        collectedBy: true,
-        items: { orderBy: { installmentNumber: 'asc' } },
-      },
-    });
+    const receipt = await this.sources.findReceiptForPdf(
+      event.tenantId,
+      event.receiptId,
+    );
     if (!receipt) return;
 
     const customerName = `${receipt.customer.firstName} ${receipt.customer.lastName}`;
@@ -186,9 +180,6 @@ export class ReceiptOnPaymentListener {
       },
     );
 
-    await this.prisma.paymentReceipt.updateMany({
-      where: { id: receipt.id, tenantId: event.tenantId },
-      data: { pdfFileId: fileRecord.id },
-    });
+    await this.sources.setReceiptPdf(event.tenantId, receipt.id, fileRecord.id);
   }
 }
