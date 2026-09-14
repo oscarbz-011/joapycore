@@ -1,11 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import { SaleOrderStatus } from '@prisma/client';
-import { PrismaService } from '../../../prisma/prisma.service';
+import { ReportsRepository } from '../repositories/reports.repository';
 import { startOfBusinessDay } from '../../../common/utils/business-date.util';
 
 @Injectable()
 export class ReportsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly reportsRepository: ReportsRepository) {}
 
   async salesReport(tenantId: string, dateFrom?: string, dateTo?: string) {
     const where = {
@@ -21,16 +21,7 @@ export class ReportsService {
         : {}),
     };
 
-    const orders = await this.prisma.saleOrder.findMany({
-      where,
-      include: {
-        customer: { select: { firstName: true, lastName: true } },
-        items: {
-          include: { product: { select: { name: true, categoryId: true } } },
-        },
-      },
-      orderBy: { orderDate: 'asc' },
-    });
+    const orders = await this.reportsRepository.findSaleOrdersForReport(where);
 
     const totalRevenue = orders.reduce(
       (acc, o) =>
@@ -87,15 +78,8 @@ export class ReportsService {
   }
 
   async stockReport(tenantId: string) {
-    const products = await this.prisma.product.findMany({
-      where: { tenantId, deletedAt: null },
-      include: {
-        category: { select: { name: true } },
-        brand: { select: { name: true } },
-        stockMovements: { select: { type: true, quantity: true } },
-      },
-      orderBy: { name: 'asc' },
-    });
+    const products =
+      await this.reportsRepository.findProductsWithMovements(tenantId);
 
     const items = products.map((p) => {
       const stock = p.stockMovements.reduce((acc, m) => {
@@ -141,34 +125,7 @@ export class ReportsService {
   }
 
   async receivablesReport(tenantId: string) {
-    const ars = await this.prisma.accountsReceivable.findMany({
-      where: { tenantId },
-      include: {
-        invoice: {
-          include: {
-            saleOrder: {
-              include: {
-                customer: true,
-                // Para crédito, AR.dueDate queda fijo en la fecha de la
-                // primera cuota desde que se crea el préstamo y nunca se
-                // actualiza — no sirve para saber si el cliente está al día.
-                // Se recalcula acá con la cuota real más próxima sin pagar.
-                loan: {
-                  select: {
-                    installments: {
-                      select: { dueDate: true, status: true },
-                      orderBy: { number: 'asc' },
-                    },
-                  },
-                },
-              },
-            },
-          },
-        },
-        paymentRecords: { select: { amount: true, paymentDate: true } },
-      },
-      orderBy: { createdAt: 'desc' },
-    });
+    const ars = await this.reportsRepository.findReceivablesForReport(tenantId);
 
     // Vencimientos = días de calendario: se comparan contra el día de hoy en
     // Paraguay, no contra el instante actual.
