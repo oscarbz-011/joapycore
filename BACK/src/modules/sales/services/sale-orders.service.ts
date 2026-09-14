@@ -18,8 +18,11 @@ import {
 } from '../dto/create-sale-order.dto';
 import { RegisterDownPaymentDto } from '../dto/register-down-payment.dto';
 import { RequestAdjustmentDto } from '../dto/request-adjustment.dto';
+import { CreditSourcesRepository } from '../repositories/credit-sources.repository';
+import { CustomersRepository } from '../repositories/customers.repository';
 import { GuarantorsRepository } from '../repositories/guarantors.repository';
 import { SaleOrdersRepository } from '../repositories/sale-orders.repository';
+import { SalesSourcesRepository } from '../repositories/sales-sources.repository';
 import { CreditEvaluationService } from './credit-evaluation.service';
 import type { AuditLogEvent } from '../../../audit/audit-log.event';
 import { OutboxService } from '../../../outbox/outbox.service';
@@ -59,6 +62,7 @@ export type QuickSaleDto = QuickSaleInput;
 @Injectable()
 export class SaleOrdersService implements SalesGateway {
   constructor(
+    // Solo para abrir transacciones; los accesos a datos van por repositorios.
     private readonly prisma: PrismaService,
     private readonly saleOrdersRepository: SaleOrdersRepository,
     // Inventario por contrato (common/contracts): Ventas no importa
@@ -71,6 +75,9 @@ export class SaleOrdersService implements SalesGateway {
     // Eventos críticos (préstamo, factura, nota de entrega) con entrega
     // garantizada: se guardan en la misma transacción que el cambio.
     private readonly outbox: OutboxService,
+    private readonly creditSources: CreditSourcesRepository,
+    private readonly salesSources: SalesSourcesRepository,
+    private readonly customersRepository: CustomersRepository,
   ) {}
 
   /**
@@ -123,13 +130,10 @@ export class SaleOrdersService implements SalesGateway {
     }
 
     // Check for overdue installments (morosidad)
-    const overdueCount = await this.prisma.installment.count({
-      where: {
-        tenantId,
-        status: 'OVERDUE',
-        loan: { customerId: order.customerId },
-      },
-    });
+    const overdueCount = await this.creditSources.countOverdueInstallments(
+      tenantId,
+      order.customerId,
+    );
     if (overdueCount > 0) {
       throw new UnprocessableEntityException(
         `El cliente tiene ${overdueCount} cuota(s) vencida(s). Regularice la situación antes de aprobar un nuevo crédito.`,
@@ -138,18 +142,15 @@ export class SaleOrdersService implements SalesGateway {
 
     // Check credit limit — cuenta saldo pendiente, no el monto original del
     // préstamo, para que uno ya casi pagado no siga ocupando el límite entero.
-    const customer = await this.prisma.customer.findFirst({
-      where: { id: order.customerId, tenantId },
-      select: { creditLimit: true },
-    });
+    const customer = await this.creditSources.findCustomerCreditLimit(
+      tenantId,
+      order.customerId,
+    );
     if (customer?.creditLimit) {
-      const activeLoans = await this.prisma.loan.findMany({
-        where: { tenantId, customerId: order.customerId, status: 'ACTIVE' },
-        select: {
-          totalAmount: true,
-          installments: { select: { paidAmount: true } },
-        },
-      });
+      const activeLoans = await this.creditSources.findActiveLoanBalances(
+        tenantId,
+        order.customerId,
+      );
       const currentDebt = activeLoans.reduce((sum, loan) => {
         const paid = loan.installments.reduce(
           (s, i) => s + toNum(i.paidAmount),
@@ -209,14 +210,17 @@ export class SaleOrdersService implements SalesGateway {
 
     // Atomic transition — TOCTOU-safe because status is the guard
     const creditApprovedEvent = await this.prisma.$transaction(async (tx) => {
-      const result = await tx.saleOrder.updateMany({
-        where: { id, tenantId, status: 'PENDING_CREDIT_APPROVAL' },
-        data: {
+      const result = await this.saleOrdersRepository.transition(
+        tenantId,
+        id,
+        { status: 'PENDING_CREDIT_APPROVAL' },
+        {
           status: 'CREDIT_APPROVED',
           approvedById: userId ?? null,
           approvedAt: new Date(),
         },
-      });
+        tx,
+      );
       if (result.count === 0) {
         throw new UnprocessableEntityException(
           'El pedido fue modificado por otra operación concurrente. Por favor, recargue e intente de nuevo.',
@@ -252,26 +256,22 @@ export class SaleOrdersService implements SalesGateway {
       );
     }
 
-    const existing = await this.prisma.downPayment.findUnique({
-      where: { saleOrderId: id },
-    });
+    const existing = await this.saleOrdersRepository.findDownPayment(id);
     if (existing) {
       throw new ConflictException(
         'Ya existe un pie registrado para este pedido',
       );
     }
 
-    const downPayment = await this.prisma.downPayment.create({
-      data: {
-        tenantId,
-        saleOrderId: id,
-        amount: dto.amount,
-        paymentMethod: dto.paymentMethod,
-        paymentDate: new Date(dto.paymentDate),
-        reference: dto.reference ?? null,
-        notes: dto.notes ?? null,
-        registeredById: userId ?? null,
-      },
+    const downPayment = await this.saleOrdersRepository.createDownPayment({
+      tenantId,
+      saleOrderId: id,
+      amount: dto.amount,
+      paymentMethod: dto.paymentMethod,
+      paymentDate: new Date(dto.paymentDate),
+      reference: dto.reference ?? null,
+      notes: dto.notes ?? null,
+      registeredById: userId ?? null,
     });
 
     this.eventEmitter.emit('audit.log', {
@@ -293,15 +293,17 @@ export class SaleOrdersService implements SalesGateway {
     userId?: string,
   ) {
     // Atomic transition: only succeeds if current status is PENDING_CREDIT_APPROVAL.
-    const result = await this.prisma.saleOrder.updateMany({
-      where: { id, tenantId, status: 'PENDING_CREDIT_APPROVAL' },
-      data: {
+    const result = await this.saleOrdersRepository.transition(
+      tenantId,
+      id,
+      { status: 'PENDING_CREDIT_APPROVAL' },
+      {
         status: 'CREDIT_REJECTED',
         rejectedById: userId ?? null,
         rejectedAt: new Date(),
         rejectionReason: reason,
       },
-    });
+    );
     if (result.count === 0) {
       throw new UnprocessableEntityException(
         'Solo los pedidos en espera de aprobación de crédito pueden rechazarse',
@@ -361,14 +363,16 @@ export class SaleOrdersService implements SalesGateway {
     dto: RequestAdjustmentDto,
     userId?: string,
   ) {
-    const result = await this.prisma.saleOrder.updateMany({
-      where: { id, tenantId, status: 'PENDING_CREDIT_APPROVAL' },
-      data: {
+    const result = await this.saleOrdersRepository.transition(
+      tenantId,
+      id,
+      { status: 'PENDING_CREDIT_APPROVAL' },
+      {
         status: 'CREDIT_NEEDS_ADJUSTMENT',
         adjustmentNote: dto.note ?? null,
         suggestedAlternatives: dto.suggestedAlternatives,
       },
-    });
+    );
     if (result.count === 0) {
       throw new UnprocessableEntityException(
         'Solo los pedidos en espera de aprobación de crédito pueden enviarse a ajustes',
@@ -466,13 +470,10 @@ export class SaleOrdersService implements SalesGateway {
       ? toNum(order.interestRate)
       : null;
     if (newInstallments && (dto.installments || dto.items)) {
-      const plan = await this.prisma.creditPlan.findFirst({
-        where: {
-          creditConfig: { tenantId },
-          installments: newInstallments,
-          isActive: true,
-        },
-      });
+      const plan = await this.creditSources.findActivePlan(
+        tenantId,
+        newInstallments,
+      );
       if (!plan) {
         throw new UnprocessableEntityException(
           `No hay un plan de crédito activo para ${newInstallments} cuotas. Configurá los planes en Ajustes → Créditos.`,
@@ -521,9 +522,7 @@ export class SaleOrdersService implements SalesGateway {
       if (dto.items) {
         const oldItemIds = order.items.map((i) => i.id);
         await this.stockLedger.detachSerialUnits(tx, oldItemIds);
-        await tx.saleOrderItem.deleteMany({
-          where: { saleOrderId: id },
-        });
+        await this.saleOrdersRepository.deleteItems(id, tx);
         await this.createItemsWithSerials(
           tx,
           tenantId,
@@ -537,26 +536,28 @@ export class SaleOrdersService implements SalesGateway {
         // mismos, pero su financedUnitPrice quedó calculado con la tasa
         // vieja y hay que recalcularlo con la nueva.
         for (const item of order.items) {
-          await tx.saleOrderItem.update({
-            where: { id: item.id },
-            data: {
+          await this.saleOrdersRepository.updateItem(
+            item.id,
+            {
               financedUnitPrice: creditInterestRate
                 ? toNum(item.unitPrice) * (1 + creditInterestRate / 100)
                 : undefined,
             },
-          });
+            tx,
+          );
         }
       }
 
-      await tx.saleOrder.update({
-        where: { id },
-        data: {
+      await this.saleOrdersRepository.updateById(
+        id,
+        {
           installments: newInstallments,
           interestRate: creditInterestRate,
           subtotal,
           total,
         },
-      });
+        tx,
+      );
     });
 
     this.eventEmitter.emit('audit.log', {
@@ -575,10 +576,12 @@ export class SaleOrdersService implements SalesGateway {
   // quería (ítems, cuotas, garantes) y recién ahí quiere que el analista
   // vuelva a evaluar el pedido.
   async resubmitForApproval(tenantId: string, id: string, userId?: string) {
-    const result = await this.prisma.saleOrder.updateMany({
-      where: { id, tenantId, status: 'CREDIT_NEEDS_ADJUSTMENT' },
-      data: { status: 'PENDING_CREDIT_APPROVAL' },
-    });
+    const result = await this.saleOrdersRepository.transition(
+      tenantId,
+      id,
+      { status: 'CREDIT_NEEDS_ADJUSTMENT' },
+      { status: 'PENDING_CREDIT_APPROVAL' },
+    );
     if (result.count === 0) {
       throw new UnprocessableEntityException(
         'Solo se pueden reenviar pedidos que necesitan ajustes',
@@ -726,8 +729,8 @@ export class SaleOrdersService implements SalesGateway {
         }
       }
 
-      const saleItem = await tx.saleOrderItem.create({
-        data: {
+      const saleItem = await this.saleOrdersRepository.createItem(
+        {
           saleOrderId: orderId,
           productId: item.productId ?? null,
           description: item.description ?? null,
@@ -745,7 +748,8 @@ export class SaleOrdersService implements SalesGateway {
           comboGroupId: item.comboGroupId ?? null,
           specNotes: item.specNotes ?? null,
         },
-      });
+        tx,
+      );
 
       if (product?.isSerialized && (item.serialNumbers?.length ?? 0) > 0) {
         await this.stockLedger.assignSerialUnits(
@@ -831,33 +835,20 @@ export class SaleOrdersService implements SalesGateway {
     userId?: string | null,
   ): Promise<string | null> {
     if (userId) {
-      const user = await this.prisma.user.findUnique({
-        where: { id: userId },
-        select: { branchId: true },
-      });
-      if (user?.branchId) return user.branchId;
+      const branchId = await this.salesSources.findUserBranchId(
+        tenantId,
+        userId,
+      );
+      if (branchId) return branchId;
     }
-    const mainBranch = await this.prisma.branch.findFirst({
-      where: { tenantId, isMain: true },
-      select: { id: true },
-    });
-    return mainBranch?.id ?? null;
+    return this.salesSources.findMainBranchId(tenantId);
   }
 
   private async resolveWalkInCustomerId(
     tx: Prisma.TransactionClient,
     tenantId: string,
   ): Promise<string> {
-    const existing = await tx.customer.findFirst({
-      where: { tenantId, firstName: 'Consumidor', lastName: 'Final' },
-      select: { id: true },
-    });
-    if (existing) return existing.id;
-    const created = await tx.customer.create({
-      data: { tenantId, firstName: 'Consumidor', lastName: 'Final' },
-      select: { id: true },
-    });
-    return created.id;
+    return this.customersRepository.findOrCreateWalkIn(tenantId, tx);
   }
 
   // ── Long path: multi-step (evaluate → confirm → deliver, separate requests) ──
@@ -917,13 +908,10 @@ export class SaleOrdersService implements SalesGateway {
           'Las ventas a crédito requieren especificar el número de cuotas',
         );
       }
-      const plan = await this.prisma.creditPlan.findFirst({
-        where: {
-          creditConfig: { tenantId },
-          installments: dto.installments,
-          isActive: true,
-        },
-      });
+      const plan = await this.creditSources.findActivePlan(
+        tenantId,
+        dto.installments,
+      );
       if (!plan) {
         throw new UnprocessableEntityException(
           `No hay un plan de crédito activo para ${dto.installments} cuotas. Configurá los planes en Ajustes → Créditos.`,
@@ -941,8 +929,8 @@ export class SaleOrdersService implements SalesGateway {
       : null;
 
     const created = await this.prisma.$transaction(async (tx) => {
-      const order = await tx.saleOrder.create({
-        data: {
+      const order = await this.saleOrdersRepository.createBare(
+        {
           tenantId,
           customerId: dto.customerId,
           branchId,
@@ -962,7 +950,8 @@ export class SaleOrdersService implements SalesGateway {
           subtotal,
           total,
         },
-      });
+        tx,
+      );
 
       const createdItems = await this.createItemsWithSerials(
         tx,
@@ -979,10 +968,10 @@ export class SaleOrdersService implements SalesGateway {
         await this.stockLedger.reserve(tx, tenantId, createdItems);
       }
 
-      const fullOrder = await tx.saleOrder.findUnique({
-        where: { id: order.id },
-        include: { customer: true, items: { include: { product: true } } },
-      });
+      const fullOrder = await this.saleOrdersRepository.findWithItems(
+        order.id,
+        tx,
+      );
       this.eventEmitter.emit('audit.log', {
         tenantId,
         userId,
@@ -1024,9 +1013,9 @@ export class SaleOrdersService implements SalesGateway {
     const isCreditSale = order.saleType === 'CREDIT';
     const nextStatus = isCreditSale ? 'PENDING_CREDIT_APPROVAL' : 'PENDING';
 
-    const updated = await this.prisma.saleOrder.update({
-      where: { id },
-      data: { status: nextStatus, orderType: 'STANDARD' },
+    const updated = await this.saleOrdersRepository.updateById(id, {
+      status: nextStatus,
+      orderType: 'STANDARD',
     });
     if (isCreditSale) {
       this.eventEmitter.emit('sale.credit.requested', {
@@ -1052,18 +1041,21 @@ export class SaleOrdersService implements SalesGateway {
     userId?: string,
   ) {
     const paymentCollectedEvent = await this.prisma.$transaction(async (tx) => {
-      const transitioned = await tx.saleOrder.updateMany({
-        where: { id, tenantId, status: 'PENDING', saleType: 'CASH' },
-        data: { status: 'PAYMENT_RECEIVED' },
-      });
+      const transitioned = await this.saleOrdersRepository.transition(
+        tenantId,
+        id,
+        { status: 'PENDING', saleType: 'CASH' },
+        { status: 'PAYMENT_RECEIVED' },
+        tx,
+      );
       if (transitioned.count === 0) {
         throw new UnprocessableEntityException(
           'Solo pedidos contado en estado PENDIENTE pueden registrar cobro',
         );
       }
 
-      await tx.salePayment.createMany({
-        data: dto.payments.map((p) => ({
+      await this.saleOrdersRepository.createPayments(
+        dto.payments.map((p) => ({
           tenantId,
           saleOrderId: id,
           amount: p.amount,
@@ -1073,7 +1065,8 @@ export class SaleOrdersService implements SalesGateway {
           notes: p.notes ?? null,
           collectedById: userId ?? null,
         })),
-      });
+        tx,
+      );
 
       // Triggers invoice creation in billing module for cash sales
       return this.outbox.enqueue(tx, tenantId, 'sale.payment.collected', {
@@ -1099,10 +1092,13 @@ export class SaleOrdersService implements SalesGateway {
   // sale.order.completed triggers billing to create the invoice for both flows.
   async confirm(tenantId: string, id: string, userId?: string) {
     const completedEvent = await this.prisma.$transaction(async (tx) => {
-      const transitioned = await tx.saleOrder.updateMany({
-        where: { id, tenantId, status: { in: ['PENDING', 'CREDIT_APPROVED'] } },
-        data: { status: 'CONFIRMED' },
-      });
+      const transitioned = await this.saleOrdersRepository.transition(
+        tenantId,
+        id,
+        { status: { in: ['PENDING', 'CREDIT_APPROVED'] } },
+        { status: 'CONFIRMED' },
+        tx,
+      );
       if (transitioned.count === 0) {
         throw new UnprocessableEntityException(
           'El pedido no puede confirmarse en su estado actual',
@@ -1113,10 +1109,7 @@ export class SaleOrdersService implements SalesGateway {
       // stock no se compromete mientras se evalúa el crédito): se reservan
       // acá, validando disponibilidad. Si no alcanza, la transacción revierte
       // también el cambio de estado.
-      const items = await tx.saleOrderItem.findMany({
-        where: { saleOrderId: id, productId: { not: null } },
-        include: { product: { select: { name: true, isSerialized: true } } },
-      });
+      const items = await this.saleOrdersRepository.findProductItems(id, tx);
       const reserved = await this.stockLedger.findActiveReservations(
         tx,
         tenantId,
@@ -1203,14 +1196,12 @@ export class SaleOrdersService implements SalesGateway {
     saleOrderId: string,
     userId?: string,
   ) {
-    await this.prisma.saleOrder.updateMany({
-      where: {
-        id: saleOrderId,
-        tenantId,
-        status: { in: ['CONFIRMED', 'INVOICED', 'PAYMENT_RECEIVED'] },
-      },
-      data: { status: 'DELIVERED' },
-    });
+    await this.saleOrdersRepository.transition(
+      tenantId,
+      saleOrderId,
+      { status: { in: ['CONFIRMED', 'INVOICED', 'PAYMENT_RECEIVED'] } },
+      { status: 'DELIVERED' },
+    );
 
     const order = await this.findOne(tenantId, saleOrderId);
 
@@ -1229,14 +1220,12 @@ export class SaleOrdersService implements SalesGateway {
   }
 
   async deliver(tenantId: string, id: string, userId?: string) {
-    const result = await this.prisma.saleOrder.updateMany({
-      where: {
-        id,
-        tenantId,
-        status: { in: ['CONFIRMED', 'PAYMENT_RECEIVED'] },
-      },
-      data: { status: 'DELIVERED' },
-    });
+    const result = await this.saleOrdersRepository.transition(
+      tenantId,
+      id,
+      { status: { in: ['CONFIRMED', 'PAYMENT_RECEIVED'] } },
+      { status: 'DELIVERED' },
+    );
     if (result.count === 0) {
       throw new UnprocessableEntityException(
         'Solo los pedidos confirmados pueden marcarse como entregados',
@@ -1272,10 +1261,11 @@ export class SaleOrdersService implements SalesGateway {
     }
 
     await this.prisma.$transaction(async (tx) => {
-      await tx.saleOrder.update({
-        where: { id },
-        data: { status: 'CANCELLED' },
-      });
+      await this.saleOrdersRepository.updateById(
+        id,
+        { status: 'CANCELLED' },
+        tx,
+      );
 
       // Release whatever is still reserved for this order
       await this.stockLedger.releaseReservations(tx, tenantId, order.items);
@@ -1325,9 +1315,11 @@ export class SaleOrdersService implements SalesGateway {
     const order = await this.prisma.$transaction(async (tx) => {
       // Re-checked inside the transaction: the session could have been closed
       // by a concurrent request between the controller call and this point.
-      const session = await tx.posSession.findFirst({
-        where: { id: posSessionId, tenantId, status: 'OPEN' },
-      });
+      const session = await this.salesSources.findOpenPosSession(
+        tenantId,
+        posSessionId,
+        tx,
+      );
       if (!session) {
         throw new UnprocessableEntityException(
           'La sesión de caja no está abierta',
@@ -1337,8 +1329,8 @@ export class SaleOrdersService implements SalesGateway {
       const customerId =
         dto.customerId ?? (await this.resolveWalkInCustomerId(tx, tenantId));
 
-      const created = await tx.saleOrder.create({
-        data: {
+      const created = await this.saleOrdersRepository.createBare(
+        {
           tenantId,
           customerId,
           branchId,
@@ -1353,7 +1345,8 @@ export class SaleOrdersService implements SalesGateway {
           subtotal,
           total,
         },
-      });
+        tx,
+      );
 
       const createdItems = await this.createItemsWithSerials(
         tx,
@@ -1377,8 +1370,8 @@ export class SaleOrdersService implements SalesGateway {
         }
       }
 
-      await tx.salePayment.createMany({
-        data: dto.payments.map((p) => ({
+      await this.saleOrdersRepository.createPayments(
+        dto.payments.map((p) => ({
           tenantId,
           saleOrderId: created.id,
           amount: p.amount,
@@ -1388,14 +1381,16 @@ export class SaleOrdersService implements SalesGateway {
           collectedById: userId,
           posSessionId,
         })),
-      });
+        tx,
+      );
 
       // No DeliveryNote: the counter hands the goods over immediately, there's
       // no separate logistics dispatch step to track.
-      await tx.saleOrder.update({
-        where: { id: created.id },
-        data: { status: 'DELIVERED' },
-      });
+      await this.saleOrdersRepository.updateById(
+        created.id,
+        { status: 'DELIVERED' },
+        tx,
+      );
 
       // Reuses BillingOnSaleListener — channel-agnostic and idempotent per
       // saleOrderId.
@@ -1406,10 +1401,10 @@ export class SaleOrdersService implements SalesGateway {
         { tenantId, saleOrderId: created.id },
       );
 
-      const saved = await tx.saleOrder.findUniqueOrThrow({
-        where: { id: created.id },
-        include: { customer: true, items: { include: { product: true } } },
-      });
+      const saved = await this.saleOrdersRepository.findWithItemsOrThrow(
+        created.id,
+        tx,
+      );
       return Object.assign(saved, { eventId });
     });
 

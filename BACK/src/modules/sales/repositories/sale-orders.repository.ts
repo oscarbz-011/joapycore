@@ -78,6 +78,93 @@ export class SaleOrdersRepository {
     return db.saleOrderItem.create({ data });
   }
 
+  // Transición de estado protegida: solo actualiza si el pedido cumple el
+  // guard (p.ej. su estado actual). Devuelve { count } para detectar
+  // carreras.
+  transition(
+    tenantId: string,
+    id: string,
+    guard: Prisma.SaleOrderWhereInput,
+    data: Prisma.SaleOrderUncheckedUpdateManyInput,
+    client: PrismaClientOrTx = this.prisma,
+  ) {
+    return client.saleOrder.updateMany({
+      where: { id, tenantId, ...guard },
+      data,
+    });
+  }
+
+  updateById(
+    id: string,
+    data: Prisma.SaleOrderUncheckedUpdateInput,
+    client: PrismaClientOrTx = this.prisma,
+  ) {
+    return client.saleOrder.update({ where: { id }, data });
+  }
+
+  // Alta sin relaciones: los ítems se crean después en la misma transacción.
+  createBare(
+    data: Prisma.SaleOrderUncheckedCreateInput,
+    client: PrismaClientOrTx = this.prisma,
+  ) {
+    return client.saleOrder.create({ data });
+  }
+
+  findWithItems(id: string, client: PrismaClientOrTx = this.prisma) {
+    return client.saleOrder.findUnique({
+      where: { id },
+      include: { customer: true, items: { include: { product: true } } },
+    });
+  }
+
+  findWithItemsOrThrow(id: string, client: PrismaClientOrTx = this.prisma) {
+    return client.saleOrder.findUniqueOrThrow({
+      where: { id },
+      include: { customer: true, items: { include: { product: true } } },
+    });
+  }
+
+  // ── Ítems ──────────────────────────────────────────────────────────────────
+
+  deleteItems(saleOrderId: string, client: PrismaClientOrTx = this.prisma) {
+    return client.saleOrderItem.deleteMany({ where: { saleOrderId } });
+  }
+
+  updateItem(
+    id: string,
+    data: Prisma.SaleOrderItemUncheckedUpdateInput,
+    client: PrismaClientOrTx = this.prisma,
+  ) {
+    return client.saleOrderItem.update({ where: { id }, data });
+  }
+
+  findProductItems(
+    saleOrderId: string,
+    client: PrismaClientOrTx = this.prisma,
+  ) {
+    return client.saleOrderItem.findMany({
+      where: { saleOrderId, productId: { not: null } },
+      include: { product: { select: { name: true, isSerialized: true } } },
+    });
+  }
+
+  // ── Cobros y pie ───────────────────────────────────────────────────────────
+
+  createPayments(
+    data: Prisma.SalePaymentCreateManyInput[],
+    client: PrismaClientOrTx = this.prisma,
+  ) {
+    return client.salePayment.createMany({ data });
+  }
+
+  findDownPayment(saleOrderId: string) {
+    return this.prisma.downPayment.findUnique({ where: { saleOrderId } });
+  }
+
+  createDownPayment(data: Prisma.DownPaymentUncheckedCreateInput) {
+    return this.prisma.downPayment.create({ data });
+  }
+
   // Solo avanza si el pedido sigue CONFIRMED (idempotente ante reintentos).
   markInvoiced(tenantId: string, id: string) {
     return this.prisma.saleOrder.updateMany({

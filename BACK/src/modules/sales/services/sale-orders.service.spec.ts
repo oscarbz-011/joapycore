@@ -7,6 +7,10 @@ import { StockLedgerService } from '../../inventory/services/stock-ledger.servic
 import { SaleOrdersService } from './sale-orders.service';
 import { ProductUnitsRepository } from '../../inventory/repositories/product-units.repository';
 import { StockMovementsRepository } from '../../inventory/repositories/stock-movements.repository';
+import { CreditSourcesRepository } from '../repositories/credit-sources.repository';
+import { CustomersRepository } from '../repositories/customers.repository';
+import { SaleOrdersRepository } from '../repositories/sale-orders.repository';
+import { SalesSourcesRepository } from '../repositories/sales-sources.repository';
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 
@@ -82,7 +86,7 @@ describe('SaleOrdersService', () => {
   let prisma: {
     $transaction: jest.Mock;
     saleOrder: { update: jest.Mock; updateMany: jest.Mock };
-    user: { findUnique: jest.Mock };
+    user: { findFirst: jest.Mock };
     branch: { findFirst: jest.Mock };
     creditPlan: { findFirst: jest.Mock };
     installment: { count: jest.Mock };
@@ -95,6 +99,8 @@ describe('SaleOrdersService', () => {
   let outbox: { enqueue: jest.Mock; dispatch: jest.Mock };
 
   beforeEach(() => {
+    // El resto de métodos del repositorio corren reales sobre los mocks de
+    // Prisma/tx (se asigna tras crear `prisma`).
     saleOrdersRepository = {
       findAll: jest.fn(),
       findById: jest.fn(),
@@ -197,7 +203,7 @@ describe('SaleOrdersService', () => {
         update: jest.fn().mockResolvedValue(makeOrder({ status: 'CANCELLED' })),
         updateMany: jest.fn().mockResolvedValue({ count: 1 }),
       },
-      user: { findUnique: jest.fn().mockResolvedValue(null) },
+      user: { findFirst: jest.fn().mockResolvedValue(null) },
       branch: { findFirst: jest.fn().mockResolvedValue(null) },
       creditPlan: {
         findFirst: jest.fn().mockResolvedValue({ interestRate: 20 }),
@@ -212,6 +218,10 @@ describe('SaleOrdersService', () => {
       },
     };
 
+    saleOrdersRepository = Object.assign(
+      new SaleOrdersRepository(prisma as any),
+      saleOrdersRepository,
+    );
     service = new SaleOrdersService(
       prisma as any,
       saleOrdersRepository as any,
@@ -226,6 +236,9 @@ describe('SaleOrdersService', () => {
         new ProductUnitsRepository(prisma as any),
       ),
       outbox as any,
+      new CreditSourcesRepository(prisma as any),
+      new SalesSourcesRepository(prisma as any),
+      new CustomersRepository(prisma as any),
     );
     // approveCredit y collectPayment transicionan dentro de la transacción:
     // mismo mock para no duplicar los setups existentes.
@@ -475,14 +488,14 @@ describe('SaleOrdersService', () => {
       productsRepository.findManyByIds.mockResolvedValue([
         makeProduct({ isSerialized: false }),
       ]);
-      prisma.user.findUnique.mockResolvedValue({ branchId: 'branch-user' });
+      prisma.user.findFirst.mockResolvedValue({ branchId: 'branch-user' });
 
       await service.create('tenant-1', baseDto, 'user-1', false, [
         'sales:create',
       ]);
 
-      expect(prisma.user.findUnique).toHaveBeenCalledWith({
-        where: { id: 'user-1' },
+      expect(prisma.user.findFirst).toHaveBeenCalledWith({
+        where: { id: 'user-1', tenantId: 'tenant-1' },
         select: { branchId: true },
       });
       expect(prisma.branch.findFirst).not.toHaveBeenCalled();
@@ -497,7 +510,7 @@ describe('SaleOrdersService', () => {
       productsRepository.findManyByIds.mockResolvedValue([
         makeProduct({ isSerialized: false }),
       ]);
-      prisma.user.findUnique.mockResolvedValue({ branchId: null });
+      prisma.user.findFirst.mockResolvedValue({ branchId: null });
       prisma.branch.findFirst.mockResolvedValue({ id: 'branch-main' });
 
       await service.create('tenant-1', baseDto, 'user-1', false, [
@@ -524,7 +537,7 @@ describe('SaleOrdersService', () => {
         'sales:create',
       ]);
 
-      expect(prisma.user.findUnique).not.toHaveBeenCalled();
+      expect(prisma.user.findFirst).not.toHaveBeenCalled();
       expect(tx.saleOrder.create).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({ branchId: null }),
@@ -709,12 +722,12 @@ describe('SaleOrdersService', () => {
       productsRepository.findManyByIds.mockResolvedValue([
         makeProduct({ isSerialized: false }),
       ]);
-      prisma.user.findUnique.mockResolvedValue({ branchId: 'branch-cashier' });
+      prisma.user.findFirst.mockResolvedValue({ branchId: 'branch-cashier' });
 
       await service.createPosSale('tenant-1', baseDto, 'session-1', 'user-1');
 
-      expect(prisma.user.findUnique).toHaveBeenCalledWith({
-        where: { id: 'user-1' },
+      expect(prisma.user.findFirst).toHaveBeenCalledWith({
+        where: { id: 'user-1', tenantId: 'tenant-1' },
         select: { branchId: true },
       });
       expect(tx.saleOrder.create).toHaveBeenCalledWith(
@@ -728,7 +741,7 @@ describe('SaleOrdersService', () => {
       productsRepository.findManyByIds.mockResolvedValue([
         makeProduct({ isSerialized: false }),
       ]);
-      prisma.user.findUnique.mockResolvedValue({ branchId: null });
+      prisma.user.findFirst.mockResolvedValue({ branchId: null });
       prisma.branch.findFirst.mockResolvedValue({ id: 'branch-main' });
 
       await service.createPosSale('tenant-1', baseDto, 'session-1', 'user-1');

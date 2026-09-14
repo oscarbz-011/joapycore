@@ -1,6 +1,7 @@
 import type { DocumentType } from '@prisma/client';
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../prisma/prisma.service';
+import { PrismaClientOrTx } from '../../../prisma/types';
 import { CreateCustomerDto } from '../dto/create-customer.dto';
 
 @Injectable()
@@ -12,6 +13,23 @@ export class CustomersRepository {
       where: { tenantId, deletedAt: null },
       orderBy: { lastName: 'asc' },
     });
+  }
+
+  // Cliente genérico "Consumidor Final" del tenant (ventas de mostrador).
+  async findOrCreateWalkIn(
+    tenantId: string,
+    client: PrismaClientOrTx = this.prisma,
+  ): Promise<string> {
+    const existing = await client.customer.findFirst({
+      where: { tenantId, firstName: 'Consumidor', lastName: 'Final' },
+      select: { id: true },
+    });
+    if (existing) return existing.id;
+    const created = await client.customer.create({
+      data: { tenantId, firstName: 'Consumidor', lastName: 'Final' },
+      select: { id: true },
+    });
+    return created.id;
   }
 
   findById(tenantId: string, id: string) {

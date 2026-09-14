@@ -17,6 +17,7 @@ import { CustomersService } from './services/customers.service';
 import { SaleOrdersService } from './services/sale-orders.service';
 import { SaleTargetsService } from './services/sale-targets.service';
 import { CreditSourcesRepository } from './repositories/credit-sources.repository';
+import { SalesSourcesRepository } from './repositories/sales-sources.repository';
 
 // Global solo para exponer SALES_GATEWAY (lo usa POS sin importar este
 // módulo). Inventario llega por los contratos de InventoryContractsModule.
@@ -40,6 +41,7 @@ import { CreditSourcesRepository } from './repositories/credit-sources.repositor
     GuarantorsRepository,
     CombosRepository,
     CreditSourcesRepository,
+    SalesSourcesRepository,
     SalesOnDeliveryListener,
     SalesOnInvoiceListener,
     { provide: SALES_GATEWAY, useExisting: SaleOrdersService },
