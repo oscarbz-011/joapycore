@@ -9,6 +9,8 @@ import { PayInstallmentDto } from '../dto/pay-installment.dto';
 import { PaymentMethod } from '@prisma/client';
 import { InstallmentsRepository } from '../repositories/installments.repository';
 import { LoansRepository } from '../repositories/loans.repository';
+import { FinanceSourcesRepository } from '../repositories/finance-sources.repository';
+import { PaymentReceiptsRepository } from '../repositories/payment-receipts.repository';
 import { LoansService } from './loans.service';
 
 const TENANT = 'tenant-1';
@@ -95,7 +97,7 @@ describe('LoansService', () => {
               create: installmentCreateMock,
               update: installmentUpdateMock,
             },
-            branch: { findUnique: branchFindUniqueMock },
+            branch: { findFirst: branchFindUniqueMock },
             paymentReceipt: {
               findFirst: paymentReceiptFindFirstMock,
               create: paymentReceiptCreateMock,
@@ -104,6 +106,9 @@ describe('LoansService', () => {
         ),
     };
 
+    const realLoansRepo = new LoansRepository(mockPrisma as any);
+    const realInstallmentsRepo = new InstallmentsRepository(mockPrisma as any);
+
     const mockLoansRepo = {
       findAll: jest.fn(),
       findById: jest.fn(),
@@ -111,6 +116,16 @@ describe('LoansService', () => {
       create: jest.fn(),
       updateContractUrl: jest.fn(),
       updateStatus: jest.fn().mockResolvedValue({}),
+      // Implementación real sobre los mocks de Prisma/tx.
+      createBare: jest.fn((data: any, client: any) =>
+        realLoansRepo.createBare(data, client),
+      ),
+      findWithSchedule: jest.fn((id: string, client: any) =>
+        realLoansRepo.findWithSchedule(id, client),
+      ),
+      findScheduleBySaleOrder: jest.fn((tenantId: string, orderId: string) =>
+        realLoansRepo.findScheduleBySaleOrder(tenantId, orderId),
+      ),
     };
 
     const mockInstallmentsRepo = {
@@ -122,7 +137,15 @@ describe('LoansService', () => {
       // Sin recargos vigentes por default — los tests de mora los sobrescriben.
       findOpenChargesByInstallments: jest.fn().mockResolvedValue([]),
       updateChargeAmount: jest.fn().mockResolvedValue({}),
+      // Implementación real sobre el tx mockeado.
+      create: jest.fn((data: any, client: any) =>
+        realInstallmentsRepo.create(data, client),
+      ),
     };
+    mockInstallmentsRepo.update = jest.fn(
+      (id: string, data: any, client: any) =>
+        realInstallmentsRepo.update(id, data, client),
+    );
 
     const mockEventEmitter = {
       emit: jest.fn(),
@@ -136,6 +159,8 @@ describe('LoansService', () => {
         { provide: LoansRepository, useValue: mockLoansRepo },
         { provide: InstallmentsRepository, useValue: mockInstallmentsRepo },
         { provide: EventEmitter2, useValue: mockEventEmitter },
+        PaymentReceiptsRepository,
+        FinanceSourcesRepository,
       ],
     }).compile();
 

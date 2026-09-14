@@ -1,6 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
 import { PrismaService } from '../../../prisma/prisma.service';
+import { FinanceSourcesRepository } from '../repositories/finance-sources.repository';
+import { InstallmentsRepository } from '../repositories/installments.repository';
+import { LoansRepository } from '../repositories/loans.repository';
 
 interface ArPaidEvent {
   tenantId: string;
@@ -12,26 +15,33 @@ interface ArPaidEvent {
 export class FinanceOnArPaidListener {
   private readonly logger = new Logger(FinanceOnArPaidListener.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    // Solo para abrir la transacción; los accesos a datos van por repositorios.
+    private readonly prisma: PrismaService,
+    private readonly sources: FinanceSourcesRepository,
+    private readonly loansRepository: LoansRepository,
+    private readonly installmentsRepository: InstallmentsRepository,
+  ) {}
 
   // When an AR is paid in full via direct payment (not via individual installments),
   // close all remaining installments on the associated loan.
   @OnEvent('payment.ar.completed')
   async handle(event: ArPaidEvent) {
     try {
-      const invoice = await this.prisma.invoice.findUnique({
-        where: { id: event.invoiceId },
-        select: { saleOrder: { select: { loan: { select: { id: true } } } } },
-      });
-      const loanId = invoice?.saleOrder?.loan?.id;
+      const loanId = await this.sources.findLoanIdByInvoice(
+        event.tenantId,
+        event.invoiceId,
+      );
       if (!loanId) return;
 
       const now = new Date();
 
       await this.prisma.$transaction(async (tx) => {
-        const pending = await tx.installment.findMany({
-          where: { loanId, tenantId: event.tenantId, status: { not: 'PAID' } },
-        });
+        const pending = await this.installmentsRepository.findUnpaidByLoan(
+          event.tenantId,
+          loanId,
+          tx,
+        );
         if (!pending.length) return;
 
         for (const inst of pending) {
@@ -39,16 +49,14 @@ export class FinanceOnArPaidListener {
             typeof inst.amount === 'object'
               ? (inst.amount as { toNumber(): number }).toNumber()
               : Number(inst.amount);
-          await tx.installment.update({
-            where: { id: inst.id },
-            data: { paidAmount: amount, status: 'PAID', paidAt: now },
-          });
+          await this.installmentsRepository.update(
+            inst.id,
+            { paidAmount: amount, status: 'PAID', paidAt: now },
+            tx,
+          );
         }
 
-        await tx.loan.update({
-          where: { id: loanId },
-          data: { status: 'PAID' },
-        });
+        await this.loansRepository.updateStatus(loanId, 'PAID', tx);
       });
     } catch (err) {
       this.logger.error('Error closing installments on AR paid event', err);

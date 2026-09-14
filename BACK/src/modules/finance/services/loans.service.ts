@@ -6,8 +6,10 @@ import {
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PaymentMethod, PaymentReceiptItemKind, Prisma } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
+import { FinanceSourcesRepository } from '../repositories/finance-sources.repository';
 import { InstallmentsRepository } from '../repositories/installments.repository';
 import { LoansRepository } from '../repositories/loans.repository';
+import { PaymentReceiptsRepository } from '../repositories/payment-receipts.repository';
 import type { PayInstallmentDto } from '../dto/pay-installment.dto';
 import type { PayInstallmentsDto } from '../dto/pay-installments.dto';
 import type { AdvancePaymentDto } from '../dto/advance-payment.dto';
@@ -82,6 +84,8 @@ export class LoansService {
     private readonly loansRepository: LoansRepository,
     private readonly installmentsRepository: InstallmentsRepository,
     private readonly eventEmitter: EventEmitter2,
+    private readonly receiptsRepository: PaymentReceiptsRepository,
+    private readonly sources: FinanceSourcesRepository,
   ) {}
 
   findAll(tenantId: string) {
@@ -108,52 +112,8 @@ export class LoansService {
     return this.installmentsRepository.findOverdue(tenantId);
   }
 
-  private get receiptInclude() {
-    return {
-      items: { orderBy: { installmentNumber: 'asc' as const } },
-      loan: { select: { id: true, saleOrderId: true } },
-      customer: {
-        select: {
-          id: true,
-          firstName: true,
-          lastName: true,
-          customerCode: true,
-          documentType: true,
-          documentNumber: true,
-        },
-      },
-      branch: { select: { id: true, name: true, city: true } },
-      collectedBy: { select: { id: true, firstName: true, lastName: true } },
-      tenant: {
-        select: {
-          razonSocial: true,
-          nombreFantasia: true,
-          ruc: true,
-          address: true,
-          numeroCasa: true,
-          city: true,
-          phone: true,
-          logoFileId: true,
-        },
-      },
-      // Factura de intereses moratorios generada a partir de este recibo,
-      // si el cobro incluyó recargos (ver interest-invoice-on-receipt.listener.ts).
-      interestInvoice: {
-        select: {
-          id: true,
-          pdfFileId: true,
-          invoiceNumber: true,
-          invoicePrefix: true,
-        },
-      },
-    };
-  }
-
   async findReceiptById(tenantId: string, id: string) {
-    const receipt = await this.prisma.paymentReceipt.findFirst({
-      where: { id, tenantId },
-      include: this.receiptInclude,
-    });
+    const receipt = await this.receiptsRepository.findById(tenantId, id);
     if (!receipt) throw new NotFoundException('Recibo no encontrado');
     return receipt;
   }
@@ -162,11 +122,10 @@ export class LoansService {
   // pago que también tocó otras cuotas (payByAmount) — en ambos casos hay
   // exactamente un recibo con un PaymentReceiptItem para esta cuota.
   async findReceiptByInstallment(tenantId: string, installmentId: string) {
-    const receipt = await this.prisma.paymentReceipt.findFirst({
-      where: { tenantId, items: { some: { installmentId } } },
-      include: this.receiptInclude,
-      orderBy: { issuedAt: 'desc' },
-    });
+    const receipt = await this.receiptsRepository.findLatestByInstallment(
+      tenantId,
+      installmentId,
+    );
     if (!receipt)
       throw new NotFoundException('No hay recibo generado para esta cuota');
     return receipt;
@@ -193,24 +152,26 @@ export class LoansService {
     let establecimiento = '001';
     let puntoExpedicion = '001';
     if (params.branchId) {
-      const branch = await tx.branch.findUnique({
-        where: { id: params.branchId },
-        select: { codigoEstablecimiento: true, puntoExpedicion: true },
-      });
+      const branch = await this.sources.findBranchNumbering(
+        tenantId,
+        params.branchId,
+        tx,
+      );
       establecimiento = branch?.codigoEstablecimiento || '001';
       puntoExpedicion = branch?.puntoExpedicion || '001';
     }
 
-    const last = await tx.paymentReceipt.findFirst({
-      where: { tenantId, establecimiento, puntoExpedicion },
-      orderBy: { sequential: 'desc' },
-      select: { sequential: true },
-    });
+    const last = await this.receiptsRepository.findLastSequential(
+      tenantId,
+      establecimiento,
+      puntoExpedicion,
+      tx,
+    );
     const sequential = (last?.sequential ?? 0) + 1;
     const receiptNumber = `${establecimiento}-${puntoExpedicion}-${String(sequential).padStart(7, '0')}`;
 
-    return tx.paymentReceipt.create({
-      data: {
+    return this.receiptsRepository.create(
+      {
         tenantId,
         loanId: params.loanId,
         customerId: params.customerId,
@@ -233,8 +194,8 @@ export class LoansService {
           })),
         },
       },
-      include: this.receiptInclude,
-    });
+      tx,
+    );
   }
 
   // Cargos de interés/mora vigentes (InstallmentInterestCharge, amount > 0)
@@ -334,9 +295,9 @@ export class LoansService {
     const chargesRemaining = charges.reduce((s, c) => s + c.amount, 0);
     const fullyPaid = newPaid >= principalAmount && chargesRemaining <= 0;
 
-    const updatedInstallment = await tx.installment.update({
-      where: { id: inst.id },
-      data: {
+    const updatedInstallment = await this.installmentsRepository.update(
+      inst.id,
+      {
         paidAmount: newPaid,
         paidAt: fullyPaid ? paymentDate : undefined,
         paymentMethod,
@@ -352,7 +313,8 @@ export class LoansService {
             : undefined,
         notes,
       },
-    });
+      tx,
+    );
 
     if (principalPayment > 0) {
       items.push({
@@ -374,10 +336,10 @@ export class LoansService {
     );
     if (existing) return existing;
 
-    const order = await this.prisma.saleOrder.findFirst({
-      where: { id: saleOrderId, tenantId },
-      include: { items: true },
-    });
+    const order = await this.sources.findSaleOrderWithItems(
+      tenantId,
+      saleOrderId,
+    );
     if (!order)
       throw new NotFoundException(`Sale order ${saleOrderId} not found`);
     if (!order.installments || order.installments < 1) {
@@ -405,18 +367,12 @@ export class LoansService {
     const amountPerInstallment = Math.round(totalAmount / order.installments);
     const now = new Date();
 
-    const creditConfig = await this.prisma.creditConfig.findUnique({
-      where: { tenantId },
-      select: { dueDayOfMonth: true },
-    });
-    const firstDueDate = computeFirstDueDate(
-      now,
-      creditConfig?.dueDayOfMonth ?? 5,
-    );
+    const dueDayOfMonth = await this.sources.findDueDayOfMonth(tenantId);
+    const firstDueDate = computeFirstDueDate(now, dueDayOfMonth ?? 5);
 
     return this.prisma.$transaction(async (tx) => {
-      const loan = await tx.loan.create({
-        data: {
+      const loan = await this.loansRepository.createBare(
+        {
           tenantId,
           saleOrderId,
           customerId: order.customerId,
@@ -425,28 +381,23 @@ export class LoansService {
           totalAmount,
           totalInstallments: order.installments!,
         },
-      });
+        tx,
+      );
 
       for (let i = 1; i <= order.installments!; i++) {
-        await tx.installment.create({
-          data: {
+        await this.installmentsRepository.create(
+          {
             tenantId,
             loanId: loan.id,
             number: i,
             dueDate: addMonths(firstDueDate, i - 1),
             amount: amountPerInstallment,
           },
-        });
+          tx,
+        );
       }
 
-      return tx.loan.findUniqueOrThrow({
-        where: { id: loan.id },
-        include: {
-          installments: { orderBy: { number: 'asc' } },
-          customer: { select: { id: true, firstName: true, lastName: true } },
-          saleOrder: { select: { id: true, orderDate: true } },
-        },
-      });
+      return this.loansRepository.findWithSchedule(loan.id, tx);
     });
   }
 
@@ -462,10 +413,10 @@ export class LoansService {
     saleOrderId: string,
     newFirstDueDate: Date,
   ) {
-    const loan = await this.prisma.loan.findFirst({
-      where: { tenantId, saleOrderId },
-      include: { installments: { orderBy: { number: 'asc' } } },
-    });
+    const loan = await this.loansRepository.findScheduleBySaleOrder(
+      tenantId,
+      saleOrderId,
+    );
     if (!loan) return; // venta al contado, no hay préstamo que reprogramar
 
     const current = loan.installments[0];
@@ -474,10 +425,11 @@ export class LoansService {
 
     await this.prisma.$transaction(async (tx) => {
       for (const inst of loan.installments) {
-        await tx.installment.update({
-          where: { id: inst.id },
-          data: { dueDate: addMonths(newFirstDueDate, inst.number - 1) },
-        });
+        await this.installmentsRepository.update(
+          inst.id,
+          { dueDate: addMonths(newFirstDueDate, inst.number - 1) },
+          tx,
+        );
       }
     });
   }
@@ -881,10 +833,11 @@ export class LoansService {
           const inst = pending[i];
           const isLast = i === count - 1;
           const newAmount = baseAmount + (isLast ? remainder : 0);
-          await tx.installment.update({
-            where: { id: inst.id },
-            data: { amount: newAmount, paidAmount: 0, status: 'PENDING' },
-          });
+          await this.installmentsRepository.update(
+            inst.id,
+            { amount: newAmount, paidAmount: 0, status: 'PENDING' },
+            tx,
+          );
         }
       });
     }

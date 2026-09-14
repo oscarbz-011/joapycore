@@ -1,6 +1,8 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { PrismaService } from '../../../prisma/prisma.service';
+import { FinanceSourcesRepository } from '../repositories/finance-sources.repository';
 import { InstallmentsRepository } from '../repositories/installments.repository';
+import { LoansRepository } from '../repositories/loans.repository';
 import { InstallmentsSchedulerService } from './installments-scheduler.service';
 import { InterestCalcService } from './interest-calc.service';
 
@@ -37,6 +39,8 @@ describe('InstallmentsSchedulerService', () => {
         InterestCalcService,
         { provide: InstallmentsRepository, useValue: mockInstallmentsRepo },
         { provide: PrismaService, useValue: mockPrisma },
+        FinanceSourcesRepository,
+        LoansRepository,
       ],
     }).compile();
 

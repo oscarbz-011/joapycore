@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
+import { PrismaClientOrTx } from '../../../prisma/types';
 
 @Injectable()
 export class LoansRepository {
@@ -64,7 +65,54 @@ export class LoansRepository {
     return this.prisma.loan.create({ data, include: this.include });
   }
 
-  updateStatus(id: string, status: 'ACTIVE' | 'PAID' | 'CANCELLED') {
-    return this.prisma.loan.update({ where: { id }, data: { status } });
+  // Alta sin relaciones: las cuotas se crean después en la misma transacción.
+  createBare(
+    data: Prisma.LoanUncheckedCreateInput,
+    client: PrismaClientOrTx = this.prisma,
+  ) {
+    return client.loan.create({ data });
+  }
+
+  findWithSchedule(id: string, client: PrismaClientOrTx = this.prisma) {
+    return client.loan.findUniqueOrThrow({
+      where: { id },
+      include: {
+        installments: { orderBy: { number: 'asc' } },
+        customer: { select: { id: true, firstName: true, lastName: true } },
+        saleOrder: { select: { id: true, orderDate: true } },
+      },
+    });
+  }
+
+  findScheduleBySaleOrder(tenantId: string, saleOrderId: string) {
+    return this.prisma.loan.findFirst({
+      where: { tenantId, saleOrderId },
+      include: { installments: { orderBy: { number: 'asc' } } },
+    });
+  }
+
+  // Préstamos activos con su cuota impaga más antigua (detección de Morosos).
+  findActiveWithOldestUnpaid(tenantId: string) {
+    return this.prisma.loan.findMany({
+      where: { tenantId, status: 'ACTIVE' },
+      select: {
+        id: true,
+        customerId: true,
+        installments: {
+          where: { status: { in: ['PENDING', 'PARTIAL', 'OVERDUE'] } },
+          orderBy: { dueDate: 'asc' },
+          take: 1,
+          select: { dueDate: true },
+        },
+      },
+    });
+  }
+
+  updateStatus(
+    id: string,
+    status: 'ACTIVE' | 'PAID' | 'CANCELLED',
+    client: PrismaClientOrTx = this.prisma,
+  ) {
+    return client.loan.update({ where: { id }, data: { status } });
   }
 }

@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { InstallmentStatus, PaymentMethod } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { PrismaClientOrTx } from '../../../prisma/types';
 import { startOfBusinessDay } from '../../../common/utils/business-date.util';
@@ -29,6 +29,23 @@ export class InstallmentsRepository {
         },
       },
     });
+  }
+
+  findUnpaidByLoan(
+    tenantId: string,
+    loanId: string,
+    client: PrismaClientOrTx = this.prisma,
+  ) {
+    return client.installment.findMany({
+      where: { loanId, tenantId, status: { not: 'PAID' } },
+    });
+  }
+
+  create(
+    data: Prisma.InstallmentUncheckedCreateInput,
+    client: PrismaClientOrTx = this.prisma,
+  ) {
+    return client.installment.create({ data });
   }
 
   findPendingByLoan(tenantId: string, loanId: string) {
@@ -136,15 +153,7 @@ export class InstallmentsRepository {
 
   update(
     id: string,
-    data: {
-      paidAmount: number;
-      paidAt?: Date;
-      paymentMethod?: PaymentMethod;
-      paymentReference?: string;
-      paymentDate?: Date;
-      status: InstallmentStatus;
-      notes?: string;
-    },
+    data: Prisma.InstallmentUncheckedUpdateInput,
     client: PrismaClientOrTx = this.prisma,
   ) {
     return client.installment.update({ where: { id }, data });

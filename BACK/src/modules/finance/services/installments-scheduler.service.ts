@@ -1,7 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
-import { PrismaService } from '../../../prisma/prisma.service';
+import { FinanceSourcesRepository } from '../repositories/finance-sources.repository';
 import { InstallmentsRepository } from '../repositories/installments.repository';
+import { LoansRepository } from '../repositories/loans.repository';
 import { InterestCalcService } from './interest-calc.service';
 import { BUSINESS_TIMEZONE } from '../../../common/utils/business-date.util';
 
@@ -18,7 +19,8 @@ export class InstallmentsSchedulerService {
 
   constructor(
     private readonly installmentsRepository: InstallmentsRepository,
-    private readonly prisma: PrismaService,
+    private readonly sources: FinanceSourcesRepository,
+    private readonly loansRepository: LoansRepository,
     private readonly interestCalc: InterestCalcService,
   ) {}
 
@@ -43,14 +45,7 @@ export class InstallmentsSchedulerService {
     if (!overdue.length) return;
 
     const tenantIds = [...new Set(overdue.map((i) => i.tenantId))];
-    const configs = await this.prisma.creditConfig.findMany({
-      where: { tenantId: { in: tenantIds } },
-      select: {
-        tenantId: true,
-        moraGraceDays: true,
-        interestComponents: { where: { isActive: true } },
-      },
-    });
+    const configs = await this.sources.findMoraConfigs(tenantIds);
     const configByTenant = new Map(configs.map((c) => [c.tenantId, c]));
 
     const now = new Date();
@@ -108,14 +103,7 @@ export class InstallmentsSchedulerService {
   // revisión, un analista decide qué hacer con cada caso.
   @Cron(CronExpression.EVERY_DAY_AT_1AM, { timeZone: BUSINESS_TIMEZONE })
   async detectDelinquentCustomers() {
-    const configs = await this.prisma.creditConfig.findMany({
-      where: { delinquencyThresholdMonths: { not: null } },
-      select: {
-        tenantId: true,
-        moraGraceDays: true,
-        delinquencyThresholdMonths: true,
-      },
-    });
+    const configs = await this.sources.findDelinquencyConfigs();
     if (!configs.length) return;
 
     const now = new Date();
@@ -123,19 +111,9 @@ export class InstallmentsSchedulerService {
 
     for (const config of configs) {
       const threshold = config.delinquencyThresholdMonths!;
-      const loans = await this.prisma.loan.findMany({
-        where: { tenantId: config.tenantId, status: 'ACTIVE' },
-        select: {
-          id: true,
-          customerId: true,
-          installments: {
-            where: { status: { in: ['PENDING', 'PARTIAL', 'OVERDUE'] } },
-            orderBy: { dueDate: 'asc' },
-            take: 1,
-            select: { dueDate: true },
-          },
-        },
-      });
+      const loans = await this.loansRepository.findActiveWithOldestUnpaid(
+        config.tenantId,
+      );
 
       for (const loan of loans) {
         const oldest = loan.installments[0];
@@ -147,22 +125,13 @@ export class InstallmentsSchedulerService {
         );
         if (periods < threshold) continue;
 
-        const existing = await this.prisma.delinquencyReport.findUnique({
-          where: {
-            tenantId_loanId: { tenantId: config.tenantId, loanId: loan.id },
-          },
+        const isNew = await this.sources.createDelinquencyReportIfMissing({
+          tenantId: config.tenantId,
+          customerId: loan.customerId,
+          loanId: loan.id,
+          monthsOverdue: periods,
         });
-        if (existing) continue;
-
-        await this.prisma.delinquencyReport.create({
-          data: {
-            tenantId: config.tenantId,
-            customerId: loan.customerId,
-            loanId: loan.id,
-            monthsOverdue: periods,
-          },
-        });
-        created++;
+        if (isNew) created++;
       }
     }
 
