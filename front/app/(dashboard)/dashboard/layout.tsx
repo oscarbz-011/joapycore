@@ -13,6 +13,7 @@ import { UserMenu } from './components/user-menu';
 import { ThemeToggle } from './components/theme-toggle';
 import { ForcePasswordModal } from './components/force-password-modal';
 import { PendingItemToasts } from './components/pending-item-toasts';
+import { RouteAccessGuard } from './components/route-access-guard';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isLoading, mustChangePassword } = useAuth();
@@ -84,7 +85,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         {/* ── Content ─────────────────────────────────────────────────────── */}
         <main className="flex-1 overflow-y-auto">
           <div className="px-8 pt-7 pb-12">
-            {children}
+            <RouteAccessGuard>{children}</RouteAccessGuard>
           </div>
         </main>
       </div>
