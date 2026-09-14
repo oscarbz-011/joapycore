@@ -38,6 +38,22 @@ export class PurchaseReceiptsRepository {
     });
   }
 
+  // Lo necesario para generar la cuenta por pagar de una recepción.
+  findForPayable(tenantId: string, id: string) {
+    return this.prisma.purchaseReceipt.findFirst({
+      where: { id, tenantId },
+      include: {
+        items: { select: { quantity: true, unitCost: true } },
+        purchaseOrder: {
+          select: {
+            supplierId: true,
+            supplier: { select: { paymentTermDays: true } },
+          },
+        },
+      },
+    });
+  }
+
   findByOrder(tenantId: string, purchaseOrderId: string) {
     return this.prisma.purchaseReceipt.findMany({
       where: { tenantId, purchaseOrderId },

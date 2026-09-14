@@ -3,6 +3,7 @@ import {
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { PurchaseReceiptsService } from './purchase-receipts.service';
+import { PurchaseOrdersRepository } from '../repositories/purchase-orders.repository';
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 
@@ -34,6 +35,7 @@ describe('PurchaseReceiptsService', () => {
   let purchaseOrdersRepository: {
     findById: jest.Mock;
     updateItemReceivedQty: jest.Mock;
+    findItems: jest.Mock;
     updateStatus: jest.Mock;
   };
   let purchaseReceiptsRepository: {
@@ -51,6 +53,10 @@ describe('PurchaseReceiptsService', () => {
       findById: jest.fn(),
       updateItemReceivedQty: jest.fn(),
       updateStatus: jest.fn(),
+      // Implementación real: consulta el tx que recibe (mockeado abajo).
+      findItems: jest.fn((orderId: string, client: any) =>
+        new PurchaseOrdersRepository({} as any).findItems(orderId, client),
+      ),
     };
     purchaseReceiptsRepository = {
       nextReceiptNumber: jest.fn().mockResolvedValue(1),

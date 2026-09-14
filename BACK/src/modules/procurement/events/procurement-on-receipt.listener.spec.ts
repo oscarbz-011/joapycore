@@ -1,4 +1,5 @@
 import { ProcurementOnReceiptListener } from './procurement-on-receipt.listener';
+import { PurchaseReceiptsRepository } from '../repositories/purchase-receipts.repository';
 
 function makeReceipt(overrides = {}) {
   return {
@@ -30,7 +31,7 @@ describe('ProcurementOnReceiptListener', () => {
     };
 
     listener = new ProcurementOnReceiptListener(
-      prisma as any,
+      new PurchaseReceiptsRepository(prisma as any),
       apRepository as any,
     );
   });

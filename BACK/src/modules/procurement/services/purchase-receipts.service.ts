@@ -121,9 +121,10 @@ export class PurchaseReceiptsService {
         );
       }
 
-      const updatedItems = await tx.purchaseOrderItem.findMany({
-        where: { purchaseOrderId: orderId },
-      });
+      const updatedItems = await this.purchaseOrdersRepository.findItems(
+        orderId,
+        tx,
+      );
       const allReceived = updatedItems.every(
         (i) => i.receivedQty >= i.quantity,
       );

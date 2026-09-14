@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
-import { PrismaService } from '../../../prisma/prisma.service';
+import { PurchaseReceiptsRepository } from '../repositories/purchase-receipts.repository';
 import { AccountsPayableRepository } from '../repositories/accounts-payable.repository';
 
 interface PurchaseReceiptCreatedEvent {
@@ -20,7 +20,7 @@ export class ProcurementOnReceiptListener {
   private readonly logger = new Logger(ProcurementOnReceiptListener.name);
 
   constructor(
-    private readonly prisma: PrismaService,
+    private readonly purchaseReceiptsRepository: PurchaseReceiptsRepository,
     private readonly apRepository: AccountsPayableRepository,
   ) {}
 
@@ -46,18 +46,10 @@ export class ProcurementOnReceiptListener {
     );
     if (existing) return;
 
-    const receipt = await this.prisma.purchaseReceipt.findFirst({
-      where: { id: purchaseReceiptId, tenantId },
-      include: {
-        items: { select: { quantity: true, unitCost: true } },
-        purchaseOrder: {
-          select: {
-            supplierId: true,
-            supplier: { select: { paymentTermDays: true } },
-          },
-        },
-      },
-    });
+    const receipt = await this.purchaseReceiptsRepository.findForPayable(
+      tenantId,
+      purchaseReceiptId,
+    );
     if (!receipt) return;
 
     const amount = receipt.items.reduce(

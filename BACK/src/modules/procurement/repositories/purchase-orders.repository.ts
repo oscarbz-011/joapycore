@@ -75,6 +75,10 @@ export class PurchaseOrdersRepository {
     });
   }
 
+  findItems(purchaseOrderId: string, client: PrismaClientOrTx = this.prisma) {
+    return client.purchaseOrderItem.findMany({ where: { purchaseOrderId } });
+  }
+
   updateItemReceivedQty(
     id: string,
     receivedQty: number,
