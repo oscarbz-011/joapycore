@@ -1,43 +1,16 @@
-import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
-import type { NextFunction, Request, Response } from 'express';
-import helmet from 'helmet';
 import { AppModule } from './app.module';
-import { HttpExceptionFilter } from './common/filters/http-exception.filter';
-import { corsOrigin, isSwaggerEnabled } from './config/security.config';
+import { configureApp } from './app.setup';
+import { isSwaggerEnabled } from './config/security.config';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
   const configService = app.get(ConfigService);
 
-  // Detrás de un proxy/load balancer la IP real viene en X-Forwarded-For; sin
-  // esto el rate limiting cuenta a todos los clientes como una sola IP.
-  const trustProxy = configService.get<string>('TRUST_PROXY');
-  if (trustProxy) {
-    app.set(
-      'trust proxy',
-      /^\d+$/.test(trustProxy) ? Number(trustProxy) : trustProxy,
-    );
-  }
-
-  // Swagger UI necesita scripts/estilos inline: se le relaja la CSP solo a /docs.
-  const apiHelmet = helmet({
-    // El front (otro origen) muestra logos y archivos servidos por la API.
-    crossOriginResourcePolicy: { policy: 'cross-origin' },
-  });
-  const docsHelmet = helmet({ contentSecurityPolicy: false });
-  app.use((req: Request, res: Response, next: NextFunction) =>
-    req.path.startsWith('/docs')
-      ? docsHelmet(req, res, next)
-      : apiHelmet(req, res, next),
-  );
-
-  app.enableCors({ origin: corsOrigin });
-  app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
-  app.useGlobalFilters(new HttpExceptionFilter());
+  configureApp(app);
 
   if (isSwaggerEnabled()) {
     const swaggerConfig = new DocumentBuilder()

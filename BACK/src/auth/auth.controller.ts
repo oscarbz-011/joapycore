@@ -38,6 +38,7 @@ export class AuthController {
   @Public()
   @Throttle({ default: THROTTLE.login })
   @Post('login')
+  @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Iniciar sesión con email o username',
     description:
@@ -58,6 +59,7 @@ export class AuthController {
   @Public()
   @Throttle({ default: THROTTLE.refresh })
   @Post('refresh')
+  @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Renovar el accessToken usando un refreshToken vigente',
     description:
