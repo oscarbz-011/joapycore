@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
-import { PrismaService } from '../../../prisma/prisma.service';
+import { SaleOrdersRepository } from '../repositories/sale-orders.repository';
 
 interface InvoiceIssuedEvent {
   tenantId: string;
@@ -10,19 +10,15 @@ interface InvoiceIssuedEvent {
 
 @Injectable()
 export class SalesOnInvoiceListener {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly saleOrdersRepository: SaleOrdersRepository) {}
 
   @OnEvent('invoice.issued', { suppressErrors: false })
   async handle(event: InvoiceIssuedEvent) {
     if (!event.saleOrderId) return;
     // Move the sale order to INVOICED so the seller can see the billing state
-    await this.prisma.saleOrder.updateMany({
-      where: {
-        id: event.saleOrderId,
-        tenantId: event.tenantId,
-        status: 'CONFIRMED',
-      },
-      data: { status: 'INVOICED' },
-    });
+    await this.saleOrdersRepository.markInvoiced(
+      event.tenantId,
+      event.saleOrderId,
+    );
   }
 }

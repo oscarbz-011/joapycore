@@ -78,6 +78,14 @@ export class SaleOrdersRepository {
     return db.saleOrderItem.create({ data });
   }
 
+  // Solo avanza si el pedido sigue CONFIRMED (idempotente ante reintentos).
+  markInvoiced(tenantId: string, id: string) {
+    return this.prisma.saleOrder.updateMany({
+      where: { id, tenantId, status: 'CONFIRMED' },
+      data: { status: 'INVOICED' },
+    });
+  }
+
   updateStatus(id: string, status: string, client?: PrismaClientOrTx) {
     const db = client ?? this.prisma;
     return db.saleOrder.update({

@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { PrismaService } from '../../../prisma/prisma.service';
+import { CreditSourcesRepository } from '../repositories/credit-sources.repository';
 
 function toNum(value: unknown): number {
   if (typeof value === 'object' && value !== null && 'toNumber' in value) {
@@ -63,19 +63,16 @@ export interface BureauCheckStatus {
 // no muta nada, solo lee y calcula.
 @Injectable()
 export class CreditEvaluationService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly creditSources: CreditSourcesRepository) {}
 
   async getCustomerCreditHistory(
     tenantId: string,
     customerId: string,
   ): Promise<CreditHistory> {
-    const loans = await this.prisma.loan.findMany({
-      where: { tenantId, customerId },
-      include: {
-        installments: { orderBy: { number: 'asc' } },
-        saleOrder: { include: { items: { include: { product: true } } } },
-      },
-    });
+    const loans = await this.creditSources.findLoanHistory(
+      tenantId,
+      customerId,
+    );
 
     if (loans.length === 0) {
       return {
@@ -163,14 +160,8 @@ export class CreditEvaluationService {
     guarantorIncomes: number[] = [],
   ): Promise<IncomeCapacity> {
     const [customer, creditConfig] = await Promise.all([
-      this.prisma.customer.findFirst({
-        where: { id: customerId, tenantId },
-        select: { monthlyIncome: true },
-      }),
-      this.prisma.creditConfig.findUnique({
-        where: { tenantId },
-        select: { maxIncomePercentage: true },
-      }),
+      this.creditSources.findCustomerIncome(tenantId, customerId),
+      this.creditSources.findMaxIncomePercentage(tenantId),
     ]);
 
     const customerIncome =
@@ -200,10 +191,10 @@ export class CreditEvaluationService {
       };
     }
 
-    const activeLoans = await this.prisma.loan.findMany({
-      where: { tenantId, customerId, status: 'ACTIVE' },
-      select: { totalAmount: true, totalInstallments: true },
-    });
+    const activeLoans = await this.creditSources.findActiveLoanTerms(
+      tenantId,
+      customerId,
+    );
     const currentCommitment = activeLoans.reduce(
       (sum, loan) => sum + toNum(loan.totalAmount) / loan.totalInstallments,
       0,
@@ -236,18 +227,16 @@ export class CreditEvaluationService {
     customerId: string,
     saleOrderId: string,
   ): Promise<BureauCheckStatus> {
-    const config = await this.prisma.creditBureauConfig.findUnique({
-      where: { tenantId },
-    });
+    const config = await this.creditSources.findBureauConfig(tenantId);
     if (!config?.isEnabled) {
       return { required: false, latestResult: null };
     }
 
     if (config.checkFrequency === 'EVERY_REQUEST') {
-      const check = await this.prisma.creditBureauCheck.findFirst({
-        where: { tenantId, saleOrderId },
-        orderBy: { createdAt: 'desc' },
-      });
+      const check = await this.creditSources.findLatestBureauCheckForOrder(
+        tenantId,
+        saleOrderId,
+      );
       return {
         required: !check,
         latestResult: (check?.result as 'CLEAN' | 'FLAGGED') ?? null,
@@ -257,16 +246,16 @@ export class CreditEvaluationService {
     // FIRST_PURCHASE_ONLY — si ya tuvo un préstamo alguna vez, ya fue
     // evaluado en el pasado (con o sin esta función activa) — no se le
     // vuelve a pedir ni se lo bloquea retroactivamente.
-    const hasLoan = await this.prisma.loan.findFirst({
-      where: { tenantId, customerId },
-      select: { id: true },
-    });
+    const hasLoan = await this.creditSources.customerHasLoan(
+      tenantId,
+      customerId,
+    );
     if (hasLoan) return { required: false, latestResult: null };
 
-    const check = await this.prisma.creditBureauCheck.findFirst({
-      where: { tenantId, customerId },
-      orderBy: { createdAt: 'desc' },
-    });
+    const check = await this.creditSources.findLatestBureauCheckForCustomer(
+      tenantId,
+      customerId,
+    );
     return {
       required: !check,
       latestResult: (check?.result as 'CLEAN' | 'FLAGGED') ?? null,

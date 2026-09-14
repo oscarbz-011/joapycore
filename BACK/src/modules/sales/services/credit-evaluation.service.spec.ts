@@ -1,4 +1,5 @@
 import { CreditEvaluationService } from './credit-evaluation.service';
+import { CreditSourcesRepository } from '../repositories/credit-sources.repository';
 
 function makeLoan(overrides = {}) {
   return {
@@ -45,7 +46,9 @@ describe('CreditEvaluationService', () => {
       creditBureauConfig: { findUnique: jest.fn() },
       creditBureauCheck: { findFirst: jest.fn() },
     };
-    service = new CreditEvaluationService(prisma as never);
+    service = new CreditEvaluationService(
+      new CreditSourcesRepository(prisma as never),
+    );
   });
 
   // ── getCustomerCreditHistory ─────────────────────────────────────────────
