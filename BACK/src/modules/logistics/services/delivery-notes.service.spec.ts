@@ -4,6 +4,7 @@ import {
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { DeliveryNotesService } from './delivery-notes.service';
+import { LogisticsSourcesRepository } from '../repositories/logistics-sources.repository';
 
 function makeNote(overrides = {}) {
   return {
@@ -35,7 +36,7 @@ describe('DeliveryNotesService', () => {
     service = new DeliveryNotesService(
       repo as any,
       eventEmitter as any,
-      prisma as any,
+      new LogisticsSourcesRepository(prisma as any),
     );
   });
 
@@ -119,7 +120,10 @@ describe('DeliveryNotesService', () => {
             assignmentMode: 'INTERNAL_EMPLOYEE',
           }),
         );
-      prisma.employee.findUnique.mockResolvedValue({ id: 'emp-1' });
+      prisma.employee.findUnique.mockResolvedValue({
+        id: 'emp-1',
+        tenantId: 'tenant-1',
+      });
 
       await service.dispatch('tenant-1', 'note-1', {}, 'user-1', [
         'logistics:track',
@@ -132,6 +136,26 @@ describe('DeliveryNotesService', () => {
       );
     });
 
+    it('rejects logistics:track when the linked employee belongs to another tenant', async () => {
+      repo.findById.mockResolvedValue(
+        makeNote({
+          assignmentMode: 'INTERNAL_EMPLOYEE',
+          assignedEmployeeId: 'emp-1',
+        }),
+      );
+      prisma.employee.findUnique.mockResolvedValue({
+        id: 'emp-1',
+        tenantId: 'other-tenant',
+      });
+
+      await expect(
+        service.dispatch('tenant-1', 'note-1', {}, 'user-1', [
+          'logistics:track',
+        ]),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+      expect(repo.update).not.toHaveBeenCalled();
+    });
+
     it('rejects logistics:track when the note is assigned to a different employee', async () => {
       repo.findById.mockResolvedValue(
         makeNote({
@@ -139,7 +163,10 @@ describe('DeliveryNotesService', () => {
           assignedEmployeeId: 'emp-1',
         }),
       );
-      prisma.employee.findUnique.mockResolvedValue({ id: 'emp-2' });
+      prisma.employee.findUnique.mockResolvedValue({
+        id: 'emp-2',
+        tenantId: 'tenant-1',
+      });
 
       await expect(
         service.dispatch('tenant-1', 'note-1', {}, 'user-1', [

@@ -5,7 +5,7 @@ import {
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
-import { PrismaService } from '../../../prisma/prisma.service';
+import { LogisticsSourcesRepository } from '../repositories/logistics-sources.repository';
 import { DeliveryNotesRepository } from '../repositories/delivery-notes.repository';
 import { DispatchDeliveryDto } from '../dto/dispatch-delivery.dto';
 import type { AuditLogEvent } from '../../../audit/audit-log.event';
@@ -15,7 +15,7 @@ export class DeliveryNotesService {
   constructor(
     private readonly repo: DeliveryNotesRepository,
     private readonly eventEmitter: EventEmitter2,
-    private readonly prisma: PrismaService,
+    private readonly sources: LogisticsSourcesRepository,
   ) {}
 
   findAll(tenantId: string, status?: string) {
@@ -61,7 +61,7 @@ export class DeliveryNotesService {
     }
     if (!hasManage) {
       const employee = userId
-        ? await this.prisma.employee.findUnique({ where: { userId } })
+        ? await this.sources.findEmployeeByUser(tenantId, userId)
         : null;
       if (!employee || note.assignedEmployeeId !== employee.id) {
         throw new ForbiddenException('Esta entrega no está asignada a vos');

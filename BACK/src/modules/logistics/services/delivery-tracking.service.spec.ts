@@ -4,6 +4,7 @@ import {
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { DeliveryTrackingService } from './delivery-tracking.service';
+import { LogisticsSourcesRepository } from '../repositories/logistics-sources.repository';
 
 function makeNote(overrides = {}) {
   return {
@@ -62,7 +63,7 @@ describe('DeliveryTrackingService', () => {
     eventEmitter = { emit: jest.fn() };
 
     service = new DeliveryTrackingService(
-      prisma as any,
+      new LogisticsSourcesRepository(prisma as any),
       deliveryNotesRepository as any,
       trackingEventsRepository as any,
       deliveryNotesService as any,

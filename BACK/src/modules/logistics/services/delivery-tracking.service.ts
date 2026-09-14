@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { DeliveryAssignmentMode, DeliveryNoteStatus } from '@prisma/client';
-import { PrismaService } from '../../../prisma/prisma.service';
+import { LogisticsSourcesRepository } from '../repositories/logistics-sources.repository';
 import { DeliveryNotesRepository } from '../repositories/delivery-notes.repository';
 import { DeliveryTrackingEventsRepository } from '../repositories/delivery-tracking-events.repository';
 import { DeliveryNotesService } from './delivery-notes.service';
@@ -24,29 +24,16 @@ const VALID_STATUSES = [
 @Injectable()
 export class DeliveryTrackingService {
   constructor(
-    private readonly prisma: PrismaService,
+    private readonly sources: LogisticsSourcesRepository,
     private readonly deliveryNotesRepository: DeliveryNotesRepository,
     private readonly trackingEventsRepository: DeliveryTrackingEventsRepository,
     private readonly deliveryNotesService: DeliveryNotesService,
     private readonly eventEmitter: EventEmitter2,
   ) {}
 
-  // Lectura cross-módulo vía PrismaService (no importa ninguna clase de hr)
-  // — mismo criterio ya usado por SaleOrdersService contra `customer`.
+  // Lectura cross-módulo vía repositorio (no importa ninguna clase de hr).
   listCouriers(tenantId: string) {
-    return this.prisma.employee.findMany({
-      where: { tenantId, isActive: true, deletedAt: null, isCourier: true },
-      select: {
-        id: true,
-        firstName: true,
-        lastName: true,
-        contractType: true,
-        userId: true,
-        phone: true,
-        mobilePhone: true,
-      },
-      orderBy: { firstName: 'asc' },
-    });
+    return this.sources.findCouriers(tenantId);
   }
 
   async assign(
@@ -69,10 +56,10 @@ export class DeliveryTrackingService {
     let employee: { id: string; firstName: string; lastName: string } | null =
       null;
     if (dto.assignedEmployeeId) {
-      employee = await this.prisma.employee.findFirst({
-        where: { id: dto.assignedEmployeeId, tenantId, isActive: true },
-        select: { id: true, firstName: true, lastName: true },
-      });
+      employee = await this.sources.findActiveEmployee(
+        tenantId,
+        dto.assignedEmployeeId,
+      );
       if (!employee) throw new NotFoundException('Empleado no encontrado');
     }
 
@@ -106,10 +93,8 @@ export class DeliveryTrackingService {
   }
 
   async findMine(tenantId: string, userId: string, status?: string) {
-    const employee = await this.prisma.employee.findUnique({
-      where: { userId },
-    });
-    if (!employee || employee.tenantId !== tenantId) return [];
+    const employee = await this.sources.findEmployeeByUser(tenantId, userId);
+    if (!employee) return [];
     const parsed = VALID_STATUSES.includes(status as DeliveryNoteStatus)
       ? (status as DeliveryNoteStatus)
       : undefined;
@@ -148,9 +133,7 @@ export class DeliveryTrackingService {
     }
 
     if (!hasManage) {
-      const employee = await this.prisma.employee.findUnique({
-        where: { userId },
-      });
+      const employee = await this.sources.findEmployeeByUser(tenantId, userId);
       if (!employee || note.assignedEmployeeId !== employee.id) {
         throw new ForbiddenException('Esta entrega no está asignada a vos');
       }
@@ -172,10 +155,12 @@ export class DeliveryTrackingService {
       dto.latitude != null &&
       dto.longitude != null
     ) {
-      await this.prisma.customer.updateMany({
-        where: { id: note.saleOrder.customerId, tenantId },
-        data: { latitude: dto.latitude, longitude: dto.longitude },
-      });
+      await this.sources.updateCustomerLocation(
+        tenantId,
+        note.saleOrder.customerId,
+        dto.latitude,
+        dto.longitude,
+      );
     }
 
     if (dto.checkpoint === 'DELIVERED') {

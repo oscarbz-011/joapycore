@@ -1,6 +1,6 @@
 import { Module, OnApplicationBootstrap, Logger } from '@nestjs/common';
-import { PrismaService } from '../../prisma/prisma.service';
 import { DeliveryNotesRepository } from './repositories/delivery-notes.repository';
+import { LogisticsSourcesRepository } from './repositories/logistics-sources.repository';
 import { DeliveryTrackingEventsRepository } from './repositories/delivery-tracking-events.repository';
 import { DeliveryNotesService } from './services/delivery-notes.service';
 import { DeliveryTrackingService } from './services/delivery-tracking.service';
@@ -22,25 +22,24 @@ import { LogisticsOnSaleCompletedListener } from './events/logistics-on-sale-com
     DeliveryTrackingService,
     DeliveryNotesRepository,
     DeliveryTrackingEventsRepository,
+    LogisticsSourcesRepository,
     LogisticsOnSaleCompletedListener,
   ],
 })
 export class LogisticsModule implements OnApplicationBootstrap {
   private readonly logger = new Logger(LogisticsModule.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly sources: LogisticsSourcesRepository,
+    private readonly deliveryNotesRepository: DeliveryNotesRepository,
+  ) {}
 
   async onApplicationBootstrap() {
     try {
       // Backfill: create PENDING delivery notes for CONFIRMED/INVOICED orders
       // that don't have one yet (orders confirmed before this feature existed).
-      const orders = await this.prisma.saleOrder.findMany({
-        where: {
-          status: { in: ['CONFIRMED', 'INVOICED'] },
-          deliveryNote: null,
-        },
-        select: { id: true, tenantId: true },
-      });
+      const orders =
+        await this.sources.findConfirmedOrdersWithoutDeliveryNote();
 
       if (orders.length === 0) return;
 
@@ -49,14 +48,10 @@ export class LogisticsModule implements OnApplicationBootstrap {
       );
 
       for (const order of orders) {
-        await this.prisma.deliveryNote.create({
-          data: {
-            tenantId: order.tenantId,
-            saleOrderId: order.id,
-            status: 'PENDING',
-            issuedAt: new Date(),
-          },
-        });
+        await this.deliveryNotesRepository.ensurePendingForOrder(
+          order.tenantId,
+          order.id,
+        );
       }
     } catch (err) {
       this.logger.warn(
