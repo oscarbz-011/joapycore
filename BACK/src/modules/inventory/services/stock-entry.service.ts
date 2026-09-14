@@ -11,6 +11,7 @@ import { PrismaClientOrTx } from '../../../prisma/types';
 import { ProductsRepository } from '../repositories/products.repository';
 import { ProductUnitsRepository } from '../repositories/product-units.repository';
 import { ProductBatchesRepository } from '../repositories/product-batches.repository';
+import { StockMovementsRepository } from '../repositories/stock-movements.repository';
 
 export interface RegisterStockEntryParams {
   productId: string;
@@ -42,6 +43,7 @@ export class StockEntryService {
     private readonly productsRepository: ProductsRepository,
     private readonly productUnitsRepository: ProductUnitsRepository,
     private readonly productBatchesRepository: ProductBatchesRepository,
+    private readonly stockMovements: StockMovementsRepository,
   ) {}
 
   async registerEntry(
@@ -96,8 +98,8 @@ export class StockEntryService {
       batchId = batch.id;
     }
 
-    await client.stockMovement.create({
-      data: {
+    await this.stockMovements.create(
+      {
         tenantId,
         productId: params.productId,
         type: 'IN',
@@ -113,7 +115,8 @@ export class StockEntryService {
             : undefined,
         notes: params.notes,
       },
-    });
+      client,
+    );
   }
 
   // Descuenta `quantity` de los lotes disponibles más antiguos (FIFO) para
@@ -164,15 +167,18 @@ export class StockEntryService {
       );
     }
 
-    const existing = await client.stockMovement.findFirst({
-      where: { tenantId, productId, referenceId, type: 'OUT', batchId: null },
-    });
+    const existing = await this.stockMovements.findUnbatchedOut(
+      tenantId,
+      productId,
+      referenceId,
+      client,
+    );
     if (existing) {
-      await client.stockMovement.delete({ where: { id: existing.id } });
+      await this.stockMovements.delete(existing.id, client);
     }
     for (const { batchId, take } of allocations) {
-      await client.stockMovement.create({
-        data: {
+      await this.stockMovements.create(
+        {
           tenantId,
           productId,
           type: 'OUT',
@@ -181,13 +187,14 @@ export class StockEntryService {
           batchId,
           referenceId,
         },
-      });
+        client,
+      );
     }
     if (remaining > 0) {
       // Remanente sin trazabilidad por lote — se registra igual para que la
       // suma total de stock siga siendo exacta.
-      await client.stockMovement.create({
-        data: {
+      await this.stockMovements.create(
+        {
           tenantId,
           productId,
           type: 'OUT',
@@ -195,7 +202,8 @@ export class StockEntryService {
           quantity: -remaining,
           referenceId,
         },
-      });
+        client,
+      );
     }
 
     return allocations[0]?.batchId;

@@ -57,4 +57,76 @@ export class ProductUnitsRepository {
       data: { status, ...(saleOrderItemId && { saleOrderItemId }) },
     });
   }
+
+  findBySerialForUpdate(
+    tenantId: string,
+    productId: string,
+    serialNumber: string,
+    client: PrismaClientOrTx = this.prisma,
+  ) {
+    return client.productUnit.findUnique({
+      where: {
+        tenantId_productId_serialNumber: { tenantId, productId, serialNumber },
+      },
+    });
+  }
+
+  assignToSaleItem(
+    id: string,
+    saleOrderItemId: string,
+    client: PrismaClientOrTx = this.prisma,
+  ) {
+    return client.productUnit.update({
+      where: { id },
+      data: { saleOrderItemId },
+    });
+  }
+
+  detachFromSaleItems(
+    saleOrderItemIds: string[],
+    client: PrismaClientOrTx = this.prisma,
+  ) {
+    return client.productUnit.updateMany({
+      where: { saleOrderItemId: { in: saleOrderItemIds } },
+      data: { saleOrderItemId: null },
+    });
+  }
+
+  markSoldBySaleItem(
+    tenantId: string,
+    saleOrderItemId: string,
+    client: PrismaClientOrTx = this.prisma,
+  ) {
+    return client.productUnit.updateMany({
+      where: { saleOrderItemId, tenantId },
+      data: { status: 'SOLD' },
+    });
+  }
+
+  /** Anulación: las unidades vuelven a stock y se desvinculan de la venta. */
+  restoreBySaleItem(
+    tenantId: string,
+    saleOrderItemId: string,
+    client: PrismaClientOrTx = this.prisma,
+  ) {
+    return client.productUnit.updateMany({
+      where: { tenantId, saleOrderItemId },
+      data: { status: 'IN_STOCK', saleOrderItemId: null },
+    });
+  }
+
+  async existsForReceiptItems(
+    tenantId: string,
+    purchaseReceiptItemIds: string[],
+    client: PrismaClientOrTx = this.prisma,
+  ): Promise<boolean> {
+    const row = await client.productUnit.findFirst({
+      where: {
+        tenantId,
+        purchaseReceiptItemId: { in: purchaseReceiptItemIds },
+      },
+      select: { id: true },
+    });
+    return row !== null;
+  }
 }

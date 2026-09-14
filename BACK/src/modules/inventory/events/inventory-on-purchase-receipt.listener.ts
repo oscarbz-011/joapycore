@@ -2,6 +2,9 @@ import { Injectable, Logger } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
 import { MovementReason } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
+import { ProductUnitsRepository } from '../repositories/product-units.repository';
+import { StockMovementsRepository } from '../repositories/stock-movements.repository';
+import { StockSourcesRepository } from '../repositories/stock-sources.repository';
 import { StockEntryService } from '../services/stock-entry.service';
 
 interface PurchaseReceiptCreatedEvent {
@@ -19,8 +22,12 @@ export class InventoryOnPurchaseReceiptListener {
   private readonly logger = new Logger(InventoryOnPurchaseReceiptListener.name);
 
   constructor(
+    // Solo para abrir la transacción; los accesos a datos van por repositorios.
     private readonly prisma: PrismaService,
     private readonly stockEntryService: StockEntryService,
+    private readonly stockSources: StockSourcesRepository,
+    private readonly stockMovements: StockMovementsRepository,
+    private readonly productUnits: ProductUnitsRepository,
   ) {}
 
   @OnEvent('purchase.receipt.created')
@@ -37,32 +44,21 @@ export class InventoryOnPurchaseReceiptListener {
   private async process(event: PurchaseReceiptCreatedEvent) {
     const { tenantId, purchaseReceiptId } = event;
 
-    const receipt = await this.prisma.purchaseReceipt.findFirst({
-      where: { id: purchaseReceiptId, tenantId },
-      include: {
-        items: {
-          include: {
-            product: { select: { isSerialized: true, usesLots: true } },
-          },
-        },
-      },
-    });
+    const receipt = await this.stockSources.findPurchaseReceiptWithItems(
+      tenantId,
+      purchaseReceiptId,
+    );
     if (!receipt) return;
 
     await this.prisma.$transaction(async (tx) => {
       // Idempotencia: si esta recepción ya generó movimientos, no repetir.
-      const alreadyProcessed = await tx.stockMovement.findFirst({
-        where: {
-          tenantId,
-          referenceId: { in: receipt.items.map((i) => i.id) },
-        },
-      });
-      const alreadyProcessedUnits = await tx.productUnit.findFirst({
-        where: {
-          tenantId,
-          purchaseReceiptItemId: { in: receipt.items.map((i) => i.id) },
-        },
-      });
+      const itemIds = receipt.items.map((i) => i.id);
+      const alreadyProcessed = await this.stockMovements.exists(
+        { tenantId, referenceId: { in: itemIds } },
+        tx,
+      );
+      const alreadyProcessedUnits =
+        await this.productUnits.existsForReceiptItems(tenantId, itemIds, tx);
       if (alreadyProcessed || alreadyProcessedUnits) return;
 
       for (const item of receipt.items) {

@@ -1,4 +1,7 @@
 import { InventoryOnPurchaseReceiptListener } from './inventory-on-purchase-receipt.listener';
+import { ProductUnitsRepository } from '../repositories/product-units.repository';
+import { StockMovementsRepository } from '../repositories/stock-movements.repository';
+import { StockSourcesRepository } from '../repositories/stock-sources.repository';
 
 function makeReceipt(overrides = {}) {
   return {
@@ -48,6 +51,9 @@ describe('InventoryOnPurchaseReceiptListener', () => {
     listener = new InventoryOnPurchaseReceiptListener(
       prisma as any,
       stockEntryService as any,
+      new StockSourcesRepository(prisma as any),
+      new StockMovementsRepository(prisma as any),
+      new ProductUnitsRepository(prisma as any),
     );
   });
 

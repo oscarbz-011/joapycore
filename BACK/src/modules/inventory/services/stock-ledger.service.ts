@@ -10,23 +10,46 @@ import type {
   StockLine,
 } from '../../../common/contracts/stock-ledger.contract';
 import {
-  assertStockAvailable,
+  aggregateDemands,
+  assertDemandsCovered,
   type StockDemand,
 } from '../../../common/utils/stock-availability.util';
+import { ProductUnitsRepository } from '../repositories/product-units.repository';
+import { StockMovementsRepository } from '../repositories/stock-movements.repository';
 
 /**
- * Implementación de StockLedger: único lugar fuera de los listeners de
- * Inventario que escribe stock_movements y product_units. Ventas y POS la
- * usan por el token STOCK_LEDGER, pasando su transacción.
+ * Implementación de StockLedger: operaciones de stock que Ventas y POS usan
+ * por el token STOCK_LEDGER, siempre dentro de la transacción del llamador.
  */
 @Injectable()
 export class StockLedgerService implements StockLedger {
-  assertAvailable(
+  constructor(
+    private readonly stockMovements: StockMovementsRepository,
+    private readonly productUnits: ProductUnitsRepository,
+  ) {}
+
+  /**
+   * Disponible = suma de todos los movimientos del producto (incluye RESERVED,
+   * que resta), el mismo cálculo que muestra el inventario. El lock por
+   * producto serializa las ventas concurrentes: sin él, dos ventas simultáneas
+   * de la última unidad leen "1 disponible" y pasan las dos. Solo aplica a no
+   * serializados; los serializados se controlan por unidad (IN_STOCK).
+   */
+  async assertAvailable(
     tx: Prisma.TransactionClient,
     tenantId: string,
     demands: StockDemand[],
   ): Promise<void> {
-    return assertStockAvailable(tx, tenantId, demands);
+    const totals = aggregateDemands(demands);
+    if (totals.size === 0) return;
+    const productIds = [...totals.keys()];
+    await this.stockMovements.lockProducts(tx, tenantId, productIds);
+    const available = await this.stockMovements.sumByProducts(
+      tenantId,
+      productIds,
+      tx,
+    );
+    assertDemandsCovered(totals, available);
   }
 
   reserve(
@@ -55,15 +78,13 @@ export class StockLedgerService implements StockLedger {
     itemIds: string[],
   ): Promise<Map<string, number>> {
     if (itemIds.length === 0) return new Map();
-    const sums = await tx.stockMovement.groupBy({
-      by: ['referenceId'],
-      where: { tenantId, type: 'RESERVED', referenceId: { in: itemIds } },
-      _sum: { quantity: true },
-    });
+    const sums = await this.stockMovements.sumReservationsByReference(
+      tenantId,
+      itemIds,
+      tx,
+    );
     return new Map(
-      sums
-        .filter((s) => s.referenceId && (s._sum.quantity ?? 0) < 0)
-        .map((s) => [s.referenceId!, -(s._sum.quantity ?? 0)]),
+      [...sums.entries()].filter(([, q]) => q < 0).map(([id, q]) => [id, -q]),
     );
   }
 
@@ -80,8 +101,8 @@ export class StockLedgerService implements StockLedger {
     for (const item of items) {
       const quantity = reserved.get(item.id);
       if (!item.productId || !quantity) continue;
-      await tx.stockMovement.create({
-        data: {
+      await this.stockMovements.create(
+        {
           tenantId,
           productId: item.productId,
           warehouseId: item.warehouseId ?? null,
@@ -89,7 +110,8 @@ export class StockLedgerService implements StockLedger {
           quantity, // positive = reverses the reservation
           referenceId: item.id,
         },
-      });
+        tx,
+      );
     }
   }
 
@@ -101,9 +123,12 @@ export class StockLedgerService implements StockLedger {
     saleItemId: string,
   ): Promise<void> {
     for (const serial of serialNumbers) {
-      const unit = await tx.productUnit.findFirst({
-        where: { tenantId, productId, serialNumber: serial },
-      });
+      const unit = await this.productUnits.findBySerialForUpdate(
+        tenantId,
+        productId,
+        serial,
+        tx,
+      );
       if (!unit) {
         throw new NotFoundException(`Serial number "${serial}" not found`);
       }
@@ -112,10 +137,7 @@ export class StockLedgerService implements StockLedger {
           `Serial "${serial}" is not available (status: ${unit.status})`,
         );
       }
-      await tx.productUnit.update({
-        where: { id: unit.id },
-        data: { saleOrderItemId: saleItemId },
-      });
+      await this.productUnits.assignToSaleItem(unit.id, saleItemId, tx);
     }
   }
 
@@ -124,10 +146,7 @@ export class StockLedgerService implements StockLedger {
     saleItemIds: string[],
   ): Promise<void> {
     if (saleItemIds.length === 0) return;
-    await tx.productUnit.updateMany({
-      where: { saleOrderItemId: { in: saleItemIds } },
-      data: { saleOrderItemId: null },
-    });
+    await this.productUnits.detachFromSaleItems(saleItemIds, tx);
   }
 
   async markSerialUnitsSold(
@@ -135,10 +154,7 @@ export class StockLedgerService implements StockLedger {
     tenantId: string,
     saleItemId: string,
   ): Promise<void> {
-    await tx.productUnit.updateMany({
-      where: { saleOrderItemId: saleItemId, tenantId },
-      data: { status: 'SOLD' },
-    });
+    await this.productUnits.markSoldBySaleItem(tenantId, saleItemId, tx);
   }
 
   private async writeMovements(
@@ -149,8 +165,8 @@ export class StockLedgerService implements StockLedger {
   ): Promise<void> {
     for (const line of lines) {
       if (!line.productId) continue; // free-text / service lines never touch stock
-      await tx.stockMovement.create({
-        data: {
+      await this.stockMovements.create(
+        {
           tenantId,
           productId: line.productId,
           warehouseId: line.warehouseId,
@@ -158,7 +174,8 @@ export class StockLedgerService implements StockLedger {
           quantity: -line.quantity,
           referenceId: line.saleItemId,
         },
-      });
+        tx,
+      );
     }
   }
 }

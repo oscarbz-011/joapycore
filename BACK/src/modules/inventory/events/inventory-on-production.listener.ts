@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
 import { MovementReason, StockMovementType } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
+import { StockMovementsRepository } from '../repositories/stock-movements.repository';
 import { StockEntryService } from '../services/stock-entry.service';
 
 interface ProductionOrderCompletedEvent {
@@ -22,8 +23,10 @@ export class InventoryOnProductionListener {
   private readonly logger = new Logger(InventoryOnProductionListener.name);
 
   constructor(
+    // Solo para abrir la transacción; los accesos a datos van por repositorios.
     private readonly prisma: PrismaService,
     private readonly stockEntryService: StockEntryService,
+    private readonly stockMovements: StockMovementsRepository,
   ) {}
 
   @OnEvent('production.order.completed')
@@ -46,16 +49,17 @@ export class InventoryOnProductionListener {
     await this.prisma.$transaction(async (tx) => {
       // Idempotencia: si esta orden ya generó movimientos, no repetir (mismo
       // criterio que el listener de recepción).
-      const already = await tx.stockMovement.findFirst({
-        where: { tenantId, referenceId: productionOrderId },
-      });
+      const already = await this.stockMovements.exists(
+        { tenantId, referenceId: productionOrderId },
+        tx,
+      );
       if (already) return;
 
       // 1) Salida de cada componente consumido.
       for (const line of event.consumed) {
         if (line.quantity <= 0) continue;
-        await tx.stockMovement.create({
-          data: {
+        await this.stockMovements.create(
+          {
             tenantId,
             productId: line.productId,
             type: StockMovementType.OUT,
@@ -65,7 +69,8 @@ export class InventoryOnProductionListener {
             warehouseId: event.warehouseId ?? undefined,
             referenceId: productionOrderId,
           },
-        });
+          tx,
+        );
       }
 
       // 2) Ingreso del producto fabricado — vía StockEntryService para que

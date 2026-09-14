@@ -1,4 +1,7 @@
 import { InventoryOnInvoiceListener } from './inventory-on-invoice.listener';
+import { ProductUnitsRepository } from '../repositories/product-units.repository';
+import { StockMovementsRepository } from '../repositories/stock-movements.repository';
+import { StockSourcesRepository } from '../repositories/stock-sources.repository';
 
 function makeItem(overrides = {}) {
   return {
@@ -13,7 +16,7 @@ function makeItem(overrides = {}) {
 describe('InventoryOnInvoiceListener', () => {
   let listener: InventoryOnInvoiceListener;
   let prisma: {
-    invoice: { findUnique: jest.Mock };
+    invoice: { findFirst: jest.Mock };
     $transaction: jest.Mock;
     stockMovement: { findFirst: jest.Mock; create: jest.Mock };
     productUnit: { updateMany: jest.Mock };
@@ -28,16 +31,22 @@ describe('InventoryOnInvoiceListener', () => {
       productUnit: { updateMany: jest.fn().mockResolvedValue({ count: 0 }) },
     };
     prisma = {
-      invoice: { findUnique: jest.fn() },
+      invoice: { findFirst: jest.fn() },
       $transaction: jest.fn().mockImplementation((cb) => cb(tx)),
       stockMovement: tx.stockMovement,
       productUnit: tx.productUnit,
     };
-    listener = new InventoryOnInvoiceListener(prisma as any);
+    // Repositorios reales sobre los mocks de Prisma/tx.
+    listener = new InventoryOnInvoiceListener(
+      prisma as any,
+      new StockSourcesRepository(prisma as any),
+      new StockMovementsRepository(prisma as any),
+      new ProductUnitsRepository(prisma as any),
+    );
   });
 
   it('does nothing when invoice has no linked saleOrder', async () => {
-    prisma.invoice.findUnique.mockResolvedValue({
+    prisma.invoice.findFirst.mockResolvedValue({
       saleOrderId: null,
       saleOrder: null,
     });
@@ -48,7 +57,7 @@ describe('InventoryOnInvoiceListener', () => {
   });
 
   it('does nothing when invoice is not found', async () => {
-    prisma.invoice.findUnique.mockResolvedValue(null);
+    prisma.invoice.findFirst.mockResolvedValue(null);
 
     await listener.handle({ tenantId: 'tenant-1', invoiceId: 'inv-1' });
 
@@ -65,7 +74,7 @@ describe('InventoryOnInvoiceListener', () => {
     };
     prisma.$transaction.mockImplementation((cb) => cb(tx));
 
-    prisma.invoice.findUnique.mockResolvedValue({
+    prisma.invoice.findFirst.mockResolvedValue({
       saleOrderId: 'order-1',
       saleOrder: { items: [makeItem({ quantity: 3 })] },
     });
@@ -96,7 +105,7 @@ describe('InventoryOnInvoiceListener', () => {
     };
     prisma.$transaction.mockImplementation((cb) => cb(tx));
 
-    prisma.invoice.findUnique.mockResolvedValue({
+    prisma.invoice.findFirst.mockResolvedValue({
       saleOrderId: 'order-1',
       saleOrder: {
         items: [makeItem({ product: { isSerialized: true } })],
@@ -122,7 +131,7 @@ describe('InventoryOnInvoiceListener', () => {
     };
     prisma.$transaction.mockImplementation((cb) => cb(tx));
 
-    prisma.invoice.findUnique.mockResolvedValue({
+    prisma.invoice.findFirst.mockResolvedValue({
       saleOrderId: 'order-1',
       saleOrder: { items: [makeItem()] },
     });

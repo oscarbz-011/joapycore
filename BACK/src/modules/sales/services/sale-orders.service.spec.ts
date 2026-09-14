@@ -5,6 +5,8 @@ import {
 } from '@nestjs/common';
 import { StockLedgerService } from '../../inventory/services/stock-ledger.service';
 import { SaleOrdersService } from './sale-orders.service';
+import { ProductUnitsRepository } from '../../inventory/repositories/product-units.repository';
+import { StockMovementsRepository } from '../../inventory/repositories/stock-movements.repository';
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 
@@ -219,7 +221,10 @@ describe('SaleOrdersService', () => {
       eventEmitter as any,
       // Implementación real sobre el tx simulado: las aserciones sobre
       // tx.stockMovement/tx.productUnit siguen valiendo.
-      new StockLedgerService(),
+      new StockLedgerService(
+        new StockMovementsRepository(prisma as any),
+        new ProductUnitsRepository(prisma as any),
+      ),
       outbox as any,
     );
     // approveCredit y collectPayment transicionan dentro de la transacción:

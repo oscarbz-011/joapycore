@@ -1,4 +1,6 @@
 import { InventoryOnSaleDeliveredListener } from './inventory-on-sale-delivered.listener';
+import { StockMovementsRepository } from '../repositories/stock-movements.repository';
+import { StockSourcesRepository } from '../repositories/stock-sources.repository';
 
 function makeOrder(overrides = {}) {
   return {
@@ -39,6 +41,8 @@ describe('InventoryOnSaleDeliveredListener', () => {
     listener = new InventoryOnSaleDeliveredListener(
       prisma as any,
       stockEntryService as any,
+      new StockSourcesRepository(prisma as any),
+      new StockMovementsRepository(prisma as any),
     );
   });
 

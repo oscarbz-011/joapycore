@@ -1,6 +1,6 @@
 /**
  * Integración contra PostgreSQL real: verifica que el advisory lock de
- * assertStockAvailable serialice dos ventas simultáneas de la última unidad.
+ * StockLedgerService.assertAvailable serialice dos ventas simultáneas de la última unidad.
  * Un test unitario con mocks no puede probar esto.
  *
  * Requiere DATABASE_URL apuntando a una base con al menos un tenant.
@@ -10,16 +10,23 @@ import 'dotenv/config';
 import { ConfigService } from '@nestjs/config';
 import { randomUUID } from 'node:crypto';
 import { PrismaService } from '../src/prisma/prisma.service';
-import { assertStockAvailable } from '../src/common/utils/stock-availability.util';
+import { ProductUnitsRepository } from '../src/modules/inventory/repositories/product-units.repository';
+import { StockMovementsRepository } from '../src/modules/inventory/repositories/stock-movements.repository';
+import { StockLedgerService } from '../src/modules/inventory/services/stock-ledger.service';
 
-describe('assertStockAvailable (PostgreSQL)', () => {
+describe('StockLedgerService.assertAvailable (PostgreSQL)', () => {
   let prisma: PrismaService;
+  let ledger: StockLedgerService;
   let tenantId: string;
   let productId: string;
 
   beforeAll(async () => {
     prisma = new PrismaService(new ConfigService(process.env));
     await prisma.$connect();
+    ledger = new StockLedgerService(
+      new StockMovementsRepository(prisma),
+      new ProductUnitsRepository(prisma),
+    );
     const tenant = await prisma.tenant.findFirstOrThrow({
       select: { id: true },
     });
@@ -45,7 +52,7 @@ describe('assertStockAvailable (PostgreSQL)', () => {
 
   const sellOne = () =>
     prisma.$transaction(async (tx) => {
-      await assertStockAvailable(tx, tenantId, [
+      await ledger.assertAvailable(tx, tenantId, [
         { productId, quantity: 1, name: 'Última unidad' },
       ]);
       // Ventana amplia entre leer y escribir: sin lock, ambas pasarían.

@@ -1,6 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
 import { PrismaService } from '../../../prisma/prisma.service';
+import { StockMovementsRepository } from '../repositories/stock-movements.repository';
+import { StockSourcesRepository } from '../repositories/stock-sources.repository';
 import { StockEntryService } from '../services/stock-entry.service';
 
 interface SaleOrderStockOutEvent {
@@ -18,8 +20,11 @@ export class InventoryOnSaleDeliveredListener {
   private readonly logger = new Logger(InventoryOnSaleDeliveredListener.name);
 
   constructor(
+    // Solo para abrir la transacción; los accesos a datos van por repositorios.
     private readonly prisma: PrismaService,
     private readonly stockEntryService: StockEntryService,
+    private readonly stockSources: StockSourcesRepository,
+    private readonly stockMovements: StockMovementsRepository,
   ) {}
 
   @OnEvent('sale.order.stock_out')
@@ -36,16 +41,10 @@ export class InventoryOnSaleDeliveredListener {
   private async process(event: SaleOrderStockOutEvent) {
     const { tenantId, saleOrderId } = event;
 
-    const order = await this.prisma.saleOrder.findFirst({
-      where: { id: saleOrderId, tenantId },
-      include: {
-        items: {
-          include: {
-            product: { select: { isSerialized: true, usesLots: true } },
-          },
-        },
-      },
-    });
+    const order = await this.stockSources.findSaleOrderItemsForFifo(
+      tenantId,
+      saleOrderId,
+    );
     if (!order) return;
 
     await this.prisma.$transaction(async (tx) => {
@@ -54,9 +53,10 @@ export class InventoryOnSaleDeliveredListener {
         if (item.product?.isSerialized || !item.product?.usesLots) continue;
 
         // Idempotencia: si ya se consumió lote para esta línea, no repetir.
-        const alreadyConsumed = await tx.stockMovement.findFirst({
-          where: { tenantId, referenceId: item.id, batchId: { not: null } },
-        });
+        const alreadyConsumed = await this.stockMovements.exists(
+          { tenantId, referenceId: item.id, batchId: { not: null } },
+          tx,
+        );
         if (alreadyConsumed) continue;
 
         const firstBatchId = await this.stockEntryService.consumeFifo(
@@ -67,10 +67,11 @@ export class InventoryOnSaleDeliveredListener {
           tx,
         );
         if (firstBatchId) {
-          await tx.saleOrderItem.update({
-            where: { id: item.id },
-            data: { batchId: firstBatchId },
-          });
+          await this.stockSources.setSaleOrderItemBatch(
+            item.id,
+            firstBatchId,
+            tx,
+          );
         }
       }
     });

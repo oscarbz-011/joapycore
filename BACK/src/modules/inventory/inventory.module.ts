@@ -16,6 +16,8 @@ import { ProductBatchesRepository } from './repositories/product-batches.reposit
 import { ProductUnitsRepository } from './repositories/product-units.repository';
 import { ProductsRepository } from './repositories/products.repository';
 import { ProductSuppliersRepository } from './repositories/product-suppliers.repository';
+import { StockMovementsRepository } from './repositories/stock-movements.repository';
+import { StockSourcesRepository } from './repositories/stock-sources.repository';
 import { BrandsService } from './services/brands.service';
 import { CategoriesService } from './services/categories.service';
 import { ProductsService } from './services/products.service';
@@ -41,6 +43,8 @@ import { StockEntryService } from './services/stock-entry.service';
     ProductUnitsRepository,
     ProductSuppliersRepository,
     ProductBatchesRepository,
+    StockMovementsRepository,
+    StockSourcesRepository,
     InventoryOnTenantListener,
     InventoryOnInvoiceListener,
     InventoryOnPurchaseReceiptListener,

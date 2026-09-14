@@ -4,6 +4,7 @@ import {
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { StockEntryService } from './stock-entry.service';
+import { StockMovementsRepository } from '../repositories/stock-movements.repository';
 
 function makeProduct(overrides = {}) {
   return {
@@ -54,6 +55,7 @@ describe('StockEntryService', () => {
       productsRepository as any,
       productUnitsRepository as any,
       productBatchesRepository as any,
+      new StockMovementsRepository(prisma as any),
     );
   });
 
