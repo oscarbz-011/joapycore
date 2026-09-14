@@ -1,3 +1,10 @@
+# No es un monorepo: BACK/ es un único paquete. pnpm 10 exige `packages:`
+# en este archivo para reconocer cualquier comando (`pnpm run`, `pnpm exec`,
+# incluso `pnpm help`) apenas el archivo existe — sin esto, pnpm falla con
+# "packages field missing or empty" para todo, no solo para prisma.
+packages:
+  - .
+
 # Parches de seguridad para dependencias transitivas (pnpm audit, 13/09/2026).
 # Acotados a la misma versión mayor que ya resolvía el lockfile: los rangos
 # abiertos que genera `pnpm audit --fix` suben de major y rompen a quien los usa.
