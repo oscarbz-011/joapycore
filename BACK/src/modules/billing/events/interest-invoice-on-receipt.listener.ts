@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
-import { PrismaService } from '../../../prisma/prisma.service';
+import { BillingSourcesRepository } from '../repositories/billing-sources.repository';
 import { InvoicesService } from '../services/invoices.service';
 
 interface PaymentReceiptCreatedEvent {
@@ -32,7 +32,7 @@ export class InterestInvoiceOnReceiptListener {
   private readonly logger = new Logger(InterestInvoiceOnReceiptListener.name);
 
   constructor(
-    private readonly prisma: PrismaService,
+    private readonly billingSources: BillingSourcesRepository,
     private readonly invoicesService: InvoicesService,
   ) {}
 
@@ -48,17 +48,10 @@ export class InterestInvoiceOnReceiptListener {
   }
 
   private async process(event: PaymentReceiptCreatedEvent) {
-    const receipt = await this.prisma.paymentReceipt.findFirst({
-      where: { id: event.receiptId, tenantId: event.tenantId },
-      include: {
-        items: true,
-        loan: {
-          include: {
-            saleOrder: { include: { invoice: true } },
-          },
-        },
-      },
-    });
+    const receipt = await this.billingSources.findReceiptForInterestInvoice(
+      event.tenantId,
+      event.receiptId,
+    );
     if (!receipt) return;
 
     const interestItems = receipt.items.filter(

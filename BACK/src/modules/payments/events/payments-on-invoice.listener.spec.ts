@@ -1,3 +1,4 @@
+import { PaymentSourcesRepository } from '../repositories/payment-sources.repository';
 import { PaymentsOnInvoiceListener } from './payments-on-invoice.listener';
 
 function makeAR(overrides = {}) {
@@ -15,7 +16,7 @@ function makeAR(overrides = {}) {
 
 describe('PaymentsOnInvoiceListener', () => {
   let listener: PaymentsOnInvoiceListener;
-  let prisma: { invoice: { findUnique: jest.Mock } };
+  let prisma: { invoice: { findFirst: jest.Mock } };
   let arRepository: {
     findByInvoice: jest.Mock;
     create: jest.Mock;
@@ -23,14 +24,14 @@ describe('PaymentsOnInvoiceListener', () => {
   };
 
   beforeEach(() => {
-    prisma = { invoice: { findUnique: jest.fn() } };
+    prisma = { invoice: { findFirst: jest.fn() } };
     arRepository = {
       findByInvoice: jest.fn(),
       create: jest.fn().mockResolvedValue({ id: 'ar-1' }),
       updateStatus: jest.fn().mockResolvedValue(undefined),
     };
     listener = new PaymentsOnInvoiceListener(
-      prisma as any,
+      new PaymentSourcesRepository(prisma as any),
       arRepository as any,
     );
   });
@@ -40,7 +41,7 @@ describe('PaymentsOnInvoiceListener', () => {
   describe('handle (invoice.issued)', () => {
     it('creates an AR using invoice.total for cash sales', async () => {
       arRepository.findByInvoice.mockResolvedValue(null);
-      prisma.invoice.findUnique.mockResolvedValue({
+      prisma.invoice.findFirst.mockResolvedValue({
         total: 2_500_000,
         dueDate: null,
         saleOrder: { saleType: 'CASH', loan: null },
@@ -63,7 +64,7 @@ describe('PaymentsOnInvoiceListener', () => {
 
     it('creates an AR using loan.totalAmount for credit sales', async () => {
       arRepository.findByInvoice.mockResolvedValue(null);
-      prisma.invoice.findUnique.mockResolvedValue({
+      prisma.invoice.findFirst.mockResolvedValue({
         total: 2_500_000,
         dueDate: null,
         saleOrder: { saleType: 'CREDIT', loan: { totalAmount: 2_875_000 } },
@@ -82,7 +83,7 @@ describe('PaymentsOnInvoiceListener', () => {
 
     it('falls back to invoice.total for credit sales when the loan has not been created yet', async () => {
       arRepository.findByInvoice.mockResolvedValue(null);
-      prisma.invoice.findUnique.mockResolvedValue({
+      prisma.invoice.findFirst.mockResolvedValue({
         total: 2_500_000,
         dueDate: null,
         saleOrder: { saleType: 'CREDIT', loan: null },
@@ -113,7 +114,7 @@ describe('PaymentsOnInvoiceListener', () => {
 
     it('skips when invoice is not found', async () => {
       arRepository.findByInvoice.mockResolvedValue(null);
-      prisma.invoice.findUnique.mockResolvedValue(null);
+      prisma.invoice.findFirst.mockResolvedValue(null);
 
       await listener.handle({
         tenantId: 'tenant-1',

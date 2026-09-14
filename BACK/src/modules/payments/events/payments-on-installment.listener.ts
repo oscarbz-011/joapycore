@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { EventEmitter2, OnEvent } from '@nestjs/event-emitter';
-import { PrismaService } from '../../../prisma/prisma.service';
 import { AccountsReceivableRepository } from '../repositories/accounts-receivable.repository';
+import { PaymentSourcesRepository } from '../repositories/payment-sources.repository';
 
 interface InstallmentPaidEvent {
   tenantId: string;
@@ -16,7 +16,7 @@ export class PaymentsOnInstallmentListener {
   private readonly logger = new Logger(PaymentsOnInstallmentListener.name);
 
   constructor(
-    private readonly prisma: PrismaService,
+    private readonly paymentSources: PaymentSourcesRepository,
     private readonly arRepository: AccountsReceivableRepository,
     private readonly eventEmitter: EventEmitter2,
   ) {}
@@ -25,10 +25,10 @@ export class PaymentsOnInstallmentListener {
   async handle(event: InstallmentPaidEvent) {
     try {
       // Find invoice for this sale order
-      const invoice = await this.prisma.invoice.findFirst({
-        where: { saleOrderId: event.saleOrderId, tenantId: event.tenantId },
-        select: { id: true },
-      });
+      const invoice = await this.paymentSources.findInvoiceIdBySaleOrder(
+        event.tenantId,
+        event.saleOrderId,
+      );
       if (!invoice) return;
 
       // Find AR for this invoice
@@ -42,10 +42,10 @@ export class PaymentsOnInstallmentListener {
       await this.arRepository.incrementPaid(ar.id, event.amount);
 
       // Refresh to check new totals
-      const updated = await this.prisma.accountsReceivable.findUnique({
-        where: { id: ar.id },
-        select: { id: true, amount: true, paidAmount: true },
-      });
+      const updated = await this.arRepository.findAmounts(
+        event.tenantId,
+        ar.id,
+      );
       if (!updated) return;
 
       const total =

@@ -4,6 +4,7 @@ import { PaymentsOnInstallmentListener } from './events/payments-on-installment.
 import { PaymentsOnInvoiceListener } from './events/payments-on-invoice.listener';
 import { AccountsReceivableRepository } from './repositories/accounts-receivable.repository';
 import { PaymentRecordsRepository } from './repositories/payment-records.repository';
+import { PaymentSourcesRepository } from './repositories/payment-sources.repository';
 import { PaymentsService } from './services/payments.service';
 
 @Module({
@@ -12,6 +13,7 @@ import { PaymentsService } from './services/payments.service';
     PaymentsService,
     AccountsReceivableRepository,
     PaymentRecordsRepository,
+    PaymentSourcesRepository,
     PaymentsOnInvoiceListener,
     PaymentsOnInstallmentListener,
   ],

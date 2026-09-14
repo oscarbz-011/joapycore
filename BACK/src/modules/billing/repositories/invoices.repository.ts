@@ -141,6 +141,20 @@ export class InvoicesRepository {
     });
   }
 
+  // Último secuencial usado en un establecimiento/punto de expedición.
+  findLastSequential(
+    tenantId: string,
+    establecimiento: string,
+    puntoExpedicion: string,
+    client: PrismaClientOrTx = this.prisma,
+  ) {
+    return client.invoice.findFirst({
+      where: { tenantId, establecimiento, puntoExpedicion },
+      orderBy: { sequential: 'desc' },
+      select: { sequential: true },
+    });
+  }
+
   updateStatus(
     tenantId: string,
     id: string,

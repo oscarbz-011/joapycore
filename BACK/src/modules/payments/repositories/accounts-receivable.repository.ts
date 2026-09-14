@@ -65,6 +65,13 @@ export class AccountsReceivableRepository {
     });
   }
 
+  findAmounts(tenantId: string, id: string) {
+    return this.prisma.accountsReceivable.findFirst({
+      where: { id, tenantId },
+      select: { id: true, amount: true, paidAmount: true },
+    });
+  }
+
   findByInvoice(tenantId: string, invoiceId: string) {
     return this.prisma.accountsReceivable.findFirst({
       where: { tenantId, invoiceId },

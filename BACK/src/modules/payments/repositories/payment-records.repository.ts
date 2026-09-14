@@ -14,6 +14,13 @@ export class PaymentRecordsRepository {
     return client.paymentRecord.create({ data });
   }
 
+  findInRange(tenantId: string, start: Date, end: Date) {
+    return this.prisma.paymentRecord.findMany({
+      where: { tenantId, paymentDate: { gte: start, lt: end } },
+      select: { amount: true, paymentMethod: true },
+    });
+  }
+
   findByAR(accountsReceivableId: string) {
     return this.prisma.paymentRecord.findMany({
       where: { accountsReceivableId },

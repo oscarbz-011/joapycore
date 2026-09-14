@@ -1,3 +1,4 @@
+import { BillingSourcesRepository } from '../repositories/billing-sources.repository';
 import { BillingOnSaleListener } from './billing-on-sale.listener';
 
 const TENANT = 'tenant-1';
@@ -17,7 +18,7 @@ function makeItem(overrides: Record<string, unknown> = {}) {
 
 describe('BillingOnSaleListener', () => {
   let prisma: {
-    loan: { findUnique: jest.Mock };
+    loan: { findFirst: jest.Mock };
     saleOrder: { findFirst: jest.Mock };
     $transaction: jest.Mock;
   };
@@ -31,7 +32,7 @@ describe('BillingOnSaleListener', () => {
 
   beforeEach(() => {
     prisma = {
-      loan: { findUnique: jest.fn().mockResolvedValue(null) },
+      loan: { findFirst: jest.fn().mockResolvedValue(null) },
       saleOrder: { findFirst: jest.fn().mockResolvedValue(null) },
       $transaction: jest
         .fn()
@@ -48,6 +49,7 @@ describe('BillingOnSaleListener', () => {
       prisma as any,
       invoicesRepository as any,
       eventEmitter as any,
+      new BillingSourcesRepository(prisma as any),
     );
   });
 
@@ -83,7 +85,7 @@ describe('BillingOnSaleListener', () => {
   });
 
   it('uses Loan.totalAmount as the invoice total for a CREDIT sale', async () => {
-    prisma.loan.findUnique.mockResolvedValue({ totalAmount: 1_200_000 });
+    prisma.loan.findFirst.mockResolvedValue({ totalAmount: 1_200_000 });
 
     prisma.saleOrder.findFirst.mockResolvedValue({
       saleType: 'CREDIT',
@@ -104,7 +106,7 @@ describe('BillingOnSaleListener', () => {
   });
 
   it('uses financedUnitPrice (not the cash unitPrice) for CREDIT sale invoice items', async () => {
-    prisma.loan.findUnique.mockResolvedValue({ totalAmount: 1_200_000 });
+    prisma.loan.findFirst.mockResolvedValue({ totalAmount: 1_200_000 });
 
     prisma.saleOrder.findFirst.mockResolvedValue({
       saleType: 'CREDIT',
@@ -125,7 +127,7 @@ describe('BillingOnSaleListener', () => {
   });
 
   it('falls back to the cash unitPrice for CREDIT sale items with no financedUnitPrice (legacy items)', async () => {
-    prisma.loan.findUnique.mockResolvedValue({ totalAmount: 1_000_000 });
+    prisma.loan.findFirst.mockResolvedValue({ totalAmount: 1_000_000 });
 
     prisma.saleOrder.findFirst.mockResolvedValue({
       saleType: 'CREDIT',
@@ -146,7 +148,7 @@ describe('BillingOnSaleListener', () => {
   });
 
   it('falls back to summing effective item prices when saleType is CREDIT but no Loan exists yet', async () => {
-    prisma.loan.findUnique.mockResolvedValue(null);
+    prisma.loan.findFirst.mockResolvedValue(null);
 
     prisma.saleOrder.findFirst.mockResolvedValue({
       saleType: 'CREDIT',

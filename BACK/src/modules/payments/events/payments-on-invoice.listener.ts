@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
-import { PrismaService } from '../../../prisma/prisma.service';
 import { AccountsReceivableRepository } from '../repositories/accounts-receivable.repository';
+import { PaymentSourcesRepository } from '../repositories/payment-sources.repository';
 
 interface InvoiceIssuedEvent {
   tenantId: string;
@@ -12,7 +12,7 @@ interface InvoiceIssuedEvent {
 @Injectable()
 export class PaymentsOnInvoiceListener {
   constructor(
-    private readonly prisma: PrismaService,
+    private readonly paymentSources: PaymentSourcesRepository,
     private readonly arRepository: AccountsReceivableRepository,
   ) {}
 
@@ -36,19 +36,10 @@ export class PaymentsOnInvoiceListener {
     );
     if (existing) return;
 
-    const invoice = await this.prisma.invoice.findUnique({
-      where: { id: event.invoiceId },
-      select: {
-        total: true,
-        dueDate: true,
-        saleOrder: {
-          select: {
-            saleType: true,
-            loan: { select: { totalAmount: true } },
-          },
-        },
-      },
-    });
+    const invoice = await this.paymentSources.findInvoiceForReceivable(
+      event.tenantId,
+      event.invoiceId,
+    );
     if (!invoice) return;
 
     const arAmount =

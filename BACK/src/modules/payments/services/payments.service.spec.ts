@@ -2,6 +2,8 @@ import {
   NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
+import { PaymentRecordsRepository } from '../repositories/payment-records.repository';
+import { PaymentSourcesRepository } from '../repositories/payment-sources.repository';
 import { PaymentsService } from './payments.service';
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
@@ -36,7 +38,7 @@ describe('PaymentsService', () => {
     incrementPaid: jest.Mock;
     updateStatus: jest.Mock;
   };
-  let paymentRecordsRepository: { create: jest.Mock };
+  let paymentRecordsRepository: { create: jest.Mock; findInRange: jest.Mock };
   let eventEmitter: { emit: jest.Mock };
   let prisma: {
     $transaction: jest.Mock;
@@ -54,6 +56,14 @@ describe('PaymentsService', () => {
     };
     paymentRecordsRepository = {
       create: jest.fn().mockResolvedValue({ id: 'pr-1' }),
+      // Implementación real sobre el mock de Prisma.
+      findInRange: jest.fn((tenantId: string, start: Date, end: Date) =>
+        new PaymentRecordsRepository(prisma as any).findInRange(
+          tenantId,
+          start,
+          end,
+        ),
+      ),
     };
     eventEmitter = { emit: jest.fn() };
 
@@ -69,6 +79,7 @@ describe('PaymentsService', () => {
       arRepository as any,
       paymentRecordsRepository as any,
       eventEmitter as any,
+      new PaymentSourcesRepository(prisma as any),
     );
   });
 

@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PrismaService } from '../../../prisma/prisma.service';
+import { BillingSourcesRepository } from '../repositories/billing-sources.repository';
 import { CreditNotesRepository } from '../repositories/credit-notes.repository';
 import { InvoicesRepository } from '../repositories/invoices.repository';
 import type { AuditLogEvent } from '../../../audit/audit-log.event';
@@ -19,6 +20,7 @@ export class InvoicesService {
     private readonly creditNotesRepository: CreditNotesRepository,
     private readonly eventEmitter: EventEmitter2,
     private readonly outbox: OutboxService,
+    private readonly billingSources: BillingSourcesRepository,
   ) {}
 
   findAll(tenantId: string) {
@@ -71,11 +73,12 @@ export class InvoicesService {
       const establecimiento = saleOrder.branch?.codigoEstablecimiento || '001';
       const puntoExpedicion = saleOrder.branch?.puntoExpedicion || '001';
 
-      const last = await tx.invoice.findFirst({
-        where: { tenantId, establecimiento, puntoExpedicion },
-        orderBy: { sequential: 'desc' },
-        select: { sequential: true },
-      });
+      const last = await this.invoicesRepository.findLastSequential(
+        tenantId,
+        establecimiento,
+        puntoExpedicion,
+        tx,
+      );
       const sequential = (last?.sequential ?? 0) + 1;
 
       await this.invoicesRepository.updateStatus(
@@ -208,19 +211,21 @@ export class InvoicesService {
       let establecimiento = '001';
       let puntoExpedicion = '001';
       if (params.branchId) {
-        const branch = await tx.branch.findUnique({
-          where: { id: params.branchId },
-          select: { codigoEstablecimiento: true, puntoExpedicion: true },
-        });
+        const branch = await this.billingSources.findBranchNumbering(
+          tenantId,
+          params.branchId,
+          tx,
+        );
         establecimiento = branch?.codigoEstablecimiento || '001';
         puntoExpedicion = branch?.puntoExpedicion || '001';
       }
 
-      const last = await tx.invoice.findFirst({
-        where: { tenantId, establecimiento, puntoExpedicion },
-        orderBy: { sequential: 'desc' },
-        select: { sequential: true },
-      });
+      const last = await this.invoicesRepository.findLastSequential(
+        tenantId,
+        establecimiento,
+        puntoExpedicion,
+        tx,
+      );
       const sequential = (last?.sequential ?? 0) + 1;
 
       return this.invoicesRepository.createInterestInvoice(

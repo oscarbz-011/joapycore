@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { EventEmitter2, OnEvent } from '@nestjs/event-emitter';
 import { PrismaService } from '../../../prisma/prisma.service';
+import { BillingSourcesRepository } from '../repositories/billing-sources.repository';
 import { InvoicesRepository } from '../repositories/invoices.repository';
 
 interface SaleOrderCompletedEvent {
@@ -27,9 +28,11 @@ function effectiveUnitPrice(item: {
 @Injectable()
 export class BillingOnSaleListener {
   constructor(
+    // Solo para abrir la transacción; los accesos a datos van por repositorios.
     private readonly prisma: PrismaService,
     private readonly invoicesRepository: InvoicesRepository,
     private readonly eventEmitter: EventEmitter2,
+    private readonly billingSources: BillingSourcesRepository,
   ) {}
 
   // Credit sales: invoice created when order is confirmed (CONFIRMED status)
@@ -50,31 +53,20 @@ export class BillingOnSaleListener {
 
     // Se lee el pedido de la base (no del payload): en un reintento del
     // outbox los datos tienen que ser los actuales.
-    const order = await this.prisma.saleOrder.findFirst({
-      where: { id: saleOrderId, tenantId },
-      select: {
-        saleType: true,
-        items: {
-          select: {
-            quantity: true,
-            unitPrice: true,
-            financedUnitPrice: true,
-            description: true,
-            product: { select: { name: true } },
-          },
-        },
-      },
-    });
+    const order = await this.billingSources.findSaleOrderForInvoicing(
+      tenantId,
+      saleOrderId,
+    );
     if (!order) return;
 
     // For credit sales, the invoice total is the full financed amount (principal + interest),
     // which lives in the Loan created when credit was approved. For cash sales, sum the items.
     let total: number;
     if (order.saleType === 'CREDIT') {
-      const loan = await this.prisma.loan.findUnique({
-        where: { saleOrderId },
-        select: { totalAmount: true },
-      });
+      const loan = await this.billingSources.findLoanTotalBySaleOrder(
+        tenantId,
+        saleOrderId,
+      );
       total = loan
         ? toNum(loan.totalAmount)
         : order.items.reduce(

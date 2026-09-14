@@ -7,6 +7,7 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { AccountsReceivableRepository } from '../repositories/accounts-receivable.repository';
 import { PaymentRecordsRepository } from '../repositories/payment-records.repository';
+import { PaymentSourcesRepository } from '../repositories/payment-sources.repository';
 import { RegisterPaymentDto } from '../dto/register-payment.dto';
 import type { AuditLogEvent } from '../../../audit/audit-log.event';
 
@@ -17,6 +18,7 @@ export class PaymentsService {
     private readonly arRepository: AccountsReceivableRepository,
     private readonly paymentRecordsRepository: PaymentRecordsRepository,
     private readonly eventEmitter: EventEmitter2,
+    private readonly paymentSources: PaymentSourcesRepository,
   ) {}
 
   findAll(tenantId: string) {
@@ -83,10 +85,7 @@ export class PaymentsService {
     }
 
     const [cashRecords, creditReceipts] = await Promise.all([
-      this.prisma.paymentRecord.findMany({
-        where: { tenantId, paymentDate: { gte: start, lt: end } },
-        select: { amount: true, paymentMethod: true },
-      }),
+      this.paymentRecordsRepository.findInRange(tenantId, start, end),
       // No se usa Installment.paidAt/paidAmount acá: paidAt solo se completa
       // cuando la cuota queda TOTALMENTE pagada (ver applyPaymentToInstallment
       // en loans.service.ts), así que un abono parcial nunca aparecía en
@@ -97,10 +96,7 @@ export class PaymentsService {
       // totalAmount = lo efectivamente cobrado en esa operación e issuedAt
       // = el instante real del cobro — es la fuente correcta para "cuánto se
       // cobró en este rango".
-      this.prisma.paymentReceipt.findMany({
-        where: { tenantId, issuedAt: { gte: start, lt: end } },
-        select: { totalAmount: true, paymentMethod: true },
-      }),
+      this.paymentSources.findReceiptsInRange(tenantId, start, end),
     ]);
 
     const toNum = (v: unknown): number =>

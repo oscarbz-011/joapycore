@@ -3,6 +3,8 @@ import {
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { InvoicesService } from './invoices.service';
+import { BillingSourcesRepository } from '../repositories/billing-sources.repository';
+import { InvoicesRepository } from '../repositories/invoices.repository';
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 
@@ -33,6 +35,7 @@ describe('InvoicesService', () => {
     findById: jest.Mock;
     updateStatus: jest.Mock;
     createInterestInvoice: jest.Mock;
+    findLastSequential: jest.Mock;
   };
   let creditNotesRepository: {
     findAll: jest.Mock;
@@ -43,7 +46,9 @@ describe('InvoicesService', () => {
   let outbox: { enqueue: jest.Mock; dispatch: jest.Mock };
   let prisma: { $transaction: jest.Mock };
   let invoiceFindFirstMock: jest.Mock;
-  let branchFindUniqueMock: jest.Mock;
+  let branchFindFirstMock: jest.Mock;
+
+  const realInvoicesRepository = new InvoicesRepository({} as any);
 
   beforeEach(() => {
     invoicesRepository = {
@@ -51,6 +56,10 @@ describe('InvoicesService', () => {
       findById: jest.fn(),
       updateStatus: jest.fn().mockResolvedValue(undefined),
       createInterestInvoice: jest.fn(),
+      // Implementación real: consulta el tx que recibe (mockeado abajo).
+      findLastSequential: jest.fn((...args: [string, string, string, any]) =>
+        realInvoicesRepository.findLastSequential(...args),
+      ),
     };
     creditNotesRepository = {
       findAll: jest.fn().mockResolvedValue([]),
@@ -63,13 +72,13 @@ describe('InvoicesService', () => {
     };
 
     invoiceFindFirstMock = jest.fn().mockResolvedValue(null);
-    branchFindUniqueMock = jest.fn().mockResolvedValue({
+    branchFindFirstMock = jest.fn().mockResolvedValue({
       codigoEstablecimiento: '001',
       puntoExpedicion: '002',
     });
     const tx = {
       invoice: { findFirst: invoiceFindFirstMock },
-      branch: { findUnique: branchFindUniqueMock },
+      branch: { findFirst: branchFindFirstMock },
     };
     prisma = {
       $transaction: jest.fn().mockImplementation((cb) => cb(tx)),
@@ -85,6 +94,7 @@ describe('InvoicesService', () => {
       creditNotesRepository as any,
       eventEmitter as any,
       outbox as any,
+      new BillingSourcesRepository(prisma as any),
     );
   });
 
@@ -371,8 +381,10 @@ describe('InvoicesService', () => {
 
       await service.createInterestInvoiceFromReceipt('tenant-1', makeParams());
 
-      expect(branchFindUniqueMock).toHaveBeenCalledWith(
-        expect.objectContaining({ where: { id: 'branch-1' } }),
+      expect(branchFindFirstMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'branch-1', tenantId: 'tenant-1' },
+        }),
       );
       expect(invoiceFindFirstMock).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -402,7 +414,7 @@ describe('InvoicesService', () => {
         makeParams({ branchId: null }),
       );
 
-      expect(branchFindUniqueMock).not.toHaveBeenCalled();
+      expect(branchFindFirstMock).not.toHaveBeenCalled();
       expect(invoicesRepository.createInterestInvoice).toHaveBeenCalledWith(
         'tenant-1',
         expect.objectContaining({

@@ -1,3 +1,4 @@
+import { BillingSourcesRepository } from '../repositories/billing-sources.repository';
 import { InterestInvoiceOnReceiptListener } from './interest-invoice-on-receipt.listener';
 
 const TENANT = 'tenant-1';
@@ -30,7 +31,7 @@ describe('InterestInvoiceOnReceiptListener', () => {
       createInterestInvoiceFromReceipt: jest.fn().mockResolvedValue({}),
     };
     listener = new InterestInvoiceOnReceiptListener(
-      prisma as any,
+      new BillingSourcesRepository(prisma as any),
       invoicesService as any,
     );
   });
