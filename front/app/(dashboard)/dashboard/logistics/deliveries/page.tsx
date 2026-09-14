@@ -1,5 +1,7 @@
 'use client';
 
+import { usePermission } from '@/lib/permissions';
+
 import { apiErrorMessage } from '@/lib/api/api-error';
 
 import { useState } from 'react';
@@ -289,6 +291,11 @@ function AssignModal({ note, onClose }: { note: DeliveryNote; onClose: () => voi
 function DeliveryCard({ note }: { note: DeliveryNote }) {
   const [expanded, setExpanded] = useState(false);
   const [dispatching, setDispatching] = useState(false);
+  const canAssign = usePermission('logistics:assign');
+  const canManage = usePermission('logistics:manage');
+  // Despachar lo permite el backend con logistics:manage o logistics:track.
+  const canTrack = usePermission('logistics:track');
+  const canDispatch = canManage || canTrack;
   const [assigning, setAssigning] = useState(false);
   const queryClient = useQueryClient();
 
@@ -326,7 +333,7 @@ function DeliveryCard({ note }: { note: DeliveryNote }) {
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
-            {note.status === 'PENDING' && !note.assignmentMode && (
+            {canAssign && note.status === 'PENDING' && !note.assignmentMode && (
               <Button size="sm" variant="outline" onClick={() => setAssigning(true)}>
                 <UserCog size={13} />
                 Asignar
@@ -334,15 +341,19 @@ function DeliveryCard({ note }: { note: DeliveryNote }) {
             )}
             {note.status === 'PENDING' && note.assignmentMode && (
               <>
-                <Button size="sm" variant="ghost" onClick={() => setAssigning(true)}>
-                  Reasignar
-                </Button>
-                <Button size="sm" onClick={() => setDispatching(true)}>
-                  Despachar
-                </Button>
+                {canAssign && (
+                  <Button size="sm" variant="ghost" onClick={() => setAssigning(true)}>
+                    Reasignar
+                  </Button>
+                )}
+                {canDispatch && (
+                  <Button size="sm" onClick={() => setDispatching(true)}>
+                    Despachar
+                  </Button>
+                )}
               </>
             )}
-            {note.status === 'DISPATCHED' && note.assignmentMode === 'EXTERNAL_COMPANY' && (
+            {canManage && note.status === 'DISPATCHED' && note.assignmentMode === 'EXTERNAL_COMPANY' && (
               <Button
                 size="sm"
                 className="bg-emerald-600 hover:bg-emerald-700"

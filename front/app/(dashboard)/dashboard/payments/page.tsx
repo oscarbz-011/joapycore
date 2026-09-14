@@ -1,5 +1,7 @@
 'use client';
 
+import { RequirePermission } from '@/components/require-permission';
+
 import { paymentMethodLabel } from '@/lib/payment-methods';
 
 import { apiErrorMessage } from '@/lib/api/api-error';
@@ -863,9 +865,11 @@ function CreditARDetail({
             <p className="font-semibold text-foreground">{formatPrice(selectedTotal)}</p>
             <p className="text-xs text-muted-foreground">{selectedCount} cuota{selectedCount !== 1 ? 's' : ''} seleccionada{selectedCount !== 1 ? 's' : ''}</p>
           </div>
-          <Button size="sm" onClick={() => setPayModalOpen(true)}>
-            Cobrar seleccionadas
-          </Button>
+          <RequirePermission permission="finance:payments:apply">
+            <Button size="sm" onClick={() => setPayModalOpen(true)}>
+              Cobrar seleccionadas
+            </Button>
+          </RequirePermission>
         </div>
       )}
 
@@ -1037,9 +1041,11 @@ function ARDetailPanel({
             {/* Action: cash sales only */}
             {!isCredit && (ar.status === 'PENDING' || ar.status === 'PARTIAL') && (
               <div className="px-5 py-4">
-                <Button className="w-full" onClick={() => setShowRegister(true)}>
-                  Registrar pago
-                </Button>
+                <RequirePermission permission="payments:register">
+                  <Button className="w-full" onClick={() => setShowRegister(true)}>
+                    Registrar pago
+                  </Button>
+                </RequirePermission>
               </div>
             )}
           </div>

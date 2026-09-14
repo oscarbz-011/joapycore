@@ -1,5 +1,7 @@
 'use client';
 
+import { usePermission } from '@/lib/permissions';
+
 import { apiErrorMessage } from '@/lib/api/api-error';
 
 import { useState } from 'react';
@@ -145,6 +147,8 @@ export function EmployeeForm({ initial, onDone }: Props) {
     const main = branches.find((b) => b.isMain) ?? branches[0];
     if (main && !form.branchId) set('branchId', main.id);
   }
+
+  const canTerminate = usePermission('hr:employees:terminate');
 
   const saveMutation = useMutation<Employee | { employee: Employee; tempPassword?: string }, Error, void>({
     mutationFn: () => {
@@ -453,8 +457,8 @@ export function EmployeeForm({ initial, onDone }: Props) {
           </section>
         )}
 
-        {/* Baja — solo al editar */}
-        {initial && initial.isActive && !initial.terminationDate && (
+        {/* Baja — solo al editar y con permiso */}
+        {initial && initial.isActive && !initial.terminationDate && canTerminate && (
           <section className="p-6 border-t border-border">
             <div className="rounded-xl border border-destructive/20 bg-destructive/5 px-4 py-3">
               <button

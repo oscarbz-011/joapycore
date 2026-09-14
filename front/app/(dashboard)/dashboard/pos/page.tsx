@@ -1,5 +1,9 @@
 'use client';
 
+import { usePermission } from '@/lib/permissions';
+
+import { RequirePermission } from '@/components/require-permission';
+
 import { apiErrorMessage } from '@/lib/api/api-error';
 
 import { useState } from 'react';
@@ -42,6 +46,7 @@ const lbl = 'block text-xs font-medium text-muted-foreground mb-1';
 // ── Open session ─────────────────────────────────────────────────────────────
 
 function OpenSessionForm() {
+  const canOpen = usePermission('pos:session:open');
   const queryClient = useQueryClient();
   const { data: terminals = [], isLoading } = useQuery({
     queryKey: ['pos-terminals'],
@@ -58,6 +63,18 @@ function OpenSessionForm() {
   });
 
   const activeTerminals = terminals.filter((t) => t.isActive);
+
+  if (!canOpen) {
+    return (
+      <div className="mx-auto max-w-md py-16 text-center">
+        <DoorOpen size={28} className="mx-auto text-muted-foreground/50" />
+        <h1 className="mt-2 text-lg font-semibold text-foreground">No hay una caja abierta</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Tu usuario no tiene permiso para abrir caja. Pedile a un encargado que la abra.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto max-w-md space-y-6 py-16">
@@ -352,9 +369,11 @@ function SaleScreen({ session }: { session: PosSession }) {
             {money(session.openingCash)}
           </p>
         </div>
-        <Button variant="outline" onClick={() => setCloseOpen(true)}>
-          <DoorClosed size={15} /> Cerrar caja
-        </Button>
+        <RequirePermission permission="pos:session:close">
+          <Button variant="outline" onClick={() => setCloseOpen(true)}>
+            <DoorClosed size={15} /> Cerrar caja
+          </Button>
+        </RequirePermission>
       </div>
 
       <div className="grid gap-5 lg:grid-cols-[1fr_360px]">

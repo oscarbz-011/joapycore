@@ -1,5 +1,7 @@
 'use client';
 
+import { RequirePermission } from '@/components/require-permission';
+
 import { apiErrorMessage } from '@/lib/api/api-error';
 
 import { useState, type ReactNode } from 'react';
@@ -386,14 +388,16 @@ export default function InvoiceDetailPage() {
                 </p>
               )}
 
-              <Button
-                className="w-full"
-                onClick={() => issueMutation.mutate()}
-                disabled={!canIssue || issueMutation.isPending}
-              >
-                <Send size={15} />
-                {issueMutation.isPending ? 'Emitiendo...' : 'Emitir factura'}
-              </Button>
+              <RequirePermission permission="billing:issue">
+                <Button
+                  className="w-full"
+                  onClick={() => issueMutation.mutate()}
+                  disabled={!canIssue || issueMutation.isPending}
+                >
+                  <Send size={15} />
+                  {issueMutation.isPending ? 'Emitiendo...' : 'Emitir factura'}
+                </Button>
+              </RequirePermission>
             </section>
           ) : (
             <section className="rounded-xl border border-border bg-card p-5">
@@ -436,13 +440,15 @@ export default function InvoiceDetailPage() {
                       {invoice.status === 'ISSUED' ? 'Se generará una nota de crédito.' : 'Se descartará el borrador.'}
                     </p>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => setShowCancelForm(true)}
-                    className="text-sm font-medium text-destructive underline underline-offset-2 hover:opacity-80"
-                  >
-                    Cancelar
-                  </button>
+                  <RequirePermission permission="billing:cancel">
+                    <button
+                      type="button"
+                      onClick={() => setShowCancelForm(true)}
+                      className="text-sm font-medium text-destructive underline underline-offset-2 hover:opacity-80"
+                    >
+                      Cancelar
+                    </button>
+                  </RequirePermission>
                 </div>
               ) : (
                 <div>

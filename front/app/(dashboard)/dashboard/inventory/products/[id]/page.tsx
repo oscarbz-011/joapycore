@@ -1,5 +1,7 @@
 'use client';
 
+import { usePermission } from '@/lib/permissions';
+
 import { apiErrorMessage } from '@/lib/api/api-error';
 
 import { useRef, useState } from 'react';
@@ -204,6 +206,11 @@ export default function ProductDetailPage() {
   const [activeTab, setActiveTab] = useState<Tab>('info');
   const [showMovement, setShowMovement] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  // Acciones visibles solo con el permiso que exige el backend para cada una.
+  const canUpdate = usePermission('inventory:products:update');
+  const canDelete = usePermission('inventory:products:delete');
+  const canMove = usePermission('inventory:movements:create');
+  const canAddUnits = usePermission('inventory:products:create');
   const [showEdit, setShowEdit] = useState(false);
   const [serialInput, setSerialInput] = useState('');
   const [selectedSupplierId, setSelectedSupplierId] = useState('');
@@ -410,6 +417,7 @@ export default function ProductDetailPage() {
           </div>
         </div>
         <div className="flex gap-2">
+          {canUpdate && (
           <Button
             variant="outline"
             size="sm"
@@ -426,7 +434,8 @@ export default function ProductDetailPage() {
           >
             Editar
           </Button>
-          {product.status !== 'ACTIVE' && (
+          )}
+          {canUpdate && product.status !== 'ACTIVE' && (
             <Button
               size="sm"
               disabled={missingToActivate.length > 0 || statusMutation.isPending}
@@ -435,7 +444,7 @@ export default function ProductDetailPage() {
               Activar
             </Button>
           )}
-          {product.status === 'ACTIVE' && (
+          {canUpdate && product.status === 'ACTIVE' && (
             <Button
               variant="outline"
               size="sm"
@@ -445,7 +454,7 @@ export default function ProductDetailPage() {
               Bloquear
             </Button>
           )}
-          {activeTab === 'movements' && (
+          {canMove && activeTab === 'movements' && (
             <Button size="sm" onClick={() => setShowMovement(true)}>
               <Plus size={13} />
               Registrar
@@ -619,6 +628,7 @@ export default function ProductDetailPage() {
           )}
 
           {/* Danger zone */}
+          {canDelete && (
           <div className="rounded-xl border border-destructive/30 bg-destructive/10 p-5">
             <p className="text-xs font-semibold uppercase tracking-widest text-destructive mb-3">Zona de peligro</p>
             {!confirmDelete ? (
@@ -649,6 +659,7 @@ export default function ProductDetailPage() {
               </div>
             )}
           </div>
+          )}
         </div>
       )}
 
@@ -658,9 +669,11 @@ export default function ProductDetailPage() {
           {movements.length === 0 ? (
             <div className="py-12 text-center">
               <p className="text-sm text-muted-foreground/60">Sin movimientos registrados para este producto.</p>
+              {canMove && (
               <button onClick={() => setShowMovement(true)} className="mt-3 text-sm font-medium text-foreground underline underline-offset-2">
                 Registrar el primero
               </button>
+              )}
             </div>
           ) : (
             <div className="overflow-hidden rounded-xl border border-border bg-card">
@@ -725,20 +738,22 @@ export default function ProductDetailPage() {
                   {ps.isPreferred && (
                     <Badge variant="outline" className="bg-accent-subtle text-accent-on border-accent-on/20">Principal</Badge>
                   )}
-                  {!ps.isPreferred && (
+                  {canUpdate && !ps.isPreferred && (
                     <button title="Marcar como principal" onClick={() => setPreferredMutation.mutate(ps.supplierId)} className="text-muted-foreground/60 hover:text-amber-500 transition-colors">
                       <Star size={14} />
                     </button>
                   )}
+                  {canDelete && (
                   <button title="Quitar proveedor" onClick={() => removeSupplierMutation.mutate(ps.supplierId)} className="text-muted-foreground/60 hover:text-destructive transition-colors">
                     <Trash2 size={14} />
                   </button>
+                  )}
                 </div>
               ))}
             </div>
           )}
 
-          {availableSuppliers.length > 0 && (
+          {canUpdate && availableSuppliers.length > 0 && (
             <div className="rounded-xl border border-border bg-card p-4 space-y-3">
               <p className="text-xs font-semibold text-muted-foreground">Agregar proveedor</p>
               <div className="flex gap-2">
@@ -825,6 +840,7 @@ export default function ProductDetailPage() {
                 {apiErrorMessage(unitsMutation.error, 'Error al registrar unidades')}
               </div>
             )}
+            {canAddUnits && (
             <Button
               type="button"
               disabled={!serialInput.trim() || unitsMutation.isPending}
@@ -835,13 +851,14 @@ export default function ProductDetailPage() {
             >
               {unitsMutation.isPending ? 'Registrando...' : 'Registrar unidades'}
             </Button>
+            )}
           </div>
         </div>
       )}
 
       {showMovement && <MovementModal productId={id} onClose={() => setShowMovement(false)} />}
 
-      {activeTab === 'info' && !showEdit && (
+      {canUpdate && activeTab === 'info' && !showEdit && (
         <div className="mt-4 flex justify-end">
           <button
             onClick={() => {

@@ -1,5 +1,7 @@
 'use client';
 
+import { RequirePermission } from '@/components/require-permission';
+
 import { apiErrorMessage } from '@/lib/api/api-error';
 
 import { useState } from 'react';
@@ -291,10 +293,12 @@ export default function MovementsPage() {
           <h1 className="text-2xl font-semibold text-foreground">Inventario</h1>
           <p className="mt-1 text-sm text-muted-foreground">Historial de movimientos de stock</p>
         </div>
-        <Button onClick={() => setShowNew(true)}>
-          <Plus size={15} />
-          Nuevo movimiento
-        </Button>
+        <RequirePermission permission="inventory:movements:create">
+          <Button onClick={() => setShowNew(true)}>
+            <Plus size={15} />
+            Nuevo movimiento
+          </Button>
+        </RequirePermission>
       </div>
 
       <InventoryNav active="movements" />
@@ -320,12 +324,14 @@ export default function MovementsPage() {
       ) : movements.length === 0 ? (
         <div className="py-16 text-center">
           <p className="text-sm text-muted-foreground/60">No hay movimientos registrados.</p>
-          <button
-            onClick={() => setShowNew(true)}
-            className="mt-3 text-sm font-medium text-foreground underline underline-offset-2"
-          >
-            Registrar el primero
-          </button>
+          <RequirePermission permission="inventory:movements:create">
+            <button
+              onClick={() => setShowNew(true)}
+              className="mt-3 text-sm font-medium text-foreground underline underline-offset-2"
+            >
+              Registrar el primero
+            </button>
+          </RequirePermission>
         </div>
       ) : (
         <div className="overflow-hidden rounded-xl border border-border bg-card">

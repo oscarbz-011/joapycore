@@ -1,5 +1,9 @@
 'use client';
 
+import { usePermission } from '@/lib/permissions';
+
+import { RequirePermission } from '@/components/require-permission';
+
 import { apiErrorMessage } from '@/lib/api/api-error';
 
 import { useEffect, useRef, useState } from 'react';
@@ -415,10 +419,12 @@ function EmptyCatalog({ onImport }: { onImport: () => void }) {
         </p>
       </div>
 
-      <Button className="mt-5" onClick={onImport}>
-        <Upload size={15} />
-        Importar lista de precios
-      </Button>
+      <RequirePermission permission="procurement:create">
+        <Button className="mt-5" onClick={onImport}>
+          <Upload size={15} />
+          Importar lista de precios
+        </Button>
+      </RequirePermission>
     </div>
   );
 }
@@ -440,6 +446,8 @@ export default function SupplierDetailPage() {
   const [mapTarget, setMapTarget] = useState<SupplierCatalogItem | null>(null);
   const [editTarget, setEditTarget] = useState<SupplierCatalogItem | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<SupplierCatalogItem | null>(null);
+  const canImport = usePermission('procurement:create');
+  const canEditCatalog = usePermission('procurement:update');
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(search.trim()), 300);
@@ -544,7 +552,7 @@ export default function SupplierDetailPage() {
             ].filter(Boolean).join(' · ') || 'Sin datos de contacto cargados'}
           </p>
         </div>
-        {!showEmptyState && (
+        {canImport && !showEmptyState && (
           <Button variant="outline" onClick={pickFile} disabled={importMutation.isPending}>
             <Upload size={15} />
             {importMutation.isPending ? 'Importando...' : 'Importar lista'}
@@ -675,6 +683,7 @@ export default function SupplierDetailPage() {
                             )}
                           </td>
                           <td className="px-3 py-2.5">
+                            {canEditCatalog && (
                             <div className="flex items-center justify-end gap-1">
                               {mapped ? (
                                 <Button
@@ -706,6 +715,7 @@ export default function SupplierDetailPage() {
                                 <Trash2 size={13} />
                               </Button>
                             </div>
+                            )}
                           </td>
                         </tr>
                       );

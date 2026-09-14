@@ -1,5 +1,7 @@
 'use client';
 
+import { usePermission } from '@/lib/permissions';
+
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -81,6 +83,7 @@ function TargetInput({
   current: number | null;
   onSave: (amount: number) => void;
 }) {
+  const canManage = usePermission('sales:manage');
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState<number>(current != null ? current / 1_000_000 : 0);
 
@@ -106,6 +109,14 @@ function TargetInput({
         <button onClick={commit} className="text-emerald-600 hover:text-emerald-800"><Check size={14} /></button>
         <button onClick={() => setEditing(false)} className="text-muted-foreground/60 hover:text-muted-foreground"><X size={14} /></button>
       </div>
+    );
+  }
+
+  if (!canManage) {
+    return (
+      <span className="mt-1 block text-xs text-muted-foreground/60">
+        {current != null ? `Meta: ${fmtGs(current)}` : 'Sin meta establecida'}
+      </span>
     );
   }
 
@@ -289,6 +300,7 @@ export default function SalesTargetsPage() {
   const qc = useQueryClient();
   const [period, setPeriod] = useState(currentPeriod);
   const [showAddForm, setShowAddForm] = useState(false);
+  const canManageTargets = usePermission('sales:manage');
 
   const { data: perf, isLoading } = useQuery({
     queryKey: ['sales-performance', period],
@@ -411,7 +423,7 @@ export default function SalesTargetsPage() {
                     </span>
                   )}
                 </div>
-                {!showAddForm && (
+                {canManageTargets && !showAddForm && (
                   <Button variant="outline" size="sm" onClick={() => setShowAddForm(true)}>
                     <Plus size={13} />
                     Agregar meta

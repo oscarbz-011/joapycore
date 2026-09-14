@@ -1,5 +1,7 @@
 'use client';
 
+import { usePermission } from '@/lib/permissions';
+
 import { apiErrorMessage } from '@/lib/api/api-error';
 
 import { useState } from 'react';
@@ -91,6 +93,9 @@ interface Props {
 }
 
 export function CustomerForm({ initial, onDone }: Props) {
+  const canCreate = usePermission('customers:create');
+  const canUpdate = usePermission('customers:update');
+  const canSave = initial ? canUpdate : canCreate;
   const queryClient = useQueryClient();
   const [form, setForm] = useState<CreateCustomerPayload>(
     initial ? fromCustomer(initial) : EMPTY_FORM,
@@ -460,7 +465,7 @@ export function CustomerForm({ initial, onDone }: Props) {
             {error && <p className="text-sm text-destructive truncate">{error}</p>}
           </div>
 
-          {initial && !confirmDelete && (
+          {initial && canUpdate && !confirmDelete && (
             <Button
               type="button"
               variant="outline"
@@ -494,7 +499,7 @@ export function CustomerForm({ initial, onDone }: Props) {
             </div>
           )}
 
-          <Button type="submit" disabled={saveMutation.isPending} className="shrink-0">
+          <Button type="submit" disabled={!canSave || saveMutation.isPending} className="shrink-0">
             {saveMutation.isPending ? 'Guardando...' : initial ? 'Guardar cambios' : 'Crear cliente'}
           </Button>
         </div>

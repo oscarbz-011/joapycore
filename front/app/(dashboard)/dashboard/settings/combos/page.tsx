@@ -1,5 +1,9 @@
 'use client';
 
+import { usePermission } from '@/lib/permissions';
+
+import { RequirePermission } from '@/components/require-permission';
+
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Boxes, Plus, Trash2, Pencil, Check, X } from 'lucide-react';
@@ -200,14 +204,16 @@ function ComboRow({ combo, onEdit, onDelete }: { combo: SaleCombo; onEdit: () =>
           {combo.items.length} producto{combo.items.length !== 1 ? 's' : ''} · {combo.priceMode === 'FIXED' ? 'Precio fijo' : `${combo.discountPercentage}% descuento`} · {fmtPrice(comboListPrice(combo))}
         </p>
       </div>
-      <div className="flex items-center gap-2 shrink-0">
-        <button type="button" onClick={onEdit} className="text-muted-foreground/60 hover:text-foreground transition-colors">
-          <Pencil size={14} />
-        </button>
-        <button type="button" onClick={onDelete} className="text-muted-foreground/60 hover:text-destructive transition-colors">
-          <Trash2 size={15} />
-        </button>
-      </div>
+      <RequirePermission permission="sales:combos:manage">
+        <div className="flex items-center gap-2 shrink-0">
+          <button type="button" onClick={onEdit} className="text-muted-foreground/60 hover:text-foreground transition-colors">
+            <Pencil size={14} />
+          </button>
+          <button type="button" onClick={onDelete} className="text-muted-foreground/60 hover:text-destructive transition-colors">
+            <Trash2 size={15} />
+          </button>
+        </div>
+      </RequirePermission>
     </div>
   );
 }
@@ -216,6 +222,8 @@ function ComboRow({ combo, onEdit, onDelete }: { combo: SaleCombo; onEdit: () =>
 
 export default function CombosSettingsPage() {
   const qc = useQueryClient();
+  const canManageCombos = usePermission('sales:combos:manage');
+  const canToggle = usePermission('tenants:update');
   const [showForm, setShowForm] = useState(false);
   const [editingCombo, setEditingCombo] = useState<SaleCombo | null>(null);
 
@@ -291,7 +299,8 @@ export default function CombosSettingsPage() {
             </div>
             <button
               type="button"
-              disabled={toggleEnabled.isPending}
+              disabled={!canToggle || toggleEnabled.isPending}
+              title={canToggle ? undefined : 'Requiere permiso para modificar la configuración de la empresa'}
               onClick={() => toggleEnabled.mutate(!enabled)}
               className={`relative flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${enabled ? 'bg-emerald-500' : 'bg-muted/50'} disabled:opacity-50`}
             >
@@ -306,7 +315,7 @@ export default function CombosSettingsPage() {
                   <p className="text-sm font-medium text-foreground">Combos</p>
                   <p className="text-xs text-muted-foreground/60 mt-0.5">Cada combo se agrega al pedido como sus líneas individuales.</p>
                 </div>
-                {!showForm && !editingCombo && (
+                {canManageCombos && !showForm && !editingCombo && (
                   <button
                     type="button"
                     onClick={() => setShowForm(true)}
@@ -331,9 +340,11 @@ export default function CombosSettingsPage() {
                 {combos.length === 0 && !showForm ? (
                   <div className="py-8 text-center">
                     <p className="text-sm text-muted-foreground/60">No hay combos configurados.</p>
-                    <button type="button" onClick={() => setShowForm(true)} className="mt-2 text-sm font-medium text-muted-foreground hover:text-foreground underline underline-offset-2">
-                      Creá el primero
-                    </button>
+                    <RequirePermission permission="sales:combos:manage">
+                      <button type="button" onClick={() => setShowForm(true)} className="mt-2 text-sm font-medium text-muted-foreground hover:text-foreground underline underline-offset-2">
+                        Creá el primero
+                      </button>
+                    </RequirePermission>
                   </div>
                 ) : (
                   combos.map((combo) =>

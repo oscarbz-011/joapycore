@@ -1,5 +1,7 @@
 'use client';
 
+import { RequirePermission } from '@/components/require-permission';
+
 import { HrNav } from '../_nav';
 
 import { apiErrorMessage } from '@/lib/api/api-error';
@@ -121,13 +123,15 @@ function ConfigPanel() {
             </div>
           </div>
           <div className="mt-4 flex items-center gap-3">
-            <Button
-              onClick={() => saveMutation.mutate()}
-              disabled={saveMutation.isPending}
-              size="sm"
-            >
-              {saveMutation.isPending ? 'Guardando...' : 'Guardar parámetros'}
-            </Button>
+            <RequirePermission permission="hr:config:manage">
+              <Button
+                onClick={() => saveMutation.mutate()}
+                disabled={saveMutation.isPending}
+                size="sm"
+              >
+                {saveMutation.isPending ? 'Guardando...' : 'Guardar parámetros'}
+              </Button>
+            </RequirePermission>
             {saved && <span className="text-sm text-emerald-600">Guardado</span>}
           </div>
         </div>
@@ -175,10 +179,12 @@ function RecordDetail({ record, onPay }: { record: PayrollRecord; onPay: (id: st
       </table>
       {record.status === 'PENDING' && (
         <div className="border-t border-border px-3 py-2">
-          <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700" onClick={() => onPay(record.id)}>
-            <CheckCircle size={13} />
-            Marcar como pagada
-          </Button>
+          <RequirePermission permission="hr:payroll:pay">
+            <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700" onClick={() => onPay(record.id)}>
+              <CheckCircle size={13} />
+              Marcar como pagada
+            </Button>
+          </RequirePermission>
         </div>
       )}
     </div>

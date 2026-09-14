@@ -1,5 +1,9 @@
 'use client';
 
+import { usePermission } from '@/lib/permissions';
+
+import { RequirePermission } from '@/components/require-permission';
+
 import { apiErrorMessage } from '@/lib/api/api-error';
 
 import { useState } from 'react';
@@ -59,6 +63,10 @@ function SupplierForm({
   function set<K extends keyof CreateSupplierPayload>(k: K, v: CreateSupplierPayload[K]) {
     setForm((f) => ({ ...f, [k]: v }));
   }
+
+  const canCreate = usePermission('suppliers:create');
+  const canEdit = usePermission('suppliers:update');
+  const canSave = initial ? canEdit : canCreate;
 
   const saveMutation = useMutation({
     mutationFn: () => {
@@ -200,11 +208,13 @@ function SupplierForm({
           </div>
         )}
 
+        {canSave && (
         <div className="flex gap-2 pt-2 border-t border-border">
           <Button type="submit" className="flex-1" disabled={saveMutation.isPending}>
             {saveMutation.isPending ? 'Guardando...' : initial ? 'Guardar cambios' : 'Crear proveedor'}
           </Button>
         </div>
+        )}
 
         {initial && (
           <Button
@@ -218,7 +228,7 @@ function SupplierForm({
           </Button>
         )}
 
-        {initial && (
+        {initial && canEdit && (
           <div>
             {!confirmDelete ? (
               <Button
@@ -289,10 +299,12 @@ export default function SuppliersPage() {
           <h1 className="text-2xl font-semibold text-foreground">Proveedores</h1>
           <p className="mt-1 text-sm text-muted-foreground">Proveedores registrados y sus condiciones de pago</p>
         </div>
-        <Button onClick={() => { setSelectedSupplier(null); setShowCreate(true); }}>
-          <Plus size={16} />
-          Nuevo proveedor
-        </Button>
+        <RequirePermission permission="suppliers:create">
+          <Button onClick={() => { setSelectedSupplier(null); setShowCreate(true); }}>
+            <Plus size={16} />
+            Nuevo proveedor
+          </Button>
+        </RequirePermission>
       </div>
 
       <div className="flex gap-6">
@@ -313,12 +325,14 @@ export default function SuppliersPage() {
           ) : filtered.length === 0 ? (
             <div className="py-16 text-center">
               <p className="text-sm text-muted-foreground/60">No se encontraron proveedores.</p>
-              <button
-                onClick={() => setShowCreate(true)}
-                className="mt-3 text-sm font-medium text-foreground underline underline-offset-2"
-              >
-                Crear el primero
-              </button>
+              <RequirePermission permission="suppliers:create">
+                <button
+                  onClick={() => setShowCreate(true)}
+                  className="mt-3 text-sm font-medium text-foreground underline underline-offset-2"
+                >
+                  Crear el primero
+                </button>
+              </RequirePermission>
             </div>
           ) : (
             <div className="overflow-hidden rounded-xl border border-border bg-card">

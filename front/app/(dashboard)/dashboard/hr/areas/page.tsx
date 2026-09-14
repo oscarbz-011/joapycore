@@ -1,5 +1,7 @@
 'use client';
 
+import { RequirePermission } from '@/components/require-permission';
+
 import { HrNav } from '../_nav';
 
 import { useState } from 'react';
@@ -49,22 +51,24 @@ function AreasPanel() {
     <div className="rounded-xl border border-border bg-card p-5">
       <h2 className="mb-4 text-sm font-semibold text-foreground">Áreas / Departamentos</h2>
 
-      <form
-        onSubmit={(e) => { e.preventDefault(); if (name.trim()) createMutation.mutate(); }}
-        className="mb-4 flex gap-2"
-      >
-        <Input
-          className="flex-1"
-          placeholder="Nombre del área..."
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          required
-        />
-        <Button type="submit" disabled={createMutation.isPending} size="sm">
-          <Plus size={14} />
-          Agregar
-        </Button>
-      </form>
+      <RequirePermission permission="hr:config:manage">
+        <form
+          onSubmit={(e) => { e.preventDefault(); if (name.trim()) createMutation.mutate(); }}
+          className="mb-4 flex gap-2"
+        >
+          <Input
+            className="flex-1"
+            placeholder="Nombre del área..."
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            required
+          />
+          <Button type="submit" disabled={createMutation.isPending} size="sm">
+            <Plus size={14} />
+            Agregar
+          </Button>
+        </form>
+      </RequirePermission>
       {error && <p className="mb-3 text-xs text-destructive">{error}</p>}
 
       {areas.length === 0 ? (
@@ -76,14 +80,16 @@ function AreasPanel() {
               <span className="text-sm text-foreground">{area.name}</span>
               <div className="flex items-center gap-2">
                 <ActiveBadge isActive={area.isActive} />
-                <button
-                  type="button"
-                  onClick={() => toggleMutation.mutate(area)}
-                  disabled={toggleMutation.isPending}
-                  className="text-xs text-muted-foreground/60 hover:text-foreground disabled:opacity-50"
-                >
-                  {area.isActive ? 'Desactivar' : 'Activar'}
-                </button>
+                <RequirePermission permission="hr:config:manage">
+                  <button
+                    type="button"
+                    onClick={() => toggleMutation.mutate(area)}
+                    disabled={toggleMutation.isPending}
+                    className="text-xs text-muted-foreground/60 hover:text-foreground disabled:opacity-50"
+                  >
+                    {area.isActive ? 'Desactivar' : 'Activar'}
+                  </button>
+                </RequirePermission>
               </div>
             </li>
           ))}
@@ -143,13 +149,15 @@ function PositionRow({
               {!pos.area && !pos.role && (
                 <span className="text-xs text-muted-foreground/60">Sin área ni rol</span>
               )}
-              <button
-                type="button"
-                onClick={() => setEditing(true)}
-                className="ml-1 text-xs text-muted-foreground/60 hover:text-foreground flex items-center gap-0.5"
-              >
-                <Pencil size={10} /> editar
-              </button>
+              <RequirePermission permission="hr:config:manage">
+                <button
+                  type="button"
+                  onClick={() => setEditing(true)}
+                  className="ml-1 text-xs text-muted-foreground/60 hover:text-foreground flex items-center gap-0.5"
+                >
+                  <Pencil size={10} /> editar
+                </button>
+              </RequirePermission>
             </div>
           ) : (
             <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -183,13 +191,15 @@ function PositionRow({
 
         <div className="flex shrink-0 items-center gap-2 pt-0.5">
           <ActiveBadge isActive={pos.isActive} />
-          <button
-            type="button"
-            onClick={onToggle}
-            className="text-xs text-muted-foreground/60 hover:text-foreground"
-          >
-            {pos.isActive ? 'Desactivar' : 'Activar'}
-          </button>
+          <RequirePermission permission="hr:config:manage">
+            <button
+              type="button"
+              onClick={onToggle}
+              className="text-xs text-muted-foreground/60 hover:text-foreground"
+            >
+              {pos.isActive ? 'Desactivar' : 'Activar'}
+            </button>
+          </RequirePermission>
         </div>
       </div>
     </li>
@@ -245,6 +255,7 @@ function PositionsPanel() {
       <h2 className="mb-4 text-sm font-semibold text-foreground">Cargos / Puestos</h2>
 
       {/* Create form */}
+      <RequirePermission permission="hr:config:manage">
       <div className="mb-4 space-y-2 rounded-lg border border-border bg-muted/30 p-3">
         <Input
           placeholder="Nombre del cargo..."
@@ -285,6 +296,7 @@ function PositionsPanel() {
         </Button>
         {error && <p className="text-xs text-destructive">{error}</p>}
       </div>
+      </RequirePermission>
 
       {positions.length === 0 ? (
         <p className="py-4 text-center text-sm text-muted-foreground/60">No hay cargos registrados.</p>

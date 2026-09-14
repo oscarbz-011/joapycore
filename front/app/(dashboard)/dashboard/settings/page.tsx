@@ -1,5 +1,7 @@
 'use client';
 
+import { usePermission } from '@/lib/permissions';
+
 import { apiErrorMessage } from '@/lib/api/api-error';
 
 import { useRef, useState } from 'react';
@@ -554,6 +556,7 @@ function CreditBureauIntegrationCard() {
 
 function IntegrationsTab() {
   const { hasModule } = useActiveModules();
+  const canUpdateTenant = usePermission('tenants:update');
   const [enabled, setEnabled] = useState<Record<string, boolean>>(
     Object.fromEntries(INTEGRATIONS.map((i) => [i.id, i.on])),
   );
@@ -562,7 +565,11 @@ function IntegrationsTab() {
     <div className="space-y-4">
       {/* El buró es parte de la evaluación de crédito: sin Financiamiento
           activo el backend responde 403. */}
-      {hasModule('finance') && <CreditBureauIntegrationCard />}
+      {hasModule('finance') && (
+        <fieldset disabled={!canUpdateTenant} className="m-0 min-w-0 border-0 p-0">
+          <CreditBureauIntegrationCard />
+        </fieldset>
+      )}
 
       <div className="rounded-xl border border-border bg-card divide-y divide-border overflow-hidden">
         {INTEGRATIONS.map((int) => (
@@ -948,6 +955,13 @@ const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
 
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState<Tab>('profile');
+  // SIFEN (certificados y facturación electrónica): verlo requiere sifen:read
+  // y modificarlo sifen:manage; sin manage los controles quedan deshabilitados.
+  const canManageSifen = usePermission('sifen:manage');
+  const canReadSifen = usePermission('sifen:read') || canManageSifen;
+  const visibleTabs = TABS.filter(
+    (t) => (t.id !== 'certificates' && t.id !== 'billing') || canReadSifen,
+  );
 
   return (
     <div>
@@ -959,7 +973,7 @@ export default function SettingsPage() {
       </div>
 
       <div className="flex border-b border-border mb-6">
-        {TABS.map((tab) => (
+        {visibleTabs.map((tab) => (
           <button
             key={tab.id}
             type="button"
@@ -981,8 +995,16 @@ export default function SettingsPage() {
       {activeTab === 'security'      && <SecurityTab />}
       {activeTab === 'notifications' && <NotificationsTab />}
       {activeTab === 'integrations'  && <IntegrationsTab />}
-      {activeTab === 'certificates'  && <CertificatesTab />}
-      {activeTab === 'billing'       && <BillingTab onGoToCerts={() => setActiveTab('certificates')} />}
+      {activeTab === 'certificates' && canReadSifen && (
+        <fieldset disabled={!canManageSifen} className="m-0 min-w-0 border-0 p-0">
+          <CertificatesTab />
+        </fieldset>
+      )}
+      {activeTab === 'billing' && canReadSifen && (
+        <fieldset disabled={!canManageSifen} className="m-0 min-w-0 border-0 p-0">
+          <BillingTab onGoToCerts={() => setActiveTab('certificates')} />
+        </fieldset>
+      )}
     </div>
   );
 }

@@ -1,5 +1,7 @@
 'use client';
 
+import { RequirePermission } from '@/components/require-permission';
+
 import { apiErrorMessage } from '@/lib/api/api-error';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -686,10 +688,12 @@ export default function InventoryPage() {
           <h1 className="text-[25px] font-extrabold tracking-tight text-foreground">Inventario</h1>
           <p className="mt-1 text-[14px] text-muted-foreground">Gestión de productos y stock</p>
         </div>
-        <Button onClick={() => setShowCreate(true)} className="gap-2">
-          <Plus size={15} />
-          Nuevo producto
-        </Button>
+        <RequirePermission permission="inventory:products:create">
+          <Button onClick={() => setShowCreate(true)} className="gap-2">
+            <Plus size={15} />
+            Nuevo producto
+          </Button>
+        </RequirePermission>
       </div>
 
       {/* KPI cards */}
@@ -800,9 +804,11 @@ export default function InventoryPage() {
       ) : products.length === 0 ? (
         <div className="py-16 text-center">
           <p className="text-[13.5px] text-muted-foreground">No se encontraron productos.</p>
-          <Button variant="link" className="mt-2 text-accent-on" onClick={() => setShowCreate(true)}>
-            Crear el primero
-          </Button>
+          <RequirePermission permission="inventory:products:create">
+            <Button variant="link" className="mt-2 text-accent-on" onClick={() => setShowCreate(true)}>
+              Crear el primero
+            </Button>
+          </RequirePermission>
         </div>
       ) : (
         <Card className="overflow-hidden p-0">

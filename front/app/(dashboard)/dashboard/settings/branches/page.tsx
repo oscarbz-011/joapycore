@@ -1,5 +1,7 @@
 'use client';
 
+import { RequirePermission } from '@/components/require-permission';
+
 import { apiErrorMessage } from '@/lib/api/api-error';
 
 import { useState } from 'react';
@@ -182,6 +184,7 @@ function BranchForm({ initial, onClose }: { initial?: Branch; onClose: () => voi
           <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">{error}</div>
         )}
 
+        <RequirePermission permission="branches:manage">
         <div className="pt-2 border-t border-border space-y-2">
           <button
             type="submit"
@@ -203,6 +206,7 @@ function BranchForm({ initial, onClose }: { initial?: Branch; onClose: () => voi
             </button>
           )}
         </div>
+        </RequirePermission>
       </form>
     </div>
   );
@@ -345,9 +349,11 @@ export default function BranchesSettingsPage() {
             </button>
           </div>
           {/* New button */}
-          <Button onClick={openCreate}>
-            <Plus size={15} /> Nueva sucursal
-          </Button>
+          <RequirePermission permission="branches:manage">
+            <Button onClick={openCreate}>
+              <Plus size={15} /> Nueva sucursal
+            </Button>
+          </RequirePermission>
         </div>
       </div>
 

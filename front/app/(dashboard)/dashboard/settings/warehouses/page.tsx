@@ -1,5 +1,7 @@
 'use client';
 
+import { RequirePermission } from '@/components/require-permission';
+
 import { apiErrorMessage } from '@/lib/api/api-error';
 
 import { useState } from 'react';
@@ -94,6 +96,7 @@ function WarehouseForm({
           <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">{error}</div>
         )}
 
+        <RequirePermission permission="warehouses:manage">
         <div className="pt-2 border-t border-border space-y-2">
           <button
             type="submit"
@@ -115,6 +118,7 @@ function WarehouseForm({
             </button>
           )}
         </div>
+        </RequirePermission>
       </form>
     </div>
   );
@@ -254,9 +258,11 @@ export default function WarehousesSettingsPage() {
             </button>
           </div>
           {/* New button */}
-          <Button onClick={openCreate}>
-            <Plus size={15} /> Nuevo depósito
-          </Button>
+          <RequirePermission permission="warehouses:manage">
+            <Button onClick={openCreate}>
+              <Plus size={15} /> Nuevo depósito
+            </Button>
+          </RequirePermission>
         </div>
       </div>
 

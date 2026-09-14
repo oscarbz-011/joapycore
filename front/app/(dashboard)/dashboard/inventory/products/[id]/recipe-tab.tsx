@@ -10,6 +10,7 @@ import { inventoryApi } from '../../../../../../lib/api/inventory';
 import { productionApi } from '../../../../../../lib/api/production';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
+import { usePermission } from '@/lib/permissions';
 import { cn } from '@/lib/utils';
 
 const NUM_CLS =
@@ -30,6 +31,7 @@ function fmtQty(n: number) {
  * cosa. Solo se muestra para productos MANUFACTURED — ver ProductKind.
  */
 export function RecipeTab({ productId, unit }: { productId: string; unit: string }) {
+  const canManage = usePermission('production:recipes:manage');
   const queryClient = useQueryClient();
   const [componentId, setComponentId] = useState('');
   const [quantity, setQuantity] = useState(0);
@@ -192,6 +194,7 @@ export function RecipeTab({ productId, unit }: { productId: string; unit: string
                           variant="ghost"
                           size="xs"
                           title="Editar cantidad"
+                          disabled={!canManage}
                           onClick={() => startEdit(r.id, current)}
                           className="-ml-2.5 font-normal text-muted-foreground"
                         >
@@ -207,7 +210,7 @@ export function RecipeTab({ productId, unit }: { productId: string; unit: string
                       <p className="mt-1 text-[12.5px] text-destructive">{editError}</p>
                     )}
                   </div>
-                  {!editing && (
+                  {canManage && !editing && (
                     <button
                       title="Quitar de la receta"
                       onClick={() => removeMutation.mutate(r.id)}
@@ -237,7 +240,7 @@ export function RecipeTab({ productId, unit }: { productId: string; unit: string
         </>
       )}
 
-      {available.length > 0 && (
+      {canManage && available.length > 0 && (
         <div className="space-y-3 rounded-xl border border-border bg-card p-4">
           <p className="text-xs font-semibold text-muted-foreground">Agregar componente</p>
           <div className="flex gap-2">

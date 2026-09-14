@@ -1,5 +1,7 @@
 'use client';
 
+import { RequirePermission } from '@/components/require-permission';
+
 import { apiErrorMessage } from '@/lib/api/api-error';
 
 import { useState } from 'react';
@@ -83,26 +85,28 @@ function CategoriesPanel() {
     <div className="rounded-xl border border-border bg-card p-5">
       <h2 className="mb-4 text-sm font-semibold text-foreground">Categorías</h2>
 
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (!name.trim()) return;
-          createMutation.mutate();
-        }}
-        className="mb-4 flex gap-2"
-      >
-        <Input
-          className="flex-1"
-          placeholder="Nombre de la categoría..."
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          required
-        />
-        <Button type="submit" size="sm" disabled={createMutation.isPending}>
-          <Plus size={14} />
-          Agregar
-        </Button>
-      </form>
+      <RequirePermission permission="inventory:categories:manage">
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (!name.trim()) return;
+            createMutation.mutate();
+          }}
+          className="mb-4 flex gap-2"
+        >
+          <Input
+            className="flex-1"
+            placeholder="Nombre de la categoría..."
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            required
+          />
+          <Button type="submit" size="sm" disabled={createMutation.isPending}>
+            <Plus size={14} />
+            Agregar
+          </Button>
+        </form>
+      </RequirePermission>
       {error && <p className="mb-3 text-xs text-destructive">{error}</p>}
 
       {categories.length === 0 ? (
@@ -117,14 +121,16 @@ function CategoriesPanel() {
               <span className="text-sm text-foreground">{cat.name}</span>
               <div className="flex items-center gap-2">
                 <ActiveBadge isActive={cat.isActive} />
-                <button
-                  type="button"
-                  onClick={() => toggleMutation.mutate(cat)}
-                  disabled={toggleMutation.isPending}
-                  className="text-xs text-muted-foreground/60 hover:text-foreground disabled:opacity-50"
-                >
-                  {cat.isActive ? 'Desactivar' : 'Activar'}
-                </button>
+                <RequirePermission permission="inventory:categories:manage">
+                  <button
+                    type="button"
+                    onClick={() => toggleMutation.mutate(cat)}
+                    disabled={toggleMutation.isPending}
+                    className="text-xs text-muted-foreground/60 hover:text-foreground disabled:opacity-50"
+                  >
+                    {cat.isActive ? 'Desactivar' : 'Activar'}
+                  </button>
+                </RequirePermission>
               </div>
             </li>
           ))}
@@ -168,26 +174,28 @@ function BrandsPanel() {
     <div className="rounded-xl border border-border bg-card p-5">
       <h2 className="mb-4 text-sm font-semibold text-foreground">Marcas</h2>
 
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (!name.trim()) return;
-          createMutation.mutate();
-        }}
-        className="mb-4 flex gap-2"
-      >
-        <Input
-          className="flex-1"
-          placeholder="Nombre de la marca..."
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          required
-        />
-        <Button type="submit" size="sm" disabled={createMutation.isPending}>
-          <Plus size={14} />
-          Agregar
-        </Button>
-      </form>
+      <RequirePermission permission="inventory:brands:manage">
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (!name.trim()) return;
+            createMutation.mutate();
+          }}
+          className="mb-4 flex gap-2"
+        >
+          <Input
+            className="flex-1"
+            placeholder="Nombre de la marca..."
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            required
+          />
+          <Button type="submit" size="sm" disabled={createMutation.isPending}>
+            <Plus size={14} />
+            Agregar
+          </Button>
+        </form>
+      </RequirePermission>
       {error && <p className="mb-3 text-xs text-destructive">{error}</p>}
 
       {brands.length === 0 ? (
@@ -202,14 +210,16 @@ function BrandsPanel() {
               <span className="text-sm text-foreground">{brand.name}</span>
               <div className="flex items-center gap-2">
                 <ActiveBadge isActive={brand.isActive} />
-                <button
-                  type="button"
-                  onClick={() => toggleMutation.mutate(brand)}
-                  disabled={toggleMutation.isPending}
-                  className="text-xs text-muted-foreground/60 hover:text-foreground disabled:opacity-50"
-                >
-                  {brand.isActive ? 'Desactivar' : 'Activar'}
-                </button>
+                <RequirePermission permission="inventory:brands:manage">
+                  <button
+                    type="button"
+                    onClick={() => toggleMutation.mutate(brand)}
+                    disabled={toggleMutation.isPending}
+                    className="text-xs text-muted-foreground/60 hover:text-foreground disabled:opacity-50"
+                  >
+                    {brand.isActive ? 'Desactivar' : 'Activar'}
+                  </button>
+                </RequirePermission>
               </div>
             </li>
           ))}

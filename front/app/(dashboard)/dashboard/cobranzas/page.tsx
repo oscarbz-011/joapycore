@@ -1,5 +1,7 @@
 'use client';
 
+import { RequirePermission } from '@/components/require-permission';
+
 import { PAYMENT_METHODS, PAYMENT_METHOD_LABELS, paymentMethodLabel } from '@/lib/payment-methods';
 
 import { apiErrorMessage } from '@/lib/api/api-error';
@@ -271,17 +273,19 @@ function RouteDetailPanel({
                       </div>
                     </div>
                   ) : (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="mt-3 w-full"
-                      onClick={() => {
-                        setRecordingVisit(visit.id);
-                        setResultForm({ result: 'COLLECTED', collectedAmount: String(visit.plannedAmount), paymentMethod: 'CASH', notes: '' });
-                      }}
-                    >
-                      Registrar resultado
-                    </Button>
+                    <RequirePermission permission="collections:collect">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="mt-3 w-full"
+                        onClick={() => {
+                          setRecordingVisit(visit.id);
+                          setResultForm({ result: 'COLLECTED', collectedAmount: String(visit.plannedAmount), paymentMethod: 'CASH', notes: '' });
+                        }}
+                      >
+                        Registrar resultado
+                      </Button>
+                    </RequirePermission>
                   )
                 ) : null}
               </div>
@@ -291,16 +295,18 @@ function RouteDetailPanel({
 
         {/* Footer action */}
         {route.status === 'OPEN' && (
-          <div className="border-t border-border px-5 py-4 shrink-0">
-            <Button
-              className="w-full"
-              onClick={() => closeMutation.mutate()}
-              disabled={closeMutation.isPending}
-            >
-              <CheckCircle2 size={15} />
-              {closeMutation.isPending ? 'Cerrando...' : 'Cerrar ruta'}
-            </Button>
-          </div>
+          <RequirePermission permission="collections:manage">
+            <div className="border-t border-border px-5 py-4 shrink-0">
+              <Button
+                className="w-full"
+                onClick={() => closeMutation.mutate()}
+                disabled={closeMutation.isPending}
+              >
+                <CheckCircle2 size={15} />
+                {closeMutation.isPending ? 'Cerrando...' : 'Cerrar ruta'}
+              </Button>
+            </div>
+          </RequirePermission>
         )}
       </SheetContent>
     </Sheet>
@@ -441,6 +447,7 @@ function AgreementsTab() {
             </div>
 
             {ag.status === 'ACTIVE' && (
+              <RequirePermission permission="collections:manage">
               <div className="flex gap-2">
                 <Button
                   size="sm"
@@ -461,6 +468,7 @@ function AgreementsTab() {
                   Marcar incumplido
                 </Button>
               </div>
+              </RequirePermission>
             )}
           </Card>
         );
@@ -644,23 +652,25 @@ function DelinquencyTab() {
                       <td className="px-4 py-3 text-muted-foreground">{fmtDate(report.createdAt)}</td>
                       <td className="px-4 py-3 text-right">
                         {report.status === 'PENDING_REVIEW' && (
-                          <div className="flex justify-end gap-2">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="border-destructive/30 text-destructive hover:bg-destructive/10"
-                              onClick={() => setReviewing({ report, action: 'REPORTED' })}
-                            >
-                              Marcar reportado
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => setReviewing({ report, action: 'EXCLUDED' })}
-                            >
-                              Excluir
-                            </Button>
-                          </div>
+                          <RequirePermission permission="collections:manage">
+                            <div className="flex justify-end gap-2">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="border-destructive/30 text-destructive hover:bg-destructive/10"
+                                onClick={() => setReviewing({ report, action: 'REPORTED' })}
+                              >
+                                Marcar reportado
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => setReviewing({ report, action: 'EXCLUDED' })}
+                              >
+                                Excluir
+                              </Button>
+                            </div>
+                          </RequirePermission>
                         )}
                         {report.reference && (
                           <p className="text-xs text-muted-foreground/60">Ref: {report.reference}</p>
@@ -721,10 +731,12 @@ export default function CobranzasPage() {
           <p className="mt-1 text-sm text-muted-foreground">Gestión de rutas, visitas y acuerdos de pago</p>
         </div>
         {tab === 'routes' && (
-          <Button onClick={() => setShowCreate(true)}>
-            <MapPin size={15} />
-            Nueva ruta
-          </Button>
+          <RequirePermission permission="collections:manage">
+            <Button onClick={() => setShowCreate(true)}>
+              <MapPin size={15} />
+              Nueva ruta
+            </Button>
+          </RequirePermission>
         )}
       </div>
 

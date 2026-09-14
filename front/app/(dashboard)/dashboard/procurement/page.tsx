@@ -1,5 +1,7 @@
 'use client';
 
+import { RequirePermission } from '@/components/require-permission';
+
 import { apiErrorMessage } from '@/lib/api/api-error';
 
 import { useState } from 'react';
@@ -713,11 +715,13 @@ function OrderDetailPanel({
 
               {/* Actions */}
               <div className="px-5 py-4 space-y-2 border-t border-border shrink-0">
-                {canConfirm && confirmAction === null && (
-                  <Button className="w-full" onClick={() => setConfirmAction('confirm')}>
-                    Confirmar orden
-                  </Button>
-                )}
+                <RequirePermission permission="procurement:update">
+                  {canConfirm && confirmAction === null && (
+                    <Button className="w-full" onClick={() => setConfirmAction('confirm')}>
+                      Confirmar orden
+                    </Button>
+                  )}
+                </RequirePermission>
                 {canConfirm && confirmAction === 'confirm' && (
                   <div className="rounded-xl border border-border bg-muted/20 px-4 py-3">
                     <p className="text-xs text-muted-foreground mb-2">¿Confirmar esta orden de compra?</p>
@@ -736,11 +740,13 @@ function OrderDetailPanel({
                     </div>
                   </div>
                 )}
-                {canReceive && (
-                  <Button className="w-full bg-emerald-600 hover:bg-emerald-700" onClick={() => setShowReceive(true)}>
-                    Registrar recepción de mercadería
-                  </Button>
-                )}
+                <RequirePermission permission="procurement:receive">
+                  {canReceive && (
+                    <Button className="w-full bg-emerald-600 hover:bg-emerald-700" onClick={() => setShowReceive(true)}>
+                      Registrar recepción de mercadería
+                    </Button>
+                  )}
+                </RequirePermission>
               </div>
             </>
           )}
@@ -817,10 +823,12 @@ export default function ProcurementPage() {
           <h1 className="text-2xl font-semibold text-foreground">Compras</h1>
           <p className="mt-1 text-sm text-muted-foreground">Órdenes de compra y proveedores</p>
         </div>
-        <Button onClick={() => setShowCreate(true)}>
-          <Plus size={16} />
-          Nueva orden
-        </Button>
+        <RequirePermission permission="procurement:create">
+          <Button onClick={() => setShowCreate(true)}>
+            <Plus size={16} />
+            Nueva orden
+          </Button>
+        </RequirePermission>
       </div>
 
       <div className="mb-4 flex items-center gap-3">
@@ -846,12 +854,14 @@ export default function ProcurementPage() {
       ) : filtered.length === 0 ? (
         <div className="py-16 text-center">
           <p className="text-sm text-muted-foreground">No se encontraron órdenes.</p>
-          <button
-            onClick={() => setShowCreate(true)}
-            className="mt-3 text-sm font-medium text-foreground underline underline-offset-2"
-          >
-            Crear la primera
-          </button>
+          <RequirePermission permission="procurement:create">
+            <button
+              onClick={() => setShowCreate(true)}
+              className="mt-3 text-sm font-medium text-foreground underline underline-offset-2"
+            >
+              Crear la primera
+            </button>
+          </RequirePermission>
         </div>
       ) : (
         <Card className="overflow-hidden p-0">

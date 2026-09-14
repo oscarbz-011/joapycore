@@ -1,5 +1,7 @@
 'use client';
 
+import { RequirePermission } from '@/components/require-permission';
+
 import { apiErrorMessage } from '@/lib/api/api-error';
 
 import { useState } from 'react';
@@ -300,9 +302,11 @@ function APDetailPanel({
 
             {(ap.status === 'PENDING' || ap.status === 'PARTIAL') && (
               <div className="px-5 py-4">
-                <Button className="w-full" onClick={() => setShowRegister(true)}>
-                  Registrar pago
-                </Button>
+                <RequirePermission permission="procurement:payables:register">
+                  <Button className="w-full" onClick={() => setShowRegister(true)}>
+                    Registrar pago
+                  </Button>
+                </RequirePermission>
               </div>
             )}
           </div>

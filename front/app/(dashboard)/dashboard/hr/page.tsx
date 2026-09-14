@@ -1,5 +1,7 @@
 'use client';
 
+import { RequirePermission } from '@/components/require-permission';
+
 import { HrNav } from './_nav';
 
 import { useRouter } from 'next/navigation';
@@ -61,10 +63,12 @@ export default function HrEmployeesPage() {
           <h1 className="text-2xl font-semibold text-foreground">RRHH</h1>
           <p className="mt-1 text-sm text-muted-foreground">Gestión de empleados, áreas y nómina</p>
         </div>
-        <Button onClick={() => router.push('/dashboard/hr/new')}>
-          <Plus size={16} />
-          Nuevo empleado
-        </Button>
+        <RequirePermission permission="hr:employees:create">
+          <Button onClick={() => router.push('/dashboard/hr/new')}>
+            <Plus size={16} />
+            Nuevo empleado
+          </Button>
+        </RequirePermission>
       </div>
 
       <HrNav active="employees" />
@@ -74,12 +78,14 @@ export default function HrEmployeesPage() {
       ) : employees.length === 0 ? (
         <div className="py-16 text-center">
           <p className="text-sm text-muted-foreground">No hay empleados registrados.</p>
-          <button
-            onClick={() => router.push('/dashboard/hr/new')}
-            className="mt-3 text-sm font-medium text-foreground underline underline-offset-2"
-          >
-            Crear el primero
-          </button>
+          <RequirePermission permission="hr:employees:create">
+            <button
+              onClick={() => router.push('/dashboard/hr/new')}
+              className="mt-3 text-sm font-medium text-foreground underline underline-offset-2"
+            >
+              Crear el primero
+            </button>
+          </RequirePermission>
         </div>
       ) : (
         <Card className="overflow-hidden p-0">
@@ -134,15 +140,17 @@ export default function HrEmployeesPage() {
                       <StatusBadge isActive={emp.isActive} terminationDate={emp.terminationDate} />
                     </td>
                     <td className="px-4 py-3">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => router.push(`/dashboard/hr/${emp.id}/edit`)}
-                        title="Editar empleado"
-                        className="h-7 w-7"
-                      >
-                        <Pencil size={14} />
-                      </Button>
+                      <RequirePermission permission="hr:employees:update">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => router.push(`/dashboard/hr/${emp.id}/edit`)}
+                          title="Editar empleado"
+                          className="h-7 w-7"
+                        >
+                          <Pencil size={14} />
+                        </Button>
+                      </RequirePermission>
                     </td>
                   </tr>
                 ))}
