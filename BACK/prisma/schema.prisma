@@ -757,46 +757,46 @@ model Brand {
 }
 
 model Product {
-  id                   String      @id @default(uuid())
-  tenantId             String      @map("tenant_id")
-  categoryId           String?     @map("category_id")
-  brandId              String?     @map("brand_id")
+  id                   String        @id @default(uuid())
+  tenantId             String        @map("tenant_id")
+  categoryId           String?       @map("category_id")
+  brandId              String?       @map("brand_id")
   model                String?
   name                 String
   description          String?
-  isSerialized         Boolean     @default(false) @map("is_serialized")
-  usesLots             Boolean     @default(false) @map("uses_lots")
+  isSerialized         Boolean       @default(false) @map("is_serialized")
+  usesLots             Boolean       @default(false) @map("uses_lots")
   // Naturaleza del producto — ver enum ProductKind. Define de dónde entra su
   // stock (compra vs. producción) y de qué default parten los dos flags de
   // abajo.
-  kind                 ProductKind @default(RESALE)
+  kind                 ProductKind   @default(RESALE)
   // En qué flujos participa. Se derivan de `kind` al crear pero quedan
   // editables a propósito: el mismo tornillo puede ser materia prima de un
   // mueble Y venderse suelto en el mostrador, y eso no es un caso raro en una
   // ferretería/carpintería. Las reglas de Compras y Ventas miran estos flags,
   // no el `kind`, justamente para no romperse en esos casos mixtos.
-  isPurchasable        Boolean     @default(true) @map("is_purchasable")
-  isSellable           Boolean     @default(true) @map("is_sellable")
-  unit                 String      @default("unidad")
-  weightKg             Float?      @map("weight_kg")
-  heightCm             Float?      @map("height_cm")
-  widthCm              Float?      @map("width_cm")
-  depthCm              Float?      @map("depth_cm")
+  isPurchasable        Boolean       @default(true) @map("is_purchasable")
+  isSellable           Boolean       @default(true) @map("is_sellable")
+  unit                 String        @default("unidad")
+  weightKg             Float?        @map("weight_kg")
+  heightCm             Float?        @map("height_cm")
+  widthCm              Float?        @map("width_cm")
+  depthCm              Float?        @map("depth_cm")
   // Nullable a propósito: un producto en DRAFT puede no tener precio todavía
   // (catálogo cargado antes de negociar con el proveedor). null = "pendiente",
   // que NO es lo mismo que 0 — un 0 explícito es un precio real de cero.
-  costPrice            Decimal?    @map("cost_price") @db.Decimal(12, 2)
-  salePrice            Decimal?    @map("sale_price") @db.Decimal(12, 2)
-  additionalMarkup     Decimal?    @map("additional_markup") @db.Decimal(8, 2)
-  additionalMarkupType MarkupType? @map("additional_markup_type")
-  stockMin             Int         @default(0) @map("stock_min")
-  stockInitial         Int         @default(0) @map("stock_initial")
-  ivaTaxRate           Decimal     @default(10) @map("iva_tax_rate") @db.Decimal(5, 2)
-  ivaIncluded          Boolean     @default(false) @map("iva_included")
+  costPrice            Decimal?      @map("cost_price") @db.Decimal(12, 2)
+  salePrice            Decimal?      @map("sale_price") @db.Decimal(12, 2)
+  additionalMarkup     Decimal?      @map("additional_markup") @db.Decimal(8, 2)
+  additionalMarkupType MarkupType?   @map("additional_markup_type")
+  stockMin             Int           @default(0) @map("stock_min")
+  stockInitial         Int           @default(0) @map("stock_initial")
+  ivaTaxRate           Decimal       @default(10) @map("iva_tax_rate") @db.Decimal(5, 2)
+  ivaIncluded          Boolean       @default(false) @map("iva_included")
   status               ProductStatus @default(DRAFT)
-  deletedAt            DateTime?   @map("deleted_at")
-  createdAt            DateTime    @default(now()) @map("created_at")
-  updatedAt            DateTime    @updatedAt @map("updated_at")
+  deletedAt            DateTime?     @map("deleted_at")
+  createdAt            DateTime      @default(now()) @map("created_at")
+  updatedAt            DateTime      @updatedAt @map("updated_at")
 
   tenant               Tenant                @relation(fields: [tenantId], references: [id])
   category             Category?             @relation(fields: [categoryId], references: [id])
@@ -810,9 +810,9 @@ model Product {
   productSuppliers     ProductSupplier[]
   comboItems           SaleComboItem[]
   // De qué está hecho este producto (si es MANUFACTURED)…
-  recipe               ProductComponent[] @relation("ProductRecipe")
+  recipe               ProductComponent[]    @relation("ProductRecipe")
   // …y en la receta de qué otros productos aparece (si es materia prima).
-  usedIn               ProductComponent[] @relation("ProductComponentOf")
+  usedIn               ProductComponent[]    @relation("ProductComponentOf")
   productionOrders     ProductionOrder[]
   productionConsumed   ProductionOrderItem[]
   supplierCatalogItems SupplierCatalogItem[]
@@ -829,18 +829,18 @@ model Product {
 // sub-ensambles anidados para el MVP. Se valida en el servicio que un producto
 // no sea componente de sí mismo (ni en cadena) para no crear ciclos.
 model ProductComponent {
-  id        String   @id @default(uuid())
-  tenantId  String   @map("tenant_id")
+  id          String   @id @default(uuid())
+  tenantId    String   @map("tenant_id")
   // El producto que se fabrica.
-  productId String   @map("product_id")
+  productId   String   @map("product_id")
   // El insumo que se consume (materia prima, o incluso otro producto).
-  componentId String @map("component_id")
+  componentId String   @map("component_id")
   // Cuánto se consume por unidad producida. Decimal porque una receta puede
   // llevar 0,5 litros de barniz o 2,25 metros de tela.
-  quantity  Decimal  @db.Decimal(12, 3)
-  notes     String?
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  quantity    Decimal  @db.Decimal(12, 3)
+  notes       String?
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
 
   tenant    Tenant  @relation(fields: [tenantId], references: [id])
   product   Product @relation("ProductRecipe", fields: [productId], references: [id])
@@ -907,25 +907,25 @@ model ProductionOrderItem {
 // importar la lista de precios sin tener que crear productos primero.
 // Ver plan-modulo-compras.md, Fase 1.
 model SupplierCatalogItem {
-  id          String  @id @default(uuid())
-  tenantId    String  @map("tenant_id")
-  supplierId  String  @map("supplier_id")
+  id               String    @id @default(uuid())
+  tenantId         String    @map("tenant_id")
+  supplierId       String    @map("supplier_id")
   // Código con el que el proveedor identifica el ítem — es la clave natural
   // de la importación (upsert por proveedor + código).
-  supplierSku String  @map("supplier_sku")
-  description String
-  price       Decimal? @db.Decimal(12, 2)
+  supplierSku      String    @map("supplier_sku")
+  description      String
+  price            Decimal?  @db.Decimal(12, 2)
   // Unidad en la que vende el proveedor y cuántas unidades internas equivale
   // (ej. vende "caja x12" y el factor 12 lo lleva a unidades).
-  supplierUnit     String?  @map("supplier_unit")
-  conversionFactor Decimal? @map("conversion_factor") @db.Decimal(12, 4)
+  supplierUnit     String?   @map("supplier_unit")
+  conversionFactor Decimal?  @map("conversion_factor") @db.Decimal(12, 4)
   validFrom        DateTime? @map("valid_from")
   validTo          DateTime? @map("valid_to")
   // Nullable a propósito: el ítem vive suelto hasta que alguien lo vincula a
   // un producto interno (o hasta que la orden de compra lo fuerza).
-  productId   String?  @map("product_id")
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  productId        String?   @map("product_id")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
 
   tenant   Tenant   @relation(fields: [tenantId], references: [id])
   supplier Supplier @relation(fields: [supplierId], references: [id])
@@ -1036,25 +1036,25 @@ model StockMovement {
 // ─── Procurement ──────────────────────────────────────────────────────────────
 
 model Supplier {
-  id          String    @id @default(uuid())
-  tenantId    String    @map("tenant_id")
-  name        String
-  contactName String?   @map("contact_name")
-  email       String?
-  phone       String?
-  address     String?
-  taxId       String?   @map("tax_id")
-  isImporter  Boolean   @default(false) @map("is_importer")
+  id              String    @id @default(uuid())
+  tenantId        String    @map("tenant_id")
+  name            String
+  contactName     String?   @map("contact_name")
+  email           String?
+  phone           String?
+  address         String?
+  taxId           String?   @map("tax_id")
+  isImporter      Boolean   @default(false) @map("is_importer")
   // Plazo de pago en días — 0 (default) es contado. Cada AccountsPayable
   // generada al recibir mercadería de este proveedor calcula su dueDate
   // como receivedAt + paymentTermDays.
-  paymentTermDays Int?  @default(0) @map("payment_term_days")
-  isActive    Boolean   @default(true) @map("is_active")
-  deletedAt   DateTime? @map("deleted_at")
-  createdAt   DateTime  @default(now()) @map("created_at")
-  updatedAt   DateTime  @updatedAt @map("updated_at")
+  paymentTermDays Int?      @default(0) @map("payment_term_days")
+  isActive        Boolean   @default(true) @map("is_active")
+  deletedAt       DateTime? @map("deleted_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
 
-  tenant           Tenant            @relation(fields: [tenantId], references: [id])
+  tenant           Tenant                @relation(fields: [tenantId], references: [id])
   purchaseOrders   PurchaseOrder[]
   productSuppliers ProductSupplier[]
   catalogItems     SupplierCatalogItem[]
@@ -1211,14 +1211,14 @@ model Customer {
   createdAt DateTime  @default(now()) @map("created_at")
   updatedAt DateTime  @updatedAt @map("updated_at")
 
-  tenant            Tenant              @relation(fields: [tenantId], references: [id])
-  saleOrders        SaleOrder[]
-  loans             Loan[]
-  collectionVisits  CollectionVisit[]
-  paymentAgreements PaymentAgreement[]
-  collectionNotes   CollectionNote[]
-  bureauChecks      CreditBureauCheck[]
-  paymentReceipts   PaymentReceipt[]
+  tenant             Tenant              @relation(fields: [tenantId], references: [id])
+  saleOrders         SaleOrder[]
+  loans              Loan[]
+  collectionVisits   CollectionVisit[]
+  paymentAgreements  PaymentAgreement[]
+  collectionNotes    CollectionNote[]
+  bureauChecks       CreditBureauCheck[]
+  paymentReceipts    PaymentReceipt[]
   delinquencyReports DelinquencyReport[]
 
   @@unique([tenantId, customerCode])
@@ -1546,9 +1546,9 @@ model Invoice {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  tenant             Tenant               @relation(fields: [tenantId], references: [id])
-  saleOrder          SaleOrder?           @relation(fields: [saleOrderId], references: [id])
-  paymentReceipt     PaymentReceipt?      @relation(fields: [paymentReceiptId], references: [id])
+  tenant             Tenant              @relation(fields: [tenantId], references: [id])
+  saleOrder          SaleOrder?          @relation(fields: [saleOrderId], references: [id])
+  paymentReceipt     PaymentReceipt?     @relation(fields: [paymentReceiptId], references: [id])
   items              InvoiceItem[]
   accountsReceivable AccountsReceivable?
   creditNotes        CreditNote[]
@@ -2046,27 +2046,27 @@ model FileRecord {
 // ─── Credit ───────────────────────────────────────────────────────────────────
 
 model CreditConfig {
-  id                  String   @id @default(uuid())
-  tenantId            String   @unique @map("tenant_id")
-  isEnabled           Boolean  @default(false) @map("is_enabled")
+  id                       String   @id @default(uuid())
+  tenantId                 String   @unique @map("tenant_id")
+  isEnabled                Boolean  @default(false) @map("is_enabled")
   // % máximo del sueldo del cliente admitido para cuota mensual de crédito —
   // null = el chequeo de capacidad de pago por sueldo no corre.
-  maxIncomePercentage Decimal? @map("max_income_percentage") @db.Decimal(5, 2)
+  maxIncomePercentage      Decimal? @map("max_income_percentage") @db.Decimal(5, 2)
   // Día del mes (1-28, evita problemas de meses cortos) en que vencen todas
   // las cuotas de todos los créditos del tenant — no depende de la fecha de
   // compra de cada cliente.
-  dueDayOfMonth       Int      @default(5) @map("due_day_of_month")
+  dueDayOfMonth            Int      @default(5) @map("due_day_of_month")
   // Días de tolerancia después del vencimiento antes de empezar a devengar
   // mora (0 = sin tolerancia, se cobra desde el día siguiente al vencimiento).
-  moraGraceDays       Int      @default(0) @map("mora_grace_days")
-  // Meses de mora (períodos de 30 días desde que vence la tolerancia) a
-  // partir de los cuales un cliente entra a la lista de Morosos para
-  // gestionar su reporte a un buró de crédito externo. null = deshabilitado.
-  delinquencyThresholdMonths Int? @map("delinquency_threshold_months")
-  createdAt           DateTime @default(now()) @map("created_at")
-  updatedAt           DateTime @updatedAt @map("updated_at")
+  moraGraceDays            Int      @default(0) @map("mora_grace_days")
+  // Días de mora (desde que vence la tolerancia) a partir de los cuales un
+  // cliente entra a la lista de Morosos para gestionar su reporte a
+  // Informconf. null = deshabilitado.
+  delinquencyThresholdDays Int?     @map("delinquency_threshold_days")
+  createdAt                DateTime @default(now()) @map("created_at")
+  updatedAt                DateTime @updatedAt @map("updated_at")
 
-  tenant             Tenant               @relation(fields: [tenantId], references: [id])
+  tenant             Tenant              @relation(fields: [tenantId], references: [id])
   plans              CreditPlan[]
   interestComponents InterestComponent[]
 
@@ -2146,22 +2146,25 @@ enum InterestComponentFrequency {
 // como lo pidió el usuario. Reemplaza por completo al viejo
 // CreditConfig.moraRate, que nunca se expuso por API/UI y nunca se cobró.
 model InterestComponent {
-  id             String                      @id @default(uuid())
-  tenantId       String                      @map("tenant_id")
-  creditConfigId String                      @map("credit_config_id")
+  id             String                     @id @default(uuid())
+  tenantId       String                     @map("tenant_id")
+  creditConfigId String                     @map("credit_config_id")
   name           String
   frequency      InterestComponentFrequency
-  percentage     Decimal                     @db.Decimal(5, 2)
+  // Decimal(7,4): permite tasas menores a 1% (ej. mora diaria de 0,001%)
+  // sin redondearlas a 0 — antes era Decimal(5,2), que solo admitía 2
+  // decimales.
+  percentage     Decimal                    @db.Decimal(7, 4)
   // Solo aplica a MONTHLY: si true, el cargo crece con cada período vencido
   // (mes 1=10%, mes 2=20%, mes 3=30% — acumulación lineal, no interés
   // compuesto). Si false, se cobra el % base una sola vez apenas se cruza
   // el primer período y no vuelve a crecer. DAILY siempre es acumulativo
   // por diseño (más días = más interés); ONE_TIME nunca lo es.
-  cumulative     Boolean                     @default(false)
-  isActive       Boolean                     @default(true) @map("is_active")
-  order          Int                         @default(0)
-  createdAt      DateTime                    @default(now()) @map("created_at")
-  updatedAt      DateTime                    @updatedAt @map("updated_at")
+  cumulative     Boolean                    @default(false)
+  isActive       Boolean                    @default(true) @map("is_active")
+  order          Int                        @default(0)
+  createdAt      DateTime                   @default(now()) @map("created_at")
+  updatedAt      DateTime                   @updatedAt @map("updated_at")
 
   tenant       Tenant                      @relation(fields: [tenantId], references: [id])
   creditConfig CreditConfig                @relation(fields: [creditConfigId], references: [id])
@@ -2207,13 +2210,13 @@ model Loan {
   createdAt         DateTime   @default(now()) @map("created_at")
   updatedAt         DateTime   @updatedAt @map("updated_at")
 
-  tenant            Tenant             @relation(fields: [tenantId], references: [id])
-  saleOrder         SaleOrder          @relation(fields: [saleOrderId], references: [id])
-  customer          Customer           @relation(fields: [customerId], references: [id])
-  installments      Installment[]
-  collectionVisits  CollectionVisit[]
-  paymentAgreements PaymentAgreement[]
-  paymentReceipts   PaymentReceipt[]
+  tenant             Tenant              @relation(fields: [tenantId], references: [id])
+  saleOrder          SaleOrder           @relation(fields: [saleOrderId], references: [id])
+  customer           Customer            @relation(fields: [customerId], references: [id])
+  installments       Installment[]
+  collectionVisits   CollectionVisit[]
+  paymentAgreements  PaymentAgreement[]
+  paymentReceipts    PaymentReceipt[]
   delinquencyReports DelinquencyReport[]
 
   @@index([tenantId, status])
@@ -2222,21 +2225,21 @@ model Loan {
 }
 
 model Installment {
-  id                   String            @id @default(uuid())
-  tenantId             String            @map("tenant_id")
-  loanId               String            @map("loan_id")
-  number               Int
-  dueDate              DateTime          @map("due_date")
-  amount               Decimal           @db.Decimal(12, 2)
-  paidAmount           Decimal           @default(0) @map("paid_amount") @db.Decimal(12, 2)
-  paidAt               DateTime?         @map("paid_at")
-  paymentMethod        PaymentMethod?    @map("payment_method")
-  paymentReference     String?           @map("payment_reference")
-  paymentDate          DateTime?         @map("payment_date")
-  status               InstallmentStatus @default(PENDING)
-  notes                String?
-  createdAt            DateTime          @default(now()) @map("created_at")
-  updatedAt            DateTime          @updatedAt @map("updated_at")
+  id               String            @id @default(uuid())
+  tenantId         String            @map("tenant_id")
+  loanId           String            @map("loan_id")
+  number           Int
+  dueDate          DateTime          @map("due_date")
+  amount           Decimal           @db.Decimal(12, 2)
+  paidAmount       Decimal           @default(0) @map("paid_amount") @db.Decimal(12, 2)
+  paidAt           DateTime?         @map("paid_at")
+  paymentMethod    PaymentMethod?    @map("payment_method")
+  paymentReference String?           @map("payment_reference")
+  paymentDate      DateTime?         @map("payment_date")
+  status           InstallmentStatus @default(PENDING)
+  notes            String?
+  createdAt        DateTime          @default(now()) @map("created_at")
+  updatedAt        DateTime          @updatedAt @map("updated_at")
 
   loan             Loan                        @relation(fields: [loanId], references: [id])
   tenant           Tenant                      @relation(fields: [tenantId], references: [id])
@@ -2272,13 +2275,13 @@ model PaymentReceipt {
   issuedAt         DateTime      @default(now()) @map("issued_at")
   pdfFileId        String?       @unique @map("pdf_file_id")
 
-  tenant      Tenant               @relation(fields: [tenantId], references: [id])
-  loan        Loan                 @relation(fields: [loanId], references: [id])
-  customer    Customer             @relation(fields: [customerId], references: [id])
-  branch      Branch?              @relation(fields: [branchId], references: [id])
-  collectedBy User?                @relation(fields: [collectedById], references: [id])
-  pdfFile     FileRecord?          @relation("ReceiptPdf", fields: [pdfFileId], references: [id])
-  items       PaymentReceiptItem[]
+  tenant          Tenant               @relation(fields: [tenantId], references: [id])
+  loan            Loan                 @relation(fields: [loanId], references: [id])
+  customer        Customer             @relation(fields: [customerId], references: [id])
+  branch          Branch?              @relation(fields: [branchId], references: [id])
+  collectedBy     User?                @relation(fields: [collectedById], references: [id])
+  pdfFile         FileRecord?          @relation("ReceiptPdf", fields: [pdfFileId], references: [id])
+  items           PaymentReceiptItem[]
   // Factura de intereses moratorios generada a partir de este recibo (si el
   // cobro incluyó algún cargo INTEREST_COMPONENT) — FK vive en Invoice.
   interestInvoice Invoice?
@@ -2456,25 +2459,26 @@ enum DelinquencyReportStatus {
 }
 
 // Candidato detectado automáticamente por el scheduler nocturno al cruzar
-// CreditConfig.delinquencyThresholdMonths — un analista lo revisa y decide
+// CreditConfig.delinquencyThresholdDays — un analista lo revisa y decide
 // reportarlo (REPORTED) o excluirlo (EXCLUDED). No hay integración real con
-// ningún buró (Informconf u otro): "provider" es texto libre y "reference"
-// es lo que el analista carga a mano tras reportarlo por fuera del sistema —
-// mismo criterio 100% manual que ya usa credit-bureau/CreditBureauCheck.
+// Informconf: "provider" es texto libre (default "informconf") y
+// "reference" es lo que el analista carga a mano tras reportarlo por fuera
+// del sistema — mismo criterio 100% manual que ya usa
+// credit-bureau/CreditBureauCheck.
 model DelinquencyReport {
-  id            String                  @id @default(uuid())
-  tenantId      String                  @map("tenant_id")
-  customerId    String                  @map("customer_id")
-  loanId        String                  @map("loan_id")
-  monthsOverdue Int                     @map("months_overdue")
-  status        DelinquencyReportStatus @default(PENDING_REVIEW)
-  provider      String                  @default("informconf")
-  reference     String?
-  notes         String?
-  reviewedById  String?                 @map("reviewed_by_id")
-  reviewedAt    DateTime?               @map("reviewed_at")
-  createdAt     DateTime                @default(now()) @map("created_at")
-  updatedAt     DateTime                @updatedAt @map("updated_at")
+  id           String                  @id @default(uuid())
+  tenantId     String                  @map("tenant_id")
+  customerId   String                  @map("customer_id")
+  loanId       String                  @map("loan_id")
+  daysOverdue  Int                     @map("days_overdue")
+  status       DelinquencyReportStatus @default(PENDING_REVIEW)
+  provider     String                  @default("informconf")
+  reference    String?
+  notes        String?
+  reviewedById String?                 @map("reviewed_by_id")
+  reviewedAt   DateTime?               @map("reviewed_at")
+  createdAt    DateTime                @default(now()) @map("created_at")
+  updatedAt    DateTime                @updatedAt @map("updated_at")
 
   tenant     Tenant   @relation(fields: [tenantId], references: [id])
   customer   Customer @relation(fields: [customerId], references: [id])

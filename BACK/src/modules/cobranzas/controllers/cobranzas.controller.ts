@@ -286,7 +286,8 @@ export class CobranzasController {
   @HttpCode(HttpStatus.OK)
   @Permissions('collections:manage')
   @ApiOperation({
-    summary: 'Marcar un candidato como reportado al buró (manual) o excluirlo',
+    summary:
+      'Marcar un candidato como reportado a Informconf (manual) o excluirlo',
   })
   updateDelinquencyReport(
     @CurrentTenant() tenantId: string,

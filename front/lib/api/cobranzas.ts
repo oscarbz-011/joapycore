@@ -72,14 +72,14 @@ export interface CollectionNote {
 }
 
 // Candidato a moroso detectado automáticamente por el scheduler nocturno al
-// cruzar CreditConfig.delinquencyThresholdMonths — no hay integración real
-// con ningún buró de crédito, "reportado" es una confirmación manual del
-// analista (mismo criterio que credit-bureau/CreditBureauCheck).
+// cruzar CreditConfig.delinquencyThresholdDays — no hay integración real
+// con Informconf, "reportado" es una confirmación manual del analista
+// (mismo criterio que credit-bureau/CreditBureauCheck).
 export interface DelinquencyReport {
   id: string;
   customerId: string;
   loanId: string;
-  monthsOverdue: number;
+  daysOverdue: number;
   status: DelinquencyReportStatus;
   provider: string;
   reference?: string | null;

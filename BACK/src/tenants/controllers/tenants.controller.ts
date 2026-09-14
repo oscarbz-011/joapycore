@@ -128,7 +128,7 @@ export class TenantsController {
       dto.maxIncomePercentage,
       dto.dueDayOfMonth,
       dto.moraGraceDays,
-      dto.delinquencyThresholdMonths,
+      dto.delinquencyThresholdDays,
     );
   }
 

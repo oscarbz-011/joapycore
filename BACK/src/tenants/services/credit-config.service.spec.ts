@@ -34,7 +34,7 @@ describe('CreditConfigService', () => {
   });
 
   describe('setEnabled', () => {
-    it('passes delinquencyThresholdMonths through to the repository', async () => {
+    it('passes delinquencyThresholdDays through to the repository', async () => {
       repo.upsertConfig.mockResolvedValue(makeConfig());
       await service.setEnabled('tenant-1', true, 30, 5, 5, 3);
       expect(repo.upsertConfig).toHaveBeenCalledWith(

@@ -12,8 +12,24 @@ import {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
+// Hasta 4 decimales (misma precisión que admite el backend), sin ceros de
+// más — permite representar tasas menores a 1% (ej. mora diaria de 0,001%)
+// sin redondearlas a 0.0%. Para valores "redondos" (15, 20, 27...) el
+// resultado es idéntico al de antes ("15.0%").
 function fmtRate(rate: number) {
-  return `${Number(rate).toFixed(1)}%`;
+  const n = Number(rate);
+  let str = n.toFixed(4).replace(/0+$/, '');
+  if (str.endsWith('.')) str += '0';
+  return `${str}%`;
+}
+
+// Equivalente mensual de una tasa diaria — mismo criterio que usa el
+// backend para un "período" (30 días, ver interest-calc.service.ts). Es
+// lineal (diaria × 30), no interés compuesto, para que coincida con cómo
+// el motor de cálculo devenga un componente DAILY día a día.
+const DAYS_PER_PERIOD = 30;
+function dailyToMonthly(dailyPct: number): number {
+  return dailyPct * DAYS_PER_PERIOD;
 }
 
 // El backend devuelve maxIncomePercentage como Decimal — JSON lo serializa
@@ -328,7 +344,7 @@ function AddComponentForm({
             <input
               type="number"
               min="0"
-              step="0.1"
+              step="0.0001"
               placeholder="10"
               value={percentage}
               onChange={(e) => setPercentage(e.target.value)}
@@ -340,6 +356,12 @@ function AddComponentForm({
       </div>
 
       <p className="text-xs text-muted-foreground/60">{FREQUENCY_HINTS[frequency]}</p>
+
+      {frequency === 'DAILY' && percentage && (
+        <p className="text-xs text-muted-foreground/60">
+          Equivale a {fmtRate(dailyToMonthly(Number(percentage)))} mensual (30 días)
+        </p>
+      )}
 
       {frequency === 'MONTHLY' && (
         <label className="flex items-center gap-2 cursor-pointer">
@@ -423,7 +445,7 @@ function ComponentRow({
                   autoFocus
                   type="number"
                   min="0"
-                  step="0.1"
+                  step="0.0001"
                   value={rateInput}
                   onChange={(e) => setRateInput(e.target.value)}
                   onKeyDown={(e) => { if (e.key === 'Enter') commitEdit(); if (e.key === 'Escape') setEditing(false); }}
@@ -433,6 +455,11 @@ function ComponentRow({
               </div>
               <button type="button" onClick={commitEdit} className="text-muted-foreground hover:text-foreground"><Check size={13} /></button>
               <button type="button" onClick={() => { setRateInput(String(pct)); setEditing(false); }} className="text-muted-foreground/60 hover:text-muted-foreground"><X size={13} /></button>
+              {component.frequency === 'DAILY' && Number(rateInput) > 0 && (
+                <span className="text-xs text-muted-foreground/60">
+                  ≈ {fmtRate(dailyToMonthly(Number(rateInput)))} mensual
+                </span>
+              )}
             </div>
           ) : (
             <button
@@ -440,7 +467,10 @@ function ComponentRow({
               onClick={() => setEditing(true)}
               className="flex items-center gap-1 text-xs text-muted-foreground/60 hover:text-muted-foreground transition-colors"
             >
-              <span>{pct.toFixed(1)}%</span>
+              <span>{fmtRate(pct)}</span>
+              {component.frequency === 'DAILY' && (
+                <span className="text-muted-foreground/40">(≈ {fmtRate(dailyToMonthly(pct))} mensual)</span>
+              )}
               <Pencil size={10} />
             </button>
           )}
@@ -523,13 +553,13 @@ export default function CreditSettingsPage() {
   });
 
   const updateDelinquencyThreshold = useMutation({
-    mutationFn: (delinquencyThresholdMonths: number | null) =>
+    mutationFn: (delinquencyThresholdDays: number | null) =>
       settingsApi.setCreditEnabled(
         config?.isEnabled ?? true,
         toNumOrNull(config?.maxIncomePercentage),
         config?.dueDayOfMonth,
         config?.moraGraceDays,
-        delinquencyThresholdMonths,
+        delinquencyThresholdDays,
       ),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['credit-config'] });
@@ -806,9 +836,9 @@ export default function CreditSettingsPage() {
           {enabled && (
             <div className="flex items-center justify-between rounded-2xl border border-border bg-card px-6 py-4">
               <div>
-                <p className="text-sm font-medium text-foreground">Meses de mora para reportar a buró</p>
+                <p className="text-sm font-medium text-foreground">Días de mora para reportar a Informconf</p>
                 <p className="text-xs text-muted-foreground/60 mt-0.5">
-                  Al cruzar esta cantidad de meses de mora, el cliente aparece en la lista de Morosos (Cobranzas) para gestionar su reporte a un buró de crédito. Vacío = deshabilitado.
+                  Al cruzar esta cantidad de días de mora, el cliente aparece en la lista de Morosos (Cobranzas) para gestionar su reporte a Informconf. Vacío = deshabilitado.
                 </p>
               </div>
               {editingThreshold ? (
@@ -845,12 +875,12 @@ export default function CreditSettingsPage() {
                 <button
                   type="button"
                   onClick={() => {
-                    setThresholdInput(config?.delinquencyThresholdMonths != null ? String(config.delinquencyThresholdMonths) : '');
+                    setThresholdInput(config?.delinquencyThresholdDays != null ? String(config.delinquencyThresholdDays) : '');
                     setEditingThreshold(true);
                   }}
                   className="flex items-center gap-1.5 text-sm font-medium text-foreground hover:text-muted-foreground transition-colors"
                 >
-                  {config?.delinquencyThresholdMonths != null ? `${config.delinquencyThresholdMonths} mes${config.delinquencyThresholdMonths === 1 ? '' : 'es'}` : 'Deshabilitado'}
+                  {config?.delinquencyThresholdDays != null ? `${config.delinquencyThresholdDays} día${config.delinquencyThresholdDays === 1 ? '' : 's'}` : 'Deshabilitado'}
                   <Pencil size={12} className="text-muted-foreground/60" />
                 </button>
               )}

@@ -62,11 +62,11 @@ export class FinanceSourcesRepository {
 
   findDelinquencyConfigs() {
     return this.prisma.creditConfig.findMany({
-      where: { delinquencyThresholdMonths: { not: null } },
+      where: { delinquencyThresholdDays: { not: null } },
       select: {
         tenantId: true,
         moraGraceDays: true,
-        delinquencyThresholdMonths: true,
+        delinquencyThresholdDays: true,
       },
     });
   }
@@ -79,7 +79,7 @@ export class FinanceSourcesRepository {
     tenantId: string;
     customerId: string;
     loanId: string;
-    monthsOverdue: number;
+    daysOverdue: number;
   }): Promise<boolean> {
     const existing = await this.prisma.delinquencyReport.findUnique({
       where: {

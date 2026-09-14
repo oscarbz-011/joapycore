@@ -23,7 +23,7 @@ export class CreditConfigService {
     maxIncomePercentage?: number | null,
     dueDayOfMonth?: number,
     moraGraceDays?: number,
-    delinquencyThresholdMonths?: number | null,
+    delinquencyThresholdDays?: number | null,
   ) {
     return this.repo.upsertConfig(
       tenantId,
@@ -31,7 +31,7 @@ export class CreditConfigService {
       maxIncomePercentage,
       dueDayOfMonth,
       moraGraceDays,
-      delinquencyThresholdMonths,
+      delinquencyThresholdDays,
     );
   }
 

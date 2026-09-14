@@ -282,7 +282,7 @@ export async function seedElectrodomesticos(prisma: PrismaClient) {
       maxIncomePercentage: 30,
       dueDayOfMonth: 5,
       moraGraceDays: 5,
-      delinquencyThresholdMonths: 3,
+      delinquencyThresholdDays: 90,
     },
   });
   await prisma.creditPlan.create({

@@ -211,13 +211,13 @@ describe('InstallmentsSchedulerService', () => {
       jest.useFakeTimers().setSystemTime(now);
 
       prisma.creditConfig.findMany.mockResolvedValue([
-        { tenantId: TENANT, moraGraceDays: 0, delinquencyThresholdMonths: 3 },
+        { tenantId: TENANT, moraGraceDays: 0, delinquencyThresholdDays: 90 },
       ]);
       prisma.loan.findMany.mockResolvedValue([
         {
           id: 'loan-1',
           customerId: 'cust-1',
-          // 95 días vencida -> 3 períodos completos, cruza el umbral de 3.
+          // 95 días vencida, cruza el umbral de 90.
           installments: [
             { dueDate: new Date(now.getTime() - 95 * MS_PER_DAY) },
           ],
@@ -231,7 +231,7 @@ describe('InstallmentsSchedulerService', () => {
           tenantId: TENANT,
           customerId: 'cust-1',
           loanId: 'loan-1',
-          monthsOverdue: 3,
+          daysOverdue: 95,
         },
       });
     });
@@ -241,7 +241,7 @@ describe('InstallmentsSchedulerService', () => {
       jest.useFakeTimers().setSystemTime(now);
 
       prisma.creditConfig.findMany.mockResolvedValue([
-        { tenantId: TENANT, moraGraceDays: 0, delinquencyThresholdMonths: 3 },
+        { tenantId: TENANT, moraGraceDays: 0, delinquencyThresholdDays: 90 },
       ]);
       prisma.loan.findMany.mockResolvedValue([
         {
@@ -249,7 +249,7 @@ describe('InstallmentsSchedulerService', () => {
           customerId: 'cust-1',
           installments: [
             { dueDate: new Date(now.getTime() - 40 * MS_PER_DAY) },
-          ], // 1 período
+          ], // 40 días vencida, no cruza el umbral de 90.
         },
       ]);
 
@@ -263,7 +263,7 @@ describe('InstallmentsSchedulerService', () => {
       jest.useFakeTimers().setSystemTime(now);
 
       prisma.creditConfig.findMany.mockResolvedValue([
-        { tenantId: TENANT, moraGraceDays: 0, delinquencyThresholdMonths: 3 },
+        { tenantId: TENANT, moraGraceDays: 0, delinquencyThresholdDays: 90 },
       ]);
       prisma.loan.findMany.mockResolvedValue([
         {

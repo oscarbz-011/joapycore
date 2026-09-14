@@ -41,9 +41,9 @@ export interface CreditConfig {
   dueDayOfMonth: number;
   // Días de tolerancia después del vencimiento antes de empezar a cobrar mora.
   moraGraceDays: number;
-  // Meses de mora a partir de los cuales un cliente entra a la lista de
+  // Días de mora a partir de los cuales un cliente entra a la lista de
   // Morosos — null = deshabilitado.
-  delinquencyThresholdMonths: number | null;
+  delinquencyThresholdDays: number | null;
   plans: CreditPlan[];
   interestComponents: InterestComponent[];
 }
@@ -74,7 +74,7 @@ export const settingsApi = {
     maxIncomePercentage?: number | null,
     dueDayOfMonth?: number,
     moraGraceDays?: number,
-    delinquencyThresholdMonths?: number | null,
+    delinquencyThresholdDays?: number | null,
   ): Promise<CreditConfig> =>
     apiClient
       .put('/tenants/me/credit', {
@@ -82,7 +82,7 @@ export const settingsApi = {
         maxIncomePercentage,
         dueDayOfMonth,
         moraGraceDays,
-        delinquencyThresholdMonths,
+        delinquencyThresholdDays,
       })
       .then((r) => r.data),
 

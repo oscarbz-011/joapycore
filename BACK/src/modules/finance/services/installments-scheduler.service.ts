@@ -97,7 +97,7 @@ export class InstallmentsSchedulerService {
 
   // Detecta candidatos a Morosos: por cada tenant con umbral configurado,
   // busca préstamos activos cuya cuota impaga más antigua ya cruzó el
-  // umbral de meses de mora, y genera un DelinquencyReport en revisión si
+  // umbral de días de mora, y genera un DelinquencyReport en revisión si
   // todavía no existe uno para ese préstamo. Nunca pisa uno ya revisado
   // (REPORTED/EXCLUDED) — la detección automática solo alimenta la cola de
   // revisión, un analista decide qué hacer con cada caso.
@@ -110,7 +110,7 @@ export class InstallmentsSchedulerService {
     let created = 0;
 
     for (const config of configs) {
-      const threshold = config.delinquencyThresholdMonths!;
+      const threshold = config.delinquencyThresholdDays!;
       const loans = await this.loansRepository.findActiveWithOldestUnpaid(
         config.tenantId,
       );
@@ -118,18 +118,18 @@ export class InstallmentsSchedulerService {
       for (const loan of loans) {
         const oldest = loan.installments[0];
         if (!oldest) continue;
-        const periods = this.interestCalc.periodsElapsed(
+        const days = this.interestCalc.daysOverdue(
           oldest.dueDate,
           config.moraGraceDays,
           now,
         );
-        if (periods < threshold) continue;
+        if (days < threshold) continue;
 
         const isNew = await this.sources.createDelinquencyReportIfMissing({
           tenantId: config.tenantId,
           customerId: loan.customerId,
           loanId: loan.id,
-          monthsOverdue: periods,
+          daysOverdue: days,
         });
         if (isNew) created++;
       }

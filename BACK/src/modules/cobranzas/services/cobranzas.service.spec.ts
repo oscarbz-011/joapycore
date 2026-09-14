@@ -10,7 +10,7 @@ function makeReport(overrides = {}) {
     tenantId: 'tenant-1',
     customerId: 'customer-1',
     loanId: 'loan-1',
-    monthsOverdue: 3,
+    daysOverdue: 90,
     status: 'PENDING_REVIEW' as const,
     ...overrides,
   };

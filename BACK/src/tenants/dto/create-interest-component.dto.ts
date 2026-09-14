@@ -26,10 +26,11 @@ export class CreateInterestComponentDto {
   frequency: InterestComponentFrequency;
 
   @ApiProperty({
-    description: '% aplicado sobre el monto de la cuota',
+    description:
+      '% aplicado sobre el monto de la cuota. Admite hasta 4 decimales para tasas menores a 1% (ej. mora diaria de 0,001%).',
     example: 10,
   })
-  @IsNumber()
+  @IsNumber({ maxDecimalPlaces: 4 })
   @IsPositive()
   percentage: number;
 

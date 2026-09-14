@@ -24,7 +24,7 @@ export class CreditConfigRepository {
     maxIncomePercentage?: number | null,
     dueDayOfMonth?: number,
     moraGraceDays?: number,
-    delinquencyThresholdMonths?: number | null,
+    delinquencyThresholdDays?: number | null,
   ) {
     return this.prisma.creditConfig.upsert({
       where: { tenantId },
@@ -34,15 +34,15 @@ export class CreditConfigRepository {
         maxIncomePercentage,
         dueDayOfMonth,
         moraGraceDays,
-        delinquencyThresholdMonths,
+        delinquencyThresholdDays,
       },
       update: {
         isEnabled,
         ...(maxIncomePercentage !== undefined ? { maxIncomePercentage } : {}),
         ...(dueDayOfMonth !== undefined ? { dueDayOfMonth } : {}),
         ...(moraGraceDays !== undefined ? { moraGraceDays } : {}),
-        ...(delinquencyThresholdMonths !== undefined
-          ? { delinquencyThresholdMonths }
+        ...(delinquencyThresholdDays !== undefined
+          ? { delinquencyThresholdDays }
           : {}),
       },
       include: {

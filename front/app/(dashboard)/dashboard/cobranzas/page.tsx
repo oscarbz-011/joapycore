@@ -480,9 +480,9 @@ function AgreementsTab() {
 // ── Delinquency (Morosos) Tab ───────────────────────────────────────────────────
 
 // Confirmar/excluir un candidato a moroso — no hay integración real con
-// ningún buró (Informconf u otro): "Marcar reportado" solo deja constancia
-// en el sistema de que el analista lo reportó por fuera; el N° de
-// referencia/expediente, si lo hay, se carga acá a mano.
+// Informconf: "Marcar reportado" solo deja constancia en el sistema de que
+// el analista lo reportó por fuera; el N° de referencia/expediente, si lo
+// hay, se carga acá a mano.
 function ReviewDelinquencyModal({
   report,
   action,
@@ -520,7 +520,7 @@ function ReviewDelinquencyModal({
       <DialogContent showCloseButton={false} className="sm:max-w-md p-0">
         <div className="flex items-center justify-between border-b border-border px-6 py-4">
           <DialogTitle>
-            {action === 'REPORTED' ? 'Marcar como reportado al buró' : 'Excluir de Morosos'}
+            {action === 'REPORTED' ? 'Marcar como reportado a Informconf' : 'Excluir de Morosos'}
           </DialogTitle>
           <Button variant="ghost" size="icon" onClick={() => onOpenChange(false)}>
             <X size={18} />
@@ -529,7 +529,7 @@ function ReviewDelinquencyModal({
 
         <div className="px-6 py-5 space-y-4">
           <p className="text-sm text-muted-foreground">
-            {report.customer.firstName} {report.customer.lastName} · {report.monthsOverdue} meses de mora
+            {report.customer.firstName} {report.customer.lastName} · {report.daysOverdue} días de mora
           </p>
 
           {action === 'REPORTED' && (
@@ -540,7 +540,7 @@ function ReviewDelinquencyModal({
                 className={NUM_CLS}
                 value={reference}
                 onChange={(e) => setReference(e.target.value)}
-                placeholder="Ej: número de expediente del buró"
+                placeholder="Ej: número de expediente de Informconf"
               />
             </div>
           )}
@@ -627,7 +627,7 @@ function DelinquencyTab() {
             <table className="w-full text-sm">
               <thead className="border-b border-border bg-muted/30 text-xs font-bold uppercase tracking-wider text-muted-foreground">
                 <tr>
-                  {['Cliente', 'Meses de mora', 'Estado', 'Detectado', ''].map((h) => (
+                  {['Cliente', 'Días de mora', 'Estado', 'Detectado', ''].map((h) => (
                     <th key={h} className="px-4 py-3 text-left">{h}</th>
                   ))}
                 </tr>
@@ -643,7 +643,7 @@ function DelinquencyTab() {
                           <p className="text-xs text-muted-foreground/60">{report.customer.documentType ?? 'CI'}: {report.customer.documentNumber}</p>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-destructive font-semibold tabular-nums">{report.monthsOverdue}</td>
+                      <td className="px-4 py-3 text-destructive font-semibold tabular-nums">{report.daysOverdue}</td>
                       <td className="px-4 py-3">
                         <Badge variant={st.destructive ? 'destructive' : 'outline'} className={st.className}>
                           {st.label}

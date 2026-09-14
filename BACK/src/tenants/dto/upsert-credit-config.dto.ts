@@ -50,11 +50,11 @@ export class UpsertCreditConfigDto {
 
   @ApiPropertyOptional({
     description:
-      'Meses de mora (períodos de 30 días) a partir de los cuales un cliente entra a la lista de Morosos para gestionar su reporte a un buró de crédito. Vacío = deshabilitado.',
-    example: 3,
+      'Días de mora a partir de los cuales un cliente entra a la lista de Morosos para gestionar su reporte a Informconf. Vacío = deshabilitado.',
+    example: 90,
   })
   @IsOptional()
   @IsInt()
   @Min(1)
-  delinquencyThresholdMonths?: number | null;
+  delinquencyThresholdDays?: number | null;
 }
