@@ -1,0 +1,128 @@
+name: CI
+
+on:
+  push:
+    branches: [develop, main]
+  pull_request:
+    branches: [develop, main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend (lint, build, tests)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: BACK
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: joapycore
+          POSTGRES_PASSWORD: joapycore
+          POSTGRES_DB: joapycore
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U joapycore"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql://joapycore:joapycore@localhost:5432/joapycore
+      # Valores solo para CI (el backend exige ≥ 32 caracteres).
+      JWT_ACCESS_SECRET: ci-jwt-access-secret-0123456789abcdef
+      TEMP_PASSWORD_KEY: ci-temp-password-key-0123456789abcdef
+      NODE_OPTIONS: --max-old-space-size=4096
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: BACK/pnpm-lock.yaml
+
+      - name: Instalar dependencias
+        run: pnpm install --frozen-lockfile
+
+      - name: Prisma client
+        run: pnpm exec prisma generate
+
+      - name: Lint (ESLint + Prettier, sin autofix)
+        run: |
+          pnpm exec eslint "{src,test}/**/*.ts"
+          pnpm exec prettier --check "src/**/*.ts" "test/**/*.ts"
+
+      - name: Build
+        run: pnpm build
+
+      - name: Tests unitarios
+        run: pnpm test -- --runInBand
+
+      - name: Auditoría de dependencias (críticas y altas)
+        run: pnpm audit --prod --audit-level high
+
+      # La historia de migraciones no se puede reproducir desde una base vacía
+      # (la shadow database falla en una migración vieja), así que en CI el
+      # schema se crea directo desde schema.prisma.
+      - name: Crear schema y datos de prueba
+        run: |
+          pnpm exec prisma db push
+          pnpm exec prisma db seed
+          pnpm seed:demo
+
+      - name: Tests de integración (PostgreSQL)
+        run: pnpm test:int
+
+      - name: Tests e2e
+        run: pnpm test:e2e
+
+  frontend:
+    name: Frontend (lint, tests, build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: front
+
+    env:
+      NEXT_PUBLIC_API_URL: http://localhost:3000
+      NEXT_TELEMETRY_DISABLED: 1
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: front/pnpm-lock.yaml
+
+      - name: Instalar dependencias
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Tests
+        run: pnpm test
+
+      - name: Build
+        run: pnpm build
+
+      - name: Auditoría de dependencias (críticas y altas)
+        run: pnpm audit --prod --audit-level high
