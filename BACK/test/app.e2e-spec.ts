@@ -36,7 +36,7 @@ describe('JoapyCore API (e2e)', () => {
     app = moduleRef.createNestApplication<NestExpressApplication>();
     configureApp(app);
     await app.init();
-    http = app.getHttpServer() as App;
+    http = app.getHttpServer();
     prisma = app.get(PrismaService);
   });
 
