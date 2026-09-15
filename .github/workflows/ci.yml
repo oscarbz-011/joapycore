@@ -68,7 +68,7 @@ jobs:
         run: pnpm build
 
       - name: Tests unitarios
-        run: pnpm test -- --runInBand
+        run: pnpm test --runInBand
 
       - name: Auditoría de dependencias (críticas y altas)
         run: pnpm audit --prod --audit-level high
