@@ -339,6 +339,7 @@ export class DocumentsService {
 
     const buffer = await this.filesService.getFileBuffer(doc.fileRecord);
     await this.emailService.sendWithAttachment({
+      tenantId,
       to: recipient,
       subject: doc.title,
       html: `<p>Adjuntamos el documento <strong>${doc.title}</strong>.</p>`,

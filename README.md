@@ -46,6 +46,7 @@ No hay Redis ni BullMQ: los procesos asíncronos son eventos en memoria (`@nestj
 | **SIFEN** | Facturación electrónica (Paraguay) — configuración |
 | **Credit Bureau** | Consultas de buró para evaluación de crédito |
 | **Audit · Alerts · Reports · Files** | Transversales |
+| **Applications · Integrations** | Correo y herramientas permanentes de productividad; conexiones externas opcionales por tenant |
 
 ## Inicio rápido
 

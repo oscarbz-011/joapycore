@@ -39,6 +39,7 @@ import { OutboxModule } from './outbox/outbox.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { TenantsModule } from './tenants/tenants.module';
 import { UsersModule } from './users/users.module';
+import { ApplicationsModule } from './applications/applications.module';
 
 @Module({
   imports: [
@@ -80,6 +81,7 @@ import { UsersModule } from './users/users.module';
     FilesModule,
     EmailModule,
     NotificationsModule,
+    ApplicationsModule,
     SifenModule,
     CreditBureauModule,
   ],

@@ -41,6 +41,18 @@ describe('checkRouteAccess', () => {
     expect(checkRouteAccess('/dashboard/logistics/mine/1', ['logistics'], ['logistics:track']).allowed).toBe(true);
   });
 
+  it('treats Applications as permanent and gates email only by permission', () => {
+    expect(
+      checkRouteAccess('/dashboard/applications/email', [], [
+        'applications:email:read',
+      ]).allowed,
+    ).toBe(true);
+    expect(checkRouteAccess('/dashboard/applications/email', [], [])).toEqual({
+      allowed: false,
+      reason: 'permission',
+    });
+  });
+
   it('only references permissions that exist in the catalog', () => {
     const catalog = new Set(PERMISSION_GROUPS.flatMap((g) => g.permissions.map((p) => p.key)));
     const unknown = ROUTE_RULES.flatMap((r) => r.anyPermission ?? []).filter((p) => !catalog.has(p));

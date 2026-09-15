@@ -30,6 +30,11 @@ export const PERMISSIONS = [
   'users:update',
   'users:deactivate',
   'roles:manage',
+  // Aplicaciones permanentes e integraciones opcionales por tenant
+  'integrations:read',
+  'integrations:manage',
+  'applications:email:read',
+  'applications:email:send',
   // Inventory
   'inventory:products:read',
   'inventory:products:create',

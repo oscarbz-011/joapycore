@@ -74,6 +74,8 @@ async function bootstrap() {
       // Transversal
       .addTag('Audit', 'Registro de auditoría')
       .addTag('Files', 'Subida y gestión de archivos')
+      .addTag('Applications', 'Aplicaciones permanentes de productividad')
+      .addTag('Integrations', 'Conexiones opcionales configurables por tenant')
       .build();
     const document = SwaggerModule.createDocument(app, swaggerConfig);
     SwaggerModule.setup('docs', app, document);

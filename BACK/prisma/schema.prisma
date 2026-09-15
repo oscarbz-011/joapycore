@@ -490,6 +490,8 @@ model Tenant {
   paymentReceipts        PaymentReceipt[]
   interestComponents     InterestComponent[]
   delinquencyReports     DelinquencyReport[]
+  integrations           TenantIntegration[]
+  appEmailMessages       AppEmailMessage[]
 
   @@map("tenants")
 }
@@ -648,6 +650,7 @@ model User {
   recordedDeliveryTrackingEvents DeliveryTrackingEvent[]
   createdSupplierPayments        SupplierPayment[]
   reviewedDelinquencyReports     DelinquencyReport[]     @relation("DelinquencyReportReviewedBy")
+  sentAppEmailMessages           AppEmailMessage[]       @relation("AppEmailSender")
 
   @@index([tenantId])
   @@map("users")
@@ -2544,6 +2547,64 @@ enum OutboxStatus {
   PROCESSING
   DONE
   FAILED
+}
+
+// ─── Aplicaciones e integraciones ─────────────────────────────────────────────
+
+enum IntegrationStatus {
+  DISCONNECTED
+  CONNECTED
+  ERROR
+}
+
+// Una integración es una conexión opcional por tenant, no un módulo de negocio.
+// `key` queda como texto para poder sumar proveedores sin migrar un enum.
+model TenantIntegration {
+  id              String            @id @default(uuid())
+  tenantId        String            @map("tenant_id")
+  key             String
+  enabled         Boolean           @default(false)
+  status          IntegrationStatus @default(DISCONNECTED)
+  encryptedConfig String?           @map("encrypted_config") @db.Text
+  lastTestedAt    DateTime?         @map("last_tested_at")
+  lastTestOk      Boolean?          @map("last_test_ok")
+  lastError       String?           @map("last_error")
+  createdAt       DateTime          @default(now()) @map("created_at")
+  updatedAt       DateTime          @updatedAt @map("updated_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, key])
+  @@index([tenantId, enabled])
+  @@map("tenant_integrations")
+}
+
+enum AppEmailStatus {
+  SENDING
+  SENT
+  FAILED
+}
+
+// Historial de la aplicación nativa de correo. La primera versión cubre salida
+// SMTP; bandejas Gmail/Outlook se incorporarán como integraciones posteriores.
+model AppEmailMessage {
+  id        String         @id @default(uuid())
+  tenantId  String         @map("tenant_id")
+  sentById  String         @map("sent_by_id")
+  recipient String
+  subject   String
+  bodyText  String         @map("body_text") @db.Text
+  status    AppEmailStatus @default(SENDING)
+  error     String?        @db.Text
+  sentAt    DateTime?      @map("sent_at")
+  createdAt DateTime       @default(now()) @map("created_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  sentBy User   @relation("AppEmailSender", fields: [sentById], references: [id])
+
+  @@index([tenantId, createdAt])
+  @@index([sentById])
+  @@map("app_email_messages")
 }
 
 // Eventos críticos entre módulos (sale.order.completed, invoice.issued, …)
