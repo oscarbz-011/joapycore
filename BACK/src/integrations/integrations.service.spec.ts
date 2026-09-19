@@ -1,4 +1,7 @@
-import { ServiceUnavailableException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { EventEmitter } from 'node:events';
 import { connect as connectTls } from 'node:tls';
 import { plainToInstance } from 'class-transformer';
@@ -178,6 +181,47 @@ describe('IntegrationsService', () => {
       user: 'new-mailbox@example.com',
       password: 'stored-imap-password',
     });
+  });
+
+  it('rejects first-time IMAP enablement without a password', async () => {
+    const { repository, service } = createService();
+    repository.findByKey.mockResolvedValue(null);
+
+    await expect(
+      service.updateIncomingEmailIntegration('tenant-1', {
+        enabled: true,
+        host: 'imap.example.com',
+        port: 993,
+        secure: true,
+        user: 'mailbox@example.com',
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(repository.upsert).not.toHaveBeenCalled();
+  });
+
+  it('does not report or return an incomplete enabled IMAP configuration', async () => {
+    const { repository, service } = createService();
+    repository.findByKey.mockImplementation(async (_tenant, key) =>
+      key === 'imap'
+        ? {
+            enabled: true,
+            encryptedConfig: encryptIntegrationConfig(
+              {
+                host: 'imap.example.com',
+                port: 993,
+                secure: true,
+                user: 'mailbox@example.com',
+              },
+              secret,
+            ),
+          }
+        : null,
+    );
+
+    await expect(service.getEmailIntegration('tenant-1')).resolves.toMatchObject(
+      { incoming: { enabled: true, configured: false, hasPassword: false } },
+    );
+    await expect(service.getEnabledImapConfig('tenant-1')).resolves.toBeNull();
   });
 
   it('tests the saved IMAP credentials and records the result', async () => {

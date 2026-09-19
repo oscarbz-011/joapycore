@@ -3,7 +3,7 @@
 // Implementación anterior conservada durante la migración; no tiene ruta pública.
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertCircle,
@@ -25,8 +25,13 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import { applicationsApi, type AppEmailMessage } from "@/lib/api/applications";
+import {
+  applicationsApi,
+  type AppEmailMessage,
+  type AppIncomingEmailMessage,
+} from "@/lib/api/applications";
 import { apiErrorMessage } from "@/lib/api/api-error";
+import { synchronizeInboxPreservingCache } from "@/lib/application-email-inbox";
 import { useAuth } from "@/lib/auth-context";
 import { usePermission } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
@@ -59,6 +64,7 @@ interface MailboxMessage {
 }
 
 const EMPTY_COMPOSE: ComposeValues = { to: "", subject: "", body: "" };
+const INBOX_QUERY_KEY = ["application-email-inbox"] as const;
 
 function initials(value: string) {
   const parts = value.trim().split(/\s+/).filter(Boolean);
@@ -403,14 +409,32 @@ export default function ApplicationEmailPage() {
     isFetching: inboxFetching,
     error: inboxError,
   } = useQuery({
-    queryKey: ["application-email-inbox"],
-    queryFn: async () => {
-      await applicationsApi.syncEmailInbox();
-      return applicationsApi.listEmailInbox();
-    },
+    queryKey: INBOX_QUERY_KEY,
+    queryFn: applicationsApi.listEmailInbox,
     enabled: incomingReady,
     retry: false,
   });
+  const {
+    data: inboxSyncResult,
+    isPending: inboxSyncing,
+    mutate: synchronizeInbox,
+  } = useMutation({
+    mutationFn: () =>
+      synchronizeInboxPreservingCache({
+        sync: applicationsApi.syncEmailInbox,
+        load: applicationsApi.listEmailInbox,
+        replaceCached: (nextMessages: AppIncomingEmailMessage[]) => {
+          queryClient.setQueryData(INBOX_QUERY_KEY, nextMessages);
+        },
+      }),
+  });
+  const inboxSyncError =
+    inboxSyncResult?.ok === false ? inboxSyncResult.error : null;
+
+  useEffect(() => {
+    if (incomingReady) synchronizeInbox();
+  }, [incomingReady, synchronizeInbox]);
+
   const mailboxAddress =
     emailStatus?.mailboxAddress ?? user?.email ?? jwtPayload?.email ?? "";
 
@@ -505,7 +529,8 @@ export default function ApplicationEmailPage() {
       : folder === "inbox"
         ? inboxLoading
         : false);
-  const folderFetching = folder === "inbox" ? inboxFetching : isFetching;
+  const folderFetching =
+    folder === "inbox" ? inboxFetching || inboxSyncing : isFetching;
 
   return (
     <div className="flex h-[calc(100vh-7.4rem)] min-h-[620px] flex-col">
@@ -647,9 +672,7 @@ export default function ApplicationEmailPage() {
                     queryKey: ["application-email-status"],
                   });
                   if (folder === "inbox") {
-                    void queryClient.invalidateQueries({
-                      queryKey: ["application-email-inbox"],
-                    });
+                    synchronizeInbox();
                   }
                 }}
                 disabled={folderFetching}
@@ -674,6 +697,12 @@ export default function ApplicationEmailPage() {
                 className="h-9 bg-muted/40 pl-9 text-xs"
               />
             </div>
+            {inboxSyncError !== null && folder === "inbox" && (
+              <p className="mt-2 text-[11px] text-amber-600">
+                No se pudo actualizar el servidor IMAP. Se muestran los
+                mensajes guardados.
+              </p>
+            )}
           </div>
 
           <div className="min-h-0 flex-1 overflow-y-auto">
@@ -695,9 +724,7 @@ export default function ApplicationEmailPage() {
             ) : inboxError && folder === "inbox" ? (
               <div className="flex h-full min-h-72 flex-col items-center justify-center px-6 text-center">
                 <AlertCircle size={25} className="mb-3 text-destructive" />
-                <p className="text-sm font-medium">
-                  No se pudo sincronizar el buzón
-                </p>
+                <p className="text-sm font-medium">No se pudo cargar el buzón</p>
                 <p className="mt-2 max-w-xs text-xs leading-5 text-muted-foreground">
                   {apiErrorMessage(
                     inboxError,

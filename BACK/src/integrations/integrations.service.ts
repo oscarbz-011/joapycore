@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   BadGatewayException,
   Injectable,
   ServiceUnavailableException,
@@ -33,6 +34,25 @@ export interface ImapIntegrationConfig {
   secure: boolean;
   user: string;
   password?: string;
+}
+
+type CompleteImapIntegrationConfig = ImapIntegrationConfig & {
+  password: string;
+};
+
+function isCompleteImapConfig(
+  config: ImapIntegrationConfig | undefined,
+): config is CompleteImapIntegrationConfig {
+  return Boolean(
+    config &&
+      config.host.trim() &&
+      Number.isInteger(config.port) &&
+      config.port >= 1 &&
+      config.port <= 65_535 &&
+      typeof config.secure === 'boolean' &&
+      config.user.trim() &&
+      config.password,
+  );
 }
 
 @Injectable()
@@ -81,7 +101,7 @@ export class IntegrationsService {
       lastTestOk: row?.lastTestOk ?? null,
       incoming: {
         enabled: incomingRow?.enabled ?? false,
-        configured: Boolean(incomingConfig),
+        configured: isCompleteImapConfig(incomingConfig),
         status: incomingRow?.status ?? ('DISCONNECTED' as const),
         host: incomingConfig?.host ?? '',
         port: incomingConfig?.port ?? 993,
@@ -136,12 +156,18 @@ export class IntegrationsService {
     const previous = existing?.encryptedConfig
       ? this.decrypt<ImapIntegrationConfig>(existing.encryptedConfig)
       : undefined;
+    const password = dto.password || previous?.password;
+    if (dto.enabled && !password) {
+      throw new BadRequestException(
+        'La contraseña IMAP es obligatoria para activar el correo entrante',
+      );
+    }
     const config: ImapIntegrationConfig = {
       host: dto.host.trim(),
       port: dto.port,
       secure: dto.secure,
       user: dto.user.trim(),
-      password: dto.password || previous?.password,
+      password,
     };
     await this.repository.upsert(tenantId, IMAP_INTEGRATION_KEY, {
       enabled: dto.enabled,
@@ -237,7 +263,8 @@ export class IntegrationsService {
   ): Promise<ImapIntegrationConfig | null> {
     const row = await this.repository.findByKey(tenantId, IMAP_INTEGRATION_KEY);
     if (!row?.enabled || !row.encryptedConfig) return null;
-    return this.decrypt<ImapIntegrationConfig>(row.encryptedConfig);
+    const config = this.decrypt<ImapIntegrationConfig>(row.encryptedConfig);
+    return isCompleteImapConfig(config) ? config : null;
   }
 
   private decrypt<T>(value: string): T {
