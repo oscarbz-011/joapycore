@@ -37,6 +37,7 @@ import {
 import {
   integrationsApi,
   type UpdateEmailIntegrationPayload,
+  type UpdateIncomingEmailIntegrationPayload,
 } from "../../../../lib/api/integrations";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -901,8 +902,19 @@ function EmailIntegrationCard() {
     fromEmail: "",
     fromName: "",
   });
+  const [incomingForm, setIncomingForm] =
+    useState<UpdateIncomingEmailIntegrationPayload>({
+      enabled: false,
+      host: "",
+      port: 993,
+      secure: true,
+      user: "",
+      password: "",
+    });
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [incomingMessage, setIncomingMessage] = useState("");
+  const [incomingError, setIncomingError] = useState("");
 
   if (config && !ready) {
     setForm({
@@ -915,6 +927,14 @@ function EmailIntegrationCard() {
       fromEmail: config.fromEmail,
       fromName: config.fromName,
     });
+    setIncomingForm({
+      enabled: config.incoming?.enabled ?? false,
+      host: config.incoming?.host ?? "",
+      port: config.incoming?.port ?? 993,
+      secure: config.incoming?.secure ?? true,
+      user: config.incoming?.user ?? "",
+      password: "",
+    });
     setReady(true);
   }
 
@@ -925,14 +945,33 @@ function EmailIntegrationCard() {
     setForm((current) => ({ ...current, [key]: value }));
   }
 
+  function currentPayload(): UpdateEmailIntegrationPayload {
+    return {
+      ...form,
+      user: form.user?.trim() || undefined,
+      password: form.password || undefined,
+      fromName: form.fromName?.trim() || undefined,
+    };
+  }
+
+  function setIncoming<K extends keyof UpdateIncomingEmailIntegrationPayload>(
+    key: K,
+    value: UpdateIncomingEmailIntegrationPayload[K],
+  ) {
+    setIncomingForm((current) => ({ ...current, [key]: value }));
+  }
+
+  function currentIncomingPayload(): UpdateIncomingEmailIntegrationPayload {
+    return {
+      ...incomingForm,
+      host: incomingForm.host.trim(),
+      user: incomingForm.user.trim(),
+      password: incomingForm.password || undefined,
+    };
+  }
+
   const saveMutation = useMutation({
-    mutationFn: () =>
-      integrationsApi.updateEmail({
-        ...form,
-        user: form.user?.trim() || undefined,
-        password: form.password || undefined,
-        fromName: form.fromName?.trim() || undefined,
-      }),
+    mutationFn: () => integrationsApi.updateEmail(currentPayload()),
     onSuccess: () => {
       setMessage("Configuración guardada");
       setError("");
@@ -944,15 +983,56 @@ function EmailIntegrationCard() {
   });
 
   const testMutation = useMutation({
-    mutationFn: integrationsApi.testEmail,
+    mutationFn: async () => {
+      // La prueba debe usar lo que el usuario ve en el formulario, incluso en
+      // la primera configuración o cuando todavía hay cambios sin guardar.
+      await integrationsApi.updateEmail(currentPayload());
+      return integrationsApi.testEmail();
+    },
     onSuccess: () => {
       setMessage("Conexión SMTP verificada correctamente");
       setError("");
+      setForm((current) => ({ ...current, password: "" }));
       void queryClient.invalidateQueries({ queryKey: ["email-integration"] });
     },
     onError: (err: Error) => {
       setMessage("");
       setError(apiErrorMessage(err, "No se pudo verificar la conexión"));
+      void queryClient.invalidateQueries({ queryKey: ["email-integration"] });
+    },
+  });
+
+  const incomingSaveMutation = useMutation({
+    mutationFn: () =>
+      integrationsApi.updateIncomingEmail(currentIncomingPayload()),
+    onSuccess: () => {
+      setIncomingMessage("Configuración de entrada guardada");
+      setIncomingError("");
+      setIncomingForm((current) => ({ ...current, password: "" }));
+      void queryClient.invalidateQueries({ queryKey: ["email-integration"] });
+    },
+    onError: (err: Error) =>
+      setIncomingError(
+        apiErrorMessage(err, "No se pudo guardar el correo entrante"),
+      ),
+  });
+
+  const incomingTestMutation = useMutation({
+    mutationFn: async () => {
+      await integrationsApi.updateIncomingEmail(currentIncomingPayload());
+      return integrationsApi.testIncomingEmail();
+    },
+    onSuccess: () => {
+      setIncomingMessage("Conexión IMAP verificada correctamente");
+      setIncomingError("");
+      setIncomingForm((current) => ({ ...current, password: "" }));
+      void queryClient.invalidateQueries({ queryKey: ["email-integration"] });
+    },
+    onError: (err: Error) => {
+      setIncomingMessage("");
+      setIncomingError(
+        apiErrorMessage(err, "No se pudo verificar la conexión IMAP"),
+      );
       void queryClient.invalidateQueries({ queryKey: ["email-integration"] });
     },
   });
@@ -1070,7 +1150,10 @@ function EmailIntegrationCard() {
                   saveMutation.mutate();
                 }}
                 disabled={
-                  saveMutation.isPending || !form.host || !form.fromEmail
+                  saveMutation.isPending ||
+                  testMutation.isPending ||
+                  !form.host ||
+                  !form.fromEmail
                 }
               >
                 {saveMutation.isPending ? "Guardando..." : "Guardar"}
@@ -1081,10 +1164,17 @@ function EmailIntegrationCard() {
                 size="sm"
                 variant="outline"
                 onClick={() => testMutation.mutate()}
-                disabled={testMutation.isPending || !config?.configured}
+                disabled={
+                  testMutation.isPending ||
+                  saveMutation.isPending ||
+                  !form.host ||
+                  !form.fromEmail
+                }
               >
                 <PlugZap size={14} />
-                {testMutation.isPending ? "Probando..." : "Probar conexión"}
+                {testMutation.isPending
+                  ? "Guardando y probando..."
+                  : "Probar conexión"}
               </Button>
             )}
             {config?.status === "CONNECTED" && (
@@ -1106,6 +1196,150 @@ function EmailIntegrationCard() {
             <p className="mt-2 text-xs text-muted-foreground">
               Última prueba:{" "}
               {new Date(config.lastTestedAt).toLocaleString("es-PY")}
+            </p>
+          )}
+
+          <div className="my-6 border-t border-border" />
+
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold text-foreground">
+                Correo entrante (IMAP)
+              </p>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                Define el servidor del tenant y un buzón para validar la
+                recepción. Las cuentas personales se asignan por usuario.
+              </p>
+            </div>
+            <Toggle
+              checked={incomingForm.enabled}
+              onChange={(value) => setIncoming("enabled", value)}
+              disabled={!canManage}
+            />
+          </div>
+
+          <fieldset
+            disabled={!canManage}
+            className="mt-5 grid grid-cols-2 gap-4 disabled:opacity-60"
+          >
+            <div className="col-span-2 space-y-1.5">
+              <Label>Servidor IMAP</Label>
+              <Input
+                value={incomingForm.host}
+                onChange={(event) => setIncoming("host", event.target.value)}
+                placeholder="imap.example.com"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Puerto</Label>
+              <Input
+                type="number"
+                min={1}
+                max={65535}
+                value={incomingForm.port}
+                onChange={(event) =>
+                  setIncoming("port", Number(event.target.value))
+                }
+              />
+            </div>
+            <label className="flex items-end gap-2 pb-2 text-sm text-muted-foreground">
+              <input
+                type="checkbox"
+                checked={incomingForm.secure}
+                onChange={(event) =>
+                  setIncoming("secure", event.target.checked)
+                }
+                className="h-4 w-4 accent-primary"
+              />
+              TLS directo (puerto 993)
+            </label>
+            <div className="space-y-1.5">
+              <Label>Buzón de validación</Label>
+              <Input
+                value={incomingForm.user}
+                onChange={(event) => setIncoming("user", event.target.value)}
+                autoComplete="username"
+                placeholder="usuario@empresa.com"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Contraseña</Label>
+              <Input
+                type="password"
+                value={incomingForm.password ?? ""}
+                onChange={(event) =>
+                  setIncoming("password", event.target.value)
+                }
+                autoComplete="new-password"
+                placeholder={
+                  config?.incoming?.hasPassword
+                    ? "Guardada · dejar vacío para conservar"
+                    : "Contraseña o clave de aplicación"
+                }
+              />
+            </div>
+          </fieldset>
+
+          <div className="mt-4 flex flex-wrap items-center gap-2">
+            {canManage && (
+              <Button
+                size="sm"
+                onClick={() => {
+                  setIncomingMessage("");
+                  setIncomingError("");
+                  incomingSaveMutation.mutate();
+                }}
+                disabled={
+                  incomingSaveMutation.isPending ||
+                  incomingTestMutation.isPending ||
+                  !incomingForm.host ||
+                  !incomingForm.user
+                }
+              >
+                {incomingSaveMutation.isPending
+                  ? "Guardando..."
+                  : "Guardar entrada"}
+              </Button>
+            )}
+            {canManage && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => incomingTestMutation.mutate()}
+                disabled={
+                  incomingTestMutation.isPending ||
+                  incomingSaveMutation.isPending ||
+                  !incomingForm.host ||
+                  !incomingForm.user
+                }
+              >
+                <PlugZap size={14} />
+                {incomingTestMutation.isPending
+                  ? "Guardando y probando..."
+                  : "Probar recepción"}
+              </Button>
+            )}
+            {config?.incoming?.status === "CONNECTED" && (
+              <span className="text-xs font-medium text-emerald-600">
+                Conectada
+              </span>
+            )}
+            {config?.incoming?.status === "ERROR" && (
+              <span className="text-xs font-medium text-destructive">
+                Con error
+              </span>
+            )}
+          </div>
+          {incomingMessage && (
+            <p className="mt-3 text-xs text-emerald-600">{incomingMessage}</p>
+          )}
+          {incomingError && (
+            <p className="mt-3 text-xs text-destructive">{incomingError}</p>
+          )}
+          {config?.incoming?.lastTestedAt && (
+            <p className="mt-2 text-xs text-muted-foreground">
+              Última prueba IMAP:{" "}
+              {new Date(config.incoming.lastTestedAt).toLocaleString("es-PY")}
             </p>
           )}
         </div>

@@ -145,4 +145,19 @@ export class EmailService {
       await this.integrationsService.getEnabledSmtpConfig(tenantId),
     );
   }
+
+  async getTenantEmailStatus(tenantId: string, mailboxAddress: string) {
+    const integration =
+      await this.integrationsService.getEmailIntegration(tenantId);
+    const outgoingEnabled = integration.enabled && integration.configured;
+    const incomingEnabled =
+      integration.incoming.enabled && integration.incoming.configured;
+    return {
+      enabled: outgoingEnabled,
+      outgoingEnabled,
+      incomingEnabled,
+      mailboxAddress,
+      automaticSender: integration.fromEmail || null,
+    };
+  }
 }

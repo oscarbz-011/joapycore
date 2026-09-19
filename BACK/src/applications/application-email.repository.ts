@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import type { IncomingImapMessage } from '../integrations/imap-connection.service';
 
 @Injectable()
 export class ApplicationEmailRepository {
@@ -21,6 +22,56 @@ export class ApplicationEmailRepository {
       orderBy: { createdAt: 'desc' },
       take: 100,
     });
+  }
+
+  listInbox(tenantId: string, mailbox: string) {
+    return this.prisma.appEmailInboxMessage.findMany({
+      where: { tenantId, mailbox },
+      select: {
+        id: true,
+        mailbox: true,
+        messageId: true,
+        senderName: true,
+        senderEmail: true,
+        recipients: true,
+        subject: true,
+        bodyText: true,
+        receivedAt: true,
+        isRead: true,
+        starred: true,
+      },
+      orderBy: { receivedAt: 'desc' },
+      take: 100,
+    });
+  }
+
+  async upsertInboxMessages(
+    tenantId: string,
+    mailbox: string,
+    messages: IncomingImapMessage[],
+  ) {
+    if (!messages.length) return;
+    await this.prisma.$transaction(
+      messages.map((message) =>
+        this.prisma.appEmailInboxMessage.upsert({
+          where: {
+            tenantId_mailbox_uid: { tenantId, mailbox, uid: message.uid },
+          },
+          create: { tenantId, mailbox, ...message },
+          update: {
+            messageId: message.messageId,
+            senderName: message.senderName,
+            senderEmail: message.senderEmail,
+            recipients: message.recipients,
+            subject: message.subject,
+            bodyText: message.bodyText,
+            receivedAt: message.receivedAt,
+            isRead: message.isRead,
+            starred: message.starred,
+          },
+        }),
+      ),
+    );
   }
 
   findById(tenantId: string, id: string) {

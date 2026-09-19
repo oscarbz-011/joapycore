@@ -13,8 +13,34 @@ export interface AppEmailMessage {
   sentBy: { id: string; firstName: string; lastName: string };
 }
 
+export interface AppIncomingEmailMessage {
+  id: string;
+  mailbox: string;
+  messageId: string | null;
+  senderName: string | null;
+  senderEmail: string;
+  recipients: string;
+  subject: string;
+  bodyText: string;
+  receivedAt: string;
+  isRead: boolean;
+  starred: boolean;
+}
+
+export interface ApplicationEmailStatus {
+  /** Compatibilidad con la primera versión, que solo conocía SMTP. */
+  enabled: boolean;
+  /** Capacidades separadas para el cliente de correo completo. */
+  outgoingEnabled?: boolean;
+  incomingEnabled?: boolean;
+  /** Buzón asignado al usuario autenticado por el administrador del tenant. */
+  mailboxAddress?: string | null;
+  /** Identidad reservada para notificaciones automáticas del sistema. */
+  automaticSender?: string | null;
+}
+
 export const applicationsApi = {
-  getEmailStatus: (): Promise<{ enabled: boolean }> =>
+  getEmailStatus: (): Promise<ApplicationEmailStatus> =>
     apiClient
       .get("/applications/email/status")
       .then((response) => response.data),
@@ -22,6 +48,18 @@ export const applicationsApi = {
   listEmailMessages: (): Promise<AppEmailMessage[]> =>
     apiClient
       .get("/applications/email/messages")
+      .then((response) => response.data),
+
+  listEmailInbox: (): Promise<AppIncomingEmailMessage[]> =>
+    apiClient
+      .get("/applications/email/inbox")
+      .then((response) => response.data),
+
+  syncEmailInbox: (): Promise<{ synced: number; mailbox: string }> =>
+    apiClient
+      .post("/applications/email/sync", undefined, {
+        timeout: LONG_REQUEST_TIMEOUT_MS,
+      })
       .then((response) => response.data),
 
   sendEmail: (dto: {

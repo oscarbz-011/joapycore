@@ -2,6 +2,7 @@ import { Body, Controller, Get, Post, Put } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CurrentTenant } from '../common/decorators/current-tenant.decorator';
 import { Permissions } from '../common/decorators/permissions.decorator';
+import { UpdateIncomingEmailIntegrationDto } from './dto/update-incoming-email-integration.dto';
 import { UpdateEmailIntegrationDto } from './dto/update-email-integration.dto';
 import { IntegrationsService } from './integrations.service';
 
@@ -30,10 +31,27 @@ export class IntegrationsController {
     return this.service.updateEmailIntegration(tenantId, dto);
   }
 
+  @Put('email/incoming')
+  @Permissions('integrations:manage')
+  @ApiOperation({ summary: 'Guardar y activar/desactivar la integración IMAP' })
+  updateIncomingEmail(
+    @CurrentTenant() tenantId: string,
+    @Body() dto: UpdateIncomingEmailIntegrationDto,
+  ) {
+    return this.service.updateIncomingEmailIntegration(tenantId, dto);
+  }
+
   @Post('email/test')
   @Permissions('integrations:manage')
   @ApiOperation({ summary: 'Probar la conexión SMTP guardada' })
   testEmail(@CurrentTenant() tenantId: string) {
     return this.service.testEmailIntegration(tenantId);
+  }
+
+  @Post('email/incoming/test')
+  @Permissions('integrations:manage')
+  @ApiOperation({ summary: 'Probar la conexión IMAP guardada' })
+  testIncomingEmail(@CurrentTenant() tenantId: string) {
+    return this.service.testIncomingEmailIntegration(tenantId);
   }
 }

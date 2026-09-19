@@ -492,6 +492,7 @@ model Tenant {
   delinquencyReports     DelinquencyReport[]
   integrations           TenantIntegration[]
   appEmailMessages       AppEmailMessage[]
+  appEmailInboxMessages  AppEmailInboxMessage[]
 
   @@map("tenants")
 }
@@ -2605,6 +2606,32 @@ model AppEmailMessage {
   @@index([tenantId, createdAt])
   @@index([sentById])
   @@map("app_email_messages")
+}
+
+// Copia local de los mensajes recibidos por IMAP. El UID es único solamente
+// dentro de cada buzón, por eso forma parte de la clave compuesta.
+model AppEmailInboxMessage {
+  id          String   @id @default(uuid())
+  tenantId    String   @map("tenant_id")
+  mailbox     String
+  uid         String
+  messageId   String?  @map("message_id")
+  senderName  String?  @map("sender_name")
+  senderEmail String   @map("sender_email")
+  recipients  String
+  subject     String
+  bodyText    String   @map("body_text") @db.Text
+  receivedAt  DateTime @map("received_at")
+  isRead      Boolean  @default(false) @map("is_read")
+  starred     Boolean  @default(false)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, mailbox, uid])
+  @@index([tenantId, receivedAt])
+  @@map("app_email_inbox_messages")
 }
 
 // Eventos críticos entre módulos (sale.order.completed, invoice.issued, …)

@@ -15,6 +15,20 @@ export interface EmailIntegration {
   hasPassword: boolean;
   lastTestedAt: string | null;
   lastTestOk: boolean | null;
+  incoming: IncomingEmailIntegration;
+}
+
+export interface IncomingEmailIntegration {
+  enabled: boolean;
+  configured: boolean;
+  status: IntegrationStatus;
+  host: string;
+  port: number;
+  secure: boolean;
+  user: string;
+  hasPassword: boolean;
+  lastTestedAt: string | null;
+  lastTestOk: boolean | null;
 }
 
 export interface UpdateEmailIntegrationPayload {
@@ -26,6 +40,15 @@ export interface UpdateEmailIntegrationPayload {
   password?: string;
   fromEmail: string;
   fromName?: string;
+}
+
+export interface UpdateIncomingEmailIntegrationPayload {
+  enabled: boolean;
+  host: string;
+  port: number;
+  secure: boolean;
+  user: string;
+  password?: string;
 }
 
 export const integrationsApi = {
@@ -40,5 +63,17 @@ export const integrationsApi = {
   testEmail: (): Promise<{ ok: true }> =>
     apiClient
       .post("/integrations/email/test")
+      .then((response) => response.data),
+
+  updateIncomingEmail: (
+    dto: UpdateIncomingEmailIntegrationPayload,
+  ): Promise<EmailIntegration> =>
+    apiClient
+      .put("/integrations/email/incoming", dto)
+      .then((response) => response.data),
+
+  testIncomingEmail: (): Promise<{ ok: true }> =>
+    apiClient
+      .post("/integrations/email/incoming/test")
       .then((response) => response.data),
 };

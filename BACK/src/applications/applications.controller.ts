@@ -18,8 +18,8 @@ export class ApplicationsController {
   @ApiOperation({
     summary: 'Consultar si el correo del tenant está disponible',
   })
-  status(@CurrentTenant() tenantId: string) {
-    return this.emailService.status(tenantId);
+  status(@CurrentTenant() tenantId: string, @CurrentUser() user: JwtPayload) {
+    return this.emailService.status(tenantId, user.email);
   }
 
   @Get('messages')
@@ -29,6 +29,20 @@ export class ApplicationsController {
   })
   list(@CurrentTenant() tenantId: string) {
     return this.emailService.list(tenantId);
+  }
+
+  @Get('inbox')
+  @Permissions('applications:email:read')
+  @ApiOperation({ summary: 'Listar los correos recibidos sincronizados' })
+  listInbox(@CurrentTenant() tenantId: string) {
+    return this.emailService.listInbox(tenantId);
+  }
+
+  @Post('sync')
+  @Permissions('applications:email:read')
+  @ApiOperation({ summary: 'Sincronizar la bandeja de entrada mediante IMAP' })
+  syncInbox(@CurrentTenant() tenantId: string) {
+    return this.emailService.syncInbox(tenantId);
   }
 
   @Post('messages')

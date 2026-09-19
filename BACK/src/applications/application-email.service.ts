@@ -1,7 +1,13 @@
-import { BadGatewayException, Injectable } from '@nestjs/common';
+import {
+  BadGatewayException,
+  Injectable,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import type { AuditLogEvent } from '../audit/audit-log.event';
 import { EmailService } from '../email/email.service';
+import { ImapConnectionService } from '../integrations/imap-connection.service';
+import { IntegrationsService } from '../integrations/integrations.service';
 import { ApplicationEmailRepository } from './application-email.repository';
 import type { SendApplicationEmailDto } from './dto/send-email.dto';
 
@@ -11,14 +17,46 @@ export class ApplicationEmailService {
     private readonly repository: ApplicationEmailRepository,
     private readonly emailService: EmailService,
     private readonly eventEmitter: EventEmitter2,
+    private readonly integrationsService: IntegrationsService,
+    private readonly imapConnection: ImapConnectionService,
   ) {}
 
   list(tenantId: string) {
     return this.repository.list(tenantId);
   }
 
-  async status(tenantId: string) {
-    return { enabled: await this.emailService.isTenantEmailEnabled(tenantId) };
+  async listInbox(tenantId: string) {
+    const config =
+      await this.integrationsService.getEnabledImapConfig(tenantId);
+    if (!config) return [];
+    return this.repository.listInbox(tenantId, config.user.toLowerCase());
+  }
+
+  async syncInbox(tenantId: string) {
+    const config =
+      await this.integrationsService.getEnabledImapConfig(tenantId);
+    if (!config) {
+      throw new ServiceUnavailableException(
+        'El correo entrante no está configurado o está desactivado',
+      );
+    }
+    try {
+      const messages = await this.imapConnection.fetchInbox(config, 100);
+      await this.repository.upsertInboxMessages(
+        tenantId,
+        config.user.toLowerCase(),
+        messages,
+      );
+      return { synced: messages.length, mailbox: config.user };
+    } catch {
+      throw new BadGatewayException(
+        'No se pudo sincronizar el buzón IMAP. Revisá la configuración y volvé a intentar.',
+      );
+    }
+  }
+
+  status(tenantId: string, mailboxAddress: string) {
+    return this.emailService.getTenantEmailStatus(tenantId, mailboxAddress);
   }
 
   async send(tenantId: string, userId: string, dto: SendApplicationEmailDto) {
