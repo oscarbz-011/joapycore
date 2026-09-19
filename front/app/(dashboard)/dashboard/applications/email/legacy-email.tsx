@@ -421,6 +421,11 @@ export default function ApplicationEmailPage() {
   } = useMutation({
     mutationFn: () =>
       synchronizeInboxPreservingCache({
+        cancelPendingLoad: () =>
+          queryClient.cancelQueries({
+            queryKey: INBOX_QUERY_KEY,
+            exact: true,
+          }),
         sync: applicationsApi.syncEmailInbox,
         load: applicationsApi.listEmailInbox,
         replaceCached: (nextMessages: AppIncomingEmailMessage[]) => {
