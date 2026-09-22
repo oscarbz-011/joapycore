@@ -1,4 +1,4 @@
-import { apiClient } from './client';
+import { apiClient } from "./client";
 
 export interface UserResponse {
   id: string;
@@ -7,7 +7,7 @@ export interface UserResponse {
   firstName: string;
   lastName: string;
   phone: string | null;
-  status: 'ACTIVE' | 'INACTIVE';
+  status: "ACTIVE" | "INACTIVE";
   mustChangePassword: boolean;
   tempPassword: string | null;
   tempPasswordExpiresAt: string | null;
@@ -36,6 +36,11 @@ export interface ChangePasswordPayload {
   newPassword: string;
 }
 
+export interface ChangeEmailPayload {
+  email: string;
+  currentPassword: string;
+}
+
 export interface Role {
   id: string;
   name: string;
@@ -43,26 +48,28 @@ export interface Role {
 }
 
 export const usersApi = {
-  listRoles: (): Promise<Role[]> =>
-    apiClient.get('/roles').then((r) => r.data),
+  listRoles: (): Promise<Role[]> => apiClient.get("/roles").then((r) => r.data),
 
   getMe: (): Promise<UserResponse> =>
-    apiClient.get('/users/me').then((r) => r.data),
+    apiClient.get("/users/me").then((r) => r.data),
 
   updateMe: (dto: UpdateProfilePayload): Promise<UserResponse> =>
-    apiClient.patch('/users/me', dto).then((r) => r.data),
+    apiClient.patch("/users/me", dto).then((r) => r.data),
 
   changePassword: (dto: ChangePasswordPayload): Promise<void> =>
-    apiClient.post('/users/me/change-password', dto).then((r) => r.data),
+    apiClient.post("/users/me/change-password", dto).then((r) => r.data),
+
+  changeEmail: (dto: ChangeEmailPayload): Promise<UserResponse> =>
+    apiClient.post("/users/me/change-email", dto).then((r) => r.data),
 
   list: (): Promise<UserResponse[]> =>
-    apiClient.get('/users').then((r) => r.data),
+    apiClient.get("/users").then((r) => r.data),
 
   getById: (id: string): Promise<UserResponse> =>
     apiClient.get(`/users/${id}`).then((r) => r.data),
 
   create: (dto: CreateUserPayload): Promise<UserResponse> =>
-    apiClient.post('/users', dto).then((r) => r.data),
+    apiClient.post("/users", dto).then((r) => r.data),
 
   deactivate: (id: string): Promise<UserResponse> =>
     apiClient.patch(`/users/${id}/deactivate`).then((r) => r.data),
@@ -76,6 +83,11 @@ export const usersApi = {
   assignRoles: (id: string, roleIds: string[]): Promise<UserResponse> =>
     apiClient.patch(`/users/${id}/roles`, { roleIds }).then((r) => r.data),
 
-  setExtraPermissions: (id: string, permissions: string[]): Promise<UserResponse> =>
-    apiClient.put(`/users/${id}/permissions`, { permissions }).then((r) => r.data),
+  setExtraPermissions: (
+    id: string,
+    permissions: string[],
+  ): Promise<UserResponse> =>
+    apiClient
+      .put(`/users/${id}/permissions`, { permissions })
+      .then((r) => r.data),
 };

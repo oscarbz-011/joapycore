@@ -272,6 +272,7 @@ const NOTIF_TYPES = [
 
 function ProfileTab() {
   const queryClient = useQueryClient();
+  const { refreshSession } = useAuth();
   const { data: me, isLoading } = useQuery({
     queryKey: ["me"],
     queryFn: usersApi.getMe,
@@ -279,7 +280,10 @@ function ProfileTab() {
   const [form, setForm] = useState({
     firstName: "",
     lastName: "",
+    email: "",
+    phone: "",
     username: "",
+    currentPassword: "",
   });
   const [ready, setReady] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -289,20 +293,41 @@ function ProfileTab() {
     setForm({
       firstName: me.firstName,
       lastName: me.lastName,
+      email: me.email,
+      phone: me.phone ?? "",
       username: me.username ?? "",
+      currentPassword: "",
     });
     setReady(true);
   }
 
   const mutation = useMutation({
-    mutationFn: () =>
-      usersApi.updateMe({
+    mutationFn: async () => {
+      const email = form.email.trim().toLowerCase();
+      const emailChanged = email !== me?.email.toLowerCase();
+      if (emailChanged) {
+        const emailUpdatedUser = await usersApi.changeEmail({
+          email,
+          currentPassword: form.currentPassword,
+        });
+        queryClient.setQueryData(["me"], emailUpdatedUser);
+        setForm((current) => ({ ...current, currentPassword: "" }));
+        await refreshSession();
+      }
+      return usersApi.updateMe({
         firstName: form.firstName,
         lastName: form.lastName,
+        phone: form.phone.trim(),
         username: form.username.trim() || undefined,
-      }),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["me"] });
+      });
+    },
+    onSuccess: (updated) => {
+      queryClient.setQueryData(["me"], updated);
+      setForm((current) => ({
+        ...current,
+        email: updated.email,
+        currentPassword: "",
+      }));
       setSuccess(true);
       setServerError("");
       setTimeout(() => setSuccess(false), 2500);
@@ -315,6 +340,22 @@ function ProfileTab() {
   const set =
     (f: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) =>
       setForm((prev) => ({ ...prev, [f]: e.target.value }));
+
+  const emailChanged =
+    Boolean(me) && form.email.trim().toLowerCase() !== me?.email.toLowerCase();
+
+  function resetForm() {
+    if (!me) return;
+    setForm({
+      firstName: me.firstName,
+      lastName: me.lastName,
+      email: me.email,
+      phone: me.phone ?? "",
+      username: me.username ?? "",
+      currentPassword: "",
+    });
+    setServerError("");
+  }
 
   if (isLoading)
     return (
@@ -384,13 +425,46 @@ function ProfileTab() {
             <Label>
               Email <span className="text-destructive">*</span>
             </Label>
-            <Input value={me?.email ?? ""} disabled readOnly />
+            <Input
+              type="email"
+              value={form.email}
+              onChange={set("email")}
+              required
+              maxLength={320}
+              autoComplete="email"
+            />
+            <p className="text-[11px] text-muted-foreground">
+              Este correo se usa para iniciar sesión. El buzón empresarial se
+              asigna por separado.
+            </p>
           </div>
           <div className="space-y-1.5">
             <Label>Teléfono</Label>
-            <Input placeholder="+595 981 000 000" />
+            <Input
+              value={form.phone}
+              onChange={set("phone")}
+              placeholder="+595 981 000 000"
+            />
           </div>
         </div>
+        {emailChanged && (
+          <div className="max-w-xl space-y-1.5">
+            <Label>
+              Contraseña actual <span className="text-destructive">*</span>
+            </Label>
+            <Input
+              type="password"
+              value={form.currentPassword}
+              onChange={set("currentPassword")}
+              required
+              autoComplete="current-password"
+              placeholder="Confirmá el cambio de email"
+            />
+            <p className="text-[11px] text-muted-foreground">
+              Necesaria para proteger el acceso a tu cuenta.
+            </p>
+          </div>
+        )}
         <div className="space-y-1.5">
           <Label>Nombre de usuario</Label>
           <div className="flex items-center rounded-3xl border border-transparent bg-input/50 px-3 focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/30 transition-[box-shadow,border-color]">
@@ -459,7 +533,7 @@ function ProfileTab() {
         {success && (
           <span className="text-sm text-emerald-500">Cambios guardados</span>
         )}
-        <Button type="button" variant="outline">
+        <Button type="button" variant="outline" onClick={resetForm}>
           Cancelar
         </Button>
         <Button type="submit" disabled={mutation.isPending}>

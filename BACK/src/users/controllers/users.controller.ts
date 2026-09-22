@@ -6,6 +6,7 @@ import { Permissions } from '../../common/decorators/permissions.decorator';
 import type { JwtPayload } from '../../common/types/jwt-payload.interface';
 import { AssignPermissionsDto } from '../dto/assign-permissions.dto';
 import { AssignUserRolesDto } from '../dto/assign-user-roles.dto';
+import { ChangeEmailDto } from '../dto/change-email.dto';
 import { ChangePasswordDto } from '../dto/change-password.dto';
 import { CreateUserDto } from '../dto/create-user.dto';
 import { UpdateUserDto } from '../dto/update-user.dto';
@@ -33,6 +34,16 @@ export class UsersController {
     @Body() dto: UpdateUserDto,
   ) {
     return this.usersService.update(tenantId, user.sub, dto);
+  }
+
+  @Post('me/change-email')
+  @ApiOperation({ summary: 'Change own login email' })
+  changeEmail(
+    @CurrentUser() user: JwtPayload,
+    @CurrentTenant() tenantId: string,
+    @Body() dto: ChangeEmailDto,
+  ) {
+    return this.usersService.changeEmail(tenantId, user.sub, dto);
   }
 
   @Post('me/change-password')
