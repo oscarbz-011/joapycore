@@ -21,7 +21,7 @@ import {
   type SaleOrderStatus,
   type SaleType,
 } from '../../../../lib/api/sales';
-import { inventoryApi, type Product } from '../../../../lib/api/inventory';
+import { inventoryApi, type ProductWithStock } from '../../../../lib/api/inventory';
 import { settingsApi } from '../../../../lib/api/settings';
 import { usersApi } from '../../../../lib/api/users';
 import { useAuth } from '../../../../lib/auth-context';
@@ -145,7 +145,7 @@ function CreateOrderModal({ open, onOpenChange, customers, products }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   customers: Customer[];
-  products: Product[];
+  products: ProductWithStock[];
 }) {
   const queryClient = useQueryClient();
   const router = useRouter();
@@ -294,6 +294,23 @@ function CreateOrderModal({ open, onOpenChange, customers, products }: {
   const selectedCreditPlan = activePlans.find((p) => p.installments === installments);
   const creditRate = selectedCreditPlan ? Number(selectedCreditPlan.interestRate) : 0;
   const financedTotal = saleType === 'CREDIT' && creditRate > 0 ? total * (1 + creditRate / 100) : total;
+  const requestedByProduct = items.reduce((totals, item) => {
+    if (item.product) {
+      totals.set(
+        item.productId,
+        (totals.get(item.productId) ?? 0) + item.quantity,
+      );
+    }
+    return totals;
+  }, new Map<string, number>());
+  const stockIssues = [...requestedByProduct.entries()]
+    .map(([productId, requested]) => {
+      const product = products.find((candidate) => candidate.id === productId);
+      return product && requested > product.stock
+        ? `${product.name}: disponible ${product.stock}, solicitado ${requested}`
+        : null;
+    })
+    .filter((issue): issue is string => issue !== null);
 
   const mutation = useMutation({
     mutationFn: () => {
@@ -362,6 +379,10 @@ function CreateOrderModal({ open, onOpenChange, customers, products }: {
           onSubmit={(e) => {
             e.preventDefault(); setError('');
             if (items.length === 0) { setError('Agregá al menos un producto'); return; }
+            if (stockIssues.length > 0) {
+              setError(`No hay stock suficiente de: ${stockIssues.join('; ')}`);
+              return;
+            }
             mutation.mutate();
           }}
           className="flex flex-col"
@@ -610,6 +631,12 @@ function CreateOrderModal({ open, onOpenChange, customers, products }: {
               </div>
             )}
 
+            {stockIssues.length > 0 && (
+              <div className="rounded-2xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                No podés crear este pedido. Stock insuficiente de: {stockIssues.join('; ')}.
+              </div>
+            )}
+
             {/* Notas */}
             <div>
               <Label className="mb-1 text-xs">Notas (opcional)</Label>
@@ -624,7 +651,7 @@ function CreateOrderModal({ open, onOpenChange, customers, products }: {
           {/* Footer */}
           <div className="flex justify-end gap-3 border-t border-border px-6 py-4">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
-            <Button type="submit" disabled={mutation.isPending}>
+            <Button type="submit" disabled={mutation.isPending || stockIssues.length > 0}>
               {mutation.isPending ? 'Creando...' : 'Crear pedido'}
             </Button>
           </div>
@@ -895,7 +922,13 @@ export default function SalesPage() {
 
   const { data: orders = [], isLoading } = useQuery({ queryKey: ['sale-orders'], queryFn: salesApi.listOrders });
   const { data: customers = [] } = useQuery({ queryKey: ['sale-customers'], queryFn: salesApi.listCustomers });
-  const { data: products = [] } = useQuery({ queryKey: ['inventory-products-active'], queryFn: () => inventoryApi.listProducts({ status: 'ACTIVE', isSellable: true }) });
+  const { data: products = [] } = useQuery({
+    queryKey: ['inventory-products-active-with-stock'],
+    queryFn: () => inventoryApi.listProductsWithStock({
+      status: 'ACTIVE',
+      isSellable: true,
+    }),
+  });
 
   const filtered = orders.filter((o) => {
     const name = `${o.customer.firstName} ${o.customer.lastName}`.toLowerCase();

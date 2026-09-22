@@ -33,8 +33,11 @@ export default function AdjustOrderPage() {
     queryFn: () => salesApi.getOrder(id),
   });
   const { data: products = [] } = useQuery({
-    queryKey: ['inventory-products-active'],
-    queryFn: () => inventoryApi.listProducts({ status: 'ACTIVE', isSellable: true }),
+    queryKey: ['inventory-products-active-with-stock'],
+    queryFn: () => inventoryApi.listProductsWithStock({
+      status: 'ACTIVE',
+      isSellable: true,
+    }),
   });
   const { data: creditConfig } = useQuery({ queryKey: ['credit-config'], queryFn: settingsApi.getCredit });
   const activePlans = creditConfig?.isEnabled ? (creditConfig.plans ?? []).filter((p) => p.isActive) : [];
@@ -103,7 +106,13 @@ export default function AdjustOrderPage() {
     setItems((prev) => [...prev, { productId: '', product: null, quantity: 1, unitPrice: 0, serialInput: '' }]);
   }
 
-  const canSave = items.length > 0 && items.every((it) => it.productId && it.quantity > 0);
+  const stockIssues = items.filter(
+    (item) => item.product && item.quantity > item.product.stock,
+  );
+  const canSave =
+    items.length > 0 &&
+    items.every((it) => it.productId && it.quantity > 0) &&
+    stockIssues.length === 0;
 
   if (isLoading) {
     return <div className="py-24 text-center text-sm text-muted-foreground/60">Cargando pedido...</div>;

@@ -468,6 +468,33 @@ describe('SaleOrdersService', () => {
       );
     });
 
+    it('rejects a credit order immediately when the product has no stock', async () => {
+      productsRepository.findManyByIds.mockResolvedValue([
+        makeProduct({ isSerialized: false }),
+      ]);
+      tx.stockMovement.groupBy.mockResolvedValue([
+        { productId: 'prod-1', _sum: { quantity: 0 } },
+      ]);
+
+      await expect(
+        service.create(
+          'tenant-1',
+          {
+            customerId: 'cust-1',
+            saleType: 'CREDIT',
+            installments: 10,
+            items: [{ productId: 'prod-1', quantity: 1, unitPrice: 2_500_000 }],
+          },
+          undefined,
+          false,
+          ['sales:create'],
+        ),
+      ).rejects.toThrow(
+        'No hay stock suficiente de: Heladera Samsung (disponible 0, pedido 1)',
+      );
+      expect(tx.stockMovement.create).not.toHaveBeenCalled();
+    });
+
     it('omits financedUnitPrice for a cash sale', async () => {
       productsRepository.findManyByIds.mockResolvedValue([
         makeProduct({ isSerialized: false }),
@@ -969,6 +996,33 @@ describe('SaleOrdersService', () => {
         }),
       );
       expect(result?.status).toBe('CREDIT_APPROVED');
+    });
+
+    it('blocks credit approval when stock was consumed during evaluation', async () => {
+      saleOrdersRepository.findById.mockResolvedValue(
+        makeOrder({ status: 'PENDING_CREDIT_APPROVAL' }),
+      );
+      tx.saleOrderItem.findMany.mockResolvedValue([
+        {
+          ...makeOrderItem({ quantity: 2 }),
+          warehouseId: null,
+          product: { name: 'Heladera Samsung', isSerialized: false },
+        },
+      ]);
+      tx.stockMovement.groupBy.mockImplementation(({ by }: { by: string[] }) =>
+        Promise.resolve(
+          by[0] === 'productId'
+            ? [{ productId: 'prod-1', _sum: { quantity: 0 } }]
+            : [],
+        ),
+      );
+
+      await expect(
+        service.approveCredit('tenant-1', 'order-1'),
+      ).rejects.toThrow(
+        'No hay stock suficiente de: Heladera Samsung (disponible 0, pedido 2)',
+      );
+      expect(outbox.enqueue).not.toHaveBeenCalled();
     });
 
     it('blocks approval when the customer has overdue installments', async () => {

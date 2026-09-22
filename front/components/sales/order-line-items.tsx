@@ -1,13 +1,14 @@
 'use client';
 
-import { Trash2 } from 'lucide-react';
+import { AlertTriangle, Trash2 } from 'lucide-react';
 import { NumericInput } from '../numeric-input';
 import { SearchSelect } from '../../app/(dashboard)/dashboard/components/search-select';
-import { type Product } from '../../lib/api/inventory';
+import { type ProductWithStock } from '../../lib/api/inventory';
 import { type CreditPlan } from '../../lib/api/settings';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { cn } from '@/lib/utils';
 
 // ── Compartido entre "Nuevo pedido" (sales/page.tsx) y "Ajustar pedido"
 // (sales/[id]/adjust/page.tsx) — mismo editor de líneas de producto y mismo
@@ -22,7 +23,7 @@ export const NUM_CLS = 'h-9 w-full min-w-0 rounded-3xl border border-transparent
 
 export interface LineItem {
   productId: string;
-  product: Product | null;
+  product: ProductWithStock | null;
   quantity: number;
   unitPrice: number;
   serialInput: string;
@@ -37,22 +38,29 @@ export interface LineItem {
 }
 
 export function LineItemRow({ item, products, onChange, onRemove }: {
-  item: LineItem; products: Product[];
+  item: LineItem; products: ProductWithStock[];
   onChange: (updated: LineItem) => void;
   onRemove: () => void;
 }) {
   const subtotal = item.quantity * item.unitPrice;
+  const insufficientStock =
+    item.product !== null && item.quantity > Number(item.product.stock);
   return (
-    <div className="rounded-2xl border border-border p-3 space-y-2">
+    <div
+      className={cn(
+        'rounded-2xl border border-border p-3 space-y-2',
+        insufficientStock && 'border-destructive/50 bg-destructive/5',
+      )}
+    >
       <div className="flex gap-2 items-start">
         <div className="flex-1">
-          <SearchSelect<Product>
+          <SearchSelect<ProductWithStock>
             items={products}
             value={item.productId}
             onChange={(id, product) => onChange({ ...item, productId: id, product, unitPrice: product ? Number(product.salePrice) : 0, serialInput: '' })}
             getKey={(p) => p.id}
             getLabel={(p) => `${p.name}${p.model ? ` (${p.model})` : ''}`}
-            getDescription={(p) => p.category?.name ?? null}
+            getDescription={(p) => `${p.category?.name ?? 'Sin categoría'} · Stock disponible: ${p.stock}`}
             filterFn={(p, q) => `${p.name} ${p.model ?? ''} ${p.category?.name ?? ''}`.toLowerCase().includes(q.toLowerCase())}
             placeholder="Buscar producto..."
             required
@@ -83,6 +91,12 @@ export function LineItemRow({ item, products, onChange, onRemove }: {
           <Trash2 size={15} />
         </button>
       </div>
+      {insufficientStock && (
+        <div className="flex items-center gap-1.5 text-xs font-medium text-destructive">
+          <AlertTriangle size={13} />
+          Stock insuficiente: disponible {item.product?.stock ?? 0}, solicitado {item.quantity}.
+        </div>
+      )}
       {item.product?.isSerialized && (
         <div>
           <Label className="mb-1 text-xs">
