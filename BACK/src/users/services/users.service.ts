@@ -251,7 +251,7 @@ export class UsersService {
       return this.getSessionSafeProfile(tenantId, userId);
     }
 
-    const existing = await this.usersRepository.findByEmail(email);
+    const existing = await this.usersRepository.findByEmailInsensitive(email);
     if (existing && existing.id !== userId) {
       throw new ConflictException('El email ya está en uso');
     }

@@ -49,6 +49,7 @@ describe('UsersService', () => {
     findAll: jest.Mock;
     findById: jest.Mock;
     findByEmail: jest.Mock;
+    findByEmailInsensitive: jest.Mock;
     findByIdForAuth: jest.Mock;
     create: jest.Mock;
     update: jest.Mock;
@@ -66,6 +67,7 @@ describe('UsersService', () => {
       findAll: jest.fn(),
       findById: jest.fn(),
       findByEmail: jest.fn(),
+      findByEmailInsensitive: jest.fn(),
       findByIdForAuth: jest.fn(),
       create: jest.fn(),
       update: jest.fn().mockResolvedValue(1),
@@ -202,7 +204,7 @@ describe('UsersService', () => {
   describe('changeEmail', () => {
     it('normalizes and updates the email after confirming the password', async () => {
       usersRepository.findByIdForAuth.mockResolvedValue(makeUser());
-      usersRepository.findByEmail.mockResolvedValue(null);
+      usersRepository.findByEmailInsensitive.mockResolvedValue(null);
       usersRepository.findById.mockResolvedValue(
         makeUser({
           email: 'new@example.com',
@@ -272,7 +274,7 @@ describe('UsersService', () => {
           currentPassword: 'wrong-password',
         }),
       ).rejects.toBeInstanceOf(UnauthorizedException);
-      expect(usersRepository.findByEmail).not.toHaveBeenCalled();
+      expect(usersRepository.findByEmailInsensitive).not.toHaveBeenCalled();
       expect(usersRepository.update).not.toHaveBeenCalled();
     });
 
@@ -295,7 +297,7 @@ describe('UsersService', () => {
       expect(result.email).toBe('user@example.com');
       expect(result).not.toHaveProperty('passwordHash');
       expect(result.tempPassword).toBeNull();
-      expect(usersRepository.findByEmail).not.toHaveBeenCalled();
+      expect(usersRepository.findByEmailInsensitive).not.toHaveBeenCalled();
       expect(usersRepository.update).not.toHaveBeenCalled();
       expect(eventEmitter.emit).not.toHaveBeenCalled();
     });
@@ -311,14 +313,33 @@ describe('UsersService', () => {
           currentPassword: 'current-password',
         }),
       ).rejects.toBeInstanceOf(NotFoundException);
-      expect(usersRepository.findByEmail).not.toHaveBeenCalled();
+      expect(usersRepository.findByEmailInsensitive).not.toHaveBeenCalled();
       expect(usersRepository.update).not.toHaveBeenCalled();
     });
 
     it('rejects an email already used by another account', async () => {
       usersRepository.findByIdForAuth.mockResolvedValue(makeUser());
-      usersRepository.findByEmail.mockResolvedValue(
+      usersRepository.findByEmailInsensitive.mockResolvedValue(
         makeUser({ id: 'another-user', email: 'taken@example.com' }),
+      );
+      (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+
+      await expect(
+        service.changeEmail('tenant-1', 'user-1', {
+          email: 'taken@example.com',
+          currentPassword: 'current-password',
+        }),
+      ).rejects.toBeInstanceOf(ConflictException);
+      expect(usersRepository.update).not.toHaveBeenCalled();
+    });
+
+    it('rejects a normalized email used by a historical mixed-case account', async () => {
+      usersRepository.findByIdForAuth.mockResolvedValue(makeUser());
+      usersRepository.findByEmailInsensitive.mockResolvedValue(
+        makeUser({ id: 'another-user', email: 'Taken@Example.com' }),
+      );
+      usersRepository.findById.mockResolvedValue(
+        makeUser({ email: 'taken@example.com' }),
       );
       (bcrypt.compare as jest.Mock).mockResolvedValue(true);
 
@@ -333,7 +354,7 @@ describe('UsersService', () => {
 
     it('returns the stable conflict response when the unique constraint wins a race', async () => {
       usersRepository.findByIdForAuth.mockResolvedValue(makeUser());
-      usersRepository.findByEmail.mockResolvedValue(null);
+      usersRepository.findByEmailInsensitive.mockResolvedValue(null);
       usersRepository.update.mockRejectedValue(
         new Prisma.PrismaClientKnownRequestError('unique email', {
           code: 'P2002',

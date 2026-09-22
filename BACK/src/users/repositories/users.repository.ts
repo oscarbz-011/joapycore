@@ -31,6 +31,12 @@ export class UsersRepository {
     return this.prisma.user.findUnique({ where: { email } });
   }
 
+  findByEmailInsensitive(email: string) {
+    return this.prisma.user.findFirst({
+      where: { email: { equals: email, mode: 'insensitive' } },
+    });
+  }
+
   // Used by login — accepts email OR username interchangeably.
   findByEmailOrUsername(emailOrUsername: string) {
     return this.prisma.user.findFirst({

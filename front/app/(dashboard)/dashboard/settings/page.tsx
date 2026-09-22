@@ -27,7 +27,7 @@ import {
   Mail,
   PlugZap,
 } from "lucide-react";
-import { usersApi } from "../../../../lib/api/users";
+import { saveOwnProfile, usersApi } from "../../../../lib/api/users";
 import { useAuth } from "../../../../lib/auth-context";
 import { sifenApi, type SifenEnvironment } from "../../../../lib/api/sifen";
 import {
@@ -286,6 +286,7 @@ function ProfileTab() {
     currentPassword: "",
   });
   const [ready, setReady] = useState(false);
+  const [sessionRefreshPending, setSessionRefreshPending] = useState(false);
   const [success, setSuccess] = useState(false);
   const [serverError, setServerError] = useState("");
 
@@ -302,25 +303,38 @@ function ProfileTab() {
   }
 
   const mutation = useMutation({
-    mutationFn: async () => {
-      const email = form.email.trim().toLowerCase();
-      const emailChanged = email !== me?.email.toLowerCase();
-      if (emailChanged) {
-        const emailUpdatedUser = await usersApi.changeEmail({
-          email,
+    mutationFn: () =>
+      saveOwnProfile(
+        {
+          currentEmail: me?.email ?? form.email,
+          email: form.email,
           currentPassword: form.currentPassword,
-        });
-        queryClient.setQueryData(["me"], emailUpdatedUser);
-        setForm((current) => ({ ...current, currentPassword: "" }));
-        await refreshSession();
-      }
-      return usersApi.updateMe({
-        firstName: form.firstName,
-        lastName: form.lastName,
-        phone: form.phone.trim(),
-        username: form.username.trim() || undefined,
-      });
-    },
+          profile: {
+            firstName: form.firstName,
+            lastName: form.lastName,
+            phone: form.phone.trim(),
+            username: form.username.trim() || undefined,
+          },
+          sessionRefreshPending,
+        },
+        {
+          changeEmail: usersApi.changeEmail,
+          updateMe: usersApi.updateMe,
+          refreshSession,
+          onEmailCommitted: (emailUpdatedUser) => {
+            setSessionRefreshPending(true);
+            queryClient.setQueryData(["me"], emailUpdatedUser);
+            setForm((current) => ({
+              ...current,
+              email: emailUpdatedUser.email,
+              currentPassword: "",
+            }));
+          },
+          onSessionRefreshCompleted: () => {
+            setSessionRefreshPending(false);
+          },
+        },
+      ),
     onSuccess: (updated) => {
       queryClient.setQueryData(["me"], updated);
       setForm((current) => ({
