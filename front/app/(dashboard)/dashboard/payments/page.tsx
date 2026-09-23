@@ -34,6 +34,7 @@ import { distributeAmount, outstandingOf, chargesTotalOf, type DistributedItem }
 import { ReceiptButton } from '../../../../components/receipt-button';
 import { arUrgency, arDisplayDueDate, DUE_SOON_DAYS, type ArUrgency, type ArUrgencyLevel } from '../../../../lib/ar-urgency';
 import { daysOverdue } from '../../../../lib/overdue';
+import { zeroChargeNotice } from '../../../../lib/finance-zero-charge';
 import { formatDatePY, todayISODate, toISODate } from '../../../../lib/date';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -762,11 +763,11 @@ function CreditARDetail({
         </div>
         {overdueInstallments.length > 0 && moraTotal === 0 && (
           <p className="rounded-lg border border-amber-500/25 bg-amber-500/10 px-2.5 py-2 text-xs leading-5 text-amber-700 dark:text-amber-300">
-            {!hasMoraComponents
-              ? 'Hay cuotas vencidas, pero no existen recargos moratorios activos en la configuración de crédito.'
-              : moraGraceDays > 0
-                ? `Hay cuotas vencidas dentro del período de tolerancia de ${moraGraceDays} días. Los intereses moratorios se aplicarán cuando finalice ese plazo.`
-                : 'La cuota está vencida; los recargos configurados todavía no generan un importe para el período transcurrido.'}
+            {zeroChargeNotice({
+              graceDays: moraGraceDays,
+              hasMoraComponents,
+              overdueDays: overdueInstallments.map((i) => installmentUrgency(i).days),
+            })}
           </p>
         )}
         <div className="flex justify-between">
