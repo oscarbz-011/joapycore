@@ -1,6 +1,5 @@
 'use client';
 
-import { useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { Download, FileCheck2, Mail, Printer } from 'lucide-react';
 import { documentsApi } from '../lib/api/documents';
@@ -15,7 +14,6 @@ import { Button } from '@/components/ui/button';
 export function ContractCard({ entityType, entityId }: { entityType: string; entityId: string }) {
   const { jwtPayload } = useAuth();
   const canManage = jwtPayload?.permissions.includes('documents:manage') ?? false;
-  const [emailSent, setEmailSent] = useState(false);
 
   const { data: docs = [], isLoading } = useQuery({
     queryKey: ['documents', 'contract', entityType, entityId],
@@ -40,7 +38,6 @@ export function ContractCard({ entityType, entityId }: { entityType: string; ent
 
   const emailMutation = useMutation({
     mutationFn: () => documentsApi.sendEmail(contract!.id),
-    onSuccess: () => setEmailSent(true),
   });
 
   if (isLoading) {
@@ -83,7 +80,7 @@ export function ContractCard({ entityType, entityId }: { entityType: string; ent
             disabled={emailMutation.isPending}
           >
             <Mail size={14} />
-            {emailMutation.isPending ? 'Enviando...' : emailSent ? 'Enviado ✓' : 'Enviar por email'}
+            {emailMutation.isPending ? 'Enviando...' : emailMutation.isSuccess ? 'Enviado ✓' : 'Enviar por email'}
           </Button>
         )}
       </div>
@@ -91,6 +88,12 @@ export function ContractCard({ entityType, entityId }: { entityType: string; ent
       {emailMutation.isError && (
         <p className="text-xs text-destructive">
           {(emailMutation.error as Error)?.message ?? 'No se pudo enviar el email'}
+        </p>
+      )}
+      {emailMutation.data && (
+        <p className="text-xs text-emerald-600">
+          El servidor SMTP aceptó el mensaje para {emailMutation.data.to}
+          {emailMutation.data.messageId ? ` · ID ${emailMutation.data.messageId}` : ''}
         </p>
       )}
     </div>

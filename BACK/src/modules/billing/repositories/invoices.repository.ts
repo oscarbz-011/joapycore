@@ -84,6 +84,14 @@ export class InvoicesRepository {
     });
   }
 
+  async hasPdf(tenantId: string, id: string): Promise<boolean> {
+    const invoice = await this.prisma.invoice.findFirst({
+      where: { id, tenantId, pdfFileId: { not: null } },
+      select: { id: true },
+    });
+    return Boolean(invoice);
+  }
+
   create(
     data: Prisma.InvoiceUncheckedCreateInput,
     client: PrismaClientOrTx = this.prisma,
@@ -159,12 +167,33 @@ export class InvoicesRepository {
     tenantId: string,
     id: string,
     status: InvoiceStatus,
-    extra?: Partial<Prisma.InvoiceUpdateInput>,
+    extra?: Partial<Prisma.InvoiceUncheckedUpdateManyInput>,
     client: PrismaClientOrTx = this.prisma,
   ) {
     return client.invoice.updateMany({
       where: { id, tenantId },
       data: { status, ...extra },
+    });
+  }
+
+  /**
+   * Último paso de una emisión: solo permite pasar a ISSUED si el PDF ya fue
+   * persistido. La condición vive en la base para que ninguna llamada pueda
+   * confirmar una factura sin comprobante por una carrera entre requests.
+   */
+  finalizeIssue(
+    tenantId: string,
+    id: string,
+    client: PrismaClientOrTx = this.prisma,
+  ) {
+    return client.invoice.updateMany({
+      where: {
+        id,
+        tenantId,
+        status: 'PENDING',
+        pdfFileId: { not: null },
+      },
+      data: { status: 'ISSUED' },
     });
   }
 }

@@ -20,6 +20,7 @@ function makeInvoice(overrides = {}) {
     notes: null,
     createdAt: new Date(),
     saleOrder: {
+      saleType: 'CASH',
       branch: { codigoEstablecimiento: '001', puntoExpedicion: '002' },
     },
     ...overrides,
@@ -34,6 +35,8 @@ describe('InvoicesService', () => {
     findAll: jest.Mock;
     findById: jest.Mock;
     updateStatus: jest.Mock;
+    hasPdf: jest.Mock;
+    finalizeIssue: jest.Mock;
     createInterestInvoice: jest.Mock;
     findLastSequential: jest.Mock;
   };
@@ -55,6 +58,8 @@ describe('InvoicesService', () => {
       findAll: jest.fn(),
       findById: jest.fn(),
       updateStatus: jest.fn().mockResolvedValue(undefined),
+      hasPdf: jest.fn().mockResolvedValue(true),
+      finalizeIssue: jest.fn().mockResolvedValue({ count: 1 }),
       createInterestInvoice: jest.fn(),
       // Implementación real: consulta el tx que recibe (mockeado abajo).
       findLastSequential: jest.fn((...args: [string, string, string, any]) =>
@@ -186,7 +191,7 @@ describe('InvoicesService', () => {
       expect(invoicesRepository.updateStatus).toHaveBeenCalledWith(
         'tenant-1',
         'inv-1',
-        'ISSUED',
+        'PENDING',
         expect.objectContaining({
           establecimiento: '001',
           puntoExpedicion: '002',
@@ -210,7 +215,7 @@ describe('InvoicesService', () => {
       expect(invoicesRepository.updateStatus).toHaveBeenCalledWith(
         'tenant-1',
         'inv-1',
-        'ISSUED',
+        'PENDING',
         expect.objectContaining({ sequential: 1, invoiceNumber: '0000001' }),
         expect.anything(),
       );
@@ -229,7 +234,7 @@ describe('InvoicesService', () => {
       expect(invoicesRepository.updateStatus).toHaveBeenCalledWith(
         'tenant-1',
         'inv-1',
-        'ISSUED',
+        'PENDING',
         expect.objectContaining({
           establecimiento: '001',
           puntoExpedicion: '001',
@@ -251,7 +256,7 @@ describe('InvoicesService', () => {
         expect.objectContaining({ tenantId: 'tenant-1', invoiceId: 'inv-1' }),
       );
       expect(outbox.enqueue).toHaveBeenCalledWith(
-        prisma,
+        expect.anything(),
         'tenant-1',
         'invoice.issued',
         expect.objectContaining({ tenantId: 'tenant-1', invoiceId: 'inv-1' }),
@@ -278,16 +283,15 @@ describe('InvoicesService', () => {
         }),
       ).rejects.toBeInstanceOf(UnprocessableEntityException);
 
-      // First call put it ISSUED (inside the numbering transaction); the
-      // second call must revert it back to PENDING and null out every
-      // ISSUED-only field, including the sequential number it had just
-      // claimed — nothing about "emitted" can survive this failure.
+      // El primer llamado solo prepara datos manteniendo PENDING; el segundo
+      // limpia los datos de emisión. El número reservado se conserva para
+      // reintentar sin asignarlo a otra factura.
       expect(invoicesRepository.updateStatus).toHaveBeenCalledTimes(2);
       expect(invoicesRepository.updateStatus).toHaveBeenNthCalledWith(
         1,
         'tenant-1',
         'inv-1',
-        'ISSUED',
+        'PENDING',
         expect.anything(),
         expect.anything(),
       );
@@ -298,14 +302,86 @@ describe('InvoicesService', () => {
         'PENDING',
         expect.objectContaining({
           issuedAt: null,
-          sequential: null,
-          invoiceNumber: null,
-          invoicePrefix: null,
+          pdfFileId: null,
         }),
       );
       // 'invoice.issued' must never fire — payments/sales react to it with
       // irreversible side effects (AR, stock) that we can't safely undo.
       expect(outbox.enqueue).not.toHaveBeenCalled();
+    });
+
+    it('does not finalize when the PDF listener resolves without persisting pdfFileId', async () => {
+      invoicesRepository.findById.mockResolvedValue(makeInvoice());
+      invoicesRepository.hasPdf.mockResolvedValue(false);
+
+      await expect(
+        service.issue('tenant-1', 'inv-1', {
+          paymentCondition: 'CASH',
+          paymentMethod: 'CASH',
+        }),
+      ).rejects.toBeInstanceOf(UnprocessableEntityException);
+
+      expect(invoicesRepository.finalizeIssue).not.toHaveBeenCalled();
+      expect(outbox.enqueue).not.toHaveBeenCalled();
+    });
+
+    it('reuses a persisted PDF when retrying an interrupted pending issuance', async () => {
+      invoicesRepository.findById.mockResolvedValue(
+        makeInvoice({
+          pdfFileId: 'pdf-already-stored',
+          issuedAt: new Date('2026-09-23T12:00:00.000Z'),
+          paymentMethod: 'CASH',
+          sequential: 7,
+          invoiceNumber: '0000007',
+          invoicePrefix: '001-002-',
+        }),
+      );
+
+      await service.issue('tenant-1', 'inv-1', {
+        paymentCondition: 'CASH',
+        paymentMethod: 'CASH',
+      });
+
+      expect(eventEmitter.emitAsync).not.toHaveBeenCalledWith(
+        'invoice.pdf.requested',
+        expect.anything(),
+      );
+      expect(invoicesRepository.updateStatus).not.toHaveBeenCalledWith(
+        'tenant-1',
+        'inv-1',
+        'PENDING',
+        expect.objectContaining({ pdfFileId: null }),
+        expect.anything(),
+      );
+      expect(invoicesRepository.finalizeIssue).toHaveBeenCalledWith(
+        'tenant-1',
+        'inv-1',
+        expect.anything(),
+      );
+    });
+
+    it('rejects changed issuance terms when a pending invoice already has a PDF', async () => {
+      invoicesRepository.findById.mockResolvedValue(
+        makeInvoice({
+          pdfFileId: 'pdf-already-stored',
+          issuedAt: new Date('2026-09-23T12:00:00.000Z'),
+          paymentMethod: 'CASH',
+          notes: 'Original',
+          sequential: 7,
+        }),
+      );
+
+      await expect(
+        service.issue('tenant-1', 'inv-1', {
+          paymentCondition: 'CASH',
+          paymentMethod: 'CASH',
+          notes: 'Changed',
+        }),
+      ).rejects.toBeInstanceOf(UnprocessableEntityException);
+
+      expect(invoicesRepository.updateStatus).not.toHaveBeenCalled();
+      expect(eventEmitter.emitAsync).not.toHaveBeenCalled();
+      expect(invoicesRepository.finalizeIssue).not.toHaveBeenCalled();
     });
 
     it('reverts to PENDING and throws when the credit due-date reschedule fails, without ever requesting the PDF', async () => {
@@ -327,6 +403,52 @@ describe('InvoicesService', () => {
         'invoice.pdf.requested',
         expect.anything(),
       );
+      expect(outbox.enqueue).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('retryPdf', () => {
+    it('returns an issued invoice with a PDF without requesting another render', async () => {
+      const invoice = makeInvoice({ status: 'ISSUED', pdfFileId: 'pdf-1' });
+      invoicesRepository.findById.mockResolvedValue(invoice);
+
+      await expect(service.retryPdf('tenant-1', 'inv-1')).resolves.toBe(
+        invoice,
+      );
+
+      expect(eventEmitter.emitAsync).not.toHaveBeenCalled();
+      expect(outbox.enqueue).not.toHaveBeenCalled();
+    });
+
+    it('regenerates a missing PDF without publishing invoice.issued again', async () => {
+      invoicesRepository.findById.mockResolvedValue(
+        makeInvoice({ status: 'ISSUED', pdfFileId: null }),
+      );
+
+      await service.retryPdf('tenant-1', 'inv-1', 'user-1');
+
+      expect(eventEmitter.emitAsync).toHaveBeenCalledWith(
+        'invoice.pdf.requested',
+        expect.objectContaining({ invoiceId: 'inv-1', issuedById: 'user-1' }),
+      );
+      expect(invoicesRepository.hasPdf).toHaveBeenCalledWith(
+        'tenant-1',
+        'inv-1',
+      );
+      expect(outbox.enqueue).not.toHaveBeenCalled();
+    });
+
+    it('keeps historical invoice state and reports an error if PDF regeneration fails', async () => {
+      invoicesRepository.findById.mockResolvedValue(
+        makeInvoice({ status: 'ISSUED', pdfFileId: null }),
+      );
+      eventEmitter.emitAsync.mockRejectedValue(new Error('storage down'));
+
+      await expect(
+        service.retryPdf('tenant-1', 'inv-1', 'user-1'),
+      ).rejects.toBeInstanceOf(UnprocessableEntityException);
+
+      expect(invoicesRepository.updateStatus).not.toHaveBeenCalled();
       expect(outbox.enqueue).not.toHaveBeenCalled();
     });
   });

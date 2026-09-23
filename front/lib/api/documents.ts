@@ -77,6 +77,12 @@ export interface DocumentFilters {
   search?: string;
 }
 
+export interface EmailDeliveryResult {
+  to: string;
+  messageId: string | null;
+  accepted: string[];
+}
+
 export const TYPE_LABELS: Record<DocType, string> = {
   INTERNAL: 'Interno',
   CONTRACT: 'Contrato',
@@ -152,7 +158,7 @@ export const documentsApi = {
   templateKinds: (): Promise<{ key: TemplateKind; label: string; variables: TemplateVariable[] }[]> =>
     apiClient.get('/documents/template-kinds').then((r) => r.data),
 
-  sendEmail: (id: string, to?: string): Promise<void> =>
+  sendEmail: (id: string, to?: string): Promise<EmailDeliveryResult> =>
     apiClient
       .post(`/documents/${id}/email`, { to }, { timeout: LONG_REQUEST_TIMEOUT_MS })
       .then((r) => r.data),

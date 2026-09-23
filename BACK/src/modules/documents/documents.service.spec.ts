@@ -14,6 +14,7 @@ import {
 } from '@prisma/client';
 import { DocumentsService } from './services/documents.service';
 import { DocumentSourcesRepository } from './repositories/document-sources.repository';
+import { InvoiceOnIssueListener } from './events/invoice-on-issue.listener';
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 
@@ -152,7 +153,13 @@ describe('DocumentsService', () => {
       delete: jest.fn(),
       getFileBuffer: jest.fn(),
     };
-    emailService = { sendWithAttachment: jest.fn() };
+    emailService = {
+      sendWithAttachment: jest.fn().mockResolvedValue({
+        to: 'cliente@example.com',
+        messageId: 'smtp-message-1',
+        accepted: ['cliente@example.com'],
+      }),
+    };
     prisma = {
       customer: { findFirst: jest.fn() },
       saleOrder: { findFirst: jest.fn() },
@@ -894,7 +901,7 @@ describe('DocumentsService', () => {
       );
       filesService.getFileBuffer.mockResolvedValue(Buffer.from('pdf'));
 
-      await service.sendEmail(
+      const result = await service.sendEmail(
         'tenant-1',
         'doc-1',
         'user-1',
@@ -904,6 +911,9 @@ describe('DocumentsService', () => {
 
       expect(emailService.sendWithAttachment).toHaveBeenCalledWith(
         expect.objectContaining({ to: 'explicit@example.com' }),
+      );
+      expect(result).toEqual(
+        expect.objectContaining({ messageId: 'smtp-message-1' }),
       );
     });
 
@@ -1288,5 +1298,40 @@ describe('DocumentsService', () => {
         service.removeCategory('tenant-1', 'ghost', 'user-1'),
       ).rejects.toBeInstanceOf(NotFoundException);
     });
+  });
+});
+
+describe('InvoiceOnIssueListener', () => {
+  it('does not render a second PDF for a duplicate request after the first was stored', async () => {
+    const sources = {
+      findInvoiceForPdf: jest.fn().mockResolvedValue({
+        id: 'inv-1',
+        pdfFileId: 'pdf-already-stored',
+        saleOrder: {},
+      }),
+    };
+    const filesService = { upload: jest.fn() };
+    const pdfService = { renderHtmlTemplate: jest.fn() };
+    const listener = new InvoiceOnIssueListener(
+      sources as never,
+      {} as never,
+      filesService as never,
+      pdfService as never,
+      {} as never,
+    );
+
+    await expect(
+      listener.handle({
+        tenantId: 'tenant-1',
+        invoiceId: 'inv-1',
+        saleOrderId: 'order-1',
+        total: 2500000,
+        dueDate: null,
+      }),
+    ).resolves.toBeUndefined();
+
+    expect(sources.findInvoiceForPdf).toHaveBeenCalledWith('tenant-1', 'inv-1');
+    expect(pdfService.renderHtmlTemplate).not.toHaveBeenCalled();
+    expect(filesService.upload).not.toHaveBeenCalled();
   });
 });

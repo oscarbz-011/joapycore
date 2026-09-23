@@ -22,6 +22,12 @@ export interface SendWithAttachmentInput {
   attachment: EmailAttachment;
 }
 
+export interface EmailDeliveryResult {
+  to: string;
+  messageId: string | null;
+  accepted: string[];
+}
+
 @Injectable()
 export class EmailService {
   private readonly logger = new Logger(EmailService.name);
@@ -47,7 +53,9 @@ export class EmailService {
     return this.transporter;
   }
 
-  async sendWithAttachment(input: SendWithAttachmentInput): Promise<void> {
+  async sendWithAttachment(
+    input: SendWithAttachmentInput,
+  ): Promise<EmailDeliveryResult> {
     const tenantConfig = input.tenantId
       ? await this.integrationsService.getEnabledSmtpConfig(input.tenantId)
       : null;
@@ -61,7 +69,7 @@ export class EmailService {
           : undefined,
       });
       try {
-        await transporter.sendMail({
+        const info = await transporter.sendMail({
           from: tenantConfig.fromName
             ? { name: tenantConfig.fromName, address: tenantConfig.fromEmail }
             : tenantConfig.fromEmail,
@@ -70,10 +78,19 @@ export class EmailService {
           html: input.html,
           attachments: [input.attachment],
         });
+        return this.deliveryResult(input.to, info);
       } finally {
         transporter.close();
       }
-      return;
+    }
+
+    // Si la operación pertenece a un tenant nunca se debe simular/fallback
+    // al SMTP global del .env. El administrador debe configurar su salida y
+    // el usuario recibe un error real hasta que exista.
+    if (input.tenantId) {
+      throw new ServiceUnavailableException(
+        'El correo saliente del tenant no está configurado o está desactivado',
+      );
     }
 
     const config = this.configService.get<EmailConfig>('email')!;
@@ -89,7 +106,7 @@ export class EmailService {
       );
     }
 
-    await this.getTransporter().sendMail({
+    const info = await this.getTransporter().sendMail({
       from: config.from,
       to: input.to,
       subject: input.subject,
@@ -102,6 +119,21 @@ export class EmailService {
         },
       ],
     });
+    return this.deliveryResult(input.to, info);
+  }
+
+  private deliveryResult(
+    to: string,
+    info: { messageId?: string; accepted?: unknown[]; rejected?: unknown[] },
+  ): EmailDeliveryResult {
+    const accepted = (info.accepted ?? []).map(String);
+    const rejected = (info.rejected ?? []).map(String);
+    if (accepted.length === 0 || rejected.includes(to)) {
+      throw new ServiceUnavailableException(
+        `El servidor SMTP no aceptó el destinatario ${to}`,
+      );
+    }
+    return { to, messageId: info.messageId ?? null, accepted };
   }
 
   async sendTenantText(input: {

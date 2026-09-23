@@ -7,7 +7,7 @@ import { apiErrorMessage } from '@/lib/api/api-error';
 import { useState, type ReactNode } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Printer, Send, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, Printer, RotateCw, Send, AlertTriangle } from 'lucide-react';
 import { billingApi, type InvoiceStatus, type IssueInvoicePayload, type PaymentMethod } from '../../../../../../lib/api/billing';
 import { settingsApi } from '../../../../../../lib/api/settings';
 import { openPdf } from '../../../../../../lib/open-pdf';
@@ -119,7 +119,7 @@ export default function InvoiceDetailPage() {
       dueDate: isCredit
         ? (invoice.dueDate ? invoice.dueDate.slice(0, 10) : computeFirstDueDateISO(dueDayOfMonth))
         : '',
-      paymentMethod: undefined,
+      paymentMethod: invoice.paymentMethod ?? undefined,
       notes: invoice.notes ?? '',
     });
     if (isCredit) {
@@ -140,6 +140,7 @@ export default function InvoiceDetailPage() {
   const [cancelReason, setCancelReason] = useState('');
 
   const issueMutation = useMutation({
+    networkMode: 'always',
     mutationFn: () =>
       billingApi.issueInvoice(id, {
         paymentCondition: form.paymentCondition,
@@ -147,7 +148,16 @@ export default function InvoiceDetailPage() {
         paymentMethod: form.paymentMethod,
         notes: form.notes || undefined,
       }),
-    onSuccess: () => {
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: ['invoice', id] });
+      void queryClient.invalidateQueries({ queryKey: ['invoices'] });
+    },
+  });
+
+  const retryPdfMutation = useMutation({
+    networkMode: 'always',
+    mutationFn: () => billingApi.retryInvoicePdf(id),
+    onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: ['invoice', id] });
       void queryClient.invalidateQueries({ queryKey: ['invoices'] });
     },
@@ -213,17 +223,17 @@ export default function InvoiceDetailPage() {
             <span className="font-mono">{invoiceRef}</span>
           </p>
         </div>
-        {invoice.status !== 'PENDING' && (
-          <Button
-            variant="outline"
-            disabled={!invoice.pdfFileId}
-            title={invoice.pdfFileId ? undefined : 'El PDF todavía se está generando'}
-            onClick={() => invoice.pdfFileId && void openPdf(invoice.pdfFileId)}
-          >
-            <Printer size={15} />
-            {invoice.pdfFileId ? 'Imprimir' : 'PDF no disponible'}
+        {invoice.status !== 'PENDING' && (invoice.pdfFileId ? (
+          <Button variant="outline" onClick={() => void openPdf(invoice.pdfFileId!)}>
+            <Printer size={15} /> Imprimir
           </Button>
-        )}
+        ) : (
+          <RequirePermission permission="billing:issue">
+            <Button variant="outline" disabled={retryPdfMutation.isPending} onClick={() => retryPdfMutation.mutate()}>
+              <RotateCw size={15} /> {retryPdfMutation.isPending ? 'Regenerando...' : 'Regenerar PDF'}
+            </Button>
+          </RequirePermission>
+        ))}
       </div>
 
       {/* Main grid */}
@@ -395,7 +405,7 @@ export default function InvoiceDetailPage() {
                   disabled={!canIssue || issueMutation.isPending}
                 >
                   <Send size={15} />
-                  {issueMutation.isPending ? 'Emitiendo...' : 'Emitir factura'}
+                  {issueMutation.isPending ? 'Generando PDF y emitiendo...' : issueMutation.isError ? 'Reintentar emisión' : 'Emitir factura'}
                 </Button>
               </RequirePermission>
             </section>
@@ -418,12 +428,17 @@ export default function InvoiceDetailPage() {
                   <Button
                     variant="outline"
                     className="w-full"
-                    disabled={!invoice.pdfFileId}
-                    onClick={() => invoice.pdfFileId && void openPdf(invoice.pdfFileId)}
+                    disabled={retryPdfMutation.isPending}
+                    onClick={() => invoice.pdfFileId ? void openPdf(invoice.pdfFileId) : retryPdfMutation.mutate()}
                   >
-                    <Printer size={15} />
-                    {invoice.pdfFileId ? 'Imprimir / descargar PDF' : 'PDF no disponible'}
+                    {invoice.pdfFileId ? <Printer size={15} /> : <RotateCw size={15} />}
+                    {invoice.pdfFileId ? 'Imprimir / descargar PDF' : retryPdfMutation.isPending ? 'Regenerando PDF...' : 'Regenerar PDF'}
                   </Button>
+                  {retryPdfMutation.isError && (
+                    <p className="mt-2 text-xs text-destructive">
+                      {apiErrorMessage(retryPdfMutation.error, 'No se pudo regenerar el PDF')}
+                    </p>
+                  )}
                 </div>
               )}
             </section>

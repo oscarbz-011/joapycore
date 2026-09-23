@@ -49,6 +49,7 @@ export interface Invoice {
   dueDate: string | null;
   total: number;
   notes: string | null;
+  paymentMethod: PaymentMethod | null;
   createdAt: string;
   // Numbering
   invoiceNumber: string | null;
@@ -119,6 +120,9 @@ export const billingApi = {
 
   issueInvoice: (id: string, dto: IssueInvoicePayload): Promise<Invoice> =>
     apiClient.post(`/billing/invoices/${id}/issue`, dto).then((r) => r.data),
+
+  retryInvoicePdf: (id: string): Promise<Invoice> =>
+    apiClient.post(`/billing/invoices/${id}/pdf/retry`).then((r) => r.data),
 
   cancelInvoice: (id: string, reason: string): Promise<Invoice> =>
     apiClient.post(`/billing/invoices/${id}/cancel`, { reason }).then((r) => r.data),

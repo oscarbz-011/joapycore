@@ -81,7 +81,10 @@ export class InvoiceOnIssueListener {
     private readonly docxTemplateService: DocxTemplateService,
   ) {}
 
-  @OnEvent('invoice.pdf.requested')
+  // Este listener forma parte de la transacción lógica de emisión. Nest
+  // suprime los errores de listeners por defecto; si eso ocurre, emitAsync()
+  // resuelve aunque no exista PDF y la factura podría avanzar igualmente.
+  @OnEvent('invoice.pdf.requested', { suppressErrors: false })
   async handle(event: InvoicePdfRequestedEvent) {
     try {
       await this.generate(event);
@@ -102,7 +105,9 @@ export class InvoiceOnIssueListener {
     // INTEREST) — pero esas nunca emiten 'invoice.issued' (ver
     // interest-invoice-on-issue.listener.ts, evento separado), así que este
     // guard es puramente defensivo.
-    if (!invoice || !invoice.saleOrder) return;
+    // Los eventos pueden repetirse tras un reintento o una respuesta perdida.
+    // Un PDF ya vinculado es el resultado durable de la primera ejecución.
+    if (!invoice || !invoice.saleOrder || invoice.pdfFileId) return;
 
     const customerName = [
       invoice.saleOrder.customer.firstName,
