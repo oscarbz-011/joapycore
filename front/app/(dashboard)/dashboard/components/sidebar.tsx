@@ -63,17 +63,13 @@ const STATIC_GROUPS: SidebarGroup[] = [
     id: "apps",
     label: "Aplicaciones",
     icon: AppWindow,
-    anyPermission: ["applications:email:read"],
+    anyPermission: ["communications:access"],
     items: [
-      { label: "Chat", href: "#", stub: true },
-      { label: "Llamadas", href: "#", stub: true },
       {
-        label: "Correo",
-        href: "/dashboard/applications/email",
-        permission: "applications:email:read",
+        label: "Centro de comunicaciones",
+        href: "/dashboard/applications/communications",
+        permission: "communications:access",
       },
-      { label: "Calendario", href: "#", stub: true },
-      { label: "Notas", href: "#", stub: true },
     ],
   },
   {

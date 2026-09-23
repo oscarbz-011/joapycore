@@ -1,6 +1,7 @@
 'use client';
 
 import { RequirePermission } from '@/components/require-permission';
+import { EntityTimeline } from '@/components/communications/entity-timeline';
 
 import { apiErrorMessage } from '@/lib/api/api-error';
 
@@ -304,6 +305,13 @@ export default function InvoiceDetailPage() {
               </span>
             </div>
           </section>
+
+          <EntityTimeline
+            entityType="INVOICE"
+            entityId={invoice.id}
+            recipient={customer.email}
+            canSendInvoice={Boolean(invoice.pdfFileId) && (invoice.status === "ISSUED" || invoice.status === "PAID")}
+          />
 
           {/* Timeline */}
           <section className="rounded-xl border border-border bg-card p-5">

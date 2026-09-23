@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Search, Mail } from 'lucide-react';
 import { useAuth } from '../../../lib/auth-context';
+import { usePermission } from '../../../lib/permissions';
 import { useWsConnection } from '../../../lib/use-ws-connection';
 import { Button } from '@/components/ui/button';
 import { Sidebar } from './components/sidebar';
@@ -17,6 +18,7 @@ import { RouteAccessGuard } from './components/route-access-guard';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isLoading, mustChangePassword } = useAuth();
+  const canCommunicate = usePermission('communications:access');
   useWsConnection();
   const router = useRouter();
   const [searchOpen, setSearchOpen] = useState(false);
@@ -68,15 +70,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
           <ThemeToggle />
 
-          <Button
+          {canCommunicate && <Button
             variant="outline"
             size="icon-sm"
-            onClick={() => router.push('/dashboard/billing')}
-            title="Facturación"
+            onClick={() => router.push('/dashboard/applications/communications')}
+            title="Centro de comunicaciones"
+            aria-label="Abrir centro de comunicaciones"
             className="text-muted-foreground"
           >
             <Mail size={15} />
-          </Button>
+          </Button>}
 
           <AlertsDropdown />
           <UserMenu />

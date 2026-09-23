@@ -41,12 +41,16 @@ describe('checkRouteAccess', () => {
     expect(checkRouteAccess('/dashboard/logistics/mine/1', ['logistics'], ['logistics:track']).allowed).toBe(true);
   });
 
-  it('treats Applications as permanent and gates email only by permission', () => {
+  it('protects the legacy email redirect with Communications access', () => {
     expect(
       checkRouteAccess('/dashboard/applications/email', [], [
-        'applications:email:read',
+        'communications:access',
       ]).allowed,
     ).toBe(true);
+    expect(checkRouteAccess('/dashboard/applications/email', [], ['applications:email:read'])).toEqual({
+      allowed: false,
+      reason: 'permission',
+    });
     expect(checkRouteAccess('/dashboard/applications/email', [], [])).toEqual({
       allowed: false,
       reason: 'permission',
@@ -57,5 +61,12 @@ describe('checkRouteAccess', () => {
     const catalog = new Set(PERMISSION_GROUPS.flatMap((g) => g.permissions.map((p) => p.key)));
     const unknown = ROUTE_RULES.flatMap((r) => r.anyPermission ?? []).filter((p) => !catalog.has(p));
     expect(unknown).toEqual([]);
+  });
+
+  it('requires the new communication permission even if legacy email was allowed', () => {
+    const path = '/dashboard/applications/communications';
+    expect(checkRouteAccess(path, [], ['communications:access']).allowed).toBe(true);
+    expect(checkRouteAccess(path, [], ['applications:email:read']).allowed).toBe(false);
+    expect(checkRouteAccess(path, [], []).allowed).toBe(false);
   });
 });

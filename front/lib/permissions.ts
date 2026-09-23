@@ -31,6 +31,17 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
     ],
   },
   {
+    module: "communications",
+    label: "Centro de comunicaciones",
+    permissions: [
+      { key: "communications:access", label: "Acceder al centro" },
+      { key: "communications:settings:manage", label: "Configurar comunicaciones" },
+      { key: "communications:email:send", label: "Enviar correos de documentos" },
+      { key: "communications:delivery:read", label: "Ver entregas de correo" },
+      { key: "communications:notes:create", label: "Agregar notas internas" },
+    ],
+  },
+  {
     module: "applications",
     label: "Aplicaciones",
     permissions: [

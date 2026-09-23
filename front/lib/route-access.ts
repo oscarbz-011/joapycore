@@ -16,8 +16,12 @@ export interface RouteRule {
 // Orden indistinto: gana el prefijo más largo que coincida.
 export const ROUTE_RULES: RouteRule[] = [
   {
+    prefix: "/dashboard/applications/communications",
+    anyPermission: ["communications:access"],
+  },
+  {
     prefix: "/dashboard/applications/email",
-    anyPermission: ["applications:email:read"],
+    anyPermission: ["communications:access"],
   },
   {
     prefix: "/dashboard/inventory",
