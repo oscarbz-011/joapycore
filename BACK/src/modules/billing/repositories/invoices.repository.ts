@@ -198,7 +198,12 @@ export class InvoicesRepository {
         updatedAt: observedUpdatedAt,
         OR: [{ issuedAt: null }, { issuedAt: { lt: staleBefore } }],
       },
-      data: { ...data, issuedAt: attemptAt },
+      data: {
+        ...data,
+        dueDate: data.dueDate ?? null,
+        notes: data.notes ?? null,
+        issuedAt: attemptAt,
+      },
     });
   }
 
@@ -243,7 +248,10 @@ export class InvoicesRepository {
         status,
         updatedAt: observedUpdatedAt,
         ...(status === 'PENDING'
-          ? { OR: [{ issuedAt: null }, { issuedAt: { lt: staleBefore } }] }
+          ? {
+              pdfFileId: null,
+              OR: [{ issuedAt: null }, { issuedAt: { lt: staleBefore } }],
+            }
           : {}),
       },
       data: { status: 'CANCELLED' },

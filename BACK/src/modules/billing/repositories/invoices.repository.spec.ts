@@ -39,6 +39,27 @@ describe('InvoicesRepository issuance claim', () => {
     );
   });
 
+  it('clears old optional printed terms when reclaiming without replacements', async () => {
+    const updateMany = jest.fn().mockResolvedValue({ count: 1 });
+    const repository = new InvoicesRepository({
+      invoice: { updateMany },
+    } as never);
+
+    await repository.claimIssue(
+      'tenant-1',
+      'inv-1',
+      new Date('2026-09-23T12:00:00.000Z'),
+      new Date('2026-09-23T12:10:00.000Z'),
+      { dueDate: undefined, notes: undefined, paymentMethod: 'CASH' },
+    );
+
+    expect(updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ dueDate: null, notes: null }),
+      }),
+    );
+  });
+
   it('releases only the same attempt while the PDF link is still empty', async () => {
     const updateMany = jest.fn().mockResolvedValue({ count: 1 });
     const repository = new InvoicesRepository({
@@ -80,6 +101,7 @@ describe('InvoicesRepository issuance claim', () => {
         id: 'inv-1',
         tenantId: 'tenant-1',
         status: 'PENDING',
+        pdfFileId: null,
         updatedAt: observedAt,
         OR: [
           { issuedAt: null },

@@ -118,6 +118,13 @@ export function canRetryInvoicePdf(invoice: Pick<Invoice, 'status' | 'pdfFileId'
   );
 }
 
+export function canPrintInvoicePdf(invoice: Pick<Invoice, 'status' | 'pdfFileId'>): boolean {
+  return (
+    (invoice.status === 'ISSUED' || invoice.status === 'PAID') &&
+    Boolean(invoice.pdfFileId)
+  );
+}
+
 export const billingApi = {
   listInvoices: (): Promise<Invoice[]> =>
     apiClient.get('/billing/invoices').then((r) => r.data),

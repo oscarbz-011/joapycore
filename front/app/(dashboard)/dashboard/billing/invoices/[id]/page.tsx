@@ -8,7 +8,7 @@ import { useState, type ReactNode } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, Printer, RotateCw, Send, AlertTriangle } from 'lucide-react';
-import { billingApi, canRetryInvoicePdf, type InvoiceStatus, type IssueInvoicePayload, type PaymentMethod } from '../../../../../../lib/api/billing';
+import { billingApi, canPrintInvoicePdf, canRetryInvoicePdf, type InvoiceStatus, type IssueInvoicePayload, type PaymentMethod } from '../../../../../../lib/api/billing';
 import { settingsApi } from '../../../../../../lib/api/settings';
 import { openPdf } from '../../../../../../lib/open-pdf';
 import { formatDatePY, parseISODate, toISODate } from '../../../../../../lib/date';
@@ -196,6 +196,7 @@ export default function InvoiceDetailPage() {
     : `#${invoice.id.slice(0, 8).toUpperCase()}`;
   const isCredit = invoice.saleOrder.saleType === 'CREDIT';
   const canIssue = isCredit ? !!form.dueDate : !!form.paymentMethod;
+  const canPrintPdf = canPrintInvoicePdf(invoice);
   const canRetryPdf = canRetryInvoicePdf(invoice);
 
   return (
@@ -224,7 +225,7 @@ export default function InvoiceDetailPage() {
             <span className="font-mono">{invoiceRef}</span>
           </p>
         </div>
-        {(invoice.pdfFileId || canRetryPdf) && (invoice.pdfFileId ? (
+        {(canPrintPdf || canRetryPdf) && (canPrintPdf ? (
           <Button variant="outline" onClick={() => void openPdf(invoice.pdfFileId!)}>
             <Printer size={15} /> Imprimir
           </Button>
