@@ -5,6 +5,8 @@ import { PrismaClientOrTx } from '../../../prisma/types';
 
 @Injectable()
 export class InvoicesRepository {
+  private static readonly STALE_CLAIM_MS = 5 * 60 * 1000;
+
   constructor(private readonly prisma: PrismaService) {}
 
   private get include() {
@@ -176,6 +178,78 @@ export class InvoicesRepository {
     });
   }
 
+  claimIssue(
+    tenantId: string,
+    id: string,
+    observedUpdatedAt: Date,
+    attemptAt: Date,
+    data: Partial<Prisma.InvoiceUncheckedUpdateManyInput>,
+    client: PrismaClientOrTx = this.prisma,
+  ) {
+    const staleBefore = new Date(
+      attemptAt.getTime() - InvoicesRepository.STALE_CLAIM_MS,
+    );
+    return client.invoice.updateMany({
+      where: {
+        id,
+        tenantId,
+        status: 'PENDING',
+        pdfFileId: null,
+        updatedAt: observedUpdatedAt,
+        OR: [{ issuedAt: null }, { issuedAt: { lt: staleBefore } }],
+      },
+      data: { ...data, issuedAt: attemptAt },
+    });
+  }
+
+  releaseIssueClaim(
+    tenantId: string,
+    id: string,
+    attemptAt: Date,
+    client: PrismaClientOrTx = this.prisma,
+  ) {
+    return client.invoice.updateMany({
+      where: {
+        id,
+        tenantId,
+        status: 'PENDING',
+        pdfFileId: null,
+        issuedAt: attemptAt,
+      },
+      data: {
+        issuedAt: null,
+        dueDate: null,
+        paymentMethod: null,
+        notes: null,
+      },
+    });
+  }
+
+  cancelIfAllowed(
+    tenantId: string,
+    id: string,
+    status: 'PENDING' | 'ISSUED',
+    observedUpdatedAt: Date,
+    now: Date,
+    client: PrismaClientOrTx = this.prisma,
+  ) {
+    const staleBefore = new Date(
+      now.getTime() - InvoicesRepository.STALE_CLAIM_MS,
+    );
+    return client.invoice.updateMany({
+      where: {
+        id,
+        tenantId,
+        status,
+        updatedAt: observedUpdatedAt,
+        ...(status === 'PENDING'
+          ? { OR: [{ issuedAt: null }, { issuedAt: { lt: staleBefore } }] }
+          : {}),
+      },
+      data: { status: 'CANCELLED' },
+    });
+  }
+
   /**
    * Último paso de una emisión: solo permite pasar a ISSUED si el PDF ya fue
    * persistido. La condición vive en la base para que ninguna llamada pueda
@@ -184,6 +258,7 @@ export class InvoicesRepository {
   finalizeIssue(
     tenantId: string,
     id: string,
+    attemptAt: Date,
     client: PrismaClientOrTx = this.prisma,
   ) {
     return client.invoice.updateMany({
@@ -192,6 +267,7 @@ export class InvoicesRepository {
         tenantId,
         status: 'PENDING',
         pdfFileId: { not: null },
+        issuedAt: attemptAt,
       },
       data: { status: 'ISSUED' },
     });

@@ -18,13 +18,25 @@ function makeInvoice(overrides = {}) {
     issuedAt: null,
     dueDate: null,
     notes: null,
+    paymentMethod: null,
+    pdfFileId: null,
+    sequential: null,
     createdAt: new Date(),
+    updatedAt: new Date('2026-09-23T12:00:00.000Z'),
     saleOrder: {
       saleType: 'CASH',
       branch: { codigoEstablecimiento: '001', puntoExpedicion: '002' },
     },
     ...overrides,
   };
+}
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((done) => {
+    resolve = done;
+  });
+  return { promise, resolve };
 }
 
 // ── Tests ──────────────────────────────────────────────────────────────────────
@@ -35,6 +47,9 @@ describe('InvoicesService', () => {
     findAll: jest.Mock;
     findById: jest.Mock;
     updateStatus: jest.Mock;
+    claimIssue: jest.Mock;
+    releaseIssueClaim: jest.Mock;
+    cancelIfAllowed: jest.Mock;
     hasPdf: jest.Mock;
     finalizeIssue: jest.Mock;
     createInterestInvoice: jest.Mock;
@@ -58,6 +73,9 @@ describe('InvoicesService', () => {
       findAll: jest.fn(),
       findById: jest.fn(),
       updateStatus: jest.fn().mockResolvedValue(undefined),
+      claimIssue: jest.fn().mockResolvedValue({ count: 1 }),
+      releaseIssueClaim: jest.fn().mockResolvedValue({ count: 1 }),
+      cancelIfAllowed: jest.fn().mockResolvedValue({ count: 1 }),
       hasPdf: jest.fn().mockResolvedValue(true),
       finalizeIssue: jest.fn().mockResolvedValue({ count: 1 }),
       createInterestInvoice: jest.fn(),
@@ -133,6 +151,150 @@ describe('InvoicesService', () => {
   // ── issue ──────────────────────────────────────────────────────────────────
 
   describe('issue', () => {
+    it('lets only one overlapping request claim a pending invoice', async () => {
+      invoicesRepository.findById.mockResolvedValue(makeInvoice());
+      invoicesRepository.claimIssue
+        .mockResolvedValueOnce({ count: 1 })
+        .mockResolvedValueOnce({ count: 0 });
+      const pdfStarted = deferred<void>();
+      const releasePdf = deferred<void>();
+      eventEmitter.emitAsync.mockImplementation((event: string) => {
+        if (event === 'invoice.pdf.requested') {
+          pdfStarted.resolve();
+          return releasePdf.promise;
+        }
+        return Promise.resolve([]);
+      });
+
+      const first = service.issue('tenant-1', 'inv-1', {
+        paymentCondition: 'CASH',
+        paymentMethod: 'CASH',
+      });
+      await pdfStarted.promise;
+      const second = service
+        .issue('tenant-1', 'inv-1', {
+          paymentCondition: 'CASH',
+          paymentMethod: 'CASH',
+        })
+        .then(
+          (value) => ({ status: 'fulfilled' as const, value }),
+          (reason) => ({ status: 'rejected' as const, reason }),
+        );
+      await new Promise<void>((resolve) => setImmediate(resolve));
+      releasePdf.resolve();
+
+      const outcomes = [...(await Promise.allSettled([first])), await second];
+      expect(
+        outcomes.filter((outcome) => outcome.status === 'fulfilled'),
+      ).toHaveLength(1);
+      expect(
+        outcomes.filter((outcome) => outcome.status === 'rejected'),
+      ).toHaveLength(1);
+      expect(
+        eventEmitter.emitAsync.mock.calls.filter(
+          ([event]) => event === 'invoice.pdf.requested',
+        ),
+      ).toHaveLength(1);
+      expect(outbox.enqueue).toHaveBeenCalledTimes(1);
+      expect(invoicesRepository.claimIssue).toHaveBeenCalledTimes(2);
+    });
+
+    it('can reclaim a stale pending issuance that never linked a PDF', async () => {
+      invoicesRepository.findById.mockResolvedValue(
+        makeInvoice({
+          issuedAt: new Date('2026-09-22T10:00:00.000Z'),
+          updatedAt: new Date('2026-09-22T10:00:00.000Z'),
+          pdfFileId: null,
+          sequential: 7,
+        }),
+      );
+
+      await service.issue('tenant-1', 'inv-1', {
+        paymentCondition: 'CASH',
+        paymentMethod: 'CASH',
+      });
+
+      expect(invoicesRepository.claimIssue.mock.calls[0].slice(0, 2)).toEqual([
+        'tenant-1',
+        'inv-1',
+      ]);
+      expect(eventEmitter.emitAsync).toHaveBeenCalledWith(
+        'invoice.pdf.requested',
+        expect.objectContaining({ invoiceId: 'inv-1' }),
+      );
+    });
+
+    it('preserves a PDF link when the renderer stores it but its acknowledgement fails', async () => {
+      const persisted = makeInvoice({ pdfFileId: null });
+      invoicesRepository.findById.mockImplementation(() =>
+        Promise.resolve({ ...persisted }),
+      );
+      invoicesRepository.updateStatus.mockImplementation(
+        (_tenantId, _id, status, extra) => {
+          Object.assign(persisted, { status, ...extra });
+          return Promise.resolve({ count: 1 });
+        },
+      );
+      invoicesRepository.claimIssue.mockImplementation(
+        (_tenantId, _id, _observedAt, attemptAt, data) => {
+          Object.assign(persisted, { ...data, issuedAt: attemptAt });
+          return Promise.resolve({ count: 1 });
+        },
+      );
+      eventEmitter.emitAsync.mockImplementation((event: string) => {
+        if (event === 'invoice.pdf.requested') {
+          Object.assign(persisted, { pdfFileId: 'pdf-stored' });
+          return Promise.reject(new Error('response lost after PDF link'));
+        }
+        return Promise.resolve([]);
+      });
+
+      await expect(
+        service.issue('tenant-1', 'inv-1', {
+          paymentCondition: 'CASH',
+          paymentMethod: 'CASH',
+        }),
+      ).rejects.toBeInstanceOf(UnprocessableEntityException);
+
+      expect(persisted.pdfFileId).toBe('pdf-stored');
+      expect(persisted.issuedAt).toBeInstanceOf(Date);
+      expect(persisted.paymentMethod).toBe('CASH');
+      expect(outbox.enqueue).not.toHaveBeenCalled();
+    });
+
+    it('preserves a linked PDF if the post-render database read fails', async () => {
+      const persisted = makeInvoice({ pdfFileId: null });
+      invoicesRepository.findById.mockResolvedValue(persisted);
+      invoicesRepository.claimIssue.mockImplementation(
+        (_tenantId, _id, _observedAt, attemptAt, data) => {
+          Object.assign(persisted, { ...data, issuedAt: attemptAt });
+          return Promise.resolve({ count: 1 });
+        },
+      );
+      eventEmitter.emitAsync.mockImplementation((event: string) => {
+        if (event === 'invoice.pdf.requested') {
+          Object.assign(persisted, { pdfFileId: 'pdf-stored' });
+        }
+        return Promise.resolve([]);
+      });
+      invoicesRepository.hasPdf.mockRejectedValue(new Error('read timeout'));
+
+      await expect(
+        service.issue('tenant-1', 'inv-1', {
+          paymentCondition: 'CASH',
+          paymentMethod: 'CASH',
+        }),
+      ).rejects.toBeInstanceOf(UnprocessableEntityException);
+
+      expect(persisted.pdfFileId).toBe('pdf-stored');
+      expect(persisted.issuedAt).toBeInstanceOf(Date);
+      expect(invoicesRepository.releaseIssueClaim).toHaveBeenCalledWith(
+        'tenant-1',
+        'inv-1',
+        persisted.issuedAt,
+      );
+      expect(outbox.enqueue).not.toHaveBeenCalled();
+    });
     it('throws UnprocessableEntityException when the invoice has no saleOrder (defensive — should never happen)', async () => {
       invoicesRepository.findById.mockResolvedValue(
         makeInvoice({ saleOrder: null }),
@@ -188,10 +350,11 @@ describe('InvoicesService', () => {
           },
         }),
       );
-      expect(invoicesRepository.updateStatus).toHaveBeenCalledWith(
+      expect(invoicesRepository.claimIssue).toHaveBeenCalledWith(
         'tenant-1',
         'inv-1',
-        'PENDING',
+        expect.any(Date),
+        expect.any(Date),
         expect.objectContaining({
           establecimiento: '001',
           puntoExpedicion: '002',
@@ -212,10 +375,11 @@ describe('InvoicesService', () => {
         paymentMethod: 'CASH',
       });
 
-      expect(invoicesRepository.updateStatus).toHaveBeenCalledWith(
+      expect(invoicesRepository.claimIssue).toHaveBeenCalledWith(
         'tenant-1',
         'inv-1',
-        'PENDING',
+        expect.any(Date),
+        expect.any(Date),
         expect.objectContaining({ sequential: 1, invoiceNumber: '0000001' }),
         expect.anything(),
       );
@@ -231,10 +395,11 @@ describe('InvoicesService', () => {
         paymentMethod: 'CASH',
       });
 
-      expect(invoicesRepository.updateStatus).toHaveBeenCalledWith(
+      expect(invoicesRepository.claimIssue).toHaveBeenCalledWith(
         'tenant-1',
         'inv-1',
-        'PENDING',
+        expect.any(Date),
+        expect.any(Date),
         expect.objectContaining({
           establecimiento: '001',
           puntoExpedicion: '001',
@@ -283,27 +448,12 @@ describe('InvoicesService', () => {
         }),
       ).rejects.toBeInstanceOf(UnprocessableEntityException);
 
-      // El primer llamado solo prepara datos manteniendo PENDING; el segundo
-      // limpia los datos de emisión. El número reservado se conserva para
-      // reintentar sin asignarlo a otra factura.
-      expect(invoicesRepository.updateStatus).toHaveBeenCalledTimes(2);
-      expect(invoicesRepository.updateStatus).toHaveBeenNthCalledWith(
-        1,
+      // El intento que falló libera su propia reclamación solo si sigue sin PDF.
+      expect(invoicesRepository.claimIssue).toHaveBeenCalledTimes(1);
+      expect(invoicesRepository.releaseIssueClaim).toHaveBeenCalledWith(
         'tenant-1',
         'inv-1',
-        'PENDING',
-        expect.anything(),
-        expect.anything(),
-      );
-      expect(invoicesRepository.updateStatus).toHaveBeenNthCalledWith(
-        2,
-        'tenant-1',
-        'inv-1',
-        'PENDING',
-        expect.objectContaining({
-          issuedAt: null,
-          pdfFileId: null,
-        }),
+        expect.any(Date),
       );
       // 'invoice.issued' must never fire — payments/sales react to it with
       // irreversible side effects (AR, stock) that we can't safely undo.
@@ -356,6 +506,7 @@ describe('InvoicesService', () => {
       expect(invoicesRepository.finalizeIssue).toHaveBeenCalledWith(
         'tenant-1',
         'inv-1',
+        expect.any(Date),
         expect.anything(),
       );
     });
@@ -422,7 +573,11 @@ describe('InvoicesService', () => {
 
     it('regenerates a missing PDF without publishing invoice.issued again', async () => {
       invoicesRepository.findById.mockResolvedValue(
-        makeInvoice({ status: 'ISSUED', pdfFileId: null }),
+        makeInvoice({
+          status: 'ISSUED',
+          pdfFileId: null,
+          issuedAt: new Date('2026-09-23T12:00:00.000Z'),
+        }),
       );
 
       await service.retryPdf('tenant-1', 'inv-1', 'user-1');
@@ -440,7 +595,11 @@ describe('InvoicesService', () => {
 
     it('keeps historical invoice state and reports an error if PDF regeneration fails', async () => {
       invoicesRepository.findById.mockResolvedValue(
-        makeInvoice({ status: 'ISSUED', pdfFileId: null }),
+        makeInvoice({
+          status: 'ISSUED',
+          pdfFileId: null,
+          issuedAt: new Date('2026-09-23T12:00:00.000Z'),
+        }),
       );
       eventEmitter.emitAsync.mockRejectedValue(new Error('storage down'));
 
@@ -608,6 +767,57 @@ describe('InvoicesService', () => {
   // ── cancel ─────────────────────────────────────────────────────────────────
 
   describe('cancel', () => {
+    it('does not cancel a recent pending issuance claim even if its PDF has not linked yet', async () => {
+      invoicesRepository.cancelIfAllowed.mockResolvedValue({ count: 0 });
+      invoicesRepository.findById.mockResolvedValue(
+        makeInvoice({
+          issuedAt: new Date(),
+          pdfFileId: null,
+        }),
+      );
+
+      await expect(
+        service.cancel('tenant-1', 'inv-1', 'customer request'),
+      ).rejects.toBeInstanceOf(UnprocessableEntityException);
+
+      expect(creditNotesRepository.create).not.toHaveBeenCalled();
+      expect(eventEmitter.emit).not.toHaveBeenCalledWith(
+        'invoice.cancelled',
+        expect.anything(),
+      );
+    });
+
+    it('rejects cancellation while a pending invoice issuance owns the claim', async () => {
+      invoicesRepository.cancelIfAllowed.mockResolvedValue({ count: 0 });
+      invoicesRepository.findById.mockResolvedValue(makeInvoice());
+      const pdfStarted = deferred<void>();
+      const releasePdf = deferred<void>();
+      eventEmitter.emitAsync.mockImplementation((event: string) => {
+        if (event === 'invoice.pdf.requested') {
+          pdfStarted.resolve();
+          return releasePdf.promise;
+        }
+        return Promise.resolve([]);
+      });
+
+      const issuance = service.issue('tenant-1', 'inv-1', {
+        paymentCondition: 'CASH',
+        paymentMethod: 'CASH',
+      });
+      await pdfStarted.promise;
+      const [cancellation] = await Promise.allSettled([
+        service.cancel('tenant-1', 'inv-1', 'customer request'),
+      ]);
+      releasePdf.resolve();
+      await issuance;
+
+      expect(cancellation.status).toBe('rejected');
+      expect(creditNotesRepository.create).not.toHaveBeenCalled();
+      expect(eventEmitter.emit).not.toHaveBeenCalledWith(
+        'invoice.cancelled',
+        expect.anything(),
+      );
+    });
     it('throws UnprocessableEntityException when invoice is already CANCELLED', async () => {
       invoicesRepository.findById.mockResolvedValue(
         makeInvoice({ status: 'CANCELLED' }),
@@ -638,11 +848,12 @@ describe('InvoicesService', () => {
 
       const result = await service.cancel('tenant-1', 'inv-1', 'motivo test');
 
-      expect(invoicesRepository.updateStatus).toHaveBeenCalledWith(
+      expect(invoicesRepository.cancelIfAllowed).toHaveBeenCalledWith(
         'tenant-1',
         'inv-1',
-        'CANCELLED',
-        undefined,
+        'PENDING',
+        expect.any(Date),
+        expect.any(Date),
         expect.anything(),
       );
       expect(creditNotesRepository.create).not.toHaveBeenCalled();
@@ -665,7 +876,7 @@ describe('InvoicesService', () => {
         'cliente solicitó cambio de producto',
       );
 
-      expect(invoicesRepository.updateStatus).toHaveBeenCalled();
+      expect(invoicesRepository.cancelIfAllowed).toHaveBeenCalled();
       expect(creditNotesRepository.generateNumber).toHaveBeenCalledWith(
         'tenant-1',
       );
@@ -676,6 +887,24 @@ describe('InvoicesService', () => {
           reason: 'cliente solicitó cambio de producto',
           number: 'NC-0001',
         }),
+        expect.anything(),
+      );
+    });
+
+    it('does not create a credit note when an issued invoice changes before cancellation commits', async () => {
+      invoicesRepository.findById.mockResolvedValue(
+        makeInvoice({ status: 'ISSUED' }),
+      );
+      invoicesRepository.cancelIfAllowed.mockResolvedValue({ count: 0 });
+
+      await expect(
+        service.cancel('tenant-1', 'inv-1', 'customer request'),
+      ).rejects.toBeInstanceOf(UnprocessableEntityException);
+
+      expect(creditNotesRepository.generateNumber).not.toHaveBeenCalled();
+      expect(creditNotesRepository.create).not.toHaveBeenCalled();
+      expect(eventEmitter.emit).not.toHaveBeenCalledWith(
+        'invoice.cancelled',
         expect.anything(),
       );
     });

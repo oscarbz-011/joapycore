@@ -66,6 +66,9 @@ export class InvoicesService {
     }
 
     const saleOrder = invoice.saleOrder;
+    const attemptAt = invoice.pdfFileId
+      ? invoice.issuedAt!
+      : new Date(Math.max(Date.now(), (invoice.issuedAt?.getTime() ?? 0) + 1));
     if (invoice.pdfFileId) {
       // El PDF ya fue guardado, pero falló la transacción final de emisión.
       // No se puede cambiar lo que imprime ese comprobante en el reintento.
@@ -85,7 +88,6 @@ export class InvoicesService {
     } else {
       // Primero se reservan la numeración y los datos que necesita el PDF,
       // pero la factura sigue PENDING hasta que se guarde el comprobante.
-      const issuedAt = new Date();
       await this.prisma.$transaction(async (tx) => {
         const establecimiento =
           saleOrder.branch?.codigoEstablecimiento || '001';
@@ -104,12 +106,12 @@ export class InvoicesService {
           sequential = (last?.sequential ?? 0) + 1;
         }
 
-        await this.invoicesRepository.updateStatus(
+        const claimed = await this.invoicesRepository.claimIssue(
           tenantId,
           id,
-          'PENDING',
+          invoice.updatedAt,
+          attemptAt,
           {
-            issuedAt,
             dueDate: dto.dueDate ? new Date(dto.dueDate) : undefined,
             paymentMethod: dto.paymentMethod ?? null,
             establecimiento,
@@ -118,11 +120,14 @@ export class InvoicesService {
             invoiceNumber: String(sequential).padStart(7, '0'),
             invoicePrefix: `${establecimiento}-${puntoExpedicion}-`,
             notes: dto.notes,
-            // Un PDF previo nunca puede validar este intento de emisión.
-            pdfFileId: null,
           },
           tx,
         );
+        if (claimed.count !== 1) {
+          throw new UnprocessableEntityException(
+            'La factura ya está siendo emitida o cambió de estado. Recargá antes de reintentar.',
+          );
+        }
       });
 
       // Los listeners críticos declaran suppressErrors:false para que
@@ -144,6 +149,8 @@ export class InvoicesService {
           total: Number(invoice.total),
           dueDate: dto.dueDate ?? null,
           issuedById: userId,
+          attemptAt,
+          expectedStatus: 'PENDING',
         });
 
         // No alcanza con que el listener resuelva: se verifica la postcondición
@@ -152,15 +159,13 @@ export class InvoicesService {
           throw new Error('El generador terminó sin vincular el archivo PDF');
         }
       } catch {
-        // Sigue siendo borrador. La numeración reservada se conserva para el
-        // reintento y no puede ser reutilizada por otra factura.
-        await this.invoicesRepository.updateStatus(tenantId, id, 'PENDING', {
-          issuedAt: null,
-          dueDate: null,
-          paymentMethod: null,
-          notes: null,
-          pdfFileId: null,
-        });
+        // Un enlace PDF confirmado o una reclamación posterior no se tocan.
+        // Solo la reclamación propia sin PDF puede liberarse.
+        await this.invoicesRepository.releaseIssueClaim(
+          tenantId,
+          id,
+          attemptAt,
+        );
         throw new UnprocessableEntityException(
           'No se pudo generar y guardar el PDF. La factura continúa como borrador; revisá la conexión y usá Reintentar emisión.',
         );
@@ -173,6 +178,7 @@ export class InvoicesService {
       const finalized = await this.invoicesRepository.finalizeIssue(
         tenantId,
         id,
+        attemptAt,
         tx,
       );
       if (finalized.count !== 1) {
@@ -227,6 +233,11 @@ export class InvoicesService {
       );
     }
     if (invoice.pdfFileId) return invoice;
+    if (!invoice.issuedAt) {
+      throw new UnprocessableEntityException(
+        'La factura no tiene una fecha de emisión válida para regenerar el PDF',
+      );
+    }
 
     try {
       await this.eventEmitter.emitAsync('invoice.pdf.requested', {
@@ -237,6 +248,8 @@ export class InvoicesService {
         total: Number(invoice.total),
         dueDate: invoice.dueDate?.toISOString() ?? null,
         issuedById: userId,
+        attemptAt: invoice.issuedAt,
+        expectedStatus: invoice.status,
       });
       if (!(await this.invoicesRepository.hasPdf(tenantId, id))) {
         throw new Error('El generador terminó sin vincular el archivo PDF');
@@ -348,17 +361,24 @@ export class InvoicesService {
       );
     }
 
+    const cancellableStatus = invoice.status;
     const needsCreditNote = invoice.status === 'ISSUED';
 
     // Atomic: both the status change and the credit note creation succeed or both rollback.
     await this.prisma.$transaction(async (tx) => {
-      await this.invoicesRepository.updateStatus(
+      const cancelled = await this.invoicesRepository.cancelIfAllowed(
         tenantId,
         id,
-        'CANCELLED',
-        undefined,
+        cancellableStatus,
+        invoice.updatedAt,
+        new Date(),
         tx,
       );
+      if (cancelled.count !== 1) {
+        throw new UnprocessableEntityException(
+          'La factura está siendo emitida o cambió de estado. Recargá antes de cancelarla.',
+        );
+      }
 
       if (needsCreditNote) {
         // generateNumber uses a COUNT, acceptable for v1 (low concurrency on cancellations).

@@ -46,11 +46,29 @@ export class DocumentSourcesRepository {
     });
   }
 
-  setInvoicePdf(tenantId: string, invoiceId: string, fileId: string) {
-    return this.prisma.invoice.updateMany({
-      where: { id: invoiceId, tenantId },
+  async setInvoicePdf(
+    tenantId: string,
+    invoiceId: string,
+    fileId: string,
+    attemptAt: Date,
+    expectedStatus: 'PENDING' | 'ISSUED' | 'PAID',
+  ) {
+    const updated = await this.prisma.invoice.updateMany({
+      where: {
+        id: invoiceId,
+        tenantId,
+        status: expectedStatus,
+        pdfFileId: null,
+        issuedAt: attemptAt,
+      },
       data: { pdfFileId: fileId },
     });
+    if (updated.count !== 1) {
+      throw new Error(
+        `La factura ${invoiceId} cambió durante la generación del PDF`,
+      );
+    }
+    return updated;
   }
 
   // ── Pedidos de venta ───────────────────────────────────────────────────────

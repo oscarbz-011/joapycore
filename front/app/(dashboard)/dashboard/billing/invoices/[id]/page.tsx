@@ -8,7 +8,7 @@ import { useState, type ReactNode } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, Printer, RotateCw, Send, AlertTriangle } from 'lucide-react';
-import { billingApi, type InvoiceStatus, type IssueInvoicePayload, type PaymentMethod } from '../../../../../../lib/api/billing';
+import { billingApi, canRetryInvoicePdf, type InvoiceStatus, type IssueInvoicePayload, type PaymentMethod } from '../../../../../../lib/api/billing';
 import { settingsApi } from '../../../../../../lib/api/settings';
 import { openPdf } from '../../../../../../lib/open-pdf';
 import { formatDatePY, parseISODate, toISODate } from '../../../../../../lib/date';
@@ -196,6 +196,7 @@ export default function InvoiceDetailPage() {
     : `#${invoice.id.slice(0, 8).toUpperCase()}`;
   const isCredit = invoice.saleOrder.saleType === 'CREDIT';
   const canIssue = isCredit ? !!form.dueDate : !!form.paymentMethod;
+  const canRetryPdf = canRetryInvoicePdf(invoice);
 
   return (
     <div className="max-w-5xl">
@@ -223,7 +224,7 @@ export default function InvoiceDetailPage() {
             <span className="font-mono">{invoiceRef}</span>
           </p>
         </div>
-        {invoice.status !== 'PENDING' && (invoice.pdfFileId ? (
+        {(invoice.pdfFileId || canRetryPdf) && (invoice.pdfFileId ? (
           <Button variant="outline" onClick={() => void openPdf(invoice.pdfFileId!)}>
             <Printer size={15} /> Imprimir
           </Button>
@@ -423,7 +424,7 @@ export default function InvoiceDetailPage() {
               )}
               {invoice.notes && <InfoRow label="Notas" value={invoice.notes} />}
 
-              {invoice.status === 'ISSUED' && (
+              {(invoice.status === 'ISSUED' || invoice.status === 'PAID') && (
                 <div className="mt-4">
                   <Button
                     variant="outline"

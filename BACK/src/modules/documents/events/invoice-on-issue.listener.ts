@@ -19,6 +19,8 @@ interface InvoicePdfRequestedEvent {
   total: number;
   dueDate: string | null;
   issuedById?: string;
+  attemptAt: Date;
+  expectedStatus: 'PENDING' | 'ISSUED' | 'PAID';
 }
 
 function formatMoney(value: unknown): string {
@@ -108,6 +110,14 @@ export class InvoiceOnIssueListener {
     // Los eventos pueden repetirse tras un reintento o una respuesta perdida.
     // Un PDF ya vinculado es el resultado durable de la primera ejecución.
     if (!invoice || !invoice.saleOrder || invoice.pdfFileId) return;
+    if (
+      invoice.status !== event.expectedStatus ||
+      invoice.issuedAt?.getTime() !== event.attemptAt.getTime()
+    ) {
+      throw new Error(
+        `La factura ${event.invoiceId} cambió durante la generación del PDF`,
+      );
+    }
 
     const customerName = [
       invoice.saleOrder.customer.firstName,
@@ -278,6 +288,12 @@ export class InvoiceOnIssueListener {
       { module: 'billing', entityType: 'invoice', entityId: invoice.id },
     );
 
-    await this.sources.setInvoicePdf(event.tenantId, invoice.id, fileRecord.id);
+    await this.sources.setInvoicePdf(
+      event.tenantId,
+      invoice.id,
+      fileRecord.id,
+      event.attemptAt,
+      event.expectedStatus,
+    );
   }
 }
