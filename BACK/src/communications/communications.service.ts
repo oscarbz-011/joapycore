@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  HttpException,
   Injectable,
   NotFoundException,
   ServiceUnavailableException,
@@ -26,6 +27,27 @@ export function communicationRetryDelay(attempt: number): number {
   return Math.min(30_000 * 2 ** Math.max(attempt - 1, 0), 60 * 60_000);
 }
 
+const PREPARATION_FAILURE = Symbol('communication.preparationFailure');
+type PreparationFailure = { code: string; safeReason: string };
+
+function knownPreparationFailure<T extends HttpException>(
+  exception: T,
+  code: string,
+  safeReason: string,
+): T {
+  Object.defineProperty(exception, PREPARATION_FAILURE, {
+    value: { code, safeReason } satisfies PreparationFailure,
+  });
+  return exception;
+}
+
+function preparationFailure(error: unknown): PreparationFailure | undefined {
+  if (!(error instanceof HttpException)) return undefined;
+  return (
+    error as HttpException & { [PREPARATION_FAILURE]?: PreparationFailure }
+  )[PREPARATION_FAILURE];
+}
+
 @Injectable()
 export class CommunicationsService {
   constructor(
@@ -34,6 +56,29 @@ export class CommunicationsService {
     private readonly provider: CommunicationsEmailProvider,
     private readonly events: EventEmitter2,
   ) {}
+
+  async queueInvoiceAutomatically(
+    tenantId: string,
+    invoiceId: string,
+    actorUserId?: string,
+  ) {
+    try {
+      return await this.queueInvoice(tenantId, invoiceId, actorUserId, true);
+    } catch (error) {
+      const failure = preparationFailure(error);
+      if (!failure) throw error;
+      if (actorUserId) {
+        await this.repository.recordAutomaticFailure({
+          tenantId,
+          invoiceId,
+          userId: actorUserId,
+          code: failure.code,
+          reason: failure.safeReason,
+        });
+      }
+      return null;
+    }
+  }
 
   async queueInvoice(
     tenantId: string,
@@ -56,9 +101,18 @@ export class CommunicationsService {
     const existing = await this.repository.byKey(tenantId, idempotencyKey);
     if (existing) return existing;
     const invoice = await this.repository.invoice(tenantId, invoiceId);
-    if (!invoice) throw new NotFoundException('Factura no encontrada');
+    if (!invoice)
+      throw knownPreparationFailure(
+        new NotFoundException('Factura no encontrada'),
+        'INVOICE_NOT_FOUND',
+        'Factura no encontrada.',
+      );
     if (!['ISSUED', 'PAID'].includes(invoice.status) || !invoice.pdfFileId) {
-      throw new BadRequestException(
+      throw knownPreparationFailure(
+        new BadRequestException(
+          'La factura debe estar emitida y tener su PDF guardado.',
+        ),
+        'INVOICE_NOT_READY',
         'La factura debe estar emitida y tener su PDF guardado.',
       );
     }
@@ -67,21 +121,43 @@ export class CommunicationsService {
       !recipient ||
       !/^[^\s<>@,;]+@[^\s<>@,;]+\.[^\s<>@,;]+$/.test(recipient)
     ) {
-      throw new BadRequestException(
-        'El cliente de la factura no tiene un correo válido.',
+      throw knownPreparationFailure(
+        new BadRequestException(
+          'El cliente de la factura no tiene un correo válido.',
+        ),
+        'RECIPIENT_INVALID',
+        'El cliente no tiene un correo válido.',
       );
     }
     const [identity, template, file] = await Promise.all([
       this.repository.identity(tenantId),
       this.repository.template(tenantId, INVOICE_TEMPLATE_CODE),
-      this.files.getById(tenantId, invoice.pdfFileId),
+      this.files
+        .getById(tenantId, invoice.pdfFileId)
+        .catch((error: unknown) => {
+          if (error instanceof NotFoundException)
+            throw knownPreparationFailure(
+              new NotFoundException('Archivo no encontrado'),
+              'PDF_NOT_FOUND',
+              'No se encontró el PDF guardado de esta factura.',
+            );
+          throw error;
+        }),
     ]);
     if (!identity)
-      throw new BadRequestException(
+      throw knownPreparationFailure(
+        new BadRequestException(
+          'Configurá una identidad predeterminada con salida habilitada.',
+        ),
+        'IDENTITY_MISSING',
         'Configurá una identidad predeterminada con salida habilitada.',
       );
     if (!template)
-      throw new BadRequestException(
+      throw knownPreparationFailure(
+        new BadRequestException(
+          'Publicá una versión de la plantilla INVOICE_ISSUED.',
+        ),
+        'TEMPLATE_MISSING',
         'Publicá una versión de la plantilla INVOICE_ISSUED.',
       );
     if (
@@ -90,7 +166,11 @@ export class CommunicationsService {
       file.entityType !== 'invoice' ||
       file.entityId !== invoice.id
     ) {
-      throw new BadRequestException(
+      throw knownPreparationFailure(
+        new BadRequestException(
+          'El archivo no es el PDF guardado de esta factura.',
+        ),
+        'PDF_INVALID',
         'El archivo no es el PDF guardado de esta factura.',
       );
     }
@@ -99,10 +179,9 @@ export class CommunicationsService {
       value
         ? value.toLocaleDateString('es-PY', { timeZone: 'America/Asuncion' })
         : '—';
-    const rendered = renderInvoiceTemplate(
-      template.subject,
-      template.bodyText,
-      {
+    let rendered: ReturnType<typeof renderInvoiceTemplate>;
+    try {
+      rendered = renderInvoiceTemplate(template.subject, template.bodyText, {
         'invoice.number': `${invoice.invoicePrefix ?? ''}${invoice.invoiceNumber ?? invoice.id}`,
         'invoice.total': Number(invoice.total).toLocaleString('es-PY'),
         'invoice.issuedAt': date(invoice.issuedAt),
@@ -119,13 +198,25 @@ export class CommunicationsService {
           .filter(Boolean)
           .join(' '),
         'tenant.name': invoice.tenant.razonSocial ?? invoice.tenant.name,
-      },
-    );
+      });
+    } catch (error) {
+      if (error instanceof BadRequestException)
+        throw knownPreparationFailure(
+          error,
+          'TEMPLATE_INVALID',
+          'La plantilla de factura no es válida.',
+        );
+      throw error;
+    }
     const actor = actorUserId
       ? await this.repository.actor(tenantId, actorUserId)
       : null;
     if (actorUserId && !actor)
-      throw new NotFoundException('Usuario no encontrado en el tenant');
+      throw knownPreparationFailure(
+        new NotFoundException('Usuario no encontrado en el tenant'),
+        'ACTOR_NOT_FOUND',
+        'Usuario no encontrado en el tenant',
+      );
     const message = await this.repository.createQueued({
       tenantId,
       invoiceId,

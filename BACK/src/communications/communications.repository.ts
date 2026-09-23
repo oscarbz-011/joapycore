@@ -101,6 +101,30 @@ export class CommunicationsRepository {
     }
   }
 
+  recordAutomaticFailure(input: {
+    tenantId: string;
+    invoiceId: string;
+    userId: string;
+    code: string;
+    reason: string;
+  }) {
+    const idempotencyKey = `invoice:${input.invoiceId}:automatic:${input.userId}:${input.code}`;
+    return this.prisma.communicationNotification.upsert({
+      where: {
+        tenantId_idempotencyKey: { tenantId: input.tenantId, idempotencyKey },
+      },
+      update: {},
+      create: {
+        tenantId: input.tenantId,
+        userId: input.userId,
+        messageId: null,
+        idempotencyKey,
+        title: 'No se pudo preparar el correo de la factura',
+        body: input.reason,
+      },
+    });
+  }
+
   async retry(tenantId: string, id: string) {
     return this.prisma.communicationMessage.updateMany({
       where: { tenantId, id, status: 'FAILED' },
