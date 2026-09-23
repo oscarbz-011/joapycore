@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/lib/auth-context";
 import { usePermission } from "@/lib/permissions";
+import { useActiveModules } from "@/lib/use-active-modules";
 import {
   communicationsApi,
   COMMUNICATIONS_PATH,
@@ -33,9 +34,10 @@ export function EntityTimeline({
   const { jwtPayload } = useAuth();
   const access = usePermission("communications:access");
   const canRead = usePermission("communications:delivery:read");
+  const { hasModule } = useActiveModules();
   const canReadInvoice =
     (jwtPayload?.permissions.includes("billing:read") ?? false) &&
-    (jwtPayload?.activeModules.includes("billing") ?? false);
+    hasModule("billing");
   return access && canRead && canReadInvoice ? (
     <TimelineContent
       key={`${jwtPayload?.tenantId}:${jwtPayload?.sub}:${entityId}`}

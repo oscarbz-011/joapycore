@@ -7,6 +7,7 @@ import { Bell, Mail, RefreshCw, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth-context";
 import { usePermission } from "@/lib/permissions";
+import { useActiveModules } from "@/lib/use-active-modules";
 import { cn } from "@/lib/utils";
 import {
   communicationsApi,
@@ -28,10 +29,11 @@ export default function CommunicationCenterPage() {
   const tenantId = jwtPayload?.tenantId;
   const userId = jwtPayload?.sub;
   const access = usePermission("communications:access");
+  const { hasModule } = useActiveModules();
   const canRead =
     usePermission("communications:delivery:read") &&
     (jwtPayload?.permissions.includes("billing:read") ?? false) &&
-    (jwtPayload?.activeModules.includes("billing") ?? false);
+    hasModule("billing");
   const canManage = usePermission("communications:settings:manage");
   const [view, setView] = useState<View>(
     canRead ? "deliveries" : "notifications",
@@ -155,7 +157,8 @@ export default function CommunicationCenterPage() {
             ) : (
               <Notifications
                 key={`${tenantId}:${userId}`}
-                canOpenMessages={canRead}
+                canOpenMessages={canRead && settings.data.emailEnabled}
+                emailDisabled={canRead && !settings.data.emailEnabled}
                 onOpenMessage={(id) => {
                   if (!tenantId || !userId) return;
                   setOpenedMessage({ tenantId, userId, id });
@@ -410,9 +413,11 @@ function Deliveries({ openedMessageId }: { openedMessageId: string | null }) {
 
 function Notifications({
   canOpenMessages,
+  emailDisabled,
   onOpenMessage,
 }: {
   canOpenMessages: boolean;
+  emailDisabled: boolean;
   onOpenMessage: (id: string) => void;
 }) {
   const { jwtPayload } = useAuth();
@@ -454,6 +459,12 @@ function Notifications({
         </div>
       )}
       {read.error && <CommunicationError error={read.error} />}
+      {emailDisabled && list.data?.items.some((item) => item.messageId) && (
+        <p className="text-sm text-muted-foreground">
+          El correo está desactivado. Un administrador puede habilitarlo en
+          Configuración para consultar el detalle de las entregas.
+        </p>
+      )}
       {list.data?.items.length === 0 && (
         <p className="py-10 text-center text-sm text-muted-foreground">
           No tenés notificaciones de comunicaciones.

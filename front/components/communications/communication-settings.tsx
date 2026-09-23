@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/lib/auth-context";
+import { usePermission } from "@/lib/permissions";
 import {
   communicationsApi,
   type CommunicationSettings,
@@ -22,6 +23,8 @@ export function CommunicationConfiguration({
   settings: CommunicationSettings;
 }) {
   const { jwtPayload } = useAuth();
+  const canReadIntegrations = usePermission("integrations:read");
+  const canManageIntegrations = usePermission("integrations:manage");
   const tenantId = jwtPayload?.tenantId;
   const userId = jwtPayload?.sub;
   const queryClient = useQueryClient();
@@ -118,12 +121,19 @@ export function CommunicationConfiguration({
           La dirección debe coincidir con el remitente SMTP configurado.
           Reply-To permite recibir respuestas en otra dirección.
         </p>
-        <Link
-          href="/dashboard/settings?tab=integrations"
-          className="inline-block text-sm underline"
-        >
-          Configurar conexión SMTP en Integraciones
-        </Link>
+        {canReadIntegrations || canManageIntegrations ? (
+          <Link
+            href="/dashboard/settings?tab=integrations"
+            className="inline-block text-sm underline"
+          >
+            Configurar conexión SMTP en Integraciones
+          </Link>
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            Un administrador con acceso a integraciones debe configurar la
+            conexión SMTP.
+          </p>
+        )}
         {identities.isPending && (
           <p className="text-sm text-muted-foreground">
             Cargando identidades...

@@ -8,6 +8,8 @@ import { CommunicationConfiguration } from '@/components/communications/communic
 const auth = vi.hoisted(() => ({
   permissions: ['communications:access'],
   activeModules: [] as string[],
+  liveModules: null as string[] | null,
+  emailEnabled: true,
   forceNotifications: false,
   queryMode: 'error' as 'error' | 'notifications' | 'cache' | 'settingsErrors' | 'notificationsError' | 'timelineError' | 'detailError',
   queryKeys: [] as unknown[][],
@@ -16,6 +18,8 @@ const auth = vi.hoisted(() => ({
 beforeEach(() => {
   auth.permissions = ['communications:access'];
   auth.activeModules = [];
+  auth.liveModules = null;
+  auth.emailEnabled = true;
   auth.forceNotifications = false;
   auth.queryMode = 'error';
   auth.queryKeys = [];
@@ -39,6 +43,14 @@ vi.mock('@/lib/auth-context', () => ({
       permissions: auth.permissions,
       activeModules: auth.activeModules,
     },
+  }),
+}));
+
+vi.mock('@/lib/use-active-modules', () => ({
+  useActiveModules: () => ({
+    hasModule: (name: string) => (auth.liveModules ?? auth.activeModules).includes(name),
+    activeModules: auth.liveModules ?? auth.activeModules,
+    isLoading: false,
   }),
 }));
 
@@ -77,7 +89,7 @@ vi.mock('@tanstack/react-query', () => ({
               }],
               total: 1, page: 1, limit: 20, unreadCount: 1,
             }
-          : { enabled: true, emailEnabled: true, invoiceEmailEnabled: false },
+          : { enabled: true, emailEnabled: auth.emailEnabled, invoiceEmailEnabled: false },
         refetch: () => Promise.resolve(),
       };
     }
@@ -218,5 +230,87 @@ describe('Communications navigation and cache scope', () => {
     expect(auth.queryKeys).toContainEqual(['communications', 'tenant-1', 'user-1', 'identities']);
     expect(auth.queryKeys).toContainEqual(['communications', 'tenant-1', 'user-1', 'templates']);
     expect(auth.queryKeys).toContainEqual(['communication-timeline', 'tenant-1', 'user-1', 'INVOICE', 'invoice-1', 1]);
+  });
+});
+
+describe('live module and permission gates', () => {
+  it('shows deliveries when billing is live even if the JWT snapshot is stale and inactive', () => {
+    auth.permissions = ['communications:access', 'communications:delivery:read', 'billing:read'];
+    auth.activeModules = [];
+    auth.liveModules = ['billing'];
+    auth.queryMode = 'cache';
+
+    const html = renderToStaticMarkup(createElement(CommunicationCenterPage));
+
+    expect(html).toContain('Entregas de correo');
+  });
+
+  it('hides deliveries when billing is no longer live despite the JWT snapshot', () => {
+    auth.permissions = ['communications:access', 'communications:delivery:read', 'billing:read'];
+    auth.activeModules = ['billing'];
+    auth.liveModules = [];
+    auth.queryMode = 'cache';
+
+    const html = renderToStaticMarkup(createElement(CommunicationCenterPage));
+
+    expect(html).not.toContain('Entregas de correo');
+    expect(html).toContain('Mis notificaciones');
+  });
+
+  it('shows the invoice timeline when billing becomes live after login', () => {
+    auth.permissions = ['communications:access', 'communications:delivery:read', 'billing:read'];
+    auth.activeModules = [];
+    auth.liveModules = ['billing'];
+
+    const html = renderToStaticMarkup(createElement(EntityTimeline, { entityType: 'INVOICE', entityId: 'invoice-1' }));
+
+    expect(html).toContain('Comunicaciones');
+  });
+
+  it('hides the invoice timeline when billing is deactivated after login', () => {
+    auth.permissions = ['communications:access', 'communications:delivery:read', 'billing:read'];
+    auth.activeModules = ['billing'];
+    auth.liveModules = [];
+
+    const html = renderToStaticMarkup(createElement(EntityTimeline, { entityType: 'INVOICE', entityId: 'invoice-1' }));
+
+    expect(html).toBe('');
+  });
+
+  it('explains disabled email without offering notification message navigation', () => {
+    auth.permissions = ['communications:access', 'communications:delivery:read', 'billing:read'];
+    auth.activeModules = ['billing'];
+    auth.emailEnabled = false;
+    auth.forceNotifications = true;
+    auth.queryMode = 'notifications';
+
+    const html = renderToStaticMarkup(createElement(CommunicationCenterPage));
+
+    expect(html).toContain('Entrega fallida');
+    expect(html).not.toContain('Ver entrega');
+    expect(html).toContain('correo está desactivado');
+  });
+
+  it('hides the SMTP integrations link without integration access', () => {
+    auth.permissions = ['communications:access', 'communications:settings:manage'];
+    auth.queryMode = 'cache';
+
+    const html = renderToStaticMarkup(createElement(CommunicationConfiguration, {
+      settings: { enabled: true, emailEnabled: true, invoiceEmailEnabled: false },
+    }));
+
+    expect(html).not.toContain('href="/dashboard/settings?tab=integrations"');
+    expect(html).toContain('integraciones');
+  });
+
+  it.each(['integrations:read', 'integrations:manage'])('shows the SMTP integrations link with %s', (permission) => {
+    auth.permissions = ['communications:access', 'communications:settings:manage', permission];
+    auth.queryMode = 'cache';
+
+    const html = renderToStaticMarkup(createElement(CommunicationConfiguration, {
+      settings: { enabled: true, emailEnabled: true, invoiceEmailEnabled: false },
+    }));
+
+    expect(html).toContain('href="/dashboard/settings?tab=integrations"');
   });
 });
