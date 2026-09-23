@@ -1,6 +1,7 @@
 'use client';
 
 import { apiErrorMessage } from '@/lib/api/api-error';
+import { findStockIssues } from '@/lib/sales-stock';
 
 import { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
@@ -106,9 +107,7 @@ export default function AdjustOrderPage() {
     setItems((prev) => [...prev, { productId: '', product: null, quantity: 1, unitPrice: 0, serialInput: '' }]);
   }
 
-  const stockIssues = items.filter(
-    (item) => item.product && item.quantity > item.product.stock,
-  );
+  const stockIssues = findStockIssues(items, products);
   const canSave =
     items.length > 0 &&
     items.every((it) => it.productId && it.quantity > 0) &&

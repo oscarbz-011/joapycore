@@ -1,6 +1,7 @@
 'use client';
 
 import { apiErrorMessage } from '@/lib/api/api-error';
+import { findStockIssues } from '@/lib/sales-stock';
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -294,23 +295,7 @@ function CreateOrderModal({ open, onOpenChange, customers, products }: {
   const selectedCreditPlan = activePlans.find((p) => p.installments === installments);
   const creditRate = selectedCreditPlan ? Number(selectedCreditPlan.interestRate) : 0;
   const financedTotal = saleType === 'CREDIT' && creditRate > 0 ? total * (1 + creditRate / 100) : total;
-  const requestedByProduct = items.reduce((totals, item) => {
-    if (item.product) {
-      totals.set(
-        item.productId,
-        (totals.get(item.productId) ?? 0) + item.quantity,
-      );
-    }
-    return totals;
-  }, new Map<string, number>());
-  const stockIssues = [...requestedByProduct.entries()]
-    .map(([productId, requested]) => {
-      const product = products.find((candidate) => candidate.id === productId);
-      return product && requested > product.stock
-        ? `${product.name}: disponible ${product.stock}, solicitado ${requested}`
-        : null;
-    })
-    .filter((issue): issue is string => issue !== null);
+  const stockIssues = findStockIssues(items, products);
 
   const mutation = useMutation({
     mutationFn: () => {
