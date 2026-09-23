@@ -15,6 +15,13 @@ export class WsBridgeListener implements OnModuleInit {
     this.emitter.onAny((event: string | string[], payload: unknown) => {
       const eventName = Array.isArray(event) ? event.join('.') : event;
       if (SKIP_EVENTS.has(eventName)) return;
+      // Las comunicaciones pueden contener notas y notificaciones privadas.
+      // Su acceso se autoriza vía REST; nunca se difunden al room del tenant.
+      if (
+        eventName.startsWith('communication.') ||
+        eventName.startsWith('communications.')
+      )
+        return;
       if (!payload || typeof payload !== 'object') return;
       const tenantId = (payload as Record<string, unknown>).tenantId;
       if (typeof tenantId !== 'string') return;

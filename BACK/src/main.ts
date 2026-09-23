@@ -75,6 +75,10 @@ async function bootstrap() {
       .addTag('Audit', 'Registro de auditoría')
       .addTag('Files', 'Subida y gestión de archivos')
       .addTag('Applications', 'Aplicaciones permanentes de productividad')
+      .addTag(
+        'Communications',
+        'Entregas de facturas, notas y notificaciones privadas',
+      )
       .addTag('Integrations', 'Conexiones opcionales configurables por tenant')
       .build();
     const document = SwaggerModule.createDocument(app, swaggerConfig);

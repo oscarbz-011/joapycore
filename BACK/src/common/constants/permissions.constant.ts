@@ -35,6 +35,12 @@ export const PERMISSIONS = [
   'integrations:manage',
   'applications:email:read',
   'applications:email:send',
+  // Centro de Comunicaciones: capacidades independientes de la aplicación antigua.
+  'communications:access',
+  'communications:settings:manage',
+  'communications:email:send',
+  'communications:delivery:read',
+  'communications:notes:create',
   // Inventory
   'inventory:products:read',
   'inventory:products:create',
