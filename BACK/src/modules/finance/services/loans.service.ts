@@ -7,6 +7,7 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PaymentMethod, PaymentReceiptItemKind, Prisma } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { FinanceSourcesRepository } from '../repositories/finance-sources.repository';
+import { InstallmentsSchedulerService } from './installments-scheduler.service';
 import { InstallmentsRepository } from '../repositories/installments.repository';
 import { LoansRepository } from '../repositories/loans.repository';
 import { PaymentReceiptsRepository } from '../repositories/payment-receipts.repository';
@@ -86,6 +87,7 @@ export class LoansService {
     private readonly eventEmitter: EventEmitter2,
     private readonly receiptsRepository: PaymentReceiptsRepository,
     private readonly sources: FinanceSourcesRepository,
+    private readonly installmentsScheduler: InstallmentsSchedulerService,
   ) {}
 
   findAll(tenantId: string) {
@@ -93,19 +95,41 @@ export class LoansService {
   }
 
   async findOne(tenantId: string, id: string) {
-    const loan = await this.loansRepository.findById(tenantId, id);
+    let loan = await this.loansRepository.findById(tenantId, id);
     if (!loan) throw new NotFoundException('Préstamo no encontrado');
-    return loan;
+    await this.installmentsScheduler.refreshLoanCharges(tenantId, loan.id);
+    loan = await this.loansRepository.findById(tenantId, id);
+    if (!loan) throw new NotFoundException('Préstamo no encontrado');
+    return this.withMoraPolicy(tenantId, loan);
   }
 
   async findByOrder(tenantId: string, saleOrderId: string) {
-    const loan = await this.loansRepository.findBySaleOrder(
+    let loan = await this.loansRepository.findBySaleOrder(
       tenantId,
       saleOrderId,
     );
     if (!loan)
       throw new NotFoundException('No existe un préstamo para este pedido');
-    return loan;
+    await this.installmentsScheduler.refreshLoanCharges(tenantId, loan.id);
+    loan = await this.loansRepository.findBySaleOrder(tenantId, saleOrderId);
+    if (!loan)
+      throw new NotFoundException('No existe un préstamo para este pedido');
+    return this.withMoraPolicy(tenantId, loan);
+  }
+
+  private async withMoraPolicy<T extends object>(tenantId: string, loan: T) {
+    const policy = await this.sources.findMoraPolicy(tenantId);
+    return {
+      ...loan,
+      moraPolicy: {
+        graceDays: policy?.moraGraceDays ?? 0,
+        components: (policy?.interestComponents ?? []).map((component) => ({
+          name: component.name,
+          frequency: component.frequency,
+          percentage: toNum(component.percentage),
+        })),
+      },
+    };
   }
 
   findOverdueInstallments(tenantId: string) {
@@ -448,6 +472,11 @@ export class LoansService {
     if (installment.status === 'PAID') {
       throw new UnprocessableEntityException('Esta cuota ya fue pagada');
     }
+
+    await this.installmentsScheduler.refreshLoanCharges(
+      tenantId,
+      installment.loanId,
+    );
 
     const charges =
       (await this.getOpenCharges([installmentId])).get(installmentId) ?? [];

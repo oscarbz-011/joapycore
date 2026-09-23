@@ -86,9 +86,13 @@ export class InstallmentsRepository {
     });
   }
 
-  findAllOverdueForMora() {
+  findAllOverdueForMora(filters?: { tenantId?: string; loanId?: string }) {
     return this.prisma.installment.findMany({
-      where: { status: 'OVERDUE' },
+      where: {
+        status: 'OVERDUE',
+        ...(filters?.tenantId && { tenantId: filters.tenantId }),
+        ...(filters?.loanId && { loanId: filters.loanId }),
+      },
       select: {
         id: true,
         tenantId: true,
@@ -113,6 +117,18 @@ export class InstallmentsRepository {
     });
   }
 
+  markLoanOverdue(tenantId: string, loanId: string, now: Date = new Date()) {
+    return this.prisma.installment.updateMany({
+      where: {
+        tenantId,
+        loanId,
+        status: { in: ['PENDING', 'PARTIAL'] },
+        dueDate: { lt: startOfBusinessDay(now) },
+      },
+      data: { status: 'OVERDUE' },
+    });
+  }
+
   // Recalculado desde cero cada noche por InstallmentsSchedulerService — ver
   // interest-calc.service.ts. `amount` es el cargo vigente completo, no un
   // delta a sumar.
@@ -126,6 +142,17 @@ export class InstallmentsRepository {
       where: { installmentId_componentId: { installmentId, componentId } },
       create: { installmentId, componentId, amount, periodsElapsed },
       update: { amount, periodsElapsed },
+    });
+  }
+
+  clearInactiveInterestCharges(installmentIds: string[]) {
+    return this.prisma.installmentInterestCharge.updateMany({
+      where: {
+        installmentId: { in: installmentIds },
+        amount: { gt: 0 },
+        component: { is: { isActive: false } },
+      },
+      data: { amount: 0 },
     });
   }
 

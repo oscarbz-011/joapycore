@@ -2142,7 +2142,7 @@ model CreditPlan {
 enum InterestComponentFrequency {
   ONE_TIME // se cobra una vez, no crece con el tiempo (ej. gastos administrativos)
   DAILY // se acumula por día de atraso (ej. interés diario)
-  MONTHLY // se acumula por período de 30 días de atraso
+  MONTHLY // se aplica por cada período de 30 días iniciado desde el primer día de mora
 }
 
 // Cada tenant define sus propios recargos por mora — pueden coexistir varios
@@ -2162,7 +2162,7 @@ model InterestComponent {
   // Solo aplica a MONTHLY: si true, el cargo crece con cada período vencido
   // (mes 1=10%, mes 2=20%, mes 3=30% — acumulación lineal, no interés
   // compuesto). Si false, se cobra el % base una sola vez apenas se cruza
-  // el primer período y no vuelve a crecer. DAILY siempre es acumulativo
+  // el primer día de mora y no vuelve a crecer. DAILY siempre es acumulativo
   // por diseño (más días = más interés); ONE_TIME nunca lo es.
   cumulative     Boolean                    @default(false)
   isActive       Boolean                    @default(true) @map("is_active")

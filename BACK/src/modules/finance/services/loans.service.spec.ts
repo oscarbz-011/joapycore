@@ -12,6 +12,7 @@ import { LoansRepository } from '../repositories/loans.repository';
 import { FinanceSourcesRepository } from '../repositories/finance-sources.repository';
 import { PaymentReceiptsRepository } from '../repositories/payment-receipts.repository';
 import { LoansService } from './loans.service';
+import { InstallmentsSchedulerService } from './installments-scheduler.service';
 
 const TENANT = 'tenant-1';
 const ORDER_ID = 'order-1';
@@ -58,6 +59,7 @@ describe('LoansService', () => {
   let paymentReceiptFindFirstMock: jest.Mock;
   let branchFindUniqueMock: jest.Mock;
   let topLevelPaymentReceiptFindFirstMock: jest.Mock;
+  let installmentsScheduler: { refreshLoanCharges: jest.Mock };
 
   beforeEach(async () => {
     installmentCreateMock = jest.fn().mockResolvedValue({});
@@ -151,6 +153,9 @@ describe('LoansService', () => {
       emit: jest.fn(),
       emitAsync: jest.fn().mockResolvedValue([]),
     };
+    installmentsScheduler = {
+      refreshLoanCharges: jest.fn().mockResolvedValue(undefined),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -161,6 +166,10 @@ describe('LoansService', () => {
         { provide: EventEmitter2, useValue: mockEventEmitter },
         PaymentReceiptsRepository,
         FinanceSourcesRepository,
+        {
+          provide: InstallmentsSchedulerService,
+          useValue: installmentsScheduler,
+        },
       ],
     }).compile();
 
@@ -175,8 +184,13 @@ describe('LoansService', () => {
     it('returns loan when found', async () => {
       loansRepo.findById.mockResolvedValue(mockLoan as never);
       const result = await service.findOne(TENANT, LOAN_ID);
-      expect(result).toBe(mockLoan);
+      expect(result).toMatchObject(mockLoan);
+      expect(result.moraPolicy).toEqual({ graceDays: 0, components: [] });
       expect(loansRepo.findById).toHaveBeenCalledWith(TENANT, LOAN_ID);
+      expect(installmentsScheduler.refreshLoanCharges).toHaveBeenCalledWith(
+        TENANT,
+        LOAN_ID,
+      );
     });
 
     it('throws NotFoundException when loan not found', async () => {
@@ -217,7 +231,7 @@ describe('LoansService', () => {
     it('returns loan for the order', async () => {
       loansRepo.findBySaleOrder.mockResolvedValue(mockLoan as never);
       const result = await service.findByOrder(TENANT, ORDER_ID);
-      expect(result).toBe(mockLoan);
+      expect(result).toMatchObject(mockLoan);
     });
 
     it('throws NotFoundException when no loan exists for order', async () => {

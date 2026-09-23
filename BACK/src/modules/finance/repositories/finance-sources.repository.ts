@@ -60,6 +60,24 @@ export class FinanceSourcesRepository {
     });
   }
 
+  findMoraPolicy(tenantId: string) {
+    return this.prisma.creditConfig.findUnique({
+      where: { tenantId },
+      select: {
+        moraGraceDays: true,
+        interestComponents: {
+          where: { isActive: true },
+          select: {
+            name: true,
+            frequency: true,
+            percentage: true,
+          },
+          orderBy: { order: 'asc' },
+        },
+      },
+    });
+  }
+
   findDelinquencyConfigs() {
     return this.prisma.creditConfig.findMany({
       where: { delinquencyThresholdDays: { not: null } },

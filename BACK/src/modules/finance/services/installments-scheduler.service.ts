@@ -41,8 +41,40 @@ export class InstallmentsSchedulerService {
   // viejos.
   @Cron(CronExpression.EVERY_DAY_AT_1AM, { timeZone: BUSINESS_TIMEZONE })
   async recalculateInterestCharges() {
+    // Si el proceso no estaba vivo a medianoche, la corrida de la 01:00 no
+    // debe depender de que markOverdueInstallments haya ocurrido antes.
+    await this.installmentsRepository.markAllOverdue();
     const overdue = await this.installmentsRepository.findAllOverdueForMora();
+    await this.recalculate(overdue);
+  }
+
+  /**
+   * Actualiza estado y mora justo antes de mostrar o cobrar un préstamo. Esto
+   * elimina la ventana en la que el frontend ya detectaba una fecha vencida,
+   * pero los cargos seguían vacíos hasta el siguiente cron nocturno.
+   */
+  async refreshLoanCharges(tenantId: string, loanId: string) {
+    await this.installmentsRepository.markLoanOverdue(tenantId, loanId);
+    const overdue = await this.installmentsRepository.findAllOverdueForMora({
+      tenantId,
+      loanId,
+    });
+    await this.recalculate(overdue);
+  }
+
+  private async recalculate(
+    overdue: Array<{
+      id: string;
+      tenantId: string;
+      amount: unknown;
+      dueDate: Date;
+    }>,
+  ) {
     if (!overdue.length) return;
+
+    await this.installmentsRepository.clearInactiveInterestCharges(
+      overdue.map((inst) => inst.id),
+    );
 
     const tenantIds = [...new Set(overdue.map((i) => i.tenantId))];
     const configs = await this.sources.findMoraConfigs(tenantIds);
@@ -61,7 +93,6 @@ export class InstallmentsSchedulerService {
         config.moraGraceDays,
         now,
       );
-      if (days < 1) continue;
       const periods = this.interestCalc.periodsElapsed(
         inst.dueDate,
         config.moraGraceDays,

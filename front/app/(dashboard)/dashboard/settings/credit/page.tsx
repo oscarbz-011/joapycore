@@ -272,7 +272,7 @@ const FREQUENCY_LABELS: Record<InterestComponentFrequency, string> = {
 const FREQUENCY_HINTS: Record<InterestComponentFrequency, string> = {
   ONE_TIME: 'Se cobra una sola vez apenas se vence la tolerancia — no crece con el tiempo. Ej: gastos administrativos.',
   DAILY: 'Se acumula por cada día de atraso. Ej: interés diario por mora.',
-  MONTHLY: 'Se acumula por cada período de 30 días de atraso.',
+  MONTHLY: 'Se aplica desde el primer día de mora por cada período de 30 días iniciado. Ej: gastos de cobranza mensuales.',
 };
 
 function AddComponentForm({

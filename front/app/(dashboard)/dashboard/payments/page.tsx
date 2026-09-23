@@ -723,6 +723,14 @@ function CreditARDetail({
   const installmentAmount    = Number(loan.installments[0]?.amount ?? 0);
   const paidFromInstallments = loan.installments.reduce((s, i) => s + Number(i.paidAmount), 0);
   const totalCredit          = Number(loan.totalAmount);
+  const outstandingPrincipal = loan.installments.reduce((sum, i) => sum + Math.max(Number(i.amount) - Number(i.paidAmount), 0), 0);
+  const moraTotal = loan.installments.reduce((sum, i) => sum + chargesTotalOf(i), 0);
+  const totalOutstanding = outstandingPrincipal + moraTotal;
+  const overdueInstallments = loan.installments.filter((i) => installmentUrgency(i).level === 'overdue');
+  const overduePrincipal = overdueInstallments.reduce((sum, i) => sum + Math.max(Number(i.amount) - Number(i.paidAmount), 0), 0);
+  const totalOverdue = overduePrincipal + moraTotal;
+  const moraGraceDays = loan.moraPolicy?.graceDays ?? 0;
+  const hasMoraComponents = (loan.moraPolicy?.components.length ?? 0) > 0;
   const creditPct            = totalCredit > 0 ? (paidFromInstallments / totalCredit) * 100 : 0;
   const amountPreview        = amountInput > 0 ? distributeAmount(loan.installments, amountInput) : null;
   const selectedTotal        = Object.values(selected).reduce((s, a) => s + a, 0);
@@ -752,9 +760,38 @@ function CreditARDetail({
           <span className="font-semibold text-muted-foreground">Total a crédito</span>
           <span className="font-bold text-foreground">{formatPrice(totalCredit)}</span>
         </div>
+        {overdueInstallments.length > 0 && moraTotal === 0 && (
+          <p className="rounded-lg border border-amber-500/25 bg-amber-500/10 px-2.5 py-2 text-xs leading-5 text-amber-700 dark:text-amber-300">
+            {!hasMoraComponents
+              ? 'Hay cuotas vencidas, pero no existen recargos moratorios activos en la configuración de crédito.'
+              : moraGraceDays > 0
+                ? `Hay cuotas vencidas dentro del período de tolerancia de ${moraGraceDays} días. Los intereses moratorios se aplicarán cuando finalice ese plazo.`
+                : 'La cuota está vencida; los recargos configurados todavía no generan un importe para el período transcurrido.'}
+          </p>
+        )}
         <div className="flex justify-between">
           <span className="text-muted-foreground">Cobrado</span>
           <span className="font-medium text-emerald-600">{formatPrice(paidFromInstallments)}</span>
+        </div>
+        <div className="flex justify-between">
+          <span className="text-muted-foreground">Saldo de cuotas</span>
+          <span className="font-medium text-foreground">{formatPrice(outstandingPrincipal)}</span>
+        </div>
+        <div className="flex justify-between">
+          <span className="text-muted-foreground">Recargos e intereses</span>
+          <span className={cn('font-medium', moraTotal > 0 ? 'text-destructive' : 'text-foreground')}>
+            {moraTotal > 0 ? '+' : ''}{formatPrice(moraTotal)}
+          </span>
+        </div>
+        {overdueInstallments.length > 0 && (
+          <div className="flex justify-between text-destructive">
+            <span className="font-medium">Total vencido</span>
+            <span className="font-semibold">{formatPrice(totalOverdue)}</span>
+          </div>
+        )}
+        <div className="flex justify-between border-t border-border pt-2">
+          <span className="font-semibold text-foreground">Total adeudado hoy</span>
+          <span className="font-bold text-foreground">{formatPrice(totalOutstanding)}</span>
         </div>
         <div className="h-2 w-full rounded-full bg-muted/20">
           <div

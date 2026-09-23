@@ -49,6 +49,14 @@ export interface Loan {
   customer: { id: string; firstName: string; lastName: string };
   saleOrder: { id: string; orderDate: string; items: LoanOrderItem[] };
   installments: Installment[];
+  moraPolicy?: {
+    graceDays: number;
+    components: Array<{
+      name: string;
+      frequency: 'ONE_TIME' | 'DAILY' | 'MONTHLY';
+      percentage: number;
+    }>;
+  };
 }
 
 export interface PayInstallmentPayload {

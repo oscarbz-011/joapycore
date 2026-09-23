@@ -9,6 +9,63 @@ import { InterestCalcService } from './interest-calc.service';
 const MS_PER_DAY = 1000 * 60 * 60 * 24;
 const TENANT = 'tenant-1';
 
+describe('InstallmentsRepository loan refresh scope', () => {
+  it('marks and selects overdue installments only for the requested tenant and loan', async () => {
+    const updateMany = jest.fn().mockResolvedValue({ count: 1 });
+    const findMany = jest.fn().mockResolvedValue([]);
+    const repository = new InstallmentsRepository({
+      installment: { updateMany, findMany },
+    } as never);
+
+    await repository.markLoanOverdue(
+      TENANT,
+      'loan-1',
+      new Date('2026-08-18T12:00:00Z'),
+    );
+    await repository.findAllOverdueForMora({
+      tenantId: TENANT,
+      loanId: 'loan-1',
+    });
+
+    expect(updateMany).toHaveBeenCalledWith({
+      where: {
+        tenantId: TENANT,
+        loanId: 'loan-1',
+        status: { in: ['PENDING', 'PARTIAL'] },
+        dueDate: { lt: new Date('2026-08-18T00:00:00Z') },
+      },
+      data: { status: 'OVERDUE' },
+    });
+    expect(findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          tenantId: TENANT,
+          loanId: 'loan-1',
+          status: 'OVERDUE',
+        },
+      }),
+    );
+  });
+
+  it('clears only open charges belonging to disabled components on selected installments', async () => {
+    const updateMany = jest.fn().mockResolvedValue({ count: 1 });
+    const repository = new InstallmentsRepository({
+      installmentInterestCharge: { updateMany },
+    } as never);
+
+    await repository.clearInactiveInterestCharges(['inst-1']);
+
+    expect(updateMany).toHaveBeenCalledWith({
+      where: {
+        installmentId: { in: ['inst-1'] },
+        amount: { gt: 0 },
+        component: { is: { isActive: false } },
+      },
+      data: { amount: 0 },
+    });
+  });
+});
+
 describe('InstallmentsSchedulerService', () => {
   let service: InstallmentsSchedulerService;
   let installmentsRepo: jest.Mocked<InstallmentsRepository>;
@@ -21,8 +78,10 @@ describe('InstallmentsSchedulerService', () => {
   beforeEach(async () => {
     const mockInstallmentsRepo = {
       markAllOverdue: jest.fn(),
+      markLoanOverdue: jest.fn(),
       findAllOverdueForMora: jest.fn(),
       upsertInterestCharge: jest.fn().mockResolvedValue({}),
+      clearInactiveInterestCharges: jest.fn().mockResolvedValue({ count: 0 }),
     };
     const mockPrisma = {
       creditConfig: { findMany: jest.fn() },
@@ -54,7 +113,154 @@ describe('InstallmentsSchedulerService', () => {
   });
 
   describe('recalculateInterestCharges', () => {
-    it('does not charge while the installment is still within the tolerance window', async () => {
+    it('removes an open charge when its component is disabled', async () => {
+      const now = new Date('2026-08-18T12:00:00Z');
+      jest.useFakeTimers().setSystemTime(now);
+      let openCharge = 0;
+      let componentActive = true;
+      installmentsRepo.clearInactiveInterestCharges.mockImplementation(
+        async () => {
+          if (!componentActive) openCharge = 0;
+          return { count: componentActive ? 0 : 1 };
+        },
+      );
+      installmentsRepo.upsertInterestCharge.mockImplementation(
+        async (_installmentId, _componentId, amount) => {
+          openCharge = amount;
+          return {} as never;
+        },
+      );
+      installmentsRepo.findAllOverdueForMora.mockResolvedValue([
+        {
+          id: 'inst-1',
+          tenantId: TENANT,
+          amount: 100_000,
+          dueDate: new Date(now.getTime() - MS_PER_DAY),
+        },
+      ] as never);
+      prisma.creditConfig.findMany
+        .mockResolvedValueOnce([
+          {
+            tenantId: TENANT,
+            moraGraceDays: 0,
+            interestComponents: [
+              {
+                id: 'monthly-fee',
+                frequency: 'MONTHLY',
+                percentage: 10,
+                cumulative: false,
+              },
+            ],
+          },
+        ])
+        .mockResolvedValueOnce([
+          {
+            tenantId: TENANT,
+            moraGraceDays: 0,
+            interestComponents: [],
+          },
+        ]);
+
+      await service.refreshLoanCharges(TENANT, 'loan-1');
+      expect(openCharge).toBe(10_000);
+
+      componentActive = false;
+      await service.refreshLoanCharges(TENANT, 'loan-1');
+      expect(openCharge).toBe(0);
+    });
+
+    it('clears an open charge when the grace period is extended past the overdue day', async () => {
+      const now = new Date('2026-08-18T12:00:00Z');
+      jest.useFakeTimers().setSystemTime(now);
+      let openCharge = 0;
+      installmentsRepo.upsertInterestCharge.mockImplementation(
+        async (_installmentId, _componentId, amount) => {
+          openCharge = amount;
+          return {} as never;
+        },
+      );
+      installmentsRepo.findAllOverdueForMora.mockResolvedValue([
+        {
+          id: 'inst-1',
+          tenantId: TENANT,
+          amount: 100_000,
+          dueDate: new Date(now.getTime() - MS_PER_DAY),
+        },
+      ] as never);
+      const component = {
+        id: 'monthly-fee',
+        frequency: 'MONTHLY',
+        percentage: 10,
+        cumulative: false,
+      };
+      prisma.creditConfig.findMany
+        .mockResolvedValueOnce([
+          {
+            tenantId: TENANT,
+            moraGraceDays: 0,
+            interestComponents: [component],
+          },
+        ])
+        .mockResolvedValueOnce([
+          {
+            tenantId: TENANT,
+            moraGraceDays: 5,
+            interestComponents: [component],
+          },
+        ]);
+
+      await service.refreshLoanCharges(TENANT, 'loan-1');
+      expect(openCharge).toBe(10_000);
+
+      await service.refreshLoanCharges(TENANT, 'loan-1');
+      expect(openCharge).toBe(0);
+    });
+
+    it('refreshes one loan on demand before it is displayed or collected', async () => {
+      const now = new Date('2026-08-18T12:00:00Z');
+      jest.useFakeTimers().setSystemTime(now);
+      installmentsRepo.findAllOverdueForMora.mockResolvedValue([
+        {
+          id: 'inst-1',
+          tenantId: TENANT,
+          amount: 100000,
+          dueDate: new Date(now.getTime() - 3 * MS_PER_DAY),
+        },
+      ] as never);
+      prisma.creditConfig.findMany.mockResolvedValue([
+        {
+          tenantId: TENANT,
+          moraGraceDays: 0,
+          interestComponents: [
+            {
+              id: 'daily-mora',
+              frequency: 'DAILY',
+              percentage: 1,
+              cumulative: false,
+            },
+          ],
+        },
+      ]);
+
+      await service.refreshLoanCharges(TENANT, 'loan-1');
+
+      expect(installmentsRepo.markLoanOverdue).toHaveBeenCalledWith(
+        TENANT,
+        'loan-1',
+      );
+      expect(installmentsRepo.findAllOverdueForMora).toHaveBeenCalledWith({
+        tenantId: TENANT,
+        loanId: 'loan-1',
+      });
+      expect(installmentsRepo.upsertInterestCharge).toHaveBeenCalledWith(
+        'inst-1',
+        'daily-mora',
+        3000,
+        1,
+      );
+    });
+
+    it('stores no open charge while the installment is still within the tolerance window', async () => {
       const now = new Date('2026-08-18T12:00:00Z');
       jest.useFakeTimers().setSystemTime(now);
 
@@ -83,7 +289,12 @@ describe('InstallmentsSchedulerService', () => {
 
       await service.recalculateInterestCharges();
 
-      expect(installmentsRepo.upsertInterestCharge).not.toHaveBeenCalled();
+      expect(installmentsRepo.upsertInterestCharge).toHaveBeenCalledWith(
+        'inst-1',
+        'comp-1',
+        0,
+        0,
+      );
     });
 
     it('charges a DAILY component only for the days elapsed after the tolerance window ends', async () => {
@@ -121,7 +332,7 @@ describe('InstallmentsSchedulerService', () => {
         'inst-1',
         'comp-1',
         5000,
-        0,
+        1,
       );
     });
 
@@ -150,7 +361,7 @@ describe('InstallmentsSchedulerService', () => {
       const now = new Date('2026-08-18T12:00:00Z');
       jest.useFakeTimers().setSystemTime(now);
 
-      // Vencida hace 95 días, sin tolerancia -> 3 períodos de 30 días completos.
+      // Vencida hace 95 días, sin tolerancia -> cuarto período de 30 días iniciado.
       installmentsRepo.findAllOverdueForMora.mockResolvedValue([
         {
           id: 'inst-1',
@@ -186,13 +397,13 @@ describe('InstallmentsSchedulerService', () => {
         'inst-1',
         'admin-fee',
         50_000,
-        3,
+        4,
       );
       expect(installmentsRepo.upsertInterestCharge).toHaveBeenCalledWith(
         'inst-1',
         'mora',
-        300_000, // 3 períodos * 10% = 30% de 1.000.000
-        3,
+        400_000, // cuarto período iniciado * 10% = 40% de 1.000.000
+        4,
       );
     });
   });
