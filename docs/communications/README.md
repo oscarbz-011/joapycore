@@ -65,26 +65,42 @@ Los DTO rechazan propiedades desconocidas; el cliente no elige `tenantId`, autor
 # Desde BACK
 pnpm exec tsc --noEmit
 pnpm test --runInBand communications smtp-adapter app-validation.pipe ws-bridge.listener invoices.service.spec outbox.service.spec
+```
 
-# Verificar primero el servicio postgres de este Compose y reservar
-# únicamente joapycore_comms_test_local; usar Redis DB 15, separada de DB 0.
-# Desde la raíz: docker compose config --services; docker compose ps
-# Desde la raíz: docker compose up -d postgres redis
-# Desde la raíz: docker compose exec -T postgres createdb -U joapycore joapycore_comms_test_local
-# Desde la raíz: docker compose exec -T redis redis-cli -n 15 DBSIZE  # debe ser 0
-$env:DATABASE_URL='postgresql://joapycore:joapycore@localhost:5435/joapycore_comms_test_local'
-$env:COMMUNICATIONS_TEST_DATABASE_URL=$env:DATABASE_URL
-$env:COMMUNICATIONS_TEST_REDIS_URL='redis://127.0.0.1:6379/15'
-pnpm exec prisma db push
-pnpm test:int --testPathPatterns=communications.int-spec
-Remove-Item Env:DATABASE_URL,Env:COMMUNICATIONS_TEST_DATABASE_URL,Env:COMMUNICATIONS_TEST_REDIS_URL
+Para repetir la integración local, verificar que `postgres` sea el servicio de este Compose y que el único nombre a eliminar sea `joapycore_comms_test_local`. La siguiente receta recrea exclusivamente esa base desechable. Si Redis DB 15 contiene claves antes de empezar, detenerse e investigar su propietario; la suite no las borra.
 
+```powershell
+# Desde la raíz del repositorio
+docker compose config --services
+docker compose ps
+docker compose up -d postgres redis
+docker compose exec -T postgres psql -U joapycore -d joapycore -Atc "SELECT datname FROM pg_database WHERE datname = 'joapycore_comms_test_local'"
+docker compose exec -T redis redis-cli -n 15 DBSIZE  # debe ser 0
+docker compose exec -T postgres dropdb --if-exists -U joapycore joapycore_comms_test_local
+docker compose exec -T postgres createdb -U joapycore joapycore_comms_test_local
+
+Push-Location BACK
+try {
+  $env:DATABASE_URL='postgresql://joapycore:joapycore@localhost:5435/joapycore_comms_test_local'
+  $env:COMMUNICATIONS_TEST_DATABASE_URL=$env:DATABASE_URL
+  $env:COMMUNICATIONS_TEST_REDIS_URL='redis://127.0.0.1:6379/15'
+  pnpm exec prisma db push
+  if ($LASTEXITCODE -ne 0) { throw 'Prisma db push falló' }
+  pnpm test:int --testPathPatterns=communications.int-spec
+  if ($LASTEXITCODE -ne 0) { throw 'La integración de Comunicaciones falló' }
+} finally {
+  Remove-Item Env:DATABASE_URL,Env:COMMUNICATIONS_TEST_DATABASE_URL,Env:COMMUNICATIONS_TEST_REDIS_URL -ErrorAction SilentlyContinue
+  Pop-Location
+}
+```
+
+```powershell
 # Desde front
 pnpm exec tsc --noEmit
 pnpm test lib/route-access.test.ts
 ```
 
-La prueba de integración exige un nombre de base `joapycore_comms_test_*`, crea fixtures con UUID y elimina solamente sus fixtures incluso ante fallos de aserción. Para Redis exige DB 15 vacía antes de empezar; rechaza una DB 15 con claves preexistentes y, si la reservó, la limpia al cerrar el worker incluso ante fallos. DB 0 no se toca. Usa PostgreSQL y opcionalmente Redis/BullMQ reales; el adaptador SMTP y la lectura física del PDF se simulan. Sin la variable de base de integración, el suite se omite para evitar escribir en la base habitual. El schema debe estar aplicado previamente. Nunca aplicar `db push` a una base de desarrollo o producción.
+La prueba de integración exige un nombre de base `joapycore_comms_test_*`, crea fixtures con UUID y elimina solamente sus fixtures incluso ante fallos de aserción. Para Redis exige DB 15 vacía antes de empezar y usa un prefijo BullMQ único por ejecución; al cerrar el worker elimina únicamente esa cola y sus claves. DB 0 y las claves ajenas no se tocan. Usa PostgreSQL y opcionalmente Redis/BullMQ reales; el adaptador SMTP y la lectura física del PDF se simulan. Sin la variable de base de integración, el suite se omite para evitar escribir en la base habitual. El schema debe estar aplicado previamente. Nunca aplicar `db push` a una base de desarrollo o producción.
 
 La suite aislada comprueba deduplicación concurrente, límites por tenant/usuario, intentos fallidos, estado `UNKNOWN` y transporte BullMQ cuando se proporciona Redis. Ninguna ejecución de esa suite equivale a comprobar entrega SMTP real o revisión visual en navegador.
 

@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { createHash, randomUUID } from 'node:crypto';
 import { NotFoundException } from '@nestjs/common';
+import { Queue } from 'bullmq';
 import Redis from 'ioredis';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { FilesService } from '../src/files/files.service';
@@ -15,7 +16,10 @@ import {
 } from '../src/communications/communications-email.provider';
 import { CommunicationHubService } from '../src/communications/hub.service';
 import { InvoiceCommunicationListener } from '../src/communications/invoice-communication.listener';
-import { CommunicationsWorker } from '../src/communications/communications.worker';
+import {
+  CommunicationsWorker,
+  redisConnection,
+} from '../src/communications/communications.worker';
 import { OutboxService } from '../src/outbox/outbox.service';
 import { OutboxRepository } from '../src/outbox/outbox.repository';
 
@@ -44,6 +48,7 @@ integration(
   () => {
     const tenantId = randomUUID();
     const userId = randomUUID();
+    const queuePrefix = `communications-int-${randomUUID()}`;
     const pdf = Buffer.from('%PDF-1.7\ncommunications-test-fixture');
     let prisma: PrismaService;
     let repository: CommunicationsRepository;
@@ -54,7 +59,7 @@ integration(
     const transport = { send: jest.fn() };
     let worker: CommunicationsWorker | undefined;
     let redisTestClient: Redis | undefined;
-    let redisDatabaseClaimed = false;
+    let redisNamespaceClaimed = false;
 
     beforeAll(async () => {
       if (redisUrl) {
@@ -66,7 +71,7 @@ integration(
             `La base Redis 15 debe estar vacía antes de la prueba (${existingKeys} claves existentes)`,
           );
         }
-        redisDatabaseClaimed = true;
+        redisNamespaceClaimed = true;
       }
       prisma = new PrismaService(new ConfigService({ DATABASE_URL: url }));
       await prisma.$connect();
@@ -161,9 +166,21 @@ integration(
         await worker?.onModuleDestroy();
       } finally {
         try {
-          if (redisTestClient && redisDatabaseClaimed) {
-            await redisTestClient.flushdb();
-            expect(await redisTestClient.dbsize()).toBe(0);
+          if (redisTestClient && redisNamespaceClaimed && redisUrl) {
+            const cleanupQueue = new Queue('communications-email', {
+              connection: redisConnection(redisUrl),
+              prefix: queuePrefix,
+            });
+            try {
+              await cleanupQueue.obliterate({ force: true });
+            } finally {
+              await cleanupQueue.close();
+            }
+            expect(
+              await redisTestClient.keys(
+                `${queuePrefix}:communications-email:*`,
+              ),
+            ).toEqual([]);
           }
         } finally {
           redisTestClient?.disconnect();
@@ -411,6 +428,7 @@ integration(
         worker = new CommunicationsWorker(
           new ConfigService({
             COMMUNICATIONS_WORKER_ENABLED: 'true',
+            COMMUNICATIONS_QUEUE_PREFIX: queuePrefix,
             REDIS_URL: redisUrl,
           }),
           repository,
@@ -440,6 +458,9 @@ integration(
             String(input.messageId).includes(message.id),
           ),
         ).toHaveLength(1);
+        expect(
+          await redisTestClient!.keys(`${queuePrefix}:communications-email:*`),
+        ).not.toHaveLength(0);
       },
       20000,
     );

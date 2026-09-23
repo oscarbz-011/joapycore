@@ -61,7 +61,10 @@ export class CommunicationsWorker implements OnModuleInit, OnModuleDestroy {
         'REDIS_URL es obligatoria al habilitar el worker de comunicaciones',
       );
     const connection = redisConnection(url);
+    const prefix =
+      this.config.get<string>('COMMUNICATIONS_QUEUE_PREFIX') || 'bull';
     this.queue = new Queue<DeliveryJob>(QUEUE, {
+      prefix,
       connection: {
         ...connection,
         maxRetriesPerRequest: 1,
@@ -81,7 +84,7 @@ export class CommunicationsWorker implements OnModuleInit, OnModuleDestroy {
           job.data.messageId,
         );
       },
-      { connection, concurrency: 3 },
+      { connection, concurrency: 3, prefix },
     );
     this.queue.on('error', () =>
       this.warnUnavailable('communications.queue.unavailable'),
