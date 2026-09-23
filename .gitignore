@@ -44,6 +44,7 @@ CLAUDE.md
 GC_PENDIENTS.md
 ARCHITECTURE.md
 COMPRAS_INVENTARIO_LOGISTICA.md
+AUDITORIA.md
 
 # Spartan AI config (contains API keys)
 .spartan/ai.env
