@@ -1210,13 +1210,16 @@ function EmailIntegrationCard() {
               />
             </div>
             <div className="space-y-1.5">
-              <Label>Email remitente</Label>
+              <Label>Email automático del sistema</Label>
               <Input
                 type="email"
                 value={form.fromEmail}
                 onChange={(event) => set("fromEmail", event.target.value)}
-                placeholder="correo@empresa.com"
+                placeholder="no-reply@empresa.com"
               />
+              <p className="text-[11px] text-muted-foreground">
+                Usado para documentos, alertas y notificaciones automáticas.
+              </p>
             </div>
             <div className="space-y-1.5">
               <Label>Nombre remitente</Label>
@@ -1441,8 +1444,7 @@ function IntegrationsTab() {
   const canUpdateTenant = usePermission("tenants:update");
   const canReadIntegrations = usePermission("integrations:read");
   const canManageIntegrations = usePermission("integrations:manage");
-  const canReadEmailIntegration =
-    canReadIntegrations || canManageIntegrations;
+  const canReadEmailIntegration = canReadIntegrations || canManageIntegrations;
 
   return (
     <div className="space-y-4">
