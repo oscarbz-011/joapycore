@@ -118,16 +118,14 @@ describe('InstallmentsSchedulerService', () => {
       jest.useFakeTimers().setSystemTime(now);
       let openCharge = 0;
       let componentActive = true;
-      installmentsRepo.clearInactiveInterestCharges.mockImplementation(
-        async () => {
-          if (!componentActive) openCharge = 0;
-          return { count: componentActive ? 0 : 1 };
-        },
-      );
+      installmentsRepo.clearInactiveInterestCharges.mockImplementation(() => {
+        if (!componentActive) openCharge = 0;
+        return Promise.resolve({ count: componentActive ? 0 : 1 });
+      });
       installmentsRepo.upsertInterestCharge.mockImplementation(
-        async (_installmentId, _componentId, amount) => {
+        (_installmentId, _componentId, amount) => {
           openCharge = amount;
-          return {} as never;
+          return Promise.resolve({} as never);
         },
       );
       installmentsRepo.findAllOverdueForMora.mockResolvedValue([
@@ -174,9 +172,9 @@ describe('InstallmentsSchedulerService', () => {
       jest.useFakeTimers().setSystemTime(now);
       let openCharge = 0;
       installmentsRepo.upsertInterestCharge.mockImplementation(
-        async (_installmentId, _componentId, amount) => {
+        (_installmentId, _componentId, amount) => {
           openCharge = amount;
-          return {} as never;
+          return Promise.resolve({} as never);
         },
       );
       installmentsRepo.findAllOverdueForMora.mockResolvedValue([

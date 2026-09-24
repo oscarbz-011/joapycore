@@ -204,7 +204,7 @@ describe('Application inbox persistence boundary', () => {
       $transaction: jest.fn(),
     };
     const repository = new ApplicationEmailRepository(prisma as never);
-    repository.listInbox('tenant-a', 'a@example.com');
+    await repository.listInbox('tenant-a', 'a@example.com');
     expect(prisma.appEmailInboxMessage.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { tenantId: 'tenant-a', mailbox: 'a@example.com' },

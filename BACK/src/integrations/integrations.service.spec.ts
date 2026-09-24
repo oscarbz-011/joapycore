@@ -201,21 +201,23 @@ describe('IntegrationsService', () => {
 
   it('does not report or return an incomplete enabled IMAP configuration', async () => {
     const { repository, service } = createService();
-    repository.findByKey.mockImplementation(async (_tenant, key) =>
-      key === 'imap'
-        ? {
-            enabled: true,
-            encryptedConfig: encryptIntegrationConfig(
-              {
-                host: 'imap.example.com',
-                port: 993,
-                secure: true,
-                user: 'mailbox@example.com',
-              },
-              secret,
-            ),
-          }
-        : null,
+    repository.findByKey.mockImplementation((_tenant, key) =>
+      Promise.resolve(
+        key === 'imap'
+          ? {
+              enabled: true,
+              encryptedConfig: encryptIntegrationConfig(
+                {
+                  host: 'imap.example.com',
+                  port: 993,
+                  secure: true,
+                  user: 'mailbox@example.com',
+                },
+                secret,
+              ),
+            }
+          : null,
+      ),
     );
 
     await expect(
@@ -262,24 +264,26 @@ describe('IntegrationsService', () => {
       port: 993,
       hasPassword: false,
     });
-    repository.findByKey.mockImplementation(async (_tenant, key) =>
-      key === 'imap'
-        ? {
-            enabled: true,
-            status: 'ERROR',
-            encryptedConfig: encryptIntegrationConfig(
-              {
-                host: 'imap.example.com',
-                port: 993,
-                secure: true,
-                user: 'inbox@example.com',
-                password: 'secret-imap',
-              },
-              secret,
-            ),
-            lastError: 'sensitive-provider-detail',
-          }
-        : null,
+    repository.findByKey.mockImplementation((_tenant, key) =>
+      Promise.resolve(
+        key === 'imap'
+          ? {
+              enabled: true,
+              status: 'ERROR',
+              encryptedConfig: encryptIntegrationConfig(
+                {
+                  host: 'imap.example.com',
+                  port: 993,
+                  secure: true,
+                  user: 'inbox@example.com',
+                  password: 'secret-imap',
+                },
+                secret,
+              ),
+              lastError: 'sensitive-provider-detail',
+            }
+          : null,
+      ),
     );
     const result = await service.getEmailIntegration('tenant-1');
     expect(result.incoming.hasPassword).toBe(true);

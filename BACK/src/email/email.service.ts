@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createTransport, type Transporter } from 'nodemailer';
+import type SMTPTransport from 'nodemailer/lib/smtp-transport';
 import type { EmailConfig } from '../config/email.config';
 import { IntegrationsService } from '../integrations/integrations.service';
 
@@ -31,14 +32,14 @@ export interface EmailDeliveryResult {
 @Injectable()
 export class EmailService {
   private readonly logger = new Logger(EmailService.name);
-  private transporter: Transporter | null = null;
+  private transporter: Transporter<SMTPTransport.SentMessageInfo> | null = null;
 
   constructor(
     private readonly configService: ConfigService,
     private readonly integrationsService: IntegrationsService,
   ) {}
 
-  private getTransporter(): Transporter {
+  private getTransporter(): Transporter<SMTPTransport.SentMessageInfo> {
     if (!this.transporter) {
       const config = this.configService.get<EmailConfig>('email')!;
       this.transporter = createTransport({
