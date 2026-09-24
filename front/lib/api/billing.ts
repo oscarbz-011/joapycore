@@ -1,9 +1,9 @@
-import { apiClient } from './client';
-import type { PaymentMethod } from '../payment-methods';
+import { apiClient } from "./client";
+import type { PaymentMethod } from "../payment-methods";
 
-export type InvoiceStatus = 'PENDING' | 'ISSUED' | 'PAID' | 'CANCELLED';
-export type CreditNoteStatus = 'ISSUED' | 'APPLIED';
-export type { PaymentMethod } from '../payment-methods';
+export type InvoiceStatus = "PENDING" | "ISSUED" | "PAID" | "CANCELLED";
+export type CreditNoteStatus = "ISSUED" | "APPLIED";
+export type { PaymentMethod } from "../payment-methods";
 
 export interface InvoiceItem {
   id: string;
@@ -64,7 +64,7 @@ export interface Invoice {
   tenant: InvoiceTenant;
   saleOrder: {
     id: string;
-    saleType: 'CASH' | 'CREDIT';
+    saleType: "CASH" | "CREDIT";
     installments: number | null;
     customer: {
       id: string;
@@ -99,35 +99,44 @@ export interface CreditNote {
     id: string;
     total: number;
     saleOrder: {
-      customer: { id: string; firstName: string; lastName: string; email: string | null };
+      customer: {
+        id: string;
+        firstName: string;
+        lastName: string;
+        email: string | null;
+      };
     };
   };
 }
 
 export interface IssueInvoicePayload {
-  paymentCondition: 'CASH' | 'CREDIT';
+  paymentCondition: "CASH" | "CREDIT";
   dueDate?: string;
   paymentMethod?: PaymentMethod;
   notes?: string;
 }
 
-export function canRetryInvoicePdf(invoice: Pick<Invoice, 'status' | 'pdfFileId'>): boolean {
+export function canRetryInvoicePdf(
+  invoice: Pick<Invoice, "status" | "pdfFileId">,
+): boolean {
   return (
-    (invoice.status === 'ISSUED' || invoice.status === 'PAID') &&
+    (invoice.status === "ISSUED" || invoice.status === "PAID") &&
     !invoice.pdfFileId
   );
 }
 
-export function canPrintInvoicePdf(invoice: Pick<Invoice, 'status' | 'pdfFileId'>): boolean {
+export function canPrintInvoicePdf(
+  invoice: Pick<Invoice, "status" | "pdfFileId">,
+): boolean {
   return (
-    (invoice.status === 'ISSUED' || invoice.status === 'PAID') &&
+    (invoice.status === "ISSUED" || invoice.status === "PAID") &&
     Boolean(invoice.pdfFileId)
   );
 }
 
 export const billingApi = {
   listInvoices: (): Promise<Invoice[]> =>
-    apiClient.get('/billing/invoices').then((r) => r.data),
+    apiClient.get("/billing/invoices").then((r) => r.data),
 
   getInvoice: (id: string): Promise<Invoice> =>
     apiClient.get(`/billing/invoices/${id}`).then((r) => r.data),
@@ -139,8 +148,10 @@ export const billingApi = {
     apiClient.post(`/billing/invoices/${id}/pdf/retry`).then((r) => r.data),
 
   cancelInvoice: (id: string, reason: string): Promise<Invoice> =>
-    apiClient.post(`/billing/invoices/${id}/cancel`, { reason }).then((r) => r.data),
+    apiClient
+      .post(`/billing/invoices/${id}/cancel`, { reason })
+      .then((r) => r.data),
 
   listCreditNotes: (): Promise<CreditNote[]> =>
-    apiClient.get('/billing/credit-notes').then((r) => r.data),
+    apiClient.get("/billing/credit-notes").then((r) => r.data),
 };

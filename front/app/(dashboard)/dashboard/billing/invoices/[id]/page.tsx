@@ -1,45 +1,75 @@
-'use client';
+"use client";
 
-import { RequirePermission } from '@/components/require-permission';
-import { EntityTimeline } from '@/components/communications/entity-timeline';
+import { RequirePermission } from "@/components/require-permission";
+import { EntityTimeline } from "@/components/communications/entity-timeline";
 
-import { apiErrorMessage } from '@/lib/api/api-error';
+import { apiErrorMessage } from "@/lib/api/api-error";
 
-import { useState, type ReactNode } from 'react';
-import { useParams, useRouter } from 'next/navigation';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Printer, RotateCw, Send, AlertTriangle } from 'lucide-react';
-import { billingApi, canPrintInvoicePdf, canRetryInvoicePdf, type InvoiceStatus, type IssueInvoicePayload, type PaymentMethod } from '../../../../../../lib/api/billing';
-import { settingsApi } from '../../../../../../lib/api/settings';
-import { openPdf } from '../../../../../../lib/open-pdf';
-import { formatDatePY, parseISODate, toISODate } from '../../../../../../lib/date';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
+import { useState, type ReactNode } from "react";
+import { useParams, useRouter } from "next/navigation";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  ArrowLeft,
+  Printer,
+  RotateCw,
+  Send,
+  AlertTriangle,
+} from "lucide-react";
+import {
+  billingApi,
+  canPrintInvoicePdf,
+  canRetryInvoicePdf,
+  type InvoiceStatus,
+  type IssueInvoicePayload,
+  type PaymentMethod,
+} from "../../../../../../lib/api/billing";
+import { settingsApi } from "../../../../../../lib/api/settings";
+import { openPdf } from "../../../../../../lib/open-pdf";
+import {
+  formatDatePY,
+  parseISODate,
+  toISODate,
+} from "../../../../../../lib/date";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+} from "@/components/ui/select";
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
 function formatPrice(n: number) {
-  return new Intl.NumberFormat('es-PY', { style: 'currency', currency: 'PYG', maximumFractionDigits: 0 }).format(n);
+  return new Intl.NumberFormat("es-PY", {
+    style: "currency",
+    currency: "PYG",
+    maximumFractionDigits: 0,
+  }).format(n);
 }
 
 const STATUS_LABEL: Record<InvoiceStatus, string> = {
-  PENDING:   'Borrador',
-  ISSUED:    'Emitida',
-  PAID:      'Pagada',
-  CANCELLED: 'Cancelada',
+  PENDING: "Borrador",
+  ISSUED: "Emitida",
+  PAID: "Pagada",
+  CANCELLED: "Cancelada",
 };
 
 const STATUS_CLASS: Partial<Record<InvoiceStatus, string>> = {
-  PENDING: 'bg-warn-subtle text-warn border-warn/30',
-  ISSUED:  'bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-950 dark:text-sky-300 dark:border-sky-800',
-  PAID:    'bg-accent-subtle text-accent-on border-accent-on/20',
+  PENDING: "bg-warn-subtle text-warn border-warn/30",
+  ISSUED:
+    "bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-950 dark:text-sky-300 dark:border-sky-800",
+  PAID: "bg-accent-subtle text-accent-on border-accent-on/20",
 };
 
 function StatusBadge({ status }: { status: InvoiceStatus }) {
   return (
-    <Badge variant={status === 'CANCELLED' ? 'destructive' : 'outline'} className={STATUS_CLASS[status]}>
+    <Badge
+      variant={status === "CANCELLED" ? "destructive" : "outline"}
+      className={STATUS_CLASS[status]}
+    >
       {STATUS_LABEL[status]}
     </Badge>
   );
@@ -56,25 +86,36 @@ function StatusBadge({ status }: { status: InvoiceStatus }) {
 function computeFirstDueDateISO(dueDayOfMonth: number): string {
   const today = new Date();
   const monthsAhead = today.getUTCDate() > dueDayOfMonth ? 2 : 1;
-  return toISODate(new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth() + monthsAhead, dueDayOfMonth)));
+  return toISODate(
+    new Date(
+      Date.UTC(
+        today.getUTCFullYear(),
+        today.getUTCMonth() + monthsAhead,
+        dueDayOfMonth,
+      ),
+    ),
+  );
 }
 
 const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
-  CASH:          'Efectivo',
-  BANK_TRANSFER: 'Transferencia bancaria',
-  CARD:          'Tarjeta (débito/crédito)',
-  PAGO_EXPRESS:  'PagoExpress',
-  AQUI_PAGO:     'AquíPago',
-  CHECK:         'Cheque',
+  CASH: "Efectivo",
+  BANK_TRANSFER: "Transferencia bancaria",
+  CARD: "Tarjeta (débito/crédito)",
+  PAGO_EXPRESS: "PagoExpress",
+  AQUI_PAGO: "AquíPago",
+  CHECK: "Cheque",
 };
 
-const TEXTAREA_CLS = 'w-full min-w-0 rounded-2xl border border-transparent bg-input/50 px-3 py-2 text-sm outline-none resize-none transition-[color,box-shadow,background-color] focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30';
+const TEXTAREA_CLS =
+  "w-full min-w-0 rounded-2xl border border-transparent bg-input/50 px-3 py-2 text-sm outline-none resize-none transition-[color,box-shadow,background-color] focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30";
 
 function InfoRow({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div className="flex justify-between items-start py-2 border-b border-border last:border-0">
       <span className="text-sm text-muted-foreground">{label}</span>
-      <span className="text-sm font-medium text-foreground text-right">{value}</span>
+      <span className="text-sm font-medium text-foreground text-right">
+        {value}
+      </span>
     </div>
   );
 }
@@ -86,22 +127,26 @@ export default function InvoiceDetailPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
 
-  const { data: invoice, isLoading, error } = useQuery({
-    queryKey: ['invoice', id],
+  const {
+    data: invoice,
+    isLoading,
+    error,
+  } = useQuery({
+    queryKey: ["invoice", id],
     queryFn: () => billingApi.getInvoice(id),
   });
 
   const { data: creditConfig } = useQuery({
-    queryKey: ['credit-config'],
+    queryKey: ["credit-config"],
     queryFn: settingsApi.getCredit,
   });
   const dueDayOfMonth = creditConfig?.dueDayOfMonth ?? 5;
 
   const [form, setForm] = useState<IssueInvoicePayload>({
-    paymentCondition: 'CASH',
-    dueDate: '',
+    paymentCondition: "CASH",
+    dueDate: "",
     paymentMethod: undefined,
-    notes: '',
+    notes: "",
   });
   const [formReady, setFormReady] = useState(false);
   // Día del mes elegido para el vencimiento de la 1ª cuota — no una fecha de
@@ -114,17 +159,23 @@ export default function InvoiceDetailPage() {
   // (patrón "ajustar estado a partir de props" de React) y no en un efecto,
   // para no pintar un render con el formulario vacío y re-renderizar.
   if (invoice && !formReady) {
-    const isCredit = invoice.saleOrder.saleType === 'CREDIT';
+    const isCredit = invoice.saleOrder.saleType === "CREDIT";
     setForm({
-      paymentCondition: isCredit ? 'CREDIT' : 'CASH',
+      paymentCondition: isCredit ? "CREDIT" : "CASH",
       dueDate: isCredit
-        ? (invoice.dueDate ? invoice.dueDate.slice(0, 10) : computeFirstDueDateISO(dueDayOfMonth))
-        : '',
+        ? invoice.dueDate
+          ? invoice.dueDate.slice(0, 10)
+          : computeFirstDueDateISO(dueDayOfMonth)
+        : "",
       paymentMethod: invoice.paymentMethod ?? undefined,
-      notes: invoice.notes ?? '',
+      notes: invoice.notes ?? "",
     });
     if (isCredit) {
-      setSelectedDay(invoice.dueDate ? (parseISODate(invoice.dueDate)?.getUTCDate() ?? dueDayOfMonth) : dueDayOfMonth);
+      setSelectedDay(
+        invoice.dueDate
+          ? (parseISODate(invoice.dueDate)?.getUTCDate() ?? dueDayOfMonth)
+          : dueDayOfMonth,
+      );
     }
     setFormReady(true);
   }
@@ -138,12 +189,12 @@ export default function InvoiceDetailPage() {
   }
 
   const [showCancelForm, setShowCancelForm] = useState(false);
-  const [cancelReason, setCancelReason] = useState('');
+  const [cancelReason, setCancelReason] = useState("");
 
   const issueMutation = useMutation({
     // Si ya no hay conexión, debe fallar y ofrecer reintento explícito en
     // vez de dejar la emisión pausada para ejecutarse sola al reconectar.
-    networkMode: 'always',
+    networkMode: "always",
     mutationFn: () =>
       billingApi.issueInvoice(id, {
         paymentCondition: form.paymentCondition,
@@ -155,52 +206,61 @@ export default function InvoiceDetailPage() {
     // al backend y haberse perdido únicamente la respuesta. Al reconectar,
     // React Query vuelve a consultar y muestra el estado persistido real.
     onSettled: () => {
-      void queryClient.invalidateQueries({ queryKey: ['invoice', id] });
-      void queryClient.invalidateQueries({ queryKey: ['invoices'] });
+      void queryClient.invalidateQueries({ queryKey: ["invoice", id] });
+      void queryClient.invalidateQueries({ queryKey: ["invoices"] });
     },
   });
 
   const retryPdfMutation = useMutation({
-    networkMode: 'always',
+    networkMode: "always",
     mutationFn: () => billingApi.retryInvoicePdf(id),
     onSettled: () => {
-      void queryClient.invalidateQueries({ queryKey: ['invoice', id] });
-      void queryClient.invalidateQueries({ queryKey: ['invoices'] });
+      void queryClient.invalidateQueries({ queryKey: ["invoice", id] });
+      void queryClient.invalidateQueries({ queryKey: ["invoices"] });
     },
   });
 
   const cancelMutation = useMutation({
     mutationFn: () => billingApi.cancelInvoice(id, cancelReason),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['invoice', id] });
-      void queryClient.invalidateQueries({ queryKey: ['invoices'] });
-      void queryClient.invalidateQueries({ queryKey: ['credit-notes'] });
+      void queryClient.invalidateQueries({ queryKey: ["invoice", id] });
+      void queryClient.invalidateQueries({ queryKey: ["invoices"] });
+      void queryClient.invalidateQueries({ queryKey: ["credit-notes"] });
       setShowCancelForm(false);
     },
   });
 
   if (isLoading) {
-    return <div className="py-24 text-center text-sm text-muted-foreground/60">Cargando factura...</div>;
+    return (
+      <div className="py-24 text-center text-sm text-muted-foreground/60">
+        Cargando factura...
+      </div>
+    );
   }
 
   if (error || !invoice) {
     return (
       <div className="py-24 text-center">
-        <p className="text-sm text-muted-foreground/60">No se encontró la factura.</p>
-        <button onClick={() => router.back()} className="mt-3 text-sm font-medium text-foreground underline underline-offset-2">
+        <p className="text-sm text-muted-foreground/60">
+          No se encontró la factura.
+        </p>
+        <button
+          onClick={() => router.back()}
+          className="mt-3 text-sm font-medium text-foreground underline underline-offset-2"
+        >
           Volver
         </button>
       </div>
     );
   }
 
-  const isPending = invoice.status === 'PENDING';
-  const canCancel = invoice.status === 'PENDING' || invoice.status === 'ISSUED';
+  const isPending = invoice.status === "PENDING";
+  const canCancel = invoice.status === "PENDING" || invoice.status === "ISSUED";
   const customer = invoice.saleOrder.customer;
   const invoiceRef = invoice.invoiceNumber
-    ? `${invoice.invoicePrefix ?? ''}${invoice.invoiceNumber}`
+    ? `${invoice.invoicePrefix ?? ""}${invoice.invoiceNumber}`
     : `#${invoice.id.slice(0, 8).toUpperCase()}`;
-  const isCredit = invoice.saleOrder.saleType === 'CREDIT';
+  const isCredit = invoice.saleOrder.saleType === "CREDIT";
   const canIssue = isCredit ? !!form.dueDate : !!form.paymentMethod;
   const canPrintPdf = canPrintInvoicePdf(invoice);
   const canRetryPdf = canRetryInvoicePdf(invoice);
@@ -210,7 +270,7 @@ export default function InvoiceDetailPage() {
       {/* Back */}
       <button
         type="button"
-        onClick={() => router.push('/dashboard/billing')}
+        onClick={() => router.push("/dashboard/billing")}
         className="mb-6 flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
       >
         <ArrowLeft size={15} />
@@ -231,17 +291,32 @@ export default function InvoiceDetailPage() {
             <span className="font-mono">{invoiceRef}</span>
           </p>
         </div>
-        {(canPrintPdf || canRetryPdf) && (canPrintPdf ? (
-          <Button variant="outline" onClick={() => void openPdf(invoice.pdfFileId!)}>
-            <Printer size={15} /> Imprimir
-          </Button>
-        ) : canRetryPdf ? (
-          <RequirePermission permission="billing:issue">
-            <Button variant="outline" disabled={retryPdfMutation.isPending} onClick={() => retryPdfMutation.mutate()}>
-              <RotateCw size={15} className={retryPdfMutation.isPending ? 'animate-spin' : ''} /> {retryPdfMutation.isPending ? 'Regenerando...' : 'Regenerar PDF'}
+        {(canPrintPdf || canRetryPdf) &&
+          (canPrintPdf ? (
+            <Button
+              variant="outline"
+              onClick={() => void openPdf(invoice.pdfFileId!)}
+            >
+              <Printer size={15} />
+              Imprimir
             </Button>
-          </RequirePermission>
-        ) : null))}
+          ) : canRetryPdf ? (
+            <RequirePermission permission="billing:issue">
+              <Button
+                variant="outline"
+                disabled={retryPdfMutation.isPending}
+                onClick={() => retryPdfMutation.mutate()}
+              >
+                <RotateCw
+                  size={15}
+                  className={retryPdfMutation.isPending ? "animate-spin" : ""}
+                />
+                {retryPdfMutation.isPending
+                  ? "Regenerando..."
+                  : "Regenerar PDF"}
+              </Button>
+            </RequirePermission>
+          ) : null)}
       </div>
 
       {/* Main grid */}
@@ -250,44 +325,68 @@ export default function InvoiceDetailPage() {
         <div className="space-y-5">
           {/* Customer */}
           <section className="rounded-xl border border-border bg-card p-5">
-            <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/60 mb-3">Cliente</h2>
-            <InfoRow label="Nombre" value={`${customer.firstName} ${customer.lastName}`} />
+            <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/60 mb-3">
+              Cliente
+            </h2>
+            <InfoRow
+              label="Nombre"
+              value={`${customer.firstName} ${customer.lastName}`}
+            />
             {customer.email && <InfoRow label="Email" value={customer.email} />}
             {customer.documentNumber && (
-              <InfoRow label="Documento" value={`${customer.documentType ?? 'C.I.'} ${customer.documentNumber}`} />
+              <InfoRow
+                label="Documento"
+                value={`${customer.documentType ?? "C.I."} ${customer.documentNumber}`}
+              />
             )}
           </section>
 
           {/* Items */}
           <section className="rounded-xl border border-border bg-card overflow-hidden">
             <div className="px-5 py-4 border-b border-border">
-              <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/60">Detalle</h2>
+              <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/60">
+                Detalle
+              </h2>
             </div>
             {(() => {
-              const itemsSubtotal = invoice.items.reduce((s, it) => s + Number(it.total), 0);
-              const invoiceTotal  = Number(invoice.total);
+              const itemsSubtotal = invoice.items.reduce(
+                (s, it) => s + Number(it.total),
+                0,
+              );
+              const invoiceTotal = Number(invoice.total);
               return (
                 <table className="w-full text-sm">
                   <thead className="bg-muted/30 text-xs font-semibold uppercase tracking-wider text-muted-foreground/60">
                     <tr>
                       <th className="px-5 py-3 text-left">Descripción</th>
                       <th className="px-5 py-3 text-center w-16">Cant.</th>
-                      {!isCredit && <th className="px-5 py-3 text-right">P. Unit.</th>}
+                      {!isCredit && (
+                        <th className="px-5 py-3 text-right">P. Unit.</th>
+                      )}
                       <th className="px-5 py-3 text-right">Total</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border">
                     {invoice.items.map((item) => {
-                      const displayTotal = isCredit && itemsSubtotal > 0
-                        ? invoiceTotal * (Number(item.total) / itemsSubtotal)
-                        : Number(item.total);
+                      const displayTotal =
+                        isCredit && itemsSubtotal > 0
+                          ? invoiceTotal * (Number(item.total) / itemsSubtotal)
+                          : Number(item.total);
                       return (
                         <tr key={item.id}>
                           <td className="px-5 py-3">
-                            <p className="font-medium text-foreground">{item.description}</p>
-                            {item.ivaRate ? <p className="text-xs text-muted-foreground/60">IVA {item.ivaRate}%</p> : null}
+                            <p className="font-medium text-foreground">
+                              {item.description}
+                            </p>
+                            {item.ivaRate ? (
+                              <p className="text-xs text-muted-foreground/60">
+                                IVA {item.ivaRate}%
+                              </p>
+                            ) : null}
                           </td>
-                          <td className="px-5 py-3 text-center text-muted-foreground tabular-nums">{item.quantity}</td>
+                          <td className="px-5 py-3 text-center text-muted-foreground tabular-nums">
+                            {item.quantity}
+                          </td>
                           {!isCredit && (
                             <td className="px-5 py-3 text-right text-muted-foreground tabular-nums">
                               {formatPrice(Number(item.unitPrice))}
@@ -304,7 +403,9 @@ export default function InvoiceDetailPage() {
               );
             })()}
             <div className="flex justify-between items-center px-5 py-4 border-t border-border bg-muted/30">
-              <span className="text-sm font-semibold text-muted-foreground">Total</span>
+              <span className="text-sm font-semibold text-muted-foreground">
+                Total
+              </span>
               <span className="text-lg font-bold text-foreground tabular-nums">
                 {formatPrice(Number(invoice.total))}
               </span>
@@ -315,15 +416,29 @@ export default function InvoiceDetailPage() {
             entityType="INVOICE"
             entityId={invoice.id}
             recipient={customer.email}
-            canSendInvoice={Boolean(invoice.pdfFileId) && (invoice.status === "ISSUED" || invoice.status === "PAID")}
+            canSendInvoice={
+              Boolean(invoice.pdfFileId) &&
+              (invoice.status === "ISSUED" || invoice.status === "PAID")
+            }
           />
 
           {/* Timeline */}
           <section className="rounded-xl border border-border bg-card p-5">
-            <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/60 mb-3">Historial</h2>
-            <InfoRow label="Creada" value={formatDatePY(invoice.createdAt, 'local')} />
-            <InfoRow label="Emitida" value={formatDatePY(invoice.issuedAt, 'local')} />
-            <InfoRow label="Vencimiento" value={formatDatePY(invoice.dueDate, 'utc')} />
+            <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/60 mb-3">
+              Historial
+            </h2>
+            <InfoRow
+              label="Creada"
+              value={formatDatePY(invoice.createdAt, "local")}
+            />
+            <InfoRow
+              label="Emitida"
+              value={formatDatePY(invoice.issuedAt, "local")}
+            />
+            <InfoRow
+              label="Vencimiento"
+              value={formatDatePY(invoice.dueDate, "utc")}
+            />
           </section>
         </div>
 
@@ -331,20 +446,28 @@ export default function InvoiceDetailPage() {
         <div className="space-y-5">
           {isPending ? (
             <section className="rounded-xl border border-border bg-card p-5">
-              <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/60 mb-4">Emisión</h2>
+              <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/60 mb-4">
+                Emisión
+              </h2>
 
               {/* Payment condition — read-only */}
               <div className="mb-4 space-y-1.5">
                 <Label>Condición de venta</Label>
                 <div className="flex items-center gap-2 h-9 rounded-3xl border border-border bg-muted/30 px-3 text-sm cursor-default select-none">
-                  <Badge variant="outline" className={isCredit
-                    ? 'bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-950 dark:text-sky-300 dark:border-sky-800'
-                    : 'bg-accent-subtle text-accent-on border-accent-on/20'
-                  }>
-                    {isCredit ? 'Crédito' : 'Contado'}
+                  <Badge
+                    variant="outline"
+                    className={
+                      isCredit
+                        ? "bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-950 dark:text-sky-300 dark:border-sky-800"
+                        : "bg-accent-subtle text-accent-on border-accent-on/20"
+                    }
+                  >
+                    {isCredit ? "Crédito" : "Contado"}
                   </Badge>
                   {isCredit && invoice.saleOrder.installments && (
-                    <span className="text-xs text-muted-foreground/60">{invoice.saleOrder.installments} cuotas</span>
+                    <span className="text-xs text-muted-foreground/60">
+                      {invoice.saleOrder.installments} cuotas
+                    </span>
                   )}
                 </div>
               </div>
@@ -354,20 +477,33 @@ export default function InvoiceDetailPage() {
                 <div className="mb-4 space-y-1.5">
                   <Label htmlFor="due-date">
                     Fecha de vencimiento de la 1ª cuota *
-                    <span className="ml-1 font-normal text-muted-foreground/60">(por conv. día {dueDayOfMonth} de cada mes)</span>
+                    <span className="ml-1 font-normal text-muted-foreground/60">
+                      (por conv. día {dueDayOfMonth} de cada mes)
+                    </span>
                   </Label>
-                  <Select value={String(selectedDay)} onValueChange={(v) => v && handleDayChange(Number(v))}>
+                  <Select
+                    value={String(selectedDay)}
+                    onValueChange={(v) => v && handleDayChange(Number(v))}
+                  >
                     <SelectTrigger id="due-date" className="w-full">
-                      <span className="min-w-0 flex-1 truncate text-left text-sm">Día {selectedDay}</span>
+                      <span className="min-w-0 flex-1 truncate text-left text-sm">
+                        Día {selectedDay}
+                      </span>
                     </SelectTrigger>
                     <SelectContent>
-                      {Array.from({ length: 28 }, (_, i) => i + 1).map((day) => (
-                        <SelectItem key={day} value={String(day)}>Día {day}</SelectItem>
-                      ))}
+                      {Array.from({ length: 28 }, (_, i) => i + 1).map(
+                        (day) => (
+                          <SelectItem key={day} value={String(day)}>
+                            Día {day}
+                          </SelectItem>
+                        ),
+                      )}
                     </SelectContent>
                   </Select>
                   <p className="text-xs text-muted-foreground/60">
-                    Vence el {formatDatePY(form.dueDate, 'utc')}. Si la cambiás, se reprograma todo el cronograma de cuotas a partir de esta fecha.
+                    Vence el {formatDatePY(form.dueDate, "utc")}. Si la cambiás,
+                    se reprograma todo el cronograma de cuotas a partir de esta
+                    fecha.
                   </p>
                 </div>
               )}
@@ -377,18 +513,32 @@ export default function InvoiceDetailPage() {
                 <div className="mb-4 space-y-1.5">
                   <Label htmlFor="payment-method">Método de pago *</Label>
                   <Select
-                    value={form.paymentMethod || 'none'}
-                    onValueChange={(v) => setForm((f) => ({ ...f, paymentMethod: v === 'none' ? undefined : v as PaymentMethod }))}
+                    value={form.paymentMethod || "none"}
+                    onValueChange={(v) =>
+                      setForm((f) => ({
+                        ...f,
+                        paymentMethod:
+                          v === "none" ? undefined : (v as PaymentMethod),
+                      }))
+                    }
                   >
                     <SelectTrigger className="w-full">
                       <span className="flex-1 text-left text-sm truncate">
-                        {form.paymentMethod ? PAYMENT_METHOD_LABELS[form.paymentMethod] : 'Seleccionar método...'}
+                        {form.paymentMethod
+                          ? PAYMENT_METHOD_LABELS[form.paymentMethod]
+                          : "Seleccionar método..."}
                       </span>
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="none">Seleccionar método...</SelectItem>
-                      {(Object.keys(PAYMENT_METHOD_LABELS) as PaymentMethod[]).map((m) => (
-                        <SelectItem key={m} value={m}>{PAYMENT_METHOD_LABELS[m]}</SelectItem>
+                      <SelectItem value="none">
+                        Seleccionar método...
+                      </SelectItem>
+                      {(
+                        Object.keys(PAYMENT_METHOD_LABELS) as PaymentMethod[]
+                      ).map((m) => (
+                        <SelectItem key={m} value={m}>
+                          {PAYMENT_METHOD_LABELS[m]}
+                        </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -402,14 +552,19 @@ export default function InvoiceDetailPage() {
                   rows={3}
                   className={TEXTAREA_CLS}
                   placeholder="Observaciones para la factura..."
-                  value={form.notes ?? ''}
-                  onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
+                  value={form.notes ?? ""}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, notes: e.target.value }))
+                  }
                 />
               </div>
 
               {issueMutation.isError && (
                 <p className="mb-3 text-xs text-destructive">
-                  {apiErrorMessage(issueMutation.error, 'Error al emitir la factura')}
+                  {apiErrorMessage(
+                    issueMutation.error,
+                    "Error al emitir la factura",
+                  )}
                 </p>
               )}
 
@@ -420,25 +575,36 @@ export default function InvoiceDetailPage() {
                   disabled={!canIssue || issueMutation.isPending}
                 >
                   <Send size={15} />
-                  {issueMutation.isPending ? 'Generando PDF y emitiendo...' : issueMutation.isError ? 'Reintentar emisión' : 'Emitir factura'}
+                  {issueMutation.isPending
+                    ? "Generando PDF y emitiendo..."
+                    : issueMutation.isError
+                      ? "Reintentar emisión"
+                      : "Emitir factura"}
                 </Button>
               </RequirePermission>
             </section>
           ) : (
             <section className="rounded-xl border border-border bg-card p-5">
-              <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/60 mb-3">Detalles de emisión</h2>
+              <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/60 mb-3">
+                Detalles de emisión
+              </h2>
               <InfoRow
                 label="Condición"
-                value={invoice.saleOrder.saleType === 'CREDIT'
-                  ? `Crédito${invoice.saleOrder.installments ? ` · ${invoice.saleOrder.installments} cuotas` : ''}`
-                  : 'Contado'}
+                value={
+                  invoice.saleOrder.saleType === "CREDIT"
+                    ? `Crédito${invoice.saleOrder.installments ? ` · ${invoice.saleOrder.installments} cuotas` : ""}`
+                    : "Contado"
+                }
               />
               {(invoice.invoiceNumber || invoice.invoicePrefix) && (
-                <InfoRow label="N° Factura" value={`${invoice.invoicePrefix ?? ''}${invoice.invoiceNumber ?? ''}`} />
+                <InfoRow
+                  label="N° Factura"
+                  value={`${invoice.invoicePrefix ?? ""}${invoice.invoiceNumber ?? ""}`}
+                />
               )}
               {invoice.notes && <InfoRow label="Notas" value={invoice.notes} />}
 
-              {(invoice.status === 'ISSUED' || invoice.status === 'PAID') && (
+              {(invoice.status === "ISSUED" || invoice.status === "PAID") && (
                 <RequirePermission permission="billing:issue">
                   <div className="mt-4">
                     <Button
@@ -453,13 +619,25 @@ export default function InvoiceDetailPage() {
                       {invoice.pdfFileId ? (
                         <Printer size={15} />
                       ) : (
-                        <RotateCw size={15} className={retryPdfMutation.isPending ? 'animate-spin' : ''} />
+                        <RotateCw
+                          size={15}
+                          className={
+                            retryPdfMutation.isPending ? "animate-spin" : ""
+                          }
+                        />
                       )}
-                      {invoice.pdfFileId ? 'Imprimir / descargar PDF' : retryPdfMutation.isPending ? 'Regenerando PDF...' : 'Regenerar PDF'}
+                      {invoice.pdfFileId
+                        ? "Imprimir / descargar PDF"
+                        : retryPdfMutation.isPending
+                          ? "Regenerando PDF..."
+                          : "Regenerar PDF"}
                     </Button>
                     {retryPdfMutation.isError && (
                       <p className="mt-2 text-xs text-destructive">
-                        {apiErrorMessage(retryPdfMutation.error, 'No se pudo regenerar el PDF')}
+                        {apiErrorMessage(
+                          retryPdfMutation.error,
+                          "No se pudo regenerar el PDF",
+                        )}
                       </p>
                     )}
                   </div>
@@ -474,9 +652,13 @@ export default function InvoiceDetailPage() {
               {!showCancelForm ? (
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-medium text-destructive">Cancelar factura</p>
+                    <p className="text-sm font-medium text-destructive">
+                      Cancelar factura
+                    </p>
                     <p className="text-xs text-muted-foreground mt-0.5">
-                      {invoice.status === 'ISSUED' ? 'Se generará una nota de crédito.' : 'Se descartará el borrador.'}
+                      {invoice.status === "ISSUED"
+                        ? "Se generará una nota de crédito."
+                        : "Se descartará el borrador."}
                     </p>
                   </div>
                   <RequirePermission permission="billing:cancel">
@@ -492,11 +674,14 @@ export default function InvoiceDetailPage() {
               ) : (
                 <div>
                   <div className="flex items-start gap-2 mb-3">
-                    <AlertTriangle size={15} className="mt-0.5 shrink-0 text-destructive" />
+                    <AlertTriangle
+                      size={15}
+                      className="mt-0.5 shrink-0 text-destructive"
+                    />
                     <p className="text-xs text-destructive">
-                      {invoice.status === 'ISSUED'
-                        ? 'Al cancelar una factura emitida se generará automáticamente una nota de crédito.'
-                        : 'Esta acción descartará el borrador. No se generará nota de crédito.'}
+                      {invoice.status === "ISSUED"
+                        ? "Al cancelar una factura emitida se generará automáticamente una nota de crédito."
+                        : "Esta acción descartará el borrador. No se generará nota de crédito."}
                     </p>
                   </div>
                   <div className="space-y-1.5 mb-3">
@@ -511,7 +696,10 @@ export default function InvoiceDetailPage() {
                   </div>
                   {cancelMutation.isError && (
                     <p className="mb-2 text-xs text-destructive">
-                      {apiErrorMessage(cancelMutation.error, 'Error al cancelar')}
+                      {apiErrorMessage(
+                        cancelMutation.error,
+                        "Error al cancelar",
+                      )}
                     </p>
                   )}
                   <div className="flex gap-2">
@@ -519,17 +707,23 @@ export default function InvoiceDetailPage() {
                       variant="destructive"
                       className="flex-1"
                       onClick={() => cancelMutation.mutate()}
-                      disabled={cancelReason.trim().length < 5 || cancelMutation.isPending}
+                      disabled={
+                        cancelReason.trim().length < 5 ||
+                        cancelMutation.isPending
+                      }
                     >
                       {cancelMutation.isPending
-                        ? 'Cancelando...'
-                        : invoice.status === 'ISSUED'
-                          ? 'Cancelar y emitir nota de crédito'
-                          : 'Confirmar cancelación'}
+                        ? "Cancelando..."
+                        : invoice.status === "ISSUED"
+                          ? "Cancelar y emitir nota de crédito"
+                          : "Confirmar cancelación"}
                     </Button>
                     <Button
                       variant="outline"
-                      onClick={() => { setShowCancelForm(false); setCancelReason(''); }}
+                      onClick={() => {
+                        setShowCancelForm(false);
+                        setCancelReason("");
+                      }}
                     >
                       Volver
                     </Button>

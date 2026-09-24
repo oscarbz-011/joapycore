@@ -1,14 +1,24 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { CreditCard, Plus, Trash2, ToggleLeft, ToggleRight, Pencil, Check, X, Percent } from 'lucide-react';
+import { useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  CreditCard,
+  Plus,
+  Trash2,
+  ToggleLeft,
+  ToggleRight,
+  Pencil,
+  Check,
+  X,
+  Percent,
+} from "lucide-react";
 import {
   settingsApi,
   type CreditPlan,
   type InterestComponent,
   type InterestComponentFrequency,
-} from '../../../../../lib/api/settings';
+} from "../../../../../lib/api/settings";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -18,8 +28,8 @@ import {
 // resultado es idéntico al de antes ("15.0%").
 function fmtRate(rate: number) {
   const n = Number(rate);
-  let str = n.toFixed(4).replace(/0+$/, '');
-  if (str.endsWith('.')) str += '0';
+  let str = n.toFixed(4).replace(/0+$/, "");
+  if (str.endsWith(".")) str += "0";
   return `${str}%`;
 }
 
@@ -55,22 +65,22 @@ function AddPlanForm({
   onCancel: () => void;
 }) {
   const QUICK_INSTALLMENTS = [3, 6, 12, 18];
-  const [installments, setInstallments] = useState<number | ''>('');
-  const [rate, setRate] = useState('');
+  const [installments, setInstallments] = useState<number | "">("");
+  const [rate, setRate] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
 
   const chosen = Number(installments);
   const isDuplicate = existingInstallments.includes(chosen);
 
   async function handleSubmit() {
     if (!chosen || !rate || isDuplicate) return;
-    setError('');
+    setError("");
     setSubmitting(true);
     try {
       await onAdd(chosen, Number(rate));
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : 'Error al agregar el plan';
+      const msg = e instanceof Error ? e.message : "Error al agregar el plan";
       setError(msg);
     } finally {
       setSubmitting(false);
@@ -93,10 +103,10 @@ function AddPlanForm({
               onClick={() => setInstallments(n)}
               className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-all ${
                 installments === n
-                  ? 'bg-primary text-primary-foreground'
+                  ? "bg-primary text-primary-foreground"
                   : existingInstallments.includes(n)
-                    ? 'cursor-not-allowed bg-muted/30 text-muted-foreground/60'
-                    : 'bg-card border border-border text-muted-foreground hover:border-ring/50'
+                    ? "cursor-not-allowed bg-muted/30 text-muted-foreground/60"
+                    : "bg-card border border-border text-muted-foreground hover:border-ring/50"
               }`}
             >
               {n}×
@@ -106,19 +116,30 @@ function AddPlanForm({
             type="number"
             min="1"
             placeholder="Otro…"
-            value={typeof installments === 'number' && !QUICK_INSTALLMENTS.includes(installments) ? installments : ''}
-            onChange={(e) => setInstallments(e.target.value ? Number(e.target.value) : '')}
+            value={
+              typeof installments === "number" &&
+              !QUICK_INSTALLMENTS.includes(installments)
+                ? installments
+                : ""
+            }
+            onChange={(e) =>
+              setInstallments(e.target.value ? Number(e.target.value) : "")
+            }
             className="w-20 rounded-lg border border-border px-2.5 py-1.5 text-sm focus:border-ring focus:outline-none"
           />
         </div>
         {isDuplicate && (
-          <p className="mt-1 text-xs text-amber-600">Ya existe un plan de {chosen} cuotas.</p>
+          <p className="mt-1 text-xs text-amber-600">
+            Ya existe un plan de {chosen} cuotas.
+          </p>
         )}
       </div>
 
       {/* Interest rate */}
       <div>
-        <p className="mb-1.5 text-xs text-muted-foreground/60">Tasa de interés total</p>
+        <p className="mb-1.5 text-xs text-muted-foreground/60">
+          Tasa de interés total
+        </p>
         <div className="relative w-32">
           <input
             type="number"
@@ -129,12 +150,17 @@ function AddPlanForm({
             onChange={(e) => setRate(e.target.value)}
             className="w-full rounded-lg border border-border py-1.5 pl-3 pr-8 text-sm focus:border-ring focus:outline-none"
           />
-          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground/60">%</span>
+          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground/60">
+            %
+          </span>
         </div>
         {rate && installments && !isDuplicate && (
           <p className="mt-1 text-xs text-muted-foreground/60">
-            Un pedido de Gs. 1.000.000 en {chosen} cuotas: Gs.{' '}
-            {Math.round((1_000_000 * (1 + Number(rate) / 100)) / chosen).toLocaleString('es-PY')} / cuota
+            Un pedido de Gs. 1.000.000 en {chosen} cuotas: Gs.{" "}
+            {Math.round(
+              (1_000_000 * (1 + Number(rate) / 100)) / chosen,
+            ).toLocaleString("es-PY")}{" "}
+            / cuota
           </p>
         )}
       </div>
@@ -149,7 +175,7 @@ function AddPlanForm({
           className="flex items-center gap-1.5 rounded-lg bg-primary px-3.5 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed"
         >
           <Check size={14} />
-          {submitting ? 'Agregando…' : 'Agregar'}
+          {submitting ? "Agregando…" : "Agregar"}
         </button>
         <button
           type="button"
@@ -189,17 +215,25 @@ function PlanRow({
   }
 
   return (
-    <div className={`flex items-center gap-4 rounded-xl border px-4 py-3 transition-all ${
-      plan.isActive ? 'border-border bg-card' : 'border-border bg-muted/30 opacity-60'
-    }`}>
+    <div
+      className={`flex items-center gap-4 rounded-xl border px-4 py-3 transition-all ${
+        plan.isActive
+          ? "border-border bg-card"
+          : "border-border bg-muted/30 opacity-60"
+      }`}
+    >
       {/* Installments badge */}
       <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-muted/30">
-        <span className="text-sm font-bold text-muted-foreground">{plan.installments}×</span>
+        <span className="text-sm font-bold text-muted-foreground">
+          {plan.installments}×
+        </span>
       </div>
 
       {/* Info */}
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium text-foreground">{plan.installments} cuotas</p>
+        <p className="text-sm font-medium text-foreground">
+          {plan.installments} cuotas
+        </p>
         {editing ? (
           <div className="mt-1 flex items-center gap-1.5">
             <div className="relative w-24">
@@ -210,13 +244,33 @@ function PlanRow({
                 step="0.1"
                 value={rateInput}
                 onChange={(e) => setRateInput(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter') commitEdit(); if (e.key === 'Escape') setEditing(false); }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") commitEdit();
+                  if (e.key === "Escape") setEditing(false);
+                }}
                 className="w-full rounded-md border border-border py-0.5 pl-2 pr-6 text-xs focus:border-ring focus:outline-none"
               />
-              <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground/60">%</span>
+              <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground/60">
+                %
+              </span>
             </div>
-            <button type="button" onClick={commitEdit} className="text-muted-foreground hover:text-foreground"><Check size={13} /></button>
-            <button type="button" onClick={() => { setRateInput(String(plan.interestRate)); setEditing(false); }} className="text-muted-foreground/60 hover:text-muted-foreground"><X size={13} /></button>
+            <button
+              type="button"
+              onClick={commitEdit}
+              className="text-muted-foreground hover:text-foreground"
+            >
+              <Check size={13} />
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setRateInput(String(plan.interestRate));
+                setEditing(false);
+              }}
+              className="text-muted-foreground/60 hover:text-muted-foreground"
+            >
+              <X size={13} />
+            </button>
           </div>
         ) : (
           <button
@@ -234,7 +288,11 @@ function PlanRow({
       <div className="hidden sm:block text-right">
         <p className="text-xs text-muted-foreground/60">Por Gs. 1.000.000</p>
         <p className="text-xs font-medium text-muted-foreground">
-          ≈ Gs. {Math.round((1_000_000 * (1 + plan.interestRate / 100)) / plan.installments).toLocaleString('es-PY')} /cuota
+          ≈ Gs.{" "}
+          {Math.round(
+            (1_000_000 * (1 + plan.interestRate / 100)) / plan.installments,
+          ).toLocaleString("es-PY")}{" "}
+          /cuota
         </p>
       </div>
 
@@ -242,11 +300,15 @@ function PlanRow({
       <div className="flex items-center gap-2">
         <button
           type="button"
-          title={plan.isActive ? 'Desactivar plan' : 'Activar plan'}
+          title={plan.isActive ? "Desactivar plan" : "Activar plan"}
           onClick={() => onToggle(plan.id, !plan.isActive)}
           className="text-muted-foreground/60 hover:text-foreground transition-colors"
         >
-          {plan.isActive ? <ToggleRight size={20} className="text-emerald-500" /> : <ToggleLeft size={20} />}
+          {plan.isActive ? (
+            <ToggleRight size={20} className="text-emerald-500" />
+          ) : (
+            <ToggleLeft size={20} />
+          )}
         </button>
         <button
           type="button"
@@ -264,39 +326,54 @@ function PlanRow({
 // ── Interest components ─────────────────────────────────────────────────────
 
 const FREQUENCY_LABELS: Record<InterestComponentFrequency, string> = {
-  ONE_TIME: 'Una sola vez',
-  DAILY: 'Diario',
-  MONTHLY: 'Mensual',
+  ONE_TIME: "Una sola vez",
+  DAILY: "Diario",
+  MONTHLY: "Mensual",
 };
 
 const FREQUENCY_HINTS: Record<InterestComponentFrequency, string> = {
-  ONE_TIME: 'Se cobra una sola vez apenas se vence la tolerancia — no crece con el tiempo. Ej: gastos administrativos.',
-  DAILY: 'Se acumula por cada día de atraso. Ej: interés diario por mora.',
-  MONTHLY: 'Se aplica desde el primer día de mora por cada período de 30 días iniciado. Ej: gastos de cobranza mensuales.',
+  ONE_TIME:
+    "Se cobra una sola vez apenas se vence la tolerancia — no crece con el tiempo. Ej: gastos administrativos.",
+  DAILY: "Se acumula por cada día de atraso. Ej: interés diario por mora.",
+  MONTHLY:
+    "Se aplica desde el primer día de mora por cada período de 30 días iniciado. Ej: gastos de cobranza mensuales.",
 };
 
 function AddComponentForm({
   onAdd,
   onCancel,
 }: {
-  onAdd: (dto: { name: string; frequency: InterestComponentFrequency; percentage: number; cumulative: boolean }) => Promise<void>;
+  onAdd: (dto: {
+    name: string;
+    frequency: InterestComponentFrequency;
+    percentage: number;
+    cumulative: boolean;
+  }) => Promise<void>;
   onCancel: () => void;
 }) {
-  const [name, setName] = useState('');
-  const [frequency, setFrequency] = useState<InterestComponentFrequency>('DAILY');
-  const [percentage, setPercentage] = useState('');
+  const [name, setName] = useState("");
+  const [frequency, setFrequency] =
+    useState<InterestComponentFrequency>("DAILY");
+  const [percentage, setPercentage] = useState("");
   const [cumulative, setCumulative] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
 
   async function handleSubmit() {
     if (!name.trim() || !percentage) return;
-    setError('');
+    setError("");
     setSubmitting(true);
     try {
-      await onAdd({ name: name.trim(), frequency, percentage: Number(percentage), cumulative });
+      await onAdd({
+        name: name.trim(),
+        frequency,
+        percentage: Number(percentage),
+        cumulative,
+      });
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Error al agregar el componente');
+      setError(
+        e instanceof Error ? e.message : "Error al agregar el componente",
+      );
     } finally {
       setSubmitting(false);
     }
@@ -304,7 +381,9 @@ function AddComponentForm({
 
   return (
     <div className="rounded-xl border-2 border-dashed border-border bg-muted/30 p-4 space-y-3">
-      <p className="text-sm font-medium text-muted-foreground">Nuevo componente</p>
+      <p className="text-sm font-medium text-muted-foreground">
+        Nuevo componente
+      </p>
 
       <div>
         <p className="mb-1.5 text-xs text-muted-foreground/60">Nombre</p>
@@ -321,15 +400,17 @@ function AddComponentForm({
         <div>
           <p className="mb-1.5 text-xs text-muted-foreground/60">Frecuencia</p>
           <div className="flex gap-2">
-            {(Object.keys(FREQUENCY_LABELS) as InterestComponentFrequency[]).map((f) => (
+            {(
+              Object.keys(FREQUENCY_LABELS) as InterestComponentFrequency[]
+            ).map((f) => (
               <button
                 key={f}
                 type="button"
                 onClick={() => setFrequency(f)}
                 className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-all ${
                   frequency === f
-                    ? 'bg-primary text-primary-foreground'
-                    : 'bg-card border border-border text-muted-foreground hover:border-ring/50'
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-card border border-border text-muted-foreground hover:border-ring/50"
                 }`}
               >
                 {FREQUENCY_LABELS[f]}
@@ -350,20 +431,25 @@ function AddComponentForm({
               onChange={(e) => setPercentage(e.target.value)}
               className="w-full rounded-lg border border-border py-1.5 pl-3 pr-8 text-sm focus:border-ring focus:outline-none"
             />
-            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground/60">%</span>
+            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground/60">
+              %
+            </span>
           </div>
         </div>
       </div>
 
-      <p className="text-xs text-muted-foreground/60">{FREQUENCY_HINTS[frequency]}</p>
+      <p className="text-xs text-muted-foreground/60">
+        {FREQUENCY_HINTS[frequency]}
+      </p>
 
-      {frequency === 'DAILY' && percentage && (
+      {frequency === "DAILY" && percentage && (
         <p className="text-xs text-muted-foreground/60">
-          Equivale a {fmtRate(dailyToMonthly(Number(percentage)))} mensual (30 días)
+          Equivale a {fmtRate(dailyToMonthly(Number(percentage)))} mensual (30
+          días)
         </p>
       )}
 
-      {frequency === 'MONTHLY' && (
+      {frequency === "MONTHLY" && (
         <label className="flex items-center gap-2 cursor-pointer">
           <input
             type="checkbox"
@@ -372,7 +458,9 @@ function AddComponentForm({
             className="h-4 w-4 rounded border-border accent-primary"
           />
           <span className="text-xs text-muted-foreground">
-            Acumulativo — el cargo crece cada mes (mes 1={percentage || 'X'}%, mes 2={percentage ? Number(percentage) * 2 : 'X'}%, mes 3={percentage ? Number(percentage) * 3 : 'X'}%...)
+            Acumulativo — el cargo crece cada mes (mes 1={percentage || "X"}%,
+            mes 2={percentage ? Number(percentage) * 2 : "X"}%, mes 3=
+            {percentage ? Number(percentage) * 3 : "X"}%...)
           </span>
         </label>
       )}
@@ -387,7 +475,7 @@ function AddComponentForm({
           className="flex items-center gap-1.5 rounded-lg bg-primary px-3.5 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed"
         >
           <Check size={14} />
-          {submitting ? 'Agregando…' : 'Agregar'}
+          {submitting ? "Agregando…" : "Agregar"}
         </button>
         <button
           type="button"
@@ -424,9 +512,13 @@ function ComponentRow({
   }
 
   return (
-    <div className={`flex items-center gap-4 rounded-xl border px-4 py-3 transition-all ${
-      component.isActive ? 'border-border bg-card' : 'border-border bg-muted/30 opacity-60'
-    }`}>
+    <div
+      className={`flex items-center gap-4 rounded-xl border px-4 py-3 transition-all ${
+        component.isActive
+          ? "border-border bg-card"
+          : "border-border bg-muted/30 opacity-60"
+      }`}
+    >
       <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-muted/30">
         <Percent size={16} className="text-muted-foreground" />
       </div>
@@ -436,7 +528,8 @@ function ComponentRow({
         <div className="mt-0.5 flex items-center gap-1.5 flex-wrap">
           <span className="text-xs text-muted-foreground/60">
             {FREQUENCY_LABELS[component.frequency]}
-            {component.frequency === 'MONTHLY' && (component.cumulative ? ' · acumulativo' : ' · una vez')}
+            {component.frequency === "MONTHLY" &&
+              (component.cumulative ? " · acumulativo" : " · una vez")}
           </span>
           {editing ? (
             <div className="flex items-center gap-1.5">
@@ -448,14 +541,34 @@ function ComponentRow({
                   step="0.0001"
                   value={rateInput}
                   onChange={(e) => setRateInput(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter') commitEdit(); if (e.key === 'Escape') setEditing(false); }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") commitEdit();
+                    if (e.key === "Escape") setEditing(false);
+                  }}
                   className="w-full rounded-md border border-border py-0.5 pl-2 pr-6 text-xs focus:border-ring focus:outline-none"
                 />
-                <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground/60">%</span>
+                <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground/60">
+                  %
+                </span>
               </div>
-              <button type="button" onClick={commitEdit} className="text-muted-foreground hover:text-foreground"><Check size={13} /></button>
-              <button type="button" onClick={() => { setRateInput(String(pct)); setEditing(false); }} className="text-muted-foreground/60 hover:text-muted-foreground"><X size={13} /></button>
-              {component.frequency === 'DAILY' && Number(rateInput) > 0 && (
+              <button
+                type="button"
+                onClick={commitEdit}
+                className="text-muted-foreground hover:text-foreground"
+              >
+                <Check size={13} />
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setRateInput(String(pct));
+                  setEditing(false);
+                }}
+                className="text-muted-foreground/60 hover:text-muted-foreground"
+              >
+                <X size={13} />
+              </button>
+              {component.frequency === "DAILY" && Number(rateInput) > 0 && (
                 <span className="text-xs text-muted-foreground/60">
                   ≈ {fmtRate(dailyToMonthly(Number(rateInput)))} mensual
                 </span>
@@ -468,8 +581,10 @@ function ComponentRow({
               className="flex items-center gap-1 text-xs text-muted-foreground/60 hover:text-muted-foreground transition-colors"
             >
               <span>{fmtRate(pct)}</span>
-              {component.frequency === 'DAILY' && (
-                <span className="text-muted-foreground/40">(≈ {fmtRate(dailyToMonthly(pct))} mensual)</span>
+              {component.frequency === "DAILY" && (
+                <span className="text-muted-foreground/40">
+                  (≈ {fmtRate(dailyToMonthly(pct))} mensual)
+                </span>
               )}
               <Pencil size={10} />
             </button>
@@ -480,11 +595,15 @@ function ComponentRow({
       <div className="flex items-center gap-2">
         <button
           type="button"
-          title={component.isActive ? 'Desactivar' : 'Activar'}
+          title={component.isActive ? "Desactivar" : "Activar"}
           onClick={() => onToggle(component.id, !component.isActive)}
           className="text-muted-foreground/60 hover:text-foreground transition-colors"
         >
-          {component.isActive ? <ToggleRight size={20} className="text-emerald-500" /> : <ToggleLeft size={20} />}
+          {component.isActive ? (
+            <ToggleRight size={20} className="text-emerald-500" />
+          ) : (
+            <ToggleLeft size={20} />
+          )}
         </button>
         <button
           type="button"
@@ -504,50 +623,66 @@ function ComponentRow({
 export default function CreditSettingsPage() {
   const qc = useQueryClient();
   const [showAddForm, setShowAddForm] = useState(false);
-  const [maxIncomeInput, setMaxIncomeInput] = useState('');
+  const [maxIncomeInput, setMaxIncomeInput] = useState("");
   const [editingMaxIncome, setEditingMaxIncome] = useState(false);
-  const [dueDayInput, setDueDayInput] = useState('');
+  const [dueDayInput, setDueDayInput] = useState("");
   const [editingDueDay, setEditingDueDay] = useState(false);
-  const [graceDaysInput, setGraceDaysInput] = useState('');
+  const [graceDaysInput, setGraceDaysInput] = useState("");
   const [editingGraceDays, setEditingGraceDays] = useState(false);
-  const [thresholdInput, setThresholdInput] = useState('');
+  const [thresholdInput, setThresholdInput] = useState("");
   const [editingThreshold, setEditingThreshold] = useState(false);
   const [showAddComponentForm, setShowAddComponentForm] = useState(false);
 
   const { data: config, isLoading } = useQuery({
-    queryKey: ['credit-config'],
+    queryKey: ["credit-config"],
     queryFn: settingsApi.getCredit,
   });
 
   const toggleEnabled = useMutation({
     mutationFn: (isEnabled: boolean) =>
-      settingsApi.setCreditEnabled(isEnabled, toNumOrNull(config?.maxIncomePercentage)),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['credit-config'] }),
+      settingsApi.setCreditEnabled(
+        isEnabled,
+        toNumOrNull(config?.maxIncomePercentage),
+      ),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["credit-config"] }),
   });
 
   const updateMaxIncome = useMutation({
     mutationFn: (maxIncomePercentage: number | null) =>
-      settingsApi.setCreditEnabled(config?.isEnabled ?? true, maxIncomePercentage),
+      settingsApi.setCreditEnabled(
+        config?.isEnabled ?? true,
+        maxIncomePercentage,
+      ),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ['credit-config'] });
+      void qc.invalidateQueries({ queryKey: ["credit-config"] });
       setEditingMaxIncome(false);
     },
   });
 
   const updateDueDay = useMutation({
     mutationFn: (dueDayOfMonth: number) =>
-      settingsApi.setCreditEnabled(config?.isEnabled ?? true, toNumOrNull(config?.maxIncomePercentage), dueDayOfMonth, config?.moraGraceDays),
+      settingsApi.setCreditEnabled(
+        config?.isEnabled ?? true,
+        toNumOrNull(config?.maxIncomePercentage),
+        dueDayOfMonth,
+        config?.moraGraceDays,
+      ),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ['credit-config'] });
+      void qc.invalidateQueries({ queryKey: ["credit-config"] });
       setEditingDueDay(false);
     },
   });
 
   const updateGraceDays = useMutation({
     mutationFn: (moraGraceDays: number) =>
-      settingsApi.setCreditEnabled(config?.isEnabled ?? true, toNumOrNull(config?.maxIncomePercentage), config?.dueDayOfMonth, moraGraceDays),
+      settingsApi.setCreditEnabled(
+        config?.isEnabled ?? true,
+        toNumOrNull(config?.maxIncomePercentage),
+        config?.dueDayOfMonth,
+        moraGraceDays,
+      ),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ['credit-config'] });
+      void qc.invalidateQueries({ queryKey: ["credit-config"] });
       setEditingGraceDays(false);
     },
   });
@@ -562,49 +697,65 @@ export default function CreditSettingsPage() {
         delinquencyThresholdDays,
       ),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ['credit-config'] });
+      void qc.invalidateQueries({ queryKey: ["credit-config"] });
       setEditingThreshold(false);
     },
   });
 
   const addComponent = useMutation({
-    mutationFn: (dto: { name: string; frequency: InterestComponentFrequency; percentage: number; cumulative: boolean }) =>
-      settingsApi.addInterestComponent(dto),
+    mutationFn: (dto: {
+      name: string;
+      frequency: InterestComponentFrequency;
+      percentage: number;
+      cumulative: boolean;
+    }) => settingsApi.addInterestComponent(dto),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ['credit-config'] });
+      void qc.invalidateQueries({ queryKey: ["credit-config"] });
       setShowAddComponentForm(false);
     },
   });
 
   const updateComponent = useMutation({
-    mutationFn: ({ id, ...dto }: { id: string; percentage?: number; isActive?: boolean }) =>
-      settingsApi.updateInterestComponent(id, dto),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['credit-config'] }),
+    mutationFn: ({
+      id,
+      ...dto
+    }: {
+      id: string;
+      percentage?: number;
+      isActive?: boolean;
+    }) => settingsApi.updateInterestComponent(id, dto),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["credit-config"] }),
   });
 
   const removeComponent = useMutation({
     mutationFn: (id: string) => settingsApi.removeInterestComponent(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['credit-config'] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["credit-config"] }),
   });
 
   const addPlan = useMutation({
     mutationFn: (dto: { installments: number; interestRate: number }) =>
       settingsApi.addCreditPlan(dto),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ['credit-config'] });
+      void qc.invalidateQueries({ queryKey: ["credit-config"] });
       setShowAddForm(false);
     },
   });
 
   const updatePlan = useMutation({
-    mutationFn: ({ id, ...dto }: { id: string; interestRate?: number; isActive?: boolean }) =>
-      settingsApi.updateCreditPlan(id, dto),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['credit-config'] }),
+    mutationFn: ({
+      id,
+      ...dto
+    }: {
+      id: string;
+      interestRate?: number;
+      isActive?: boolean;
+    }) => settingsApi.updateCreditPlan(id, dto),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["credit-config"] }),
   });
 
   const removePlan = useMutation({
     mutationFn: (id: string) => settingsApi.removeCreditPlan(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['credit-config'] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["credit-config"] }),
   });
 
   const enabled = config?.isEnabled ?? false;
@@ -620,9 +771,12 @@ export default function CreditSettingsPage() {
           <CreditCard size={20} className="text-muted-foreground" />
         </div>
         <div>
-          <h1 className="text-xl font-semibold text-foreground">Configuración de Crédito</h1>
+          <h1 className="text-xl font-semibold text-foreground">
+            Configuración de Crédito
+          </h1>
           <p className="mt-0.5 text-sm text-muted-foreground">
-            Habilita las ventas a crédito y define los planes de financiamiento disponibles.
+            Habilita las ventas a crédito y define los planes de financiamiento
+            disponibles.
           </p>
         </div>
       </div>
@@ -630,7 +784,10 @@ export default function CreditSettingsPage() {
       {isLoading ? (
         <div className="space-y-3">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="h-16 animate-pulse rounded-xl bg-muted/30" />
+            <div
+              key={i}
+              className="h-16 animate-pulse rounded-xl bg-muted/30"
+            />
           ))}
         </div>
       ) : (
@@ -638,9 +795,12 @@ export default function CreditSettingsPage() {
           {/* Enable/disable toggle */}
           <div className="flex items-center justify-between rounded-2xl border border-border bg-card px-6 py-4">
             <div>
-              <p className="text-sm font-medium text-foreground">Ventas a crédito</p>
+              <p className="text-sm font-medium text-foreground">
+                Ventas a crédito
+              </p>
               <p className="text-xs text-muted-foreground/60 mt-0.5">
-                Permite registrar pedidos con plan de cuotas en el módulo de Ventas.
+                Permite registrar pedidos con plan de cuotas en el módulo de
+                Ventas.
               </p>
             </div>
             <button
@@ -648,12 +808,12 @@ export default function CreditSettingsPage() {
               disabled={toggleEnabled.isPending}
               onClick={() => toggleEnabled.mutate(!enabled)}
               className={`relative flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${
-                enabled ? 'bg-emerald-500' : 'bg-muted/50'
+                enabled ? "bg-emerald-500" : "bg-muted/50"
               } disabled:opacity-50`}
             >
               <span
                 className={`absolute left-0.5 h-5 w-5 rounded-full bg-background shadow transition-transform ${
-                  enabled ? 'translate-x-5' : 'translate-x-0'
+                  enabled ? "translate-x-5" : "translate-x-0"
                 }`}
               />
             </button>
@@ -663,9 +823,13 @@ export default function CreditSettingsPage() {
           {enabled && (
             <div className="flex items-center justify-between rounded-2xl border border-border bg-card px-6 py-4">
               <div>
-                <p className="text-sm font-medium text-foreground">Tope de cuota por sueldo</p>
+                <p className="text-sm font-medium text-foreground">
+                  Tope de cuota por sueldo
+                </p>
                 <p className="text-xs text-muted-foreground/60 mt-0.5">
-                  % máximo del sueldo declarado del cliente que puede ocupar la cuota mensual (sumando otros créditos activos). Vacío = sin tope.
+                  % máximo del sueldo declarado del cliente que puede ocupar la
+                  cuota mensual (sumando otros créditos activos). Vacío = sin
+                  tope.
                 </p>
               </div>
               {editingMaxIncome ? (
@@ -680,16 +844,25 @@ export default function CreditSettingsPage() {
                       value={maxIncomeInput}
                       onChange={(e) => setMaxIncomeInput(e.target.value)}
                       onKeyDown={(e) => {
-                        if (e.key === 'Enter') updateMaxIncome.mutate(maxIncomeInput ? Number(maxIncomeInput) : null);
-                        if (e.key === 'Escape') setEditingMaxIncome(false);
+                        if (e.key === "Enter")
+                          updateMaxIncome.mutate(
+                            maxIncomeInput ? Number(maxIncomeInput) : null,
+                          );
+                        if (e.key === "Escape") setEditingMaxIncome(false);
                       }}
                       className="w-full rounded-md border border-border py-1 pl-2 pr-6 text-sm focus:border-ring focus:outline-none"
                     />
-                    <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground/60">%</span>
+                    <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground/60">
+                      %
+                    </span>
                   </div>
                   <button
                     type="button"
-                    onClick={() => updateMaxIncome.mutate(maxIncomeInput ? Number(maxIncomeInput) : null)}
+                    onClick={() =>
+                      updateMaxIncome.mutate(
+                        maxIncomeInput ? Number(maxIncomeInput) : null,
+                      )
+                    }
                     className="text-muted-foreground hover:text-foreground"
                   >
                     <Check size={15} />
@@ -706,12 +879,18 @@ export default function CreditSettingsPage() {
                 <button
                   type="button"
                   onClick={() => {
-                    setMaxIncomeInput(config?.maxIncomePercentage != null ? String(config.maxIncomePercentage) : '');
+                    setMaxIncomeInput(
+                      config?.maxIncomePercentage != null
+                        ? String(config.maxIncomePercentage)
+                        : "",
+                    );
                     setEditingMaxIncome(true);
                   }}
                   className="flex items-center gap-1.5 text-sm font-medium text-foreground hover:text-muted-foreground transition-colors"
                 >
-                  {config?.maxIncomePercentage != null ? `${config.maxIncomePercentage}%` : 'Sin tope'}
+                  {config?.maxIncomePercentage != null
+                    ? `${config.maxIncomePercentage}%`
+                    : "Sin tope"}
                   <Pencil size={12} className="text-muted-foreground/60" />
                 </button>
               )}
@@ -722,9 +901,13 @@ export default function CreditSettingsPage() {
           {enabled && (
             <div className="flex items-center justify-between rounded-2xl border border-border bg-card px-6 py-4">
               <div>
-                <p className="text-sm font-medium text-foreground">Día de vencimiento de cuotas</p>
+                <p className="text-sm font-medium text-foreground">
+                  Día de vencimiento de cuotas
+                </p>
                 <p className="text-xs text-muted-foreground/60 mt-0.5">
-                  Día del mes en que vencen todas las cuotas de crédito, sin importar la fecha de compra. Siempre se garantiza al menos un mes de plazo para la primera cuota.
+                  Día del mes en que vencen todas las cuotas de crédito, sin
+                  importar la fecha de compra. Siempre se garantiza al menos un
+                  mes de plazo para la primera cuota.
                 </p>
               </div>
               {editingDueDay ? (
@@ -738,8 +921,9 @@ export default function CreditSettingsPage() {
                     value={dueDayInput}
                     onChange={(e) => setDueDayInput(e.target.value)}
                     onKeyDown={(e) => {
-                      if (e.key === 'Enter' && dueDayInput) updateDueDay.mutate(Number(dueDayInput));
-                      if (e.key === 'Escape') setEditingDueDay(false);
+                      if (e.key === "Enter" && dueDayInput)
+                        updateDueDay.mutate(Number(dueDayInput));
+                      if (e.key === "Escape") setEditingDueDay(false);
                     }}
                     className="w-16 rounded-md border border-border py-1 px-2 text-sm focus:border-ring focus:outline-none"
                   />
@@ -779,9 +963,12 @@ export default function CreditSettingsPage() {
           {enabled && (
             <div className="flex items-center justify-between rounded-2xl border border-border bg-card px-6 py-4">
               <div>
-                <p className="text-sm font-medium text-foreground">Tolerancia antes de cobrar mora</p>
+                <p className="text-sm font-medium text-foreground">
+                  Tolerancia antes de cobrar mora
+                </p>
                 <p className="text-xs text-muted-foreground/60 mt-0.5">
-                  Días después del vencimiento antes de empezar a devengar interés moratorio sobre las cuotas atrasadas.
+                  Días después del vencimiento antes de empezar a devengar
+                  interés moratorio sobre las cuotas atrasadas.
                 </p>
               </div>
               {editingGraceDays ? (
@@ -795,15 +982,18 @@ export default function CreditSettingsPage() {
                     value={graceDaysInput}
                     onChange={(e) => setGraceDaysInput(e.target.value)}
                     onKeyDown={(e) => {
-                      if (e.key === 'Enter' && graceDaysInput) updateGraceDays.mutate(Number(graceDaysInput));
-                      if (e.key === 'Escape') setEditingGraceDays(false);
+                      if (e.key === "Enter" && graceDaysInput)
+                        updateGraceDays.mutate(Number(graceDaysInput));
+                      if (e.key === "Escape") setEditingGraceDays(false);
                     }}
                     className="w-16 rounded-md border border-border py-1 px-2 text-sm focus:border-ring focus:outline-none"
                   />
                   <button
                     type="button"
                     disabled={!graceDaysInput}
-                    onClick={() => updateGraceDays.mutate(Number(graceDaysInput))}
+                    onClick={() =>
+                      updateGraceDays.mutate(Number(graceDaysInput))
+                    }
                     className="text-muted-foreground hover:text-foreground disabled:opacity-40"
                   >
                     <Check size={15} />
@@ -825,7 +1015,9 @@ export default function CreditSettingsPage() {
                   }}
                   className="flex items-center gap-1.5 text-sm font-medium text-foreground hover:text-muted-foreground transition-colors"
                 >
-                  {config?.moraGraceDays ? `${config.moraGraceDays} día${config.moraGraceDays === 1 ? '' : 's'}` : 'Sin tolerancia'}
+                  {config?.moraGraceDays
+                    ? `${config.moraGraceDays} día${config.moraGraceDays === 1 ? "" : "s"}`
+                    : "Sin tolerancia"}
                   <Pencil size={12} className="text-muted-foreground/60" />
                 </button>
               )}
@@ -836,9 +1028,13 @@ export default function CreditSettingsPage() {
           {enabled && (
             <div className="flex items-center justify-between rounded-2xl border border-border bg-card px-6 py-4">
               <div>
-                <p className="text-sm font-medium text-foreground">Días de mora para reportar a Informconf</p>
+                <p className="text-sm font-medium text-foreground">
+                  Días de mora para reportar a Informconf
+                </p>
                 <p className="text-xs text-muted-foreground/60 mt-0.5">
-                  Al cruzar esta cantidad de días de mora, el cliente aparece en la lista de Morosos (Cobranzas) para gestionar su reporte a Informconf. Vacío = deshabilitado.
+                  Al cruzar esta cantidad de días de mora, el cliente aparece en
+                  la lista de Morosos (Cobranzas) para gestionar su reporte a
+                  Informconf. Vacío = deshabilitado.
                 </p>
               </div>
               {editingThreshold ? (
@@ -851,14 +1047,21 @@ export default function CreditSettingsPage() {
                     value={thresholdInput}
                     onChange={(e) => setThresholdInput(e.target.value)}
                     onKeyDown={(e) => {
-                      if (e.key === 'Enter') updateDelinquencyThreshold.mutate(thresholdInput ? Number(thresholdInput) : null);
-                      if (e.key === 'Escape') setEditingThreshold(false);
+                      if (e.key === "Enter")
+                        updateDelinquencyThreshold.mutate(
+                          thresholdInput ? Number(thresholdInput) : null,
+                        );
+                      if (e.key === "Escape") setEditingThreshold(false);
                     }}
                     className="w-16 rounded-md border border-border py-1 px-2 text-sm focus:border-ring focus:outline-none"
                   />
                   <button
                     type="button"
-                    onClick={() => updateDelinquencyThreshold.mutate(thresholdInput ? Number(thresholdInput) : null)}
+                    onClick={() =>
+                      updateDelinquencyThreshold.mutate(
+                        thresholdInput ? Number(thresholdInput) : null,
+                      )
+                    }
                     className="text-muted-foreground hover:text-foreground"
                   >
                     <Check size={15} />
@@ -875,12 +1078,18 @@ export default function CreditSettingsPage() {
                 <button
                   type="button"
                   onClick={() => {
-                    setThresholdInput(config?.delinquencyThresholdDays != null ? String(config.delinquencyThresholdDays) : '');
+                    setThresholdInput(
+                      config?.delinquencyThresholdDays != null
+                        ? String(config.delinquencyThresholdDays)
+                        : "",
+                    );
                     setEditingThreshold(true);
                   }}
                   className="flex items-center gap-1.5 text-sm font-medium text-foreground hover:text-muted-foreground transition-colors"
                 >
-                  {config?.delinquencyThresholdDays != null ? `${config.delinquencyThresholdDays} día${config.delinquencyThresholdDays === 1 ? '' : 's'}` : 'Deshabilitado'}
+                  {config?.delinquencyThresholdDays != null
+                    ? `${config.delinquencyThresholdDays} día${config.delinquencyThresholdDays === 1 ? "" : "s"}`
+                    : "Deshabilitado"}
                   <Pencil size={12} className="text-muted-foreground/60" />
                 </button>
               )}
@@ -892,9 +1101,13 @@ export default function CreditSettingsPage() {
             <div className="rounded-2xl border border-border bg-card">
               <div className="flex items-center justify-between border-b border-border px-6 py-4">
                 <div>
-                  <p className="text-sm font-medium text-foreground">Componentes de interés y mora</p>
+                  <p className="text-sm font-medium text-foreground">
+                    Componentes de interés y mora
+                  </p>
                   <p className="text-xs text-muted-foreground/60 mt-0.5">
-                    Recargos que se suman a la cuota una vez vencida la tolerancia — podés combinar varios (ej. gastos administrativos + mora diaria) o usar solo uno.
+                    Recargos que se suman a la cuota una vez vencida la
+                    tolerancia — podés combinar varios (ej. gastos
+                    administrativos + mora diaria) o usar solo uno.
                   </p>
                 </div>
                 {!showAddComponentForm && (
@@ -921,7 +1134,10 @@ export default function CreditSettingsPage() {
 
                 {interestComponents.length === 0 && !showAddComponentForm ? (
                   <div className="py-8 text-center">
-                    <p className="text-sm text-muted-foreground/60">No hay componentes configurados — no se cobra ningún recargo por mora.</p>
+                    <p className="text-sm text-muted-foreground/60">
+                      No hay componentes configurados — no se cobra ningún
+                      recargo por mora.
+                    </p>
                     <button
                       type="button"
                       onClick={() => setShowAddComponentForm(true)}
@@ -935,13 +1151,21 @@ export default function CreditSettingsPage() {
                     <ComponentRow
                       key={component.id}
                       component={component}
-                      onToggle={(id, isActive) => updateComponent.mutate({ id, isActive })}
+                      onToggle={(id, isActive) =>
+                        updateComponent.mutate({ id, isActive })
+                      }
                       onDelete={(id) => {
-                        if (confirm(`¿Eliminar el componente "${component.name}"?`)) {
+                        if (
+                          confirm(
+                            `¿Eliminar el componente "${component.name}"?`,
+                          )
+                        ) {
                           removeComponent.mutate(id);
                         }
                       }}
-                      onUpdateRate={(id, percentage) => updateComponent.mutate({ id, percentage })}
+                      onUpdateRate={(id, percentage) =>
+                        updateComponent.mutate({ id, percentage })
+                      }
                     />
                   ))
                 )}
@@ -954,9 +1178,12 @@ export default function CreditSettingsPage() {
             <div className="rounded-2xl border border-border bg-card">
               <div className="flex items-center justify-between border-b border-border px-6 py-4">
                 <div>
-                  <p className="text-sm font-medium text-foreground">Planes de financiamiento</p>
+                  <p className="text-sm font-medium text-foreground">
+                    Planes de financiamiento
+                  </p>
                   <p className="text-xs text-muted-foreground/60 mt-0.5">
-                    El vendedor podrá seleccionar cualquiera de los planes activos al crear un pedido.
+                    El vendedor podrá seleccionar cualquiera de los planes
+                    activos al crear un pedido.
                   </p>
                 </div>
                 {!showAddForm && (
@@ -984,7 +1211,9 @@ export default function CreditSettingsPage() {
 
                 {plans.length === 0 && !showAddForm ? (
                   <div className="py-8 text-center">
-                    <p className="text-sm text-muted-foreground/60">No hay planes configurados.</p>
+                    <p className="text-sm text-muted-foreground/60">
+                      No hay planes configurados.
+                    </p>
                     <button
                       type="button"
                       onClick={() => setShowAddForm(true)}
@@ -998,13 +1227,21 @@ export default function CreditSettingsPage() {
                     <PlanRow
                       key={plan.id}
                       plan={plan}
-                      onToggle={(id, isActive) => updatePlan.mutate({ id, isActive })}
+                      onToggle={(id, isActive) =>
+                        updatePlan.mutate({ id, isActive })
+                      }
                       onDelete={(id) => {
-                        if (confirm(`¿Eliminar el plan de ${plan.installments} cuotas?`)) {
+                        if (
+                          confirm(
+                            `¿Eliminar el plan de ${plan.installments} cuotas?`,
+                          )
+                        ) {
                           removePlan.mutate(id);
                         }
                       }}
-                      onUpdateRate={(id, interestRate) => updatePlan.mutate({ id, interestRate })}
+                      onUpdateRate={(id, interestRate) =>
+                        updatePlan.mutate({ id, interestRate })
+                      }
                     />
                   ))
                 )}
@@ -1016,7 +1253,8 @@ export default function CreditSettingsPage() {
           {!enabled && (
             <div className="rounded-xl bg-amber-50 border border-amber-200 px-4 py-3 dark:bg-amber-950/30 dark:border-amber-800/30">
               <p className="text-xs text-amber-700 dark:text-amber-300">
-                Las ventas a crédito están deshabilitadas. Los pedidos solo pueden registrarse al contado.
+                Las ventas a crédito están deshabilitadas. Los pedidos solo
+                pueden registrarse al contado.
               </p>
             </div>
           )}
