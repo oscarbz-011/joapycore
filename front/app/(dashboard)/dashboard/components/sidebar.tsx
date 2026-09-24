@@ -84,10 +84,26 @@ const STATIC_GROUPS: SidebarGroup[] = [
       "inventory:movements:read",
     ],
     items: [
-      { label: "Productos", href: "/dashboard/inventory/products" },
-      { label: "Categorías", href: "/dashboard/inventory/categories" },
-      { label: "Marcas", href: "/dashboard/inventory/brands" },
-      { label: "Movimientos", href: "/dashboard/inventory/movements" },
+      {
+        label: "Productos",
+        href: "/dashboard/inventory/products",
+        permission: "inventory:products:read",
+      },
+      {
+        label: "Categorías",
+        href: "/dashboard/inventory/categories",
+        permission: "inventory:categories:read",
+      },
+      {
+        label: "Marcas",
+        href: "/dashboard/inventory/brands",
+        permission: "inventory:brands:read",
+      },
+      {
+        label: "Movimientos",
+        href: "/dashboard/inventory/movements",
+        permission: "inventory:movements:read",
+      },
       {
         label: "Lotes",
         href: "/dashboard/inventory/batches",
