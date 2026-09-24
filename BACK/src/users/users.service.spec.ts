@@ -230,18 +230,15 @@ describe('UsersService', () => {
       expect(result).not.toHaveProperty('tempPasswordEncrypted');
       expect(result).not.toHaveProperty('sessionsValidAfter');
       expect(result.tempPassword).toBeNull();
-      expect(eventEmitter.emit).toHaveBeenCalledWith(
-        'audit.log',
-        {
-          tenantId: 'tenant-1',
-          userId: 'user-1',
-          module: 'users',
-          action: 'user.email_changed',
-          resourceId: 'user-1',
-          before: { email: 'user@example.com' },
-          after: { email: 'new@example.com' },
-        },
-      );
+      expect(eventEmitter.emit).toHaveBeenCalledWith('audit.log', {
+        tenantId: 'tenant-1',
+        userId: 'user-1',
+        module: 'users',
+        action: 'user.email_changed',
+        resourceId: 'user-1',
+        before: { email: 'user@example.com' },
+        after: { email: 'new@example.com' },
+      });
     });
 
     it('rejects a wrong current password with a stable unauthorized response', async () => {

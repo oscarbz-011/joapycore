@@ -45,13 +45,13 @@ function isCompleteImapConfig(
 ): config is CompleteImapIntegrationConfig {
   return Boolean(
     config &&
-      config.host.trim() &&
-      Number.isInteger(config.port) &&
-      config.port >= 1 &&
-      config.port <= 65_535 &&
-      typeof config.secure === 'boolean' &&
-      config.user.trim() &&
-      config.password,
+    config.host.trim() &&
+    Number.isInteger(config.port) &&
+    config.port >= 1 &&
+    config.port <= 65_535 &&
+    typeof config.secure === 'boolean' &&
+    config.user.trim() &&
+    config.password,
   );
 }
 

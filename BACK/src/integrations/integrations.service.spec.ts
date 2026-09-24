@@ -218,9 +218,11 @@ describe('IntegrationsService', () => {
         : null,
     );
 
-    await expect(service.getEmailIntegration('tenant-1')).resolves.toMatchObject(
-      { incoming: { enabled: true, configured: false, hasPassword: false } },
-    );
+    await expect(
+      service.getEmailIntegration('tenant-1'),
+    ).resolves.toMatchObject({
+      incoming: { enabled: true, configured: false, hasPassword: false },
+    });
     await expect(service.getEnabledImapConfig('tenant-1')).resolves.toBeNull();
   });
 
@@ -320,37 +322,48 @@ describe('IntegrationsService', () => {
 });
 
 describe('IMAP transport security', () => {
-  it.each(['error', 'close'])('rejects a late socket %s without escaping the verification promise', async (event) => {
-    jest.useFakeTimers();
-    try {
-      const socket = Object.assign(new EventEmitter(), {
-        setTimeout: jest.fn(), end: jest.fn(), destroy: jest.fn(), write: jest.fn(),
-      });
-      jest.mocked(connectTls).mockReturnValue(socket as never);
-      const verification = new ImapConnectionService().verify({
-        host: 'imap.example.com', port: 993, secure: true,
-        user: 'user@example.com', password: 'secret',
-      }).catch((error: Error) => error);
-      socket.emit('secureConnect');
-      await Promise.resolve();
-      let escapedError: unknown;
+  it.each(['error', 'close'])(
+    'rejects a late socket %s without escaping the verification promise',
+    async (event) => {
+      jest.useFakeTimers();
       try {
-        socket.emit(event, new Error('connection reset'));
-      } catch (error) {
-        escapedError = error;
+        const socket = Object.assign(new EventEmitter(), {
+          setTimeout: jest.fn(),
+          end: jest.fn(),
+          destroy: jest.fn(),
+          write: jest.fn(),
+        });
+        jest.mocked(connectTls).mockReturnValue(socket as never);
+        const verification = new ImapConnectionService()
+          .verify({
+            host: 'imap.example.com',
+            port: 993,
+            secure: true,
+            user: 'user@example.com',
+            password: 'secret',
+          })
+          .catch((error: Error) => error);
+        socket.emit('secureConnect');
+        await Promise.resolve();
+        let escapedError: unknown;
+        try {
+          socket.emit(event, new Error('connection reset'));
+        } catch (error) {
+          escapedError = error;
+        }
+        // Clean up even on the broken implementation, without a real 15s wait.
+        jest.runOnlyPendingTimers();
+        const error = await verification;
+        expect(escapedError).toBeUndefined();
+        expect(error).toBeInstanceOf(Error);
+        expect((error as Error).message).not.toContain('no respondió a tiempo');
+        expect(socket.destroy).toHaveBeenCalled();
+        expect(socket.listenerCount('data')).toBe(0);
+      } finally {
+        jest.useRealTimers();
       }
-      // Clean up even on the broken implementation, without a real 15s wait.
-      jest.runOnlyPendingTimers();
-      const error = await verification;
-      expect(escapedError).toBeUndefined();
-      expect(error).toBeInstanceOf(Error);
-      expect((error as Error).message).not.toContain('no respondió a tiempo');
-      expect(socket.destroy).toHaveBeenCalled();
-      expect(socket.listenerCount('data')).toBe(0);
-    } finally {
-      jest.useRealTimers();
-    }
-  });
+    },
+  );
 
   it.each([false, true])(
     'requires encrypted downloads when secure=%s',
