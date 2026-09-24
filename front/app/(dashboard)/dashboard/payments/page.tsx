@@ -724,11 +724,11 @@ function CreditARDetail({
   const installmentAmount    = Number(loan.installments[0]?.amount ?? 0);
   const paidFromInstallments = loan.installments.reduce((s, i) => s + Number(i.paidAmount), 0);
   const totalCredit          = Number(loan.totalAmount);
-  const outstandingPrincipal = loan.installments.reduce((sum, i) => sum + Math.max(Number(i.amount) - Number(i.paidAmount), 0), 0);
-  const moraTotal = loan.installments.reduce((sum, i) => sum + chargesTotalOf(i), 0);
+  const outstandingPrincipal = loan.installments.reduce((sum, installment) => sum + Math.max(Number(installment.amount) - Number(installment.paidAmount), 0), 0);
+  const moraTotal = loan.installments.reduce((sum, installment) => sum + chargesTotalOf(installment), 0);
   const totalOutstanding = outstandingPrincipal + moraTotal;
-  const overdueInstallments = loan.installments.filter((i) => installmentUrgency(i).level === 'overdue');
-  const overduePrincipal = overdueInstallments.reduce((sum, i) => sum + Math.max(Number(i.amount) - Number(i.paidAmount), 0), 0);
+  const overdueInstallments = loan.installments.filter((installment) => installmentUrgency(installment).level === 'overdue');
+  const overduePrincipal = overdueInstallments.reduce((sum, installment) => sum + Math.max(Number(installment.amount) - Number(installment.paidAmount), 0), 0);
   const totalOverdue = overduePrincipal + moraTotal;
   const moraGraceDays = loan.moraPolicy?.graceDays ?? 0;
   const hasMoraComponents = (loan.moraPolicy?.components.length ?? 0) > 0;
@@ -766,7 +766,7 @@ function CreditARDetail({
             {zeroChargeNotice({
               graceDays: moraGraceDays,
               hasMoraComponents,
-              overdueDays: overdueInstallments.map((i) => installmentUrgency(i).days),
+              overdueDays: overdueInstallments.map((installment) => installmentUrgency(installment).days),
             })}
           </p>
         )}
@@ -1386,7 +1386,7 @@ export default function PaymentsPage() {
     <div>
       <div className="mb-6 flex items-start justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-foreground">Pagos</h1>
+          <h1 className="text-2xl font-semibold text-foreground">Cuentas por Cobrar</h1>
           <p className="mt-1 text-sm text-muted-foreground">Cuentas por cobrar y registro de pagos</p>
         </div>
         {activePendingAR.length > 0 && (
