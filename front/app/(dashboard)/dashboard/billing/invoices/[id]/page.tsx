@@ -141,6 +141,8 @@ export default function InvoiceDetailPage() {
   const [cancelReason, setCancelReason] = useState('');
 
   const issueMutation = useMutation({
+    // Si ya no hay conexión, debe fallar y ofrecer reintento explícito en
+    // vez de dejar la emisión pausada para ejecutarse sola al reconectar.
     networkMode: 'always',
     mutationFn: () =>
       billingApi.issueInvoice(id, {
@@ -149,6 +151,9 @@ export default function InvoiceDetailPage() {
         paymentMethod: form.paymentMethod,
         notes: form.notes || undefined,
       }),
+    // También se reconcilia después de un error: el POST pudo haber llegado
+    // al backend y haberse perdido únicamente la respuesta. Al reconectar,
+    // React Query vuelve a consultar y muestra el estado persistido real.
     onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: ['invoice', id] });
       void queryClient.invalidateQueries({ queryKey: ['invoices'] });
@@ -230,13 +235,13 @@ export default function InvoiceDetailPage() {
           <Button variant="outline" onClick={() => void openPdf(invoice.pdfFileId!)}>
             <Printer size={15} /> Imprimir
           </Button>
-        ) : (
+        ) : canRetryPdf ? (
           <RequirePermission permission="billing:issue">
             <Button variant="outline" disabled={retryPdfMutation.isPending} onClick={() => retryPdfMutation.mutate()}>
-              <RotateCw size={15} /> {retryPdfMutation.isPending ? 'Regenerando...' : 'Regenerar PDF'}
+              <RotateCw size={15} className={retryPdfMutation.isPending ? 'animate-spin' : ''} /> {retryPdfMutation.isPending ? 'Regenerando...' : 'Regenerar PDF'}
             </Button>
           </RequirePermission>
-        ))}
+        ) : null))}
       </div>
 
       {/* Main grid */}
@@ -434,22 +439,31 @@ export default function InvoiceDetailPage() {
               {invoice.notes && <InfoRow label="Notas" value={invoice.notes} />}
 
               {(invoice.status === 'ISSUED' || invoice.status === 'PAID') && (
-                <div className="mt-4">
-                  <Button
-                    variant="outline"
-                    className="w-full"
-                    disabled={retryPdfMutation.isPending}
-                    onClick={() => invoice.pdfFileId ? void openPdf(invoice.pdfFileId) : retryPdfMutation.mutate()}
-                  >
-                    {invoice.pdfFileId ? <Printer size={15} /> : <RotateCw size={15} />}
-                    {invoice.pdfFileId ? 'Imprimir / descargar PDF' : retryPdfMutation.isPending ? 'Regenerando PDF...' : 'Regenerar PDF'}
-                  </Button>
-                  {retryPdfMutation.isError && (
-                    <p className="mt-2 text-xs text-destructive">
-                      {apiErrorMessage(retryPdfMutation.error, 'No se pudo regenerar el PDF')}
-                    </p>
-                  )}
-                </div>
+                <RequirePermission permission="billing:issue">
+                  <div className="mt-4">
+                    <Button
+                      variant="outline"
+                      className="w-full"
+                      disabled={retryPdfMutation.isPending}
+                      onClick={() => {
+                        if (invoice.pdfFileId) void openPdf(invoice.pdfFileId);
+                        else retryPdfMutation.mutate();
+                      }}
+                    >
+                      {invoice.pdfFileId ? (
+                        <Printer size={15} />
+                      ) : (
+                        <RotateCw size={15} className={retryPdfMutation.isPending ? 'animate-spin' : ''} />
+                      )}
+                      {invoice.pdfFileId ? 'Imprimir / descargar PDF' : retryPdfMutation.isPending ? 'Regenerando PDF...' : 'Regenerar PDF'}
+                    </Button>
+                    {retryPdfMutation.isError && (
+                      <p className="mt-2 text-xs text-destructive">
+                        {apiErrorMessage(retryPdfMutation.error, 'No se pudo regenerar el PDF')}
+                      </p>
+                    )}
+                  </div>
+                </RequirePermission>
               )}
             </section>
           )}
