@@ -3,7 +3,7 @@
  * StockLedgerService.assertAvailable serialice dos ventas simultáneas de la última unidad.
  * Un test unitario con mocks no puede probar esto.
  *
- * Requiere DATABASE_URL apuntando a una base con al menos un tenant.
+ * Requiere DATABASE_URL apuntando a una base desechable con el esquema aplicado.
  * Correr con: pnpm test:int
  */
 import 'dotenv/config';
@@ -27,7 +27,8 @@ describe('StockLedgerService.assertAvailable (PostgreSQL)', () => {
       new StockMovementsRepository(prisma),
       new ProductUnitsRepository(prisma),
     );
-    const tenant = await prisma.tenant.findFirstOrThrow({
+    const tenant = await prisma.tenant.create({
+      data: { name: `TEST stock lock ${randomUUID()}` },
       select: { id: true },
     });
     tenantId = tenant.id;
@@ -45,8 +46,14 @@ describe('StockLedgerService.assertAvailable (PostgreSQL)', () => {
   });
 
   afterAll(async () => {
-    await prisma.stockMovement.deleteMany({ where: { tenantId, productId } });
-    await prisma.product.delete({ where: { id: productId } });
+    if (!prisma) return;
+    if (productId) {
+      await prisma.stockMovement.deleteMany({ where: { tenantId, productId } });
+      await prisma.product.deleteMany({ where: { id: productId } });
+    }
+    if (tenantId) {
+      await prisma.tenant.deleteMany({ where: { id: tenantId } });
+    }
     await prisma.$disconnect();
   });
 
