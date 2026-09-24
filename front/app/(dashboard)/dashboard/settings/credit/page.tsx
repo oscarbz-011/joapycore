@@ -54,7 +54,7 @@ function AddPlanForm({
   onAdd: (installments: number, interestRate: number) => Promise<void>;
   onCancel: () => void;
 }) {
-  const QUICK_INSTALLMENTS = [3, 6, 12, 18, 24, 36];
+  const QUICK_INSTALLMENTS = [3, 6, 12, 18];
   const [installments, setInstallments] = useState<number | ''>('');
   const [rate, setRate] = useState('');
   const [submitting, setSubmitting] = useState(false);
