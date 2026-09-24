@@ -134,6 +134,14 @@ export function canPrintInvoicePdf(
   );
 }
 
+export function invoicePdfAction(
+  invoice: Pick<Invoice, "status" | "pdfFileId">,
+): "print" | "retry" | null {
+  if (canPrintInvoicePdf(invoice)) return "print";
+  if (canRetryInvoicePdf(invoice)) return "retry";
+  return null;
+}
+
 export const billingApi = {
   listInvoices: (): Promise<Invoice[]> =>
     apiClient.get("/billing/invoices").then((r) => r.data),

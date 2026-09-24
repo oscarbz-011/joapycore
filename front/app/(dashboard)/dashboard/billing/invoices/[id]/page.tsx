@@ -17,8 +17,7 @@ import {
 } from "lucide-react";
 import {
   billingApi,
-  canPrintInvoicePdf,
-  canRetryInvoicePdf,
+  invoicePdfAction,
   type InvoiceStatus,
   type IssueInvoicePayload,
   type PaymentMethod,
@@ -262,8 +261,7 @@ export default function InvoiceDetailPage() {
     : `#${invoice.id.slice(0, 8).toUpperCase()}`;
   const isCredit = invoice.saleOrder.saleType === "CREDIT";
   const canIssue = isCredit ? !!form.dueDate : !!form.paymentMethod;
-  const canPrintPdf = canPrintInvoicePdf(invoice);
-  const canRetryPdf = canRetryInvoicePdf(invoice);
+  const pdfAction = invoicePdfAction(invoice);
 
   return (
     <div className="max-w-5xl">
@@ -291,32 +289,29 @@ export default function InvoiceDetailPage() {
             <span className="font-mono">{invoiceRef}</span>
           </p>
         </div>
-        {(canPrintPdf || canRetryPdf) &&
-          (canPrintPdf ? (
+        {pdfAction === "print" ? (
+          <Button
+            variant="outline"
+            onClick={() => void openPdf(invoice.pdfFileId!)}
+          >
+            <Printer size={15} />
+            Imprimir
+          </Button>
+        ) : pdfAction === "retry" ? (
+          <RequirePermission permission="billing:issue">
             <Button
               variant="outline"
-              onClick={() => void openPdf(invoice.pdfFileId!)}
+              disabled={retryPdfMutation.isPending}
+              onClick={() => retryPdfMutation.mutate()}
             >
-              <Printer size={15} />
-              Imprimir
+              <RotateCw
+                size={15}
+                className={retryPdfMutation.isPending ? "animate-spin" : ""}
+              />
+              {retryPdfMutation.isPending ? "Regenerando..." : "Regenerar PDF"}
             </Button>
-          ) : canRetryPdf ? (
-            <RequirePermission permission="billing:issue">
-              <Button
-                variant="outline"
-                disabled={retryPdfMutation.isPending}
-                onClick={() => retryPdfMutation.mutate()}
-              >
-                <RotateCw
-                  size={15}
-                  className={retryPdfMutation.isPending ? "animate-spin" : ""}
-                />
-                {retryPdfMutation.isPending
-                  ? "Regenerando..."
-                  : "Regenerar PDF"}
-              </Button>
-            </RequirePermission>
-          ) : null)}
+          </RequirePermission>
+        ) : null}
       </div>
 
       {/* Main grid */}
@@ -604,33 +599,35 @@ export default function InvoiceDetailPage() {
               )}
               {invoice.notes && <InfoRow label="Notas" value={invoice.notes} />}
 
-              {(invoice.status === "ISSUED" || invoice.status === "PAID") && (
+              {pdfAction === "print" ? (
+                <div className="mt-4">
+                  <Button
+                    variant="outline"
+                    className="w-full"
+                    onClick={() => void openPdf(invoice.pdfFileId!)}
+                  >
+                    <Printer size={15} />
+                    Imprimir / descargar PDF
+                  </Button>
+                </div>
+              ) : pdfAction === "retry" ? (
                 <RequirePermission permission="billing:issue">
                   <div className="mt-4">
                     <Button
                       variant="outline"
                       className="w-full"
                       disabled={retryPdfMutation.isPending}
-                      onClick={() => {
-                        if (invoice.pdfFileId) void openPdf(invoice.pdfFileId);
-                        else retryPdfMutation.mutate();
-                      }}
+                      onClick={() => retryPdfMutation.mutate()}
                     >
-                      {invoice.pdfFileId ? (
-                        <Printer size={15} />
-                      ) : (
-                        <RotateCw
-                          size={15}
-                          className={
-                            retryPdfMutation.isPending ? "animate-spin" : ""
-                          }
-                        />
-                      )}
-                      {invoice.pdfFileId
-                        ? "Imprimir / descargar PDF"
-                        : retryPdfMutation.isPending
-                          ? "Regenerando PDF..."
-                          : "Regenerar PDF"}
+                      <RotateCw
+                        size={15}
+                        className={
+                          retryPdfMutation.isPending ? "animate-spin" : ""
+                        }
+                      />
+                      {retryPdfMutation.isPending
+                        ? "Regenerando PDF..."
+                        : "Regenerar PDF"}
                     </Button>
                     {retryPdfMutation.isError && (
                       <p className="mt-2 text-xs text-destructive">
@@ -642,7 +639,7 @@ export default function InvoiceDetailPage() {
                     )}
                   </div>
                 </RequirePermission>
-              )}
+              ) : null}
             </section>
           )}
 
