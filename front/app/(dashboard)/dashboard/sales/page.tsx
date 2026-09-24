@@ -6,7 +6,7 @@ import { findStockIssues } from '@/lib/sales-stock';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Plus, Search, X, UserCheck, UserPlus } from 'lucide-react';
+import { Plus, RotateCw, Search, X, UserCheck, UserPlus } from 'lucide-react';
 
 import { ContractCard } from '../../../../components/contract-card';
 import { NumericInput } from '../../../../components/numeric-input';
@@ -142,10 +142,13 @@ interface OrderDraft {
   surchargeReason: string;
 }
 
-function CreateOrderModal({ open, onOpenChange, customers, products }: {
+function CreateOrderModal({ open, onOpenChange, customers, customersError, customersFetching, onRetryCustomers, products }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   customers: Customer[];
+  customersError: unknown;
+  customersFetching: boolean;
+  onRetryCustomers: () => void;
   products: ProductWithStock[];
 }) {
   const queryClient = useQueryClient();
@@ -169,7 +172,6 @@ function CreateOrderModal({ open, onOpenChange, customers, products }: {
   const [addMode, setAddMode] = useState<'ITEM' | 'COMBO'>('ITEM');
 
   const { data: allUsers = [] } = useQuery({ queryKey: ['users'], queryFn: usersApi.list, enabled: canManage });
-  const { data: liveCustomers = customers } = useQuery({ queryKey: ['sale-customers'], queryFn: salesApi.listCustomers, initialData: customers });
   const { data: creditConfig } = useQuery({ queryKey: ['credit-config'], queryFn: settingsApi.getCredit });
   const { data: salesConfig } = useQuery({ queryKey: ['sales-config'], queryFn: settingsApi.getSalesConfig });
   const combosEnabled = salesConfig?.combosEnabled ?? false;
@@ -378,7 +380,7 @@ function CreateOrderModal({ open, onOpenChange, customers, products }: {
             <div>
               <Label className="mb-1 text-xs">Cliente *</Label>
               <SearchSelect<Customer>
-                items={liveCustomers}
+                items={customers}
                 value={customerId}
                 onChange={(id) => setCustomerId(id)}
                 getKey={(c) => c.id}
@@ -393,6 +395,23 @@ function CreateOrderModal({ open, onOpenChange, customers, products }: {
                 createLabel=" Crear cliente nuevo"
                 required
               />
+              {Boolean(customersError) && customers.length === 0 && (
+                <div className="mt-2 flex items-center justify-between gap-3 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2">
+                  <p className="text-xs text-destructive">
+                    {apiErrorMessage(customersError, 'No se pudo cargar la lista de clientes.')}
+                  </p>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={onRetryCustomers}
+                    disabled={customersFetching}
+                  >
+                    <RotateCw size={13} className={customersFetching ? 'animate-spin' : ''} />
+                    Reintentar
+                  </Button>
+                </div>
+              )}
             </div>
 
             {/* Vendedor */}
@@ -906,7 +925,14 @@ export default function SalesPage() {
   const [panelOpen, setPanelOpen]         = useState(false);
 
   const { data: orders = [], isLoading } = useQuery({ queryKey: ['sale-orders'], queryFn: salesApi.listOrders });
-  const { data: customers = [] } = useQuery({ queryKey: ['sale-customers'], queryFn: salesApi.listCustomers });
+  const customersQuery = useQuery({
+    queryKey: ['sale-customers'],
+    queryFn: salesApi.listCustomers,
+    retry: 3,
+    refetchOnMount: 'always',
+    refetchOnReconnect: 'always',
+  });
+  const customers = customersQuery.data ?? [];
   const { data: products = [] } = useQuery({
     queryKey: ['inventory-products-active-with-stock'],
     queryFn: () => inventoryApi.listProductsWithStock({
@@ -921,6 +947,13 @@ export default function SalesPage() {
   });
 
   function openPanel(order: SaleOrder) { setPanelOrder(order); setPanelOpen(true); }
+  function openCreateOrder() {
+    // El modal siempre valida la lista contra el backend. Antes una consulta
+    // fallida se convertía silenciosamente en [] y quedaba cacheada hasta que
+    // el usuario visitaba Clientes y refrescaba toda la aplicación.
+    void customersQuery.refetch();
+    setShowCreate(true);
+  }
   function closePanel(open: boolean) { if (!open) { setPanelOpen(false); } }
 
   return (
@@ -930,7 +963,7 @@ export default function SalesPage() {
           <h1 className="text-[25px] font-extrabold tracking-tight text-foreground">Ventas</h1>
           <p className="mt-1 text-[14px] text-muted-foreground">Pedidos</p>
         </div>
-        <Button onClick={() => setShowCreate(true)} className="gap-2">
+        <Button onClick={openCreateOrder} className="gap-2">
           <Plus size={16} />
           Nuevo pedido
         </Button>
@@ -969,7 +1002,7 @@ export default function SalesPage() {
       ) : filtered.length === 0 ? (
         <div className="py-16 text-center">
           <p className="text-sm text-muted-foreground">No se encontraron pedidos.</p>
-          <Button variant="link" className="mt-2" onClick={() => setShowCreate(true)}>Crear el primero</Button>
+          <Button variant="link" className="mt-2" onClick={openCreateOrder}>Crear el primero</Button>
         </div>
       ) : (
         <Card className="overflow-hidden p-0">
@@ -1016,7 +1049,15 @@ export default function SalesPage() {
 
       <Separator className="hidden" />
 
-      <CreateOrderModal open={showCreate} onOpenChange={setShowCreate} customers={customers} products={products} />
+      <CreateOrderModal
+        open={showCreate}
+        onOpenChange={setShowCreate}
+        customers={customers}
+        customersError={customersQuery.error}
+        customersFetching={customersQuery.isFetching}
+        onRetryCustomers={() => void customersQuery.refetch()}
+        products={products}
+      />
 
       {panelOrder && (
         <OrderDetailPanel open={panelOpen} onOpenChange={closePanel} order={panelOrder} />
