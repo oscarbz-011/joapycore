@@ -2582,6 +2582,7 @@ model TenantIntegration {
 
 enum AppEmailStatus {
   SENDING
+  UNKNOWN
   SENT
   FAILED
 }

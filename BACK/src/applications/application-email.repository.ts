@@ -115,6 +115,16 @@ export class ApplicationEmailRepository {
     });
   }
 
+  markUnknown(tenantId: string, id: string) {
+    return this.prisma.appEmailMessage.updateMany({
+      where: { tenantId, id },
+      data: {
+        status: 'UNKNOWN',
+        error: 'El resultado de la entrega SMTP todavía no está confirmado',
+      },
+    });
+  }
+
   markFailed(tenantId: string, id: string, error: string) {
     return this.prisma.appEmailMessage.updateMany({
       where: { tenantId, id },

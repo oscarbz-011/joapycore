@@ -1,6 +1,6 @@
 import { apiClient, LONG_REQUEST_TIMEOUT_MS } from "./client";
 
-export type AppEmailStatus = "SENDING" | "SENT" | "FAILED";
+export type AppEmailStatus = "SENDING" | "UNKNOWN" | "SENT" | "FAILED";
 
 export interface AppEmailMessage {
   id: string;

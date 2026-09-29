@@ -14,6 +14,7 @@ describe('ApplicationEmailService', () => {
     syncInboxMessages: jest.Mock;
     findById: jest.Mock;
     createPending: jest.Mock;
+    markUnknown: jest.Mock;
     markSent: jest.Mock;
     markFailed: jest.Mock;
   };
@@ -41,6 +42,7 @@ describe('ApplicationEmailService', () => {
         subject: 'Hola',
         bodyText: 'Mensaje',
       }),
+      markUnknown: jest.fn(),
       markSent: jest.fn(),
       markFailed: jest.fn(),
     };
@@ -112,6 +114,13 @@ describe('ApplicationEmailService', () => {
         to: 'client@example.com',
       }),
     );
+    expect(repository.markUnknown).toHaveBeenCalledWith(
+      'tenant-1',
+      'message-1',
+    );
+    expect(repository.markUnknown.mock.invocationCallOrder[0]).toBeLessThan(
+      emailService.sendTenantText.mock.invocationCallOrder[0],
+    );
     expect(repository.markSent).toHaveBeenCalledWith('tenant-1', 'message-1');
     expect(repository.findById).toHaveBeenCalledWith('tenant-1', 'message-1');
     expect(eventEmitter.emit).toHaveBeenCalledWith(
@@ -165,6 +174,35 @@ describe('ApplicationEmailService', () => {
       'tenant-1',
       'message-1',
       '535 auth failed',
+    );
+  });
+
+  it('keeps an accepted SMTP delivery as unknown when persisting SENT fails', async () => {
+    repository.markSent.mockRejectedValue(new Error('database unavailable'));
+
+    await expect(
+      service.send('tenant-1', 'user-1', {
+        to: 'client@example.com',
+        subject: 'Hola',
+        body: 'Mensaje',
+      }),
+    ).resolves.toEqual(
+      expect.objectContaining({ id: 'message-1', status: 'UNKNOWN' }),
+    );
+
+    expect(repository.markUnknown).toHaveBeenCalledWith(
+      'tenant-1',
+      'message-1',
+    );
+    expect(repository.markFailed).not.toHaveBeenCalled();
+    expect(repository.findById).not.toHaveBeenCalled();
+    expect(eventEmitter.emit).not.toHaveBeenCalledWith(
+      'application.email.sent',
+      expect.anything(),
+    );
+    expect(eventEmitter.emit).toHaveBeenCalledWith(
+      'application.email.unknown',
+      expect.objectContaining({ tenantId: 'tenant-1', messageId: 'message-1' }),
     );
   });
 

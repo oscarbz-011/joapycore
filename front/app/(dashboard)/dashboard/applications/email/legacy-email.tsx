@@ -96,6 +96,7 @@ function fullMessageDate(value: string | null) {
 function statusLabel(status: AppEmailMessage["status"]) {
   if (status === "SENT") return "Enviado";
   if (status === "FAILED") return "No enviado";
+  if (status === "UNKNOWN") return "Entrega por confirmar";
   return "Enviando";
 }
 
@@ -704,8 +705,8 @@ export default function ApplicationEmailPage() {
             </div>
             {inboxSyncError !== null && folder === "inbox" && (
               <p className="mt-2 text-[11px] text-amber-600">
-                No se pudo actualizar el servidor IMAP. Se muestran los
-                mensajes guardados.
+                No se pudo actualizar el servidor IMAP. Se muestran los mensajes
+                guardados.
               </p>
             )}
           </div>
@@ -729,7 +730,9 @@ export default function ApplicationEmailPage() {
             ) : inboxError && folder === "inbox" ? (
               <div className="flex h-full min-h-72 flex-col items-center justify-center px-6 text-center">
                 <AlertCircle size={25} className="mb-3 text-destructive" />
-                <p className="text-sm font-medium">No se pudo cargar el buzón</p>
+                <p className="text-sm font-medium">
+                  No se pudo cargar el buzón
+                </p>
                 <p className="mt-2 max-w-xs text-xs leading-5 text-muted-foreground">
                   {apiErrorMessage(
                     inboxError,

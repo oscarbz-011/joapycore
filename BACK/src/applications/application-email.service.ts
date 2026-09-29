@@ -69,6 +69,18 @@ export class ApplicationEmailService {
       subject: dto.subject.trim(),
       bodyText: dto.body,
     });
+
+    try {
+      // UNKNOWN is persisted before contacting SMTP. If the process or database
+      // fails after the provider accepts the message, a retry cannot mistake
+      // the delivery for a definite failure and send a duplicate.
+      await this.repository.markUnknown(tenantId, message.id);
+    } catch {
+      throw new ServiceUnavailableException(
+        'No se pudo preparar el envío de forma segura. Intentá nuevamente.',
+      );
+    }
+
     try {
       await this.emailService.sendTenantText({
         tenantId,
@@ -76,8 +88,22 @@ export class ApplicationEmailService {
         subject: message.subject,
         text: message.bodyText,
       });
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      try {
+        await this.repository.markFailed(tenantId, message.id, detail);
+      } catch {
+        // The public response stays sanitized even when persistence is down.
+      }
+      throw new BadGatewayException(
+        'No se pudo enviar el correo. Revisá la integración SMTP e intentá nuevamente.',
+      );
+    }
+
+    try {
       await this.repository.markSent(tenantId, message.id);
-      this.eventEmitter.emit('application.email.sent', {
+    } catch {
+      this.eventEmitter.emit('application.email.unknown', {
         tenantId,
         messageId: message.id,
       });
@@ -85,17 +111,29 @@ export class ApplicationEmailService {
         tenantId,
         userId,
         module: 'applications',
-        action: 'application.email.sent',
+        action: 'application.email.unknown',
         resourceId: message.id,
-        after: { to: message.recipient, subject: message.subject },
+        after: {
+          to: message.recipient,
+          subject: message.subject,
+          deliveryAccepted: true,
+        },
       } satisfies AuditLogEvent);
-    } catch (error) {
-      const detail = error instanceof Error ? error.message : String(error);
-      await this.repository.markFailed(tenantId, message.id, detail);
-      throw new BadGatewayException(
-        'No se pudo enviar el correo. Revisá la integración SMTP e intentá nuevamente.',
-      );
+      return { ...message, status: 'UNKNOWN' as const, sentAt: null };
     }
+
+    this.eventEmitter.emit('application.email.sent', {
+      tenantId,
+      messageId: message.id,
+    });
+    this.eventEmitter.emit('audit.log', {
+      tenantId,
+      userId,
+      module: 'applications',
+      action: 'application.email.sent',
+      resourceId: message.id,
+      after: { to: message.recipient, subject: message.subject },
+    } satisfies AuditLogEvent);
     return this.repository.findById(tenantId, message.id);
   }
 }
