@@ -2614,6 +2614,7 @@ model AppEmailInboxMessage {
   id          String   @id @default(uuid())
   tenantId    String   @map("tenant_id")
   mailbox     String
+  uidValidity String   @map("uid_validity")
   uid         String
   messageId   String?  @map("message_id")
   senderName  String?  @map("sender_name")
@@ -2629,7 +2630,7 @@ model AppEmailInboxMessage {
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
-  @@unique([tenantId, mailbox, uid])
+  @@unique([tenantId, mailbox, uidValidity, uid], map: "app_email_inbox_epoch_uid_key")
   @@index([tenantId, receivedAt])
   @@map("app_email_inbox_messages")
 }

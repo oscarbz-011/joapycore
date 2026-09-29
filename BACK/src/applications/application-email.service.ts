@@ -41,10 +41,14 @@ export class ApplicationEmailService {
       );
     }
     try {
-      const messages = await this.imapConnection.fetchInbox(config, 100);
-      await this.repository.upsertInboxMessages(
+      const { uidValidity, messages } = await this.imapConnection.fetchInbox(
+        config,
+        100,
+      );
+      await this.repository.syncInboxMessages(
         tenantId,
         config.user.toLowerCase(),
+        uidValidity,
         messages,
       );
       return { synced: messages.length, mailbox: config.user };

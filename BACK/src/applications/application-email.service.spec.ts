@@ -11,7 +11,7 @@ describe('ApplicationEmailService', () => {
   let repository: {
     list: jest.Mock;
     listInbox: jest.Mock;
-    upsertInboxMessages: jest.Mock;
+    syncInboxMessages: jest.Mock;
     findById: jest.Mock;
     createPending: jest.Mock;
     markSent: jest.Mock;
@@ -30,7 +30,7 @@ describe('ApplicationEmailService', () => {
     repository = {
       list: jest.fn().mockResolvedValue([]),
       listInbox: jest.fn().mockResolvedValue([]),
-      upsertInboxMessages: jest.fn(),
+      syncInboxMessages: jest.fn(),
       findById: jest.fn().mockResolvedValue({
         id: 'message-1',
         status: 'SENT',
@@ -65,7 +65,11 @@ describe('ApplicationEmailService', () => {
         password: 'secret',
       }),
     };
-    imapConnection = { fetchInbox: jest.fn().mockResolvedValue([]) };
+    imapConnection = {
+      fetchInbox: jest
+        .fn()
+        .mockResolvedValue({ uidValidity: '100', messages: [] }),
+    };
     service = new ApplicationEmailService(
       repository as never,
       emailService as never,
@@ -129,15 +133,19 @@ describe('ApplicationEmailService', () => {
         starred: false,
       },
     ];
-    imapConnection.fetchInbox.mockResolvedValue(incoming);
+    imapConnection.fetchInbox.mockResolvedValue({
+      uidValidity: '200',
+      messages: incoming,
+    });
 
     await expect(service.syncInbox('tenant-1')).resolves.toEqual({
       synced: 1,
       mailbox: 'user@example.com',
     });
-    expect(repository.upsertInboxMessages).toHaveBeenCalledWith(
+    expect(repository.syncInboxMessages).toHaveBeenCalledWith(
       'tenant-1',
       'user@example.com',
+      '200',
       incoming,
     );
   });
@@ -169,7 +177,7 @@ describe('ApplicationEmailService', () => {
     expect(JSON.stringify(error.getResponse())).not.toMatch(
       /secret|provider detail/,
     );
-    expect(repository.upsertInboxMessages).not.toHaveBeenCalled();
+    expect(repository.syncInboxMessages).not.toHaveBeenCalled();
   });
 
   it('does not download or list another mailbox when IMAP is disabled', async () => {
@@ -198,10 +206,18 @@ describe('ApplicationEmailService', () => {
 });
 
 describe('Application inbox persistence boundary', () => {
-  it('scopes reads and duplicate detection to the tenant, mailbox, and UID', async () => {
+  it('scopes reads and duplicate detection to tenant, mailbox, UIDVALIDITY, and UID', async () => {
+    const transaction = {
+      appEmailInboxMessage: {
+        deleteMany: jest.fn(),
+        upsert: jest.fn(),
+      },
+    };
     const prisma = {
-      appEmailInboxMessage: { findMany: jest.fn(), upsert: jest.fn() },
-      $transaction: jest.fn(),
+      appEmailInboxMessage: { findMany: jest.fn() },
+      $transaction: jest
+        .fn()
+        .mockImplementation((callback) => callback(transaction)),
     };
     const repository = new ApplicationEmailRepository(prisma as never);
     await repository.listInbox('tenant-a', 'a@example.com');
@@ -225,16 +241,62 @@ describe('Application inbox persistence boundary', () => {
       ['tenant-a', 'b@example.com'],
       ['tenant-b', 'a@example.com'],
     ]) {
-      await repository.upsertInboxMessages(tenant, mailbox, [message]);
-      expect(prisma.appEmailInboxMessage.upsert).toHaveBeenLastCalledWith(
+      await repository.syncInboxMessages(tenant, mailbox, '200', [message]);
+      expect(
+        transaction.appEmailInboxMessage.deleteMany,
+      ).toHaveBeenLastCalledWith({
+        where: { tenantId: tenant, mailbox, uidValidity: { not: '200' } },
+      });
+      expect(transaction.appEmailInboxMessage.upsert).toHaveBeenLastCalledWith(
         expect.objectContaining({
           where: {
-            tenantId_mailbox_uid: { tenantId: tenant, mailbox, uid: '42' },
+            tenantId_mailbox_uidValidity_uid: {
+              tenantId: tenant,
+              mailbox,
+              uidValidity: '200',
+              uid: '42',
+            },
           },
-          create: { tenantId: tenant, mailbox, ...message },
+          create: {
+            tenantId: tenant,
+            mailbox,
+            uidValidity: '200',
+            ...message,
+          },
         }),
       );
     }
+  });
+
+  it('clears a previous UIDVALIDITY even when the reset mailbox is empty', async () => {
+    const transaction = {
+      appEmailInboxMessage: {
+        deleteMany: jest.fn(),
+        upsert: jest.fn(),
+      },
+    };
+    const prisma = {
+      appEmailInboxMessage: { findMany: jest.fn() },
+      $transaction: jest
+        .fn()
+        .mockImplementation((callback) => callback(transaction)),
+    };
+
+    await new ApplicationEmailRepository(prisma as never).syncInboxMessages(
+      'tenant-a',
+      'a@example.com',
+      '201',
+      [],
+    );
+
+    expect(transaction.appEmailInboxMessage.deleteMany).toHaveBeenCalledWith({
+      where: {
+        tenantId: 'tenant-a',
+        mailbox: 'a@example.com',
+        uidValidity: { not: '201' },
+      },
+    });
+    expect(transaction.appEmailInboxMessage.upsert).not.toHaveBeenCalled();
   });
 });
 

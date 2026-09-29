@@ -379,7 +379,7 @@ describe('IMAP transport security', () => {
           ({
             connect: jest.fn(),
             getMailboxLock: jest.fn().mockResolvedValue({ release }),
-            mailbox: { exists: 0 },
+            mailbox: { exists: 0, uidValidity: 123456789n },
             logout,
             close: jest.fn(),
           }) as unknown as ImapFlow,
@@ -392,7 +392,7 @@ describe('IMAP transport security', () => {
           user: 'user@example.com',
           password: 'secret',
         }),
-      ).resolves.toEqual([]);
+      ).resolves.toEqual({ uidValidity: '123456789', messages: [] });
       const options = jest.mocked(ImapFlow).mock.calls.at(-1)?.[0];
       expect(options).toMatchObject({
         secure,
@@ -401,6 +401,36 @@ describe('IMAP transport security', () => {
       });
       if (!secure) expect(options?.doSTARTTLS).toBe(true);
       else expect(options?.doSTARTTLS).not.toBe(true);
+      expect(release).toHaveBeenCalled();
+      expect(logout).toHaveBeenCalled();
+    },
+  );
+
+  it.each([undefined, 0n])(
+    'rejects an inbox without a valid UIDVALIDITY (%s)',
+    async (uidValidity) => {
+      const release = jest.fn();
+      const logout = jest.fn();
+      jest.mocked(ImapFlow).mockImplementation(
+        () =>
+          ({
+            connect: jest.fn(),
+            getMailboxLock: jest.fn().mockResolvedValue({ release }),
+            mailbox: { exists: 0, uidValidity },
+            logout,
+            close: jest.fn(),
+          }) as unknown as ImapFlow,
+      );
+
+      await expect(
+        new ImapConnectionService().fetchInbox({
+          host: 'imap.example.com',
+          port: 993,
+          secure: true,
+          user: 'user@example.com',
+          password: 'secret',
+        }),
+      ).rejects.toThrow('UIDVALIDITY');
       expect(release).toHaveBeenCalled();
       expect(logout).toHaveBeenCalled();
     },

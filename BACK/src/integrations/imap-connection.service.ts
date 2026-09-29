@@ -25,6 +25,11 @@ export interface IncomingImapMessage {
   starred: boolean;
 }
 
+export interface FetchedImapInbox {
+  uidValidity: string;
+  messages: IncomingImapMessage[];
+}
+
 const CONNECTION_TIMEOUT_MS = 15_000;
 
 class ImapLineReader {
@@ -224,7 +229,7 @@ export class ImapConnectionService {
   async fetchInbox(
     config: ImapConnectionConfig,
     limit = 100,
-  ): Promise<IncomingImapMessage[]> {
+  ): Promise<FetchedImapInbox> {
     if (!config.password) {
       throw new Error('La contraseña IMAP no está configurada');
     }
@@ -246,8 +251,14 @@ export class ImapConnectionService {
     try {
       await client.connect();
       lock = await client.getMailboxLock('INBOX');
+      const uidValidity = client.mailbox
+        ? String(client.mailbox.uidValidity)
+        : '';
+      if (!/^[1-9]\d*$/.test(uidValidity)) {
+        throw new Error('El servidor IMAP no informó un UIDVALIDITY válido');
+      }
       const exists = client.mailbox ? client.mailbox.exists : 0;
-      if (!exists) return [];
+      if (!exists) return { uidValidity, messages: [] };
 
       const start = Math.max(1, exists - Math.max(1, limit) + 1);
       const messages: IncomingImapMessage[] = [];
@@ -293,7 +304,7 @@ export class ImapConnectionService {
           starred: message.flags?.has('\\Flagged') ?? false,
         });
       }
-      return messages;
+      return { uidValidity, messages };
     } finally {
       lock?.release();
       try {

@@ -45,19 +45,27 @@ export class ApplicationEmailRepository {
     });
   }
 
-  async upsertInboxMessages(
+  async syncInboxMessages(
     tenantId: string,
     mailbox: string,
+    uidValidity: string,
     messages: IncomingImapMessage[],
   ) {
-    if (!messages.length) return;
-    await this.prisma.$transaction(
-      messages.map((message) =>
-        this.prisma.appEmailInboxMessage.upsert({
+    await this.prisma.$transaction(async (transaction) => {
+      await transaction.appEmailInboxMessage.deleteMany({
+        where: { tenantId, mailbox, uidValidity: { not: uidValidity } },
+      });
+      for (const message of messages) {
+        await transaction.appEmailInboxMessage.upsert({
           where: {
-            tenantId_mailbox_uid: { tenantId, mailbox, uid: message.uid },
+            tenantId_mailbox_uidValidity_uid: {
+              tenantId,
+              mailbox,
+              uidValidity,
+              uid: message.uid,
+            },
           },
-          create: { tenantId, mailbox, ...message },
+          create: { tenantId, mailbox, uidValidity, ...message },
           update: {
             messageId: message.messageId,
             senderName: message.senderName,
@@ -69,9 +77,9 @@ export class ApplicationEmailRepository {
             isRead: message.isRead,
             starred: message.starred,
           },
-        }),
-      ),
-    );
+        });
+      }
+    });
   }
 
   findById(tenantId: string, id: string) {
