@@ -36,6 +36,9 @@ describe("findRouteRule", () => {
     expect(findRouteRule("/dashboard/inventory/movements")?.prefix).toBe(
       "/dashboard/inventory/movements",
     );
+    expect(findRouteRule("/dashboard/inventory/stock")?.prefix).toBe(
+      "/dashboard/inventory/stock",
+    );
   });
 });
 
@@ -98,6 +101,20 @@ describe("checkRouteAccess", () => {
         ["inventory:categories:read"],
       ),
     ).toEqual({ allowed: false, reason: "permission" });
+    expect(
+      checkRouteAccess(
+        "/dashboard/inventory/stock",
+        ["inventory"],
+        ["inventory:categories:read"],
+      ),
+    ).toEqual({ allowed: false, reason: "permission" });
+    expect(
+      checkRouteAccess(
+        "/dashboard/inventory/stock",
+        ["inventory"],
+        ["inventory:products:read"],
+      ).allowed,
+    ).toBe(true);
   });
 
   it("protects the legacy email redirect with Communications access", () => {

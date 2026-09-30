@@ -114,7 +114,11 @@ const STATIC_GROUPS: SidebarGroup[] = [
         href: "/dashboard/inventory/stock-entries/initial",
         permission: "inventory:movements:create",
       },
-      { label: "Stock", href: "/dashboard/inventory/stock", stub: true },
+      {
+        label: "Stock",
+        href: "/dashboard/inventory/stock",
+        permission: "inventory:products:read",
+      },
     ],
   },
   {

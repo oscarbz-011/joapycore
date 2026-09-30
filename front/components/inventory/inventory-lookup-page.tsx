@@ -61,10 +61,12 @@ export function InventoryLookupPage({
   const queryClient = useQueryClient();
   const [name, setName] = useState("");
   const [error, setError] = useState("");
-  const { data: items = [] } = useQuery({ queryKey, queryFn: list });
+  const listQuery = useQuery({ queryKey, queryFn: list });
+  const items = listQuery.data ?? [];
 
   const createMutation = useMutation({
     mutationFn: () => create(name.trim()),
+    onMutate: () => setError(""),
     onSuccess: () => {
       setName("");
       setError("");
@@ -77,7 +79,13 @@ export function InventoryLookupPage({
 
   const toggleMutation = useMutation({
     mutationFn: updateActive,
+    onMutate: () => setError(""),
     onSuccess: () => queryClient.invalidateQueries({ queryKey }),
+    onError: (cause) => {
+      setError(
+        apiErrorMessage(cause, `No se pudo actualizar la ${itemName}.`),
+      );
+    },
   });
 
   return (
@@ -99,6 +107,7 @@ export function InventoryLookupPage({
             className="mb-4 flex gap-2"
           >
             <Input
+              aria-label={`Nombre de la ${itemName}`}
               className="flex-1"
               placeholder={inputPlaceholder}
               value={name}
@@ -113,7 +122,29 @@ export function InventoryLookupPage({
         </RequirePermission>
         {error && <p className="mb-3 text-xs text-destructive">{error}</p>}
 
-        {items.length === 0 ? (
+        {listQuery.isLoading ? (
+          <p className="py-4 text-center text-sm text-muted-foreground">
+            Cargando {title.toLocaleLowerCase("es")}...
+          </p>
+        ) : listQuery.isError ? (
+          <div className="flex flex-col items-center gap-3 py-4 text-center">
+            <p className="text-sm text-destructive">
+              {apiErrorMessage(
+                listQuery.error,
+                `No se pudieron cargar las ${title.toLocaleLowerCase("es")}.`,
+              )}
+            </p>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => void listQuery.refetch()}
+              disabled={listQuery.isFetching}
+            >
+              Reintentar
+            </Button>
+          </div>
+        ) : items.length === 0 ? (
           <p className="py-4 text-center text-sm text-muted-foreground/60">
             {emptyMessage}
           </p>
