@@ -68,7 +68,13 @@ describe('InstallmentsRepository loan refresh scope', () => {
 
 describe('InstallmentsSchedulerService', () => {
   let service: InstallmentsSchedulerService;
-  let installmentsRepo: jest.Mocked<InstallmentsRepository>;
+  let installmentsRepo: {
+    markAllOverdue: jest.Mock;
+    markLoanOverdue: jest.Mock;
+    findAllOverdueForMora: jest.Mock;
+    upsertInterestCharge: jest.Mock;
+    clearInactiveInterestCharges: jest.Mock;
+  };
   let prisma: {
     creditConfig: { findMany: jest.Mock };
     loan: { findMany: jest.Mock };
