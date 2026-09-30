@@ -1,0 +1,34 @@
+name: PR Policy
+
+on:
+  pull_request:
+    branches: [develop, main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-policy-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Validate branch and title
+    runs-on: ubuntu-latest
+    env:
+      HEAD_REF: ${{ github.head_ref }}
+      BASE_REF: ${{ github.base_ref }}
+      PR_TITLE: ${{ github.event.pull_request.title }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Test policy
+        run: node --test .github/scripts/pr-policy.test.mjs
+
+      - name: Validate pull request
+        run: node .github/scripts/pr-policy.mjs
