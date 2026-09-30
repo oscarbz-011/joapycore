@@ -2,7 +2,7 @@ import {
   BadGatewayException,
   ServiceUnavailableException,
 } from '@nestjs/common';
-import { EmailService } from '../email/email.service';
+import { EmailService, TenantSmtpDeliveryError } from '../email/email.service';
 import { ApplicationEmailRepository } from './application-email.repository';
 import { ApplicationEmailService } from './application-email.service';
 
@@ -204,6 +204,36 @@ describe('ApplicationEmailService', () => {
       'application.email.unknown',
       expect.objectContaining({ tenantId: 'tenant-1', messageId: 'message-1' }),
     );
+  });
+
+  it('keeps an ambiguous SMTP transport outcome as unknown', async () => {
+    emailService.sendTenantText.mockRejectedValue(
+      new TenantSmtpDeliveryError(true),
+    );
+
+    await expect(
+      service.send('tenant-1', 'user-1', {
+        to: 'client@example.com',
+        subject: 'Hola',
+        body: 'Mensaje',
+      }),
+    ).resolves.toEqual(
+      expect.objectContaining({ id: 'message-1', status: 'UNKNOWN' }),
+    );
+
+    expect(repository.markFailed).not.toHaveBeenCalled();
+    expect(eventEmitter.emit).toHaveBeenCalledWith(
+      'application.email.unknown',
+      expect.objectContaining({ tenantId: 'tenant-1', messageId: 'message-1' }),
+    );
+    const ambiguousAudit = eventEmitter.emit.mock.calls.find(
+      ([event, payload]) =>
+        event === 'audit.log' && payload.action === 'application.email.unknown',
+    )?.[1];
+    expect(ambiguousAudit.after).toEqual(
+      expect.objectContaining({ outcomeAmbiguous: true }),
+    );
+    expect(ambiguousAudit.after).not.toHaveProperty('deliveryAccepted');
   });
 
   it('does not expose IMAP provider errors or credentials in sync responses', async () => {

@@ -5,7 +5,7 @@ import {
 } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import type { AuditLogEvent } from '../audit/audit-log.event';
-import { EmailService } from '../email/email.service';
+import { EmailService, TenantSmtpDeliveryError } from '../email/email.service';
 import { ImapConnectionService } from '../integrations/imap-connection.service';
 import { IntegrationsService } from '../integrations/integrations.service';
 import { ApplicationEmailRepository } from './application-email.repository';
@@ -89,6 +89,25 @@ export class ApplicationEmailService {
         text: message.bodyText,
       });
     } catch (error) {
+      if (error instanceof TenantSmtpDeliveryError && error.ambiguous) {
+        this.eventEmitter.emit('application.email.unknown', {
+          tenantId,
+          messageId: message.id,
+        });
+        this.eventEmitter.emit('audit.log', {
+          tenantId,
+          userId,
+          module: 'applications',
+          action: 'application.email.unknown',
+          resourceId: message.id,
+          after: {
+            to: message.recipient,
+            subject: message.subject,
+            outcomeAmbiguous: true,
+          },
+        } satisfies AuditLogEvent);
+        return { ...message, status: 'UNKNOWN' as const, sentAt: null };
+      }
       const detail = error instanceof Error ? error.message : String(error);
       try {
         await this.repository.markFailed(tenantId, message.id, detail);

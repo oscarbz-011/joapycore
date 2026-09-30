@@ -30,6 +30,26 @@ export interface EmailDeliveryResult {
   accepted: string[];
 }
 
+export class TenantSmtpDeliveryError extends Error {
+  constructor(readonly ambiguous: boolean) {
+    super(
+      ambiguous
+        ? 'El servidor SMTP no confirmó el resultado del envío'
+        : 'El servidor SMTP rechazó el envío o no estaba disponible',
+    );
+  }
+}
+
+function tenantSmtpDeliveryError(error: unknown, sending: boolean) {
+  const responseCode = (error as { responseCode?: unknown } | undefined)
+    ?.responseCode;
+  const explicitRejection =
+    typeof responseCode === 'number' &&
+    responseCode >= 400 &&
+    responseCode <= 599;
+  return new TenantSmtpDeliveryError(sending && !explicitRejection);
+}
+
 @Injectable()
 export class EmailService {
   private readonly logger = new Logger(EmailService.name);
@@ -171,14 +191,23 @@ export class EmailService {
         : undefined,
     });
     try {
-      await transporter.sendMail({
-        from: config.fromName
-          ? { name: config.fromName, address: config.fromEmail }
-          : config.fromEmail,
-        to: input.to,
-        subject: input.subject,
-        text: input.text,
-      });
+      try {
+        await transporter.verify();
+      } catch (error) {
+        throw tenantSmtpDeliveryError(error, false);
+      }
+      try {
+        await transporter.sendMail({
+          from: config.fromName
+            ? { name: config.fromName, address: config.fromEmail }
+            : config.fromEmail,
+          to: input.to,
+          subject: input.subject,
+          text: input.text,
+        });
+      } catch (error) {
+        throw tenantSmtpDeliveryError(error, true);
+      }
     } finally {
       transporter.close();
     }

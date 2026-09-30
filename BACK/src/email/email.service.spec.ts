@@ -10,6 +10,7 @@ jest.mock('../integrations/network-destination.policy', () => ({
 
 describe('EmailService', () => {
   const sendMail = jest.fn();
+  const verify = jest.fn();
   const close = jest.fn();
   const integrationsService = {
     getEnabledSmtpConfig: jest.fn(),
@@ -39,7 +40,8 @@ describe('EmailService', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    (createTransport as jest.Mock).mockReturnValue({ sendMail, close });
+    verify.mockResolvedValue(true);
+    (createTransport as jest.Mock).mockReturnValue({ sendMail, verify, close });
     jest.mocked(resolvePublicNetworkDestination).mockResolvedValue({
       address: '8.8.8.8',
       family: 4,
@@ -111,5 +113,39 @@ describe('EmailService', () => {
       'no aceptó el destinatario',
     );
     expect(close).toHaveBeenCalled();
+  });
+
+  it('classifies a lost SMTP response during tenant text delivery as ambiguous', async () => {
+    sendMail.mockRejectedValue(
+      Object.assign(new Error('socket reset'), {
+        code: 'ETIMEDOUT',
+      }),
+    );
+
+    await expect(
+      createService().sendTenantText({
+        tenantId: 'tenant-1',
+        to: 'cliente@example.com',
+        subject: 'Hola',
+        text: 'Mensaje',
+      }),
+    ).rejects.toEqual(expect.objectContaining({ ambiguous: true }));
+    expect(verify).toHaveBeenCalled();
+    expect(close).toHaveBeenCalled();
+  });
+
+  it('classifies an explicit SMTP rejection as definitive', async () => {
+    sendMail.mockRejectedValue(
+      Object.assign(new Error('rejected'), { responseCode: 550 }),
+    );
+
+    await expect(
+      createService().sendTenantText({
+        tenantId: 'tenant-1',
+        to: 'cliente@example.com',
+        subject: 'Hola',
+        text: 'Mensaje',
+      }),
+    ).rejects.toEqual(expect.objectContaining({ ambiguous: false }));
   });
 });
