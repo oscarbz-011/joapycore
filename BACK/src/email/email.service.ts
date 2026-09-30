@@ -8,6 +8,7 @@ import { createTransport, type Transporter } from 'nodemailer';
 import type SMTPTransport from 'nodemailer/lib/smtp-transport';
 import type { EmailConfig } from '../config/email.config';
 import { IntegrationsService } from '../integrations/integrations.service';
+import { resolvePublicNetworkDestination } from '../integrations/network-destination.policy';
 
 export interface EmailAttachment {
   filename: string;
@@ -61,10 +62,16 @@ export class EmailService {
       ? await this.integrationsService.getEnabledSmtpConfig(input.tenantId)
       : null;
     if (tenantConfig) {
+      const destination = await resolvePublicNetworkDestination(
+        tenantConfig.host,
+      );
       const transporter = createTransport({
-        host: tenantConfig.host,
+        host: destination.address,
         port: tenantConfig.port,
         secure: tenantConfig.secure,
+        tls: destination.servername
+          ? { servername: destination.servername }
+          : undefined,
         auth: tenantConfig.user
           ? { user: tenantConfig.user, pass: tenantConfig.password }
           : undefined,
@@ -151,10 +158,14 @@ export class EmailService {
         'La integración de correo no está configurada o está desactivada',
       );
     }
+    const destination = await resolvePublicNetworkDestination(config.host);
     const transporter = createTransport({
-      host: config.host,
+      host: destination.address,
       port: config.port,
       secure: config.secure,
+      tls: destination.servername
+        ? { servername: destination.servername }
+        : undefined,
       auth: config.user
         ? { user: config.user, pass: config.password }
         : undefined,

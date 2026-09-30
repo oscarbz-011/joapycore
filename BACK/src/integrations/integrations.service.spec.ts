@@ -4,6 +4,7 @@ import {
 } from '@nestjs/common';
 import { EventEmitter } from 'node:events';
 import { connect as connectTls } from 'node:tls';
+import { createTransport } from 'nodemailer';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
 import { ImapFlow } from 'imapflow';
@@ -18,9 +19,18 @@ import {
   IntegrationsService,
   type SmtpIntegrationConfig,
 } from './integrations.service';
+import { resolvePublicNetworkDestination } from './network-destination.policy';
 
 jest.mock('imapflow', () => ({ ImapFlow: jest.fn() }));
 jest.mock('node:tls', () => ({ connect: jest.fn() }));
+jest.mock('nodemailer', () => ({ createTransport: jest.fn() }));
+jest.mock('./network-destination.policy', () => ({
+  resolvePublicNetworkDestination: jest.fn().mockResolvedValue({
+    address: '8.8.8.8',
+    family: 4,
+    servername: 'imap.example.com',
+  }),
+}));
 
 describe('IntegrationsService', () => {
   const secret = 'integration-secret-with-at-least-32-characters';
@@ -80,7 +90,7 @@ describe('IntegrationsService', () => {
     expect(result).not.toHaveProperty('lastError');
   });
 
-  it('preserves an omitted password and invalidates the previous test', async () => {
+  it('preserves an omitted SMTP password only when connection identity is unchanged', async () => {
     const { repository, service } = createService();
     const existing = {
       enabled: true,
@@ -94,10 +104,10 @@ describe('IntegrationsService', () => {
 
     await service.updateEmailIntegration('tenant-1', {
       enabled: true,
-      host: 'smtp.new.example',
-      port: 465,
-      secure: true,
-      user: 'new-user',
+      host: 'smtp.old.example',
+      port: 587,
+      secure: false,
+      user: 'old-user',
       fromEmail: 'new@example.com',
       fromName: 'New Sender',
     });
@@ -115,15 +125,43 @@ describe('IntegrationsService', () => {
         secret,
       ),
     ).toEqual({
-      host: 'smtp.new.example',
-      port: 465,
-      secure: true,
-      user: 'new-user',
+      host: 'smtp.old.example',
+      port: 587,
+      secure: false,
+      user: 'old-user',
       password: 'stored-password',
       fromEmail: 'new@example.com',
       fromName: 'New Sender',
     });
   });
+
+  it.each([
+    { host: 'smtp.attacker.example' },
+    { port: 465 },
+    { secure: true },
+    { user: 'attacker' },
+  ])(
+    'requires a new SMTP password when connection identity changes: %o',
+    async (change) => {
+      const { repository, service } = createService();
+      repository.findByKey.mockResolvedValue({
+        encryptedConfig: encryptIntegrationConfig(existingConfig, secret),
+      });
+
+      await expect(
+        service.updateEmailIntegration('tenant-1', {
+          enabled: true,
+          host: existingConfig.host,
+          port: existingConfig.port,
+          secure: existingConfig.secure,
+          user: existingConfig.user,
+          fromEmail: 'sender@example.com',
+          ...change,
+        }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(repository.upsert).not.toHaveBeenCalled();
+    },
+  );
 
   it('refuses to store credentials without an encryption key', async () => {
     const { repository, service } = createService('');
@@ -141,7 +179,7 @@ describe('IntegrationsService', () => {
     expect(repository.upsert).not.toHaveBeenCalled();
   });
 
-  it('preserves an omitted IMAP password independently from SMTP', async () => {
+  it('preserves an omitted IMAP password when connection identity is unchanged', async () => {
     const { repository, service } = createService();
     const incomingConfig: ImapIntegrationConfig = {
       host: 'imap.old.example',
@@ -161,10 +199,10 @@ describe('IntegrationsService', () => {
 
     await service.updateIncomingEmailIntegration('tenant-1', {
       enabled: true,
-      host: 'imap.new.example',
-      port: 143,
-      secure: false,
-      user: 'new-mailbox@example.com',
+      host: 'imap.old.example',
+      port: 993,
+      secure: true,
+      user: 'mailbox@example.com',
     });
 
     const saved = repository.upsert.mock.calls[0][2];
@@ -175,12 +213,39 @@ describe('IntegrationsService', () => {
         secret,
       ),
     ).toEqual({
-      host: 'imap.new.example',
-      port: 143,
-      secure: false,
-      user: 'new-mailbox@example.com',
+      host: 'imap.old.example',
+      port: 993,
+      secure: true,
+      user: 'mailbox@example.com',
       password: 'stored-imap-password',
     });
+  });
+
+  it('requires a new IMAP password when connection identity changes', async () => {
+    const { repository, service } = createService();
+    repository.findByKey.mockResolvedValue({
+      encryptedConfig: encryptIntegrationConfig(
+        {
+          host: 'imap.old.example',
+          port: 993,
+          secure: true,
+          user: 'mailbox@example.com',
+          password: 'stored-imap-password',
+        },
+        secret,
+      ),
+    });
+
+    await expect(
+      service.updateIncomingEmailIntegration('tenant-1', {
+        enabled: true,
+        host: 'imap.attacker.example',
+        port: 993,
+        secure: true,
+        user: 'mailbox@example.com',
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(repository.upsert).not.toHaveBeenCalled();
   });
 
   it('rejects first-time IMAP enablement without a password', async () => {
@@ -249,6 +314,29 @@ describe('IntegrationsService', () => {
       'tenant-1',
       'imap',
       true,
+    );
+  });
+
+  it('rejects an unsafe SMTP destination before creating a transport', async () => {
+    const { repository, service } = createService();
+    repository.findByKey.mockResolvedValue({
+      encryptedConfig: encryptIntegrationConfig(existingConfig, secret),
+    });
+    jest
+      .mocked(resolvePublicNetworkDestination)
+      .mockRejectedValueOnce(new Error('destino público requerido'));
+
+    const error = await service
+      .testEmailIntegration('tenant-1')
+      .catch((value) => value);
+
+    expect(error.getStatus()).toBe(502);
+    expect(createTransport).not.toHaveBeenCalled();
+    expect(repository.markTestResult).toHaveBeenCalledWith(
+      'tenant-1',
+      'smtp',
+      false,
+      'destino público requerido',
     );
   });
 

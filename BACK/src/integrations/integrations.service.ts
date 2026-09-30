@@ -14,6 +14,7 @@ import {
   encryptIntegrationConfig,
 } from './integration-credentials.util';
 import { IntegrationsRepository } from './integrations.repository';
+import { resolvePublicNetworkDestination } from './network-destination.policy';
 
 export const SMTP_INTEGRATION_KEY = 'smtp';
 export const IMAP_INTEGRATION_KEY = 'imap';
@@ -52,6 +53,18 @@ function isCompleteImapConfig(
     typeof config.secure === 'boolean' &&
     config.user.trim() &&
     config.password,
+  );
+}
+
+function sameConnectionIdentity(
+  previous: { host: string; port: number; secure: boolean; user?: string },
+  next: { host: string; port: number; secure: boolean; user?: string },
+) {
+  return (
+    previous.host.trim().toLowerCase() === next.host.trim().toLowerCase() &&
+    previous.port === next.port &&
+    previous.secure === next.secure &&
+    (previous.user?.trim() || undefined) === (next.user?.trim() || undefined)
   );
 }
 
@@ -125,12 +138,29 @@ export class IntegrationsService {
     const previous = existing?.encryptedConfig
       ? this.decrypt<SmtpIntegrationConfig>(existing.encryptedConfig)
       : undefined;
-    const config: SmtpIntegrationConfig = {
+    const connection = {
       host: dto.host.trim(),
       port: dto.port,
       secure: dto.secure,
       user: dto.user?.trim() || undefined,
-      password: dto.password || previous?.password,
+    };
+    const identityChanged = Boolean(
+      previous && !sameConnectionIdentity(previous, connection),
+    );
+    if (
+      identityChanged &&
+      previous?.password &&
+      connection.user &&
+      !dto.password
+    ) {
+      throw new BadRequestException(
+        'Ingresá nuevamente la contraseña SMTP al cambiar el servidor o usuario',
+      );
+    }
+    const config: SmtpIntegrationConfig = {
+      ...connection,
+      password:
+        dto.password || (!identityChanged ? previous?.password : undefined),
       fromEmail: dto.fromEmail.trim(),
       fromName: dto.fromName?.trim() || undefined,
     };
@@ -156,17 +186,29 @@ export class IntegrationsService {
     const previous = existing?.encryptedConfig
       ? this.decrypt<ImapIntegrationConfig>(existing.encryptedConfig)
       : undefined;
-    const password = dto.password || previous?.password;
+    const connection = {
+      host: dto.host.trim(),
+      port: dto.port,
+      secure: dto.secure,
+      user: dto.user.trim(),
+    };
+    const identityChanged = Boolean(
+      previous && !sameConnectionIdentity(previous, connection),
+    );
+    if (identityChanged && previous?.password && !dto.password) {
+      throw new BadRequestException(
+        'Ingresá nuevamente la contraseña IMAP al cambiar el servidor o usuario',
+      );
+    }
+    const password =
+      dto.password || (!identityChanged ? previous?.password : undefined);
     if (dto.enabled && !password) {
       throw new BadRequestException(
         'La contraseña IMAP es obligatoria para activar el correo entrante',
       );
     }
     const config: ImapIntegrationConfig = {
-      host: dto.host.trim(),
-      port: dto.port,
-      secure: dto.secure,
-      user: dto.user.trim(),
+      ...connection,
       password,
     };
     await this.repository.upsert(tenantId, IMAP_INTEGRATION_KEY, {
@@ -188,15 +230,20 @@ export class IntegrationsService {
       );
     }
     const config = this.decrypt<SmtpIntegrationConfig>(row.encryptedConfig);
-    const transporter = createTransport({
-      host: config.host,
-      port: config.port,
-      secure: config.secure,
-      auth: config.user
-        ? { user: config.user, pass: config.password }
-        : undefined,
-    });
+    let transporter: ReturnType<typeof createTransport> | undefined;
     try {
+      const destination = await resolvePublicNetworkDestination(config.host);
+      transporter = createTransport({
+        host: destination.address,
+        port: config.port,
+        secure: config.secure,
+        tls: destination.servername
+          ? { servername: destination.servername }
+          : undefined,
+        auth: config.user
+          ? { user: config.user, pass: config.password }
+          : undefined,
+      });
       await transporter.verify();
       await this.repository.markTestResult(
         tenantId,
@@ -216,7 +263,7 @@ export class IntegrationsService {
         'No se pudo conectar con el servidor SMTP. Revisá los datos y volvé a intentar.',
       );
     } finally {
-      transporter.close();
+      transporter?.close();
     }
   }
 

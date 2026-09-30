@@ -1,8 +1,12 @@
 import { ServiceUnavailableException } from '@nestjs/common';
 import { createTransport } from 'nodemailer';
 import { EmailService } from './email.service';
+import { resolvePublicNetworkDestination } from '../integrations/network-destination.policy';
 
 jest.mock('nodemailer', () => ({ createTransport: jest.fn() }));
+jest.mock('../integrations/network-destination.policy', () => ({
+  resolvePublicNetworkDestination: jest.fn(),
+}));
 
 describe('EmailService', () => {
   const sendMail = jest.fn();
@@ -36,6 +40,11 @@ describe('EmailService', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     (createTransport as jest.Mock).mockReturnValue({ sendMail, close });
+    jest.mocked(resolvePublicNetworkDestination).mockResolvedValue({
+      address: '8.8.8.8',
+      family: 4,
+      servername: 'smtp.tenant.example.com',
+    });
     integrationsService.getEnabledSmtpConfig.mockResolvedValue({
       host: 'smtp.tenant.example.com',
       port: 587,
@@ -70,6 +79,12 @@ describe('EmailService', () => {
       expect.objectContaining({
         to: 'cliente@example.com',
         attachments: [expect.objectContaining({ filename: 'contrato.pdf' })],
+      }),
+    );
+    expect(createTransport).toHaveBeenCalledWith(
+      expect.objectContaining({
+        host: '8.8.8.8',
+        tls: { servername: 'smtp.tenant.example.com' },
       }),
     );
     expect(close).toHaveBeenCalled();

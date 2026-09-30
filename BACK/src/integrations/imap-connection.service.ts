@@ -3,6 +3,7 @@ import { connect as connectNet, type Socket } from 'node:net';
 import { connect as connectTls } from 'node:tls';
 import { ImapFlow } from 'imapflow';
 import { simpleParser } from 'mailparser';
+import { resolvePublicNetworkDestination } from './network-destination.policy';
 
 export interface ImapConnectionConfig {
   host: string;
@@ -167,14 +168,15 @@ async function runCommand(
 @Injectable()
 export class ImapConnectionService {
   async verify(config: ImapConnectionConfig): Promise<void> {
+    const destination = await resolvePublicNetworkDestination(config.host);
     let socket: Socket | undefined;
     let reader: ImapLineReader | undefined;
     try {
       if (config.secure) {
         const tlsSocket = connectTls({
-          host: config.host,
+          host: destination.address,
           port: config.port,
-          servername: config.host,
+          servername: destination.servername,
           rejectUnauthorized: true,
         });
         socket = tlsSocket;
@@ -182,7 +184,7 @@ export class ImapConnectionService {
         await waitForConnection(tlsSocket, 'secureConnect');
       } else {
         const plainSocket = connectNet({
-          host: config.host,
+          host: destination.address,
           port: config.port,
         });
         socket = plainSocket;
@@ -198,7 +200,7 @@ export class ImapConnectionService {
         reader.dispose();
         const tlsSocket = connectTls({
           socket,
-          servername: config.host,
+          servername: destination.servername,
           rejectUnauthorized: true,
         });
         socket = tlsSocket;
@@ -233,9 +235,10 @@ export class ImapConnectionService {
     if (!config.password) {
       throw new Error('La contraseña IMAP no está configurada');
     }
+    const destination = await resolvePublicNetworkDestination(config.host);
 
     const client = new ImapFlow({
-      host: config.host,
+      host: destination.address,
       port: config.port,
       secure: config.secure,
       doSTARTTLS: config.secure ? undefined : true,
@@ -244,7 +247,10 @@ export class ImapConnectionService {
       connectionTimeout: CONNECTION_TIMEOUT_MS,
       greetingTimeout: CONNECTION_TIMEOUT_MS,
       socketTimeout: 30_000,
-      tls: { rejectUnauthorized: true },
+      tls: {
+        rejectUnauthorized: true,
+        servername: destination.servername,
+      },
     });
 
     let lock: { release: () => void } | undefined;
