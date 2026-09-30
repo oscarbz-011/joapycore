@@ -10,6 +10,15 @@ packages:
 # abiertos que genera `pnpm audit --fix` suben de major y rompen a quien los usa.
 # deepmerge-ts 7→8 sí cambia de major: solo lo usa @prisma/config (CLI de
 # Prisma, no el runtime) y se verificó `prisma validate` + `prisma generate`.
+allowBuilds:
+  '@parcel/watcher': true
+  '@prisma/engines': true
+  '@scarf/scarf': false
+  msgpackr-extract: false
+  prisma: false
+  puppeteer: false
+  unrs-resolver: false
+
 overrides:
   brace-expansion@<1.1.18: ^1.1.18
   brace-expansion@>=2.0.0 <2.1.4: ^2.1.4
