@@ -71,6 +71,7 @@ for (const { head, base, title, error } of invalidCases) {
 }
 
 test("validates Conventional Commit titles", () => {
+  assert.deepEqual(validateTitle("fix: x"), []);
   assert.deepEqual(validateTitle("feat!: remove obsolete API"), []);
   assert.deepEqual(validateTitle("perf(database)!: avoid duplicate query"), []);
   assert.match(validateTitle("feature: invalid type")[0], /Conventional Commit/i);

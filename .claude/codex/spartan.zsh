@@ -94,9 +94,28 @@ cdx-commit() {
   _cdx_codex review --commit "$sha" "$@"
 }
 
+cdx-ship() {
+  local rounds="${1:-2}" requested="$2" base i stance
+  if ! [[ "$rounds" =~ ^[0-9]+$ ]] || (( rounds < 1 )); then
+    echo "Usage: cdx-ship [rounds>=1] [base]" >&2
+    return 1
+  fi
+
+  base=$(_cdx_resolve_base "$requested") || return
+  for (( i = 1; i <= rounds; i++ )); do
+    case "$i" in
+      1) stance="Review Standards and obvious correctness issues." ;;
+      2) stance="Review Specification compliance and challenge prior assumptions." ;;
+      *) stance="Perform a deeper pass for missed regressions, edge cases, and security risks." ;;
+    esac
+    echo "==> Review round $i/$rounds against $base"
+    _cdx_review_diff "$base" "$stance"
+  done
+}
+
 cdx-pr() {
-  local pr="$1" meta number base ref tmp status
-  [[ -z "$pr" ]] && { echo "Usage: cdx-pr <number-or-url>" >&2; return 1; }
+  local pr="$1" rounds="${2:-2}" meta number base ref tmp status
+  [[ -z "$pr" ]] && { echo "Usage: cdx-pr <number-or-url> [rounds]" >&2; return 1; }
   command -v gh >/dev/null || { echo "gh CLI is required." >&2; return 1; }
 
   meta=$(gh pr view "$pr" --json number,baseRefName --template '{{.number}} {{.baseRefName}}') || return
@@ -106,7 +125,7 @@ cdx-pr() {
   git fetch origin "refs/heads/$base:refs/remotes/origin/$base" "pull/$number/head:$ref" --quiet || return
   tmp=$(mktemp -d "${TMPDIR:-/tmp}/cdx-pr-${number}.XXXXXX") || return
   git worktree add --detach "$tmp" "$ref" >/dev/null || return
-  (cd "$tmp" && _cdx_review_diff "origin/$base" "Review Standards and Specification separately.")
+  (cd "$tmp" && cdx-ship "$rounds" "origin/$base")
   status=$?
   git worktree remove "$tmp" --force >/dev/null 2>&1
   return "$status"
@@ -120,6 +139,7 @@ Codex helpers (default integration base: develop)
   cdx-security [base]         Security and tenant-isolation review
   cdx-uncommitted             Review working-tree changes
   cdx-commit <sha>            Review one commit
-  cdx-pr <number-or-url>      Review a PR against its actual base
+  cdx-ship [rounds] [base]    Run multiple review passes (default: 2)
+  cdx-pr <number-or-url> [n]  Review a PR in n rounds against its actual base
 EOF
 }

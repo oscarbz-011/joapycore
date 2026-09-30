@@ -1,7 +1,7 @@
 import { pathToFileURL } from "node:url";
 
 const TITLE_PATTERN =
-  /^(?:feat|fix|refactor|perf|docs|test|build|ci|chore|revert)(?:\([a-z0-9][a-z0-9-]*\))?!?:\s+\S.+$/;
+  /^(?:feat|fix|refactor|perf|docs|test|build|ci|chore|revert)(?:\([a-z0-9][a-z0-9-]*\))?!?:\s+\S(?:.*\S)?$/;
 const TOPIC_PATTERN =
   /^(feature|fix|refactor|chore|docs|test|ci)\/(back|front|shared|infra)\/([a-z0-9]+(?:-[a-z0-9]+)*)$/;
 const RELEASE_PATTERN = /^release\/(\d+\.\d+\.\d+)$/;
