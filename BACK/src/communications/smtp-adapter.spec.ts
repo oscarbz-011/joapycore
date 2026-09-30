@@ -1,11 +1,15 @@
 import { createTransport } from 'nodemailer';
 import { IntegrationsService } from '../integrations/integrations.service';
+import { resolvePublicNetworkDestination } from '../integrations/network-destination.policy';
 import {
   CommunicationsEmailProvider,
   type TransactionalEmail,
 } from './communications-email.provider';
 
 jest.mock('nodemailer', () => ({ createTransport: jest.fn() }));
+jest.mock('../integrations/network-destination.policy', () => ({
+  resolvePublicNetworkDestination: jest.fn(),
+}));
 
 describe('Tenant SMTP adapter', () => {
   const input: TransactionalEmail = {
@@ -47,6 +51,11 @@ describe('Tenant SMTP adapter', () => {
       messageId: input.messageId,
     });
     (createTransport as jest.Mock).mockReturnValue(transport);
+    jest.mocked(resolvePublicNetworkDestination).mockResolvedValue({
+      address: '8.8.8.8',
+      family: 4,
+      servername: 'smtp.example.test',
+    });
     provider = new CommunicationsEmailProvider(
       integrations as unknown as IntegrationsService,
     );
@@ -55,6 +64,12 @@ describe('Tenant SMTP adapter', () => {
   it('sends the pinned attachment with Reply-To, stable Message-ID and text-only content', async () => {
     expect(await provider.send(input)).toEqual({ messageId: input.messageId });
     expect(integrations.getEnabledSmtpConfig).toHaveBeenCalledWith('tenant-a');
+    expect(createTransport).toHaveBeenCalledWith(
+      expect.objectContaining({
+        host: '8.8.8.8',
+        tls: { servername: 'smtp.example.test' },
+      }),
+    );
     expect(transport.sendMail).toHaveBeenCalledWith({
       messageId: input.messageId,
       from: { name: 'Mi empresa', address: input.fromEmail },
@@ -65,6 +80,18 @@ describe('Tenant SMTP adapter', () => {
       attachments: [input.attachment],
     });
     expect(transport.close).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects an unsafe destination before creating a transport', async () => {
+    jest
+      .mocked(resolvePublicNetworkDestination)
+      .mockRejectedValueOnce(new Error('private destination'));
+
+    await expect(provider.send(input)).rejects.toMatchObject({
+      code: 'SMTP_UNAVAILABLE',
+      ambiguous: false,
+    });
+    expect(createTransport).not.toHaveBeenCalled();
   });
 
   it('does not use global SMTP when a tenant has no enabled connection', async () => {

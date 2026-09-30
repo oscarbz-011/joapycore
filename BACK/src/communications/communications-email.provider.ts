@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { createTransport } from 'nodemailer';
 import { IntegrationsService } from '../integrations/integrations.service';
+import { resolvePublicNetworkDestination } from '../integrations/network-destination.policy';
 
 export interface TransactionalEmail {
   tenantId: string;
@@ -73,10 +74,21 @@ export class CommunicationsEmailProvider {
         'El remitente configurado ya no coincide con la identidad del mensaje.',
       );
     }
+    let destination: Awaited<
+      ReturnType<typeof resolvePublicNetworkDestination>
+    >;
+    try {
+      destination = await resolvePublicNetworkDestination(config.host);
+    } catch (error) {
+      throw classifySmtpFailure(error, false);
+    }
     const transporter = createTransport({
-      host: config.host,
+      host: destination.address,
       port: config.port,
       secure: config.secure,
+      tls: destination.servername
+        ? { servername: destination.servername }
+        : undefined,
       auth: config.user
         ? { user: config.user, pass: config.password }
         : undefined,
