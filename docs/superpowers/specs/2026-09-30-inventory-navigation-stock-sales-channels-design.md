@@ -50,14 +50,14 @@ El estado no equivale a disponibilidad ni a stock.
 
 Un producto puede tener cero, uno o varios canales. Tener canales configurados no evita la validación del estado: solo los productos `ACTIVE` pueden participar en una venta nueva.
 
-La migración de datos asignará `[NORMAL, POS]` a cada producto cuyo `isSellable` actual sea verdadero y `[]` a los demás. `ECOMMERCE` quedará deshabilitado hasta configurarlo expresamente.
+La migración de datos asignará `[NORMAL]` a cada producto cuyo `isSellable` actual sea verdadero y `[]` a los demás. Ni `POS` ni `ECOMMERCE` se habilitarán automáticamente: ambos requieren configuración expresa por producto.
 
 Los valores predeterminados al crear serán:
 
 | Tipo de producto | Canales iniciales |
 | --- | --- |
-| `RESALE` | `NORMAL`, `POS` |
-| `MANUFACTURED` | `NORMAL`, `POS` |
+| `RESALE` | `NORMAL` |
+| `MANUFACTURED` | `NORMAL` |
 | `RAW_MATERIAL` | ninguno |
 
 La configuración seguirá siendo editable por producto para contemplar casos mixtos.
@@ -246,7 +246,7 @@ No se agregan permisos:
 
 ### Backend
 
-- Migración de `isSellable = true` a `[NORMAL, POS]` y falso a `[]`.
+- Migración de `isSellable = true` a `[NORMAL]` y falso a `[]`, sin habilitar `POS` o `ECOMMERCE` implícitamente.
 - Valores predeterminados por `ProductKind`.
 - Filtro independiente de `NORMAL`, `POS` y `ECOMMERCE`.
 - Rechazo de ventas por estado o canal.
