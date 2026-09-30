@@ -107,7 +107,7 @@ export default function BillingPage() {
       {/* Header */}
       <div className="mb-5 flex items-start justify-between">
         <div>
-          <h1 className="text-[25px] font-extrabold tracking-tight text-foreground">Facturación</h1>
+          <h1 className="text-[25px] font-extrabold tracking-tight text-foreground">Facturas</h1>
           <p className="mt-1 text-[14px] text-muted-foreground">Al confirmar un pedido se genera un borrador. El cajero lo revisa y lo emite.</p>
         </div>
         {pendingCount > 0 && (
