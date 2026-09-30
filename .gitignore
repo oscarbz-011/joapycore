@@ -37,6 +37,9 @@ coverage/
 # Next.js build output
 .next/
 
+# Local feature worktrees
+.worktrees/
+
 # Ignore all other files by default
 .claude/
 AGENTS.md
