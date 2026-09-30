@@ -24,7 +24,6 @@ export function CommunicationConfiguration({
 }) {
   const { jwtPayload } = useAuth();
   const canReadIntegrations = usePermission("integrations:read");
-  const canManageIntegrations = usePermission("integrations:manage");
   const tenantId = jwtPayload?.tenantId;
   const userId = jwtPayload?.sub;
   const queryClient = useQueryClient();
@@ -121,7 +120,7 @@ export function CommunicationConfiguration({
           La dirección debe coincidir con el remitente SMTP configurado.
           Reply-To permite recibir respuestas en otra dirección.
         </p>
-        {canReadIntegrations || canManageIntegrations ? (
+        {canReadIntegrations ? (
           <Link
             href="/dashboard/settings?tab=integrations"
             className="inline-block text-sm underline"
@@ -142,7 +141,11 @@ export function CommunicationConfiguration({
         {identities.error && (
           <div className="space-y-3">
             <CommunicationError error={identities.error} />
-            <Button variant="outline" size="sm" onClick={() => void identities.refetch()}>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => void identities.refetch()}
+            >
               Reintentar identidades
             </Button>
           </div>
@@ -287,7 +290,11 @@ export function CommunicationConfiguration({
         {templates.error && (
           <div className="space-y-3">
             <CommunicationError error={templates.error} />
-            <Button variant="outline" size="sm" onClick={() => void templates.refetch()}>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => void templates.refetch()}
+            >
               Reintentar versiones
             </Button>
           </div>

@@ -1443,12 +1443,10 @@ function IntegrationsTab() {
   const { hasModule } = useActiveModules();
   const canUpdateTenant = usePermission("tenants:update");
   const canReadIntegrations = usePermission("integrations:read");
-  const canManageIntegrations = usePermission("integrations:manage");
-  const canReadEmailIntegration = canReadIntegrations || canManageIntegrations;
 
   return (
     <div className="space-y-4">
-      {canReadEmailIntegration && <EmailIntegrationCard />}
+      {canReadIntegrations && <EmailIntegrationCard />}
       {/* El buró es parte de la evaluación de crédito: sin Financiamiento
           activo el backend responde 403. */}
       {hasModule("finance") && (

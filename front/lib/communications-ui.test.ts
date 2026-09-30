@@ -303,8 +303,8 @@ describe('live module and permission gates', () => {
     expect(html).toContain('integraciones');
   });
 
-  it.each(['integrations:read', 'integrations:manage'])('shows the SMTP integrations link with %s', (permission) => {
-    auth.permissions = ['communications:access', 'communications:settings:manage', permission];
+  it('shows the SMTP integrations link with read access', () => {
+    auth.permissions = ['communications:access', 'communications:settings:manage', 'integrations:read'];
     auth.queryMode = 'cache';
 
     const html = renderToStaticMarkup(createElement(CommunicationConfiguration, {
@@ -312,5 +312,16 @@ describe('live module and permission gates', () => {
     }));
 
     expect(html).toContain('href="/dashboard/settings?tab=integrations"');
+  });
+
+  it('does not offer a read-backed integrations view with manage access alone', () => {
+    auth.permissions = ['communications:access', 'communications:settings:manage', 'integrations:manage'];
+    auth.queryMode = 'cache';
+
+    const html = renderToStaticMarkup(createElement(CommunicationConfiguration, {
+      settings: { enabled: true, emailEnabled: true, invoiceEmailEnabled: false },
+    }));
+
+    expect(html).not.toContain('href="/dashboard/settings?tab=integrations"');
   });
 });
