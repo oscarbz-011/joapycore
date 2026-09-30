@@ -338,7 +338,8 @@ export class DocumentsService {
     }
 
     const buffer = await this.filesService.getFileBuffer(doc.fileRecord);
-    await this.emailService.sendWithAttachment({
+    const delivery = await this.emailService.sendWithAttachment({
+      tenantId,
       to: recipient,
       subject: doc.title,
       html: `<p>Adjuntamos el documento <strong>${doc.title}</strong>.</p>`,
@@ -357,6 +358,8 @@ export class DocumentsService {
       resourceId: id,
       after: { to: recipient },
     } satisfies AuditLogEvent);
+
+    return delivery;
   }
 
   private async resolveEntityEmail(

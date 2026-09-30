@@ -29,7 +29,9 @@ export class FinanceOnSaleListener {
   // ANTES de que Documentos genere el PDF de la factura (invoices.service.ts
   // espera este evento antes de emitir 'invoice.issued'), así el PDF ya
   // imprime la fecha correcta de la primera cuota.
-  @OnEvent('invoice.duedate.selected')
+  // La reprogramación es parte del flujo crítico de emisión: el PDF debe
+  // reflejar la misma primera fecha de vencimiento que quedó en las cuotas.
+  @OnEvent('invoice.duedate.selected', { suppressErrors: false })
   async handleDueDateSelected(event: InvoiceDueDateSelectedEvent) {
     try {
       await this.loansService.rescheduleInstallments(
@@ -41,6 +43,7 @@ export class FinanceOnSaleListener {
       this.logger.error(
         `No se pudo reprogramar las cuotas del pedido ${event.saleOrderId}: ${(error as Error).message}`,
       );
+      throw error;
     }
   }
 }

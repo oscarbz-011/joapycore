@@ -95,7 +95,7 @@ export class LoansService {
   async findOne(tenantId: string, id: string) {
     const loan = await this.loansRepository.findById(tenantId, id);
     if (!loan) throw new NotFoundException('Préstamo no encontrado');
-    return loan;
+    return this.withMoraPolicy(tenantId, loan);
   }
 
   async findByOrder(tenantId: string, saleOrderId: string) {
@@ -105,7 +105,22 @@ export class LoansService {
     );
     if (!loan)
       throw new NotFoundException('No existe un préstamo para este pedido');
-    return loan;
+    return this.withMoraPolicy(tenantId, loan);
+  }
+
+  private async withMoraPolicy<T extends object>(tenantId: string, loan: T) {
+    const policy = await this.sources.findMoraPolicy(tenantId);
+    return {
+      ...loan,
+      moraPolicy: {
+        graceDays: policy?.moraGraceDays ?? 0,
+        components: (policy?.interestComponents ?? []).map((component) => ({
+          name: component.name,
+          frequency: component.frequency,
+          percentage: toNum(component.percentage),
+        })),
+      },
+    };
   }
 
   findOverdueInstallments(tenantId: string) {

@@ -8,6 +8,7 @@
 import 'dotenv/config';
 import { ConfigService } from '@nestjs/config';
 import { EventEmitter2 } from '@nestjs/event-emitter';
+import { randomUUID } from 'node:crypto';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { EmployeesRepository } from '../src/modules/hr/repositories/employees.repository';
 import { LeavesRepository } from '../src/modules/hr/repositories/leaves.repository';
@@ -21,8 +22,9 @@ describe('LeavesService (PostgreSQL)', () => {
   let tenantId: string;
   let employeeId: string;
 
-  const cleanup = () =>
-    Promise.all([
+  const cleanup = async () => {
+    if (!employeeId) return;
+    await Promise.all([
       prisma.leave.deleteMany({
         where: {
           employeeId,
@@ -31,15 +33,29 @@ describe('LeavesService (PostgreSQL)', () => {
       }),
       prisma.leaveBalance.deleteMany({ where: { employeeId, year: YEAR } }),
     ]);
+  };
 
   beforeAll(async () => {
     prisma = new PrismaService(new ConfigService(process.env));
     await prisma.$connect();
-    const employee = await prisma.employee.findFirstOrThrow({
-      where: { isActive: true, terminationDate: null, deletedAt: null },
-      select: { id: true, tenantId: true },
+    const tenant = await prisma.tenant.create({
+      data: { name: `TEST leaves ${randomUUID()}` },
+      select: { id: true },
     });
-    tenantId = employee.tenantId;
+    tenantId = tenant.id;
+    const employee = await prisma.employee.create({
+      data: {
+        tenantId,
+        employeeNumber: 1,
+        firstName: 'Integration',
+        lastName: 'Test',
+        documentNumber: randomUUID(),
+        birthDate: new Date('1990-01-01T00:00:00Z'),
+        hireDate: new Date('2020-01-01T00:00:00Z'),
+        baseSalary: 1,
+      },
+      select: { id: true },
+    });
     employeeId = employee.id;
     service = new LeavesService(
       prisma,
@@ -51,7 +67,14 @@ describe('LeavesService (PostgreSQL)', () => {
   });
 
   afterAll(async () => {
+    if (!prisma) return;
     await cleanup();
+    if (employeeId) {
+      await prisma.employee.deleteMany({ where: { id: employeeId } });
+    }
+    if (tenantId) {
+      await prisma.tenant.deleteMany({ where: { id: tenantId } });
+    }
     await prisma.$disconnect();
   });
 

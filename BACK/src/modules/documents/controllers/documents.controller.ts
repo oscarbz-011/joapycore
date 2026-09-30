@@ -206,7 +206,7 @@ export class DocumentsController {
   }
 
   @Post(':id/email')
-  @HttpCode(HttpStatus.NO_CONTENT)
+  @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Enviar el documento adjunto por email' })
   sendEmail(
     @CurrentTenant() tenantId: string,

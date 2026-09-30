@@ -1,13 +1,14 @@
-'use client';
+"use client";
 
-import { Trash2 } from 'lucide-react';
-import { NumericInput } from '../numeric-input';
-import { SearchSelect } from '../../app/(dashboard)/dashboard/components/search-select';
-import { type Product } from '../../lib/api/inventory';
-import { type CreditPlan } from '../../lib/api/settings';
-import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
+import { AlertTriangle, Trash2 } from "lucide-react";
+import { NumericInput } from "../numeric-input";
+import { SearchSelect } from "../../app/(dashboard)/dashboard/components/search-select";
+import { type ProductWithStock } from "../../lib/api/inventory";
+import { type CreditPlan } from "../../lib/api/settings";
+import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { cn } from "@/lib/utils";
 
 // ── Compartido entre "Nuevo pedido" (sales/page.tsx) y "Ajustar pedido"
 // (sales/[id]/adjust/page.tsx) — mismo editor de líneas de producto y mismo
@@ -15,14 +16,19 @@ import { Textarea } from '@/components/ui/textarea';
 // se arma o se corrige.
 
 export function formatPrice(n: number) {
-  return new Intl.NumberFormat('es-PY', { style: 'currency', currency: 'PYG', maximumFractionDigits: 0 }).format(n);
+  return new Intl.NumberFormat("es-PY", {
+    style: "currency",
+    currency: "PYG",
+    maximumFractionDigits: 0,
+  }).format(n);
 }
 
-export const NUM_CLS = 'h-9 w-full min-w-0 rounded-3xl border border-transparent bg-input/50 px-3 text-sm outline-none transition-[color,box-shadow,background-color] focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30';
+export const NUM_CLS =
+  "h-9 w-full min-w-0 rounded-3xl border border-transparent bg-input/50 px-3 text-sm outline-none transition-[color,box-shadow,background-color] focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30";
 
 export interface LineItem {
   productId: string;
-  product: Product | null;
+  product: ProductWithStock | null;
   quantity: number;
   unitPrice: number;
   serialInput: string;
@@ -36,24 +42,51 @@ export interface LineItem {
   comboName?: string;
 }
 
-export function LineItemRow({ item, products, onChange, onRemove }: {
-  item: LineItem; products: Product[];
+export function LineItemRow({
+  item,
+  products,
+  onChange,
+  onRemove,
+}: {
+  item: LineItem;
+  products: ProductWithStock[];
   onChange: (updated: LineItem) => void;
   onRemove: () => void;
 }) {
   const subtotal = item.quantity * item.unitPrice;
+  const insufficientStock =
+    item.product !== null && item.quantity > Number(item.product.stock);
   return (
-    <div className="rounded-2xl border border-border p-3 space-y-2">
+    <div
+      className={cn(
+        "rounded-2xl border border-border p-3 space-y-2",
+        insufficientStock && "border-destructive/50 bg-destructive/5",
+      )}
+    >
       <div className="flex gap-2 items-start">
         <div className="flex-1">
-          <SearchSelect<Product>
+          <SearchSelect<ProductWithStock>
             items={products}
             value={item.productId}
-            onChange={(id, product) => onChange({ ...item, productId: id, product, unitPrice: product ? Number(product.salePrice) : 0, serialInput: '' })}
+            onChange={(id, product) =>
+              onChange({
+                ...item,
+                productId: id,
+                product,
+                unitPrice: product ? Number(product.salePrice) : 0,
+                serialInput: "",
+              })
+            }
             getKey={(p) => p.id}
-            getLabel={(p) => `${p.name}${p.model ? ` (${p.model})` : ''}`}
-            getDescription={(p) => p.category?.name ?? null}
-            filterFn={(p, q) => `${p.name} ${p.model ?? ''} ${p.category?.name ?? ''}`.toLowerCase().includes(q.toLowerCase())}
+            getLabel={(p) => `${p.name}${p.model ? ` (${p.model})` : ""}`}
+            getDescription={(p) =>
+              `${p.category?.name ?? "Sin categoría"} · Stock disponible: ${p.stock}`
+            }
+            filterFn={(p, q) =>
+              `${p.name} ${p.model ?? ""} ${p.category?.name ?? ""}`
+                .toLowerCase()
+                .includes(q.toLowerCase())
+            }
             placeholder="Buscar producto..."
             required
           />
@@ -61,7 +94,9 @@ export function LineItemRow({ item, products, onChange, onRemove }: {
         <div className="w-20">
           <NumericInput
             value={item.quantity}
-            onChange={(v) => onChange({ ...item, quantity: Math.max(1, Math.round(v)) })}
+            onChange={(v) =>
+              onChange({ ...item, quantity: Math.max(1, Math.round(v)) })
+            }
             placeholder="Cant."
             className={NUM_CLS}
             required
@@ -79,19 +114,31 @@ export function LineItemRow({ item, products, onChange, onRemove }: {
         <div className="w-28 pt-2 text-right text-sm font-medium text-muted-foreground">
           {formatPrice(subtotal)}
         </div>
-        <button type="button" onClick={onRemove} className="pt-2 text-muted-foreground/50 hover:text-destructive">
+        <button
+          type="button"
+          onClick={onRemove}
+          className="pt-2 text-muted-foreground/50 hover:text-destructive"
+        >
           <Trash2 size={15} />
         </button>
       </div>
+      {insufficientStock && (
+        <div className="flex items-center gap-1.5 text-xs font-medium text-destructive">
+          <AlertTriangle size={13} />
+          Stock insuficiente: disponible {item.product?.stock ?? 0}, solicitado{" "}
+          {item.quantity}.
+        </div>
+      )}
       {item.product?.isSerialized && (
         <div>
           <Label className="mb-1 text-xs">
-            Números de serie (uno por línea, {item.quantity} requerido{item.quantity !== 1 ? 's' : ''})
+            Números de serie (uno por línea, {item.quantity} requerido
+            {item.quantity !== 1 ? "s" : ""})
           </Label>
           <Textarea
             className="font-mono text-xs"
             rows={Math.min(item.quantity, 4)}
-            placeholder={'SN001\nSN002'}
+            placeholder={"SN001\nSN002"}
             value={item.serialInput}
             onChange={(e) => onChange({ ...item, serialInput: e.target.value })}
           />
@@ -103,18 +150,27 @@ export function LineItemRow({ item, products, onChange, onRemove }: {
 
 // ── Credit plan selector ───────────────────────────────────────────────────────
 
-export function CreditOptions({ total, installments, onInstallmentsChange, plans }: {
-  total: number; installments: number;
+export function CreditOptions({
+  total,
+  installments,
+  onInstallmentsChange,
+  plans,
+}: {
+  total: number;
+  installments: number;
   onInstallmentsChange: (n: number) => void;
   plans: CreditPlan[];
 }) {
   const selectedPlan = plans.find((p) => p.installments === installments);
   const rate = selectedPlan ? Number(selectedPlan.interestRate) : 0;
-  const monthly = installments > 0 ? (total * (1 + rate / 100)) / installments : 0;
+  const monthly =
+    installments > 0 ? (total * (1 + rate / 100)) / installments : 0;
 
   return (
     <div className="rounded-2xl border border-warn/30 bg-warn-subtle/50 p-4 space-y-3">
-      <p className="text-xs font-semibold uppercase tracking-wide text-warn">Venta a crédito</p>
+      <p className="text-xs font-semibold uppercase tracking-wide text-warn">
+        Venta a crédito
+      </p>
       <div>
         <Label className="mb-1 text-xs">Plan de cuotas</Label>
         <div className="flex gap-2 flex-wrap">
@@ -123,7 +179,9 @@ export function CreditOptions({ total, installments, onInstallmentsChange, plans
               key={plan.installments}
               type="button"
               size="sm"
-              variant={installments === plan.installments ? 'default' : 'outline'}
+              variant={
+                installments === plan.installments ? "default" : "outline"
+              }
               onClick={() => onInstallmentsChange(plan.installments)}
             >
               {plan.installments}x
@@ -133,12 +191,18 @@ export function CreditOptions({ total, installments, onInstallmentsChange, plans
       </div>
       {installments > 0 && total > 0 && selectedPlan && (
         <p className="text-sm text-warn">
-          Cuota estimada: <strong>{formatPrice(Math.ceil(monthly))}</strong> / mes
-          {rate > 0 && <span className="text-xs ml-1 opacity-70">({rate}% interés total)</span>}
+          Cuota estimada: <strong>{formatPrice(Math.ceil(monthly))}</strong> /
+          mes
+          {rate > 0 && (
+            <span className="text-xs ml-1 opacity-70">
+              ({rate}% interés total)
+            </span>
+          )}
         </p>
       )}
       <p className="text-xs text-warn/80">
-        El pedido quedará en estado <strong>En evaluación</strong> hasta que el analista de crédito lo apruebe.
+        El pedido quedará en estado <strong>En evaluación</strong> hasta que el
+        analista de crédito lo apruebe.
       </p>
     </div>
   );

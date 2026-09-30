@@ -226,6 +226,10 @@ export class SaleOrdersService implements SalesGateway {
           'El pedido fue modificado por otra operación concurrente. Por favor, recargue e intente de nuevo.',
         );
       }
+      // El stock pudo cambiar mientras el crédito estuvo en evaluación. La
+      // aprobación es el momento en que se compromete definitivamente: se
+      // valida y reserva dentro de la misma transacción que cambia el estado.
+      await this.reserveMissingOrderStock(tx, tenantId, id);
       // Triggers Loan + Installment creation in FinanceModule
       return this.outbox.enqueue(tx, tenantId, 'sale.credit.approved', {
         tenantId,
@@ -523,7 +527,7 @@ export class SaleOrdersService implements SalesGateway {
         const oldItemIds = order.items.map((i) => i.id);
         await this.stockLedger.detachSerialUnits(tx, oldItemIds);
         await this.saleOrdersRepository.deleteItems(id, tx);
-        await this.createItemsWithSerials(
+        const createdItems = await this.createItemsWithSerials(
           tx,
           tenantId,
           id,
@@ -531,6 +535,7 @@ export class SaleOrdersService implements SalesGateway {
           productMap,
           creditInterestRate,
         );
+        await this.assertItemsInStock(tx, tenantId, createdItems, productMap);
       } else if (dto.installments) {
         // Solo cambió el plan de cuotas — los ítems siguen siendo los
         // mismos, pero su financedUnitPrice quedó calculado con la tasa
@@ -962,10 +967,15 @@ export class SaleOrdersService implements SalesGateway {
         creditInterestRate,
       );
 
-      // For non-QUOTE cash orders, reserve stock immediately so it's visible as committed
-      if (!isQuote && !isCreditSale) {
+      // Ningún pedido real puede nacer sin stock. En contado además se reserva
+      // inmediatamente; en crédito se vuelve a validar y se reserva recién al
+      // aprobar, para no inmovilizar inventario durante una evaluación que
+      // puede ser rechazada.
+      if (!isQuote) {
         await this.assertItemsInStock(tx, tenantId, createdItems, productMap);
-        await this.stockLedger.reserve(tx, tenantId, createdItems);
+        if (!isCreditSale) {
+          await this.stockLedger.reserve(tx, tenantId, createdItems);
+        }
       }
 
       const fullOrder = await this.saleOrdersRepository.findWithItems(
@@ -1105,34 +1115,10 @@ export class SaleOrdersService implements SalesGateway {
         );
       }
 
-      // Los pedidos contado ya reservaron al crearse. Los de crédito no (el
-      // stock no se compromete mientras se evalúa el crédito): se reservan
-      // acá, validando disponibilidad. Si no alcanza, la transacción revierte
-      // también el cambio de estado.
-      const items = await this.saleOrdersRepository.findProductItems(id, tx);
-      const reserved = await this.stockLedger.findActiveReservations(
-        tx,
-        tenantId,
-        items.map((i) => i.id),
-      );
-      const toReserve = items
-        .filter((i) => !reserved.has(i.id))
-        .map((i) => ({
-          saleItemId: i.id,
-          productId: i.productId,
-          quantity: i.quantity,
-          warehouseId: i.warehouseId ?? null,
-          isSerialized: !!i.product?.isSerialized,
-        }));
-      await this.assertItemsInStock(
-        tx,
-        tenantId,
-        toReserve,
-        new Map(
-          items.map((i) => [i.productId!, { name: i.product?.name ?? '' }]),
-        ),
-      );
-      await this.stockLedger.reserve(tx, tenantId, toReserve);
+      // Defensa final: los pedidos contado ya están reservados y los de
+      // crédito se reservan al aprobar. Si una orden antigua no tiene reserva,
+      // se valida acá sin duplicar movimientos existentes.
+      await this.reserveMissingOrderStock(tx, tenantId, id);
 
       // Invoice is created by BillingOnSaleListener and the delivery note by
       // LogisticsOnSaleCompletedListener on this event
@@ -1152,6 +1138,38 @@ export class SaleOrdersService implements SalesGateway {
       resourceId: id,
     } satisfies AuditLogEvent);
     return confirmed;
+  }
+
+  private async reserveMissingOrderStock(
+    tx: Prisma.TransactionClient,
+    tenantId: string,
+    orderId: string,
+  ): Promise<void> {
+    const items = await this.saleOrdersRepository.findProductItems(orderId, tx);
+    const reserved = await this.stockLedger.findActiveReservations(
+      tx,
+      tenantId,
+      items.map((i) => i.id),
+    );
+    const toReserve = items
+      .filter((i) => !reserved.has(i.id))
+      .map((i) => ({
+        saleItemId: i.id,
+        productId: i.productId,
+        quantity: i.quantity,
+        warehouseId: i.warehouseId ?? null,
+        isSerialized: !!i.product?.isSerialized,
+      }));
+
+    await this.assertItemsInStock(
+      tx,
+      tenantId,
+      toReserve,
+      new Map(
+        items.map((i) => [i.productId!, { name: i.product?.name ?? '' }]),
+      ),
+    );
+    await this.stockLedger.reserve(tx, tenantId, toReserve);
   }
 
   // Bloque de stock-out compartido por handleDeliveryConfirmed() (logística

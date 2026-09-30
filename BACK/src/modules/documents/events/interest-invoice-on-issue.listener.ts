@@ -85,6 +85,11 @@ export class InterestInvoiceOnIssueListener {
       event.invoiceId,
     );
     if (!invoice || !invoice.paymentReceipt) return;
+    if (!invoice.issuedAt) {
+      throw new Error(
+        `La factura de intereses ${event.invoiceId} no tiene fecha de emisión`,
+      );
+    }
 
     const customer = invoice.paymentReceipt.customer;
     const customerName = [
@@ -228,6 +233,12 @@ export class InterestInvoiceOnIssueListener {
       { module: 'billing', entityType: 'invoice', entityId: invoice.id },
     );
 
-    await this.sources.setInvoicePdf(event.tenantId, invoice.id, fileRecord.id);
+    await this.sources.setInvoicePdf(
+      event.tenantId,
+      invoice.id,
+      fileRecord.id,
+      invoice.issuedAt,
+      'PAID',
+    );
   }
 }

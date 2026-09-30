@@ -4,6 +4,7 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
+  UnauthorizedException,
 } from '@nestjs/common';
 import * as bcrypt from 'bcryptjs';
 import { Prisma } from '@prisma/client';
@@ -17,6 +18,7 @@ import {
   type SessionInvalidateEvent,
 } from '../../common/events/session-invalidate.event';
 import { AssignUserRolesDto } from '../dto/assign-user-roles.dto';
+import { ChangeEmailDto } from '../dto/change-email.dto';
 import { ChangePasswordDto } from '../dto/change-password.dto';
 import { CreateUserDto } from '../dto/create-user.dto';
 import { UpdateUserDto } from '../dto/update-user.dto';
@@ -228,6 +230,62 @@ export class UsersService {
       sessionsValidAfter: new Date(),
     });
     this.invalidateSession({ userId });
+  }
+
+  async changeEmail(tenantId: string, userId: string, dto: ChangeEmailDto) {
+    const user = await this.usersRepository.findByIdForAuth(userId);
+    if (!user || user.tenantId !== tenantId) {
+      throw new NotFoundException('User not found');
+    }
+
+    const matches = await bcrypt.compare(
+      dto.currentPassword,
+      user.passwordHash,
+    );
+    if (!matches) {
+      throw new UnauthorizedException('La contraseña actual es incorrecta');
+    }
+
+    const email = dto.email.trim().toLowerCase();
+    if (email === user.email.toLowerCase()) {
+      return this.getSessionSafeProfile(tenantId, userId);
+    }
+
+    const existing = await this.usersRepository.findByEmailInsensitive(email);
+    if (existing && existing.id !== userId) {
+      throw new ConflictException('El email ya está en uso');
+    }
+
+    let count: number;
+    try {
+      count = await this.usersRepository.update(tenantId, userId, { email });
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
+        throw new ConflictException('El email ya está en uso');
+      }
+      throw error;
+    }
+    if (count === 0) throw new NotFoundException('User not found');
+
+    this.eventEmitter.emit('audit.log', {
+      tenantId,
+      userId,
+      module: 'users',
+      action: 'user.email_changed',
+      resourceId: userId,
+      before: { email: user.email },
+      after: { email },
+    } satisfies AuditLogEvent);
+
+    return this.getSessionSafeProfile(tenantId, userId);
+  }
+
+  private async getSessionSafeProfile(tenantId: string, userId: string) {
+    const profile = await this.getById(tenantId, userId);
+    return { ...profile, tempPassword: null };
   }
 
   private invalidateSession(event: SessionInvalidateEvent) {

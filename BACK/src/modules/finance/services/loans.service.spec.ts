@@ -151,7 +151,6 @@ describe('LoansService', () => {
       emit: jest.fn(),
       emitAsync: jest.fn().mockResolvedValue([]),
     };
-
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         LoansService,
@@ -175,7 +174,8 @@ describe('LoansService', () => {
     it('returns loan when found', async () => {
       loansRepo.findById.mockResolvedValue(mockLoan as never);
       const result = await service.findOne(TENANT, LOAN_ID);
-      expect(result).toBe(mockLoan);
+      expect(result).toMatchObject(mockLoan);
+      expect(result.moraPolicy).toEqual({ graceDays: 0, components: [] });
       expect(loansRepo.findById).toHaveBeenCalledWith(TENANT, LOAN_ID);
     });
 
@@ -184,6 +184,22 @@ describe('LoansService', () => {
       await expect(service.findOne(TENANT, LOAN_ID)).rejects.toThrow(
         NotFoundException,
       );
+    });
+
+    it('keeps a collected interest balance closed when the loan is read', async () => {
+      loansRepo.findById.mockResolvedValue({
+        ...mockLoan,
+        installments: [
+          {
+            ...mockLoan.installments[0],
+            interestCharges: [{ id: 'charge-1', amount: 0 }],
+          },
+        ],
+      } as never);
+
+      const loan = await service.findOne(TENANT, LOAN_ID);
+
+      expect(Number(loan.installments[0].interestCharges[0].amount)).toBe(0);
     });
   });
 
@@ -217,7 +233,7 @@ describe('LoansService', () => {
     it('returns loan for the order', async () => {
       loansRepo.findBySaleOrder.mockResolvedValue(mockLoan as never);
       const result = await service.findByOrder(TENANT, ORDER_ID);
-      expect(result).toBe(mockLoan);
+      expect(result).toMatchObject(mockLoan);
     });
 
     it('throws NotFoundException when no loan exists for order', async () => {
@@ -536,6 +552,15 @@ describe('LoansService', () => {
       installmentsRepo.findById.mockResolvedValue(mockInstallment as never);
       await expect(
         service.payInstallment(TENANT, INST_ID, { ...baseDto, amount: 600 }),
+      ).rejects.toThrow(UnprocessableEntityException);
+    });
+
+    it('does not accept overpayment after a previously collected interest charge', async () => {
+      installmentsRepo.findById.mockResolvedValue(mockInstallment as never);
+      installmentsRepo.findOpenChargesByInstallments.mockResolvedValue([]);
+
+      await expect(
+        service.payInstallment(TENANT, INST_ID, { ...baseDto, amount: 551 }),
       ).rejects.toThrow(UnprocessableEntityException);
     });
 

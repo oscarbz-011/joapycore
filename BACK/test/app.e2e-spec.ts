@@ -94,6 +94,43 @@ describe('JoapyCore API (e2e)', () => {
     expect(JSON.stringify(res.body)).toContain('password');
   });
 
+  it('serves the communication center behind authentication with opt-in flags', async () => {
+    await request(http).get('/communications/settings').expect(401);
+    const settings = await request(http)
+      .get('/communications/settings')
+      .set('Authorization', `Bearer ${tokens.accessToken}`)
+      .expect(200);
+    expect(settings.body).toEqual({
+      enabled: false,
+      emailEnabled: false,
+      invoiceEmailEnabled: false,
+    });
+    await request(http)
+      .patch('/communications/settings')
+      .set('Authorization', `Bearer ${tokens.accessToken}`)
+      .send({ enabled: true, tenantId: randomUUID() })
+      .expect(400);
+    await request(http)
+      .patch('/communications/settings')
+      .set('Authorization', `Bearer ${tokens.accessToken}`)
+      .send({ enabled: true })
+      .expect(200);
+    const notifications = await request(http)
+      .get('/communications/notifications')
+      .set('Authorization', `Bearer ${tokens.accessToken}`)
+      .expect(200);
+    expect(notifications.body).toMatchObject({ items: [], unreadCount: 0 });
+  });
+
+  it('keeps the IMAP inbox available behind its existing authorization', async () => {
+    await request(http).get('/applications/email/inbox').expect(401);
+    const inbox = await request(http)
+      .get('/applications/email/inbox')
+      .set('Authorization', `Bearer ${tokens.accessToken}`)
+      .expect(200);
+    expect(inbox.body).toEqual([]);
+  });
+
   it('rotates the refresh token and rejects the one already used', async () => {
     const res = await request(http)
       .post('/auth/refresh')

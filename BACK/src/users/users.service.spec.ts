@@ -3,9 +3,11 @@ import {
   ConflictException,
   ForbiddenException,
   NotFoundException,
+  UnauthorizedException,
 } from '@nestjs/common';
-import { UserStatus } from '@prisma/client';
+import { Prisma, UserStatus } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
+import { encryptTempPassword } from '../common/utils/temp-password.util';
 import { UsersService } from './services/users.service';
 
 jest.mock('bcryptjs');
@@ -22,11 +24,13 @@ function makeUser(overrides = {}) {
     passwordHash: 'hashed',
     firstName: 'John',
     lastName: 'Doe',
+    phone: null,
     status: UserStatus.ACTIVE,
     mustChangePassword: false,
     tempPasswordEncrypted: null,
     tempPasswordExpiresAt: null,
     lastLoginAt: null,
+    sessionsValidAfter: null,
     createdAt: new Date(),
     updatedAt: new Date(),
     deletedAt: null,
@@ -45,6 +49,7 @@ describe('UsersService', () => {
     findAll: jest.Mock;
     findById: jest.Mock;
     findByEmail: jest.Mock;
+    findByEmailInsensitive: jest.Mock;
     findByIdForAuth: jest.Mock;
     create: jest.Mock;
     update: jest.Mock;
@@ -62,6 +67,7 @@ describe('UsersService', () => {
       findAll: jest.fn(),
       findById: jest.fn(),
       findByEmail: jest.fn(),
+      findByEmailInsensitive: jest.fn(),
       findByIdForAuth: jest.fn(),
       create: jest.fn(),
       update: jest.fn().mockResolvedValue(1),
@@ -190,6 +196,184 @@ describe('UsersService', () => {
       ).rejects.toBeInstanceOf(ConflictException);
 
       expect(usersRepository.create).not.toHaveBeenCalled();
+    });
+  });
+
+  // ── change email ──────────────────────────────────────────────────────────
+
+  describe('changeEmail', () => {
+    it('normalizes and updates the email after confirming the password', async () => {
+      usersRepository.findByIdForAuth.mockResolvedValue(makeUser());
+      usersRepository.findByEmailInsensitive.mockResolvedValue(null);
+      usersRepository.findById.mockResolvedValue(
+        makeUser({
+          email: 'new@example.com',
+          mustChangePassword: true,
+          tempPasswordEncrypted: encryptTempPassword('temporary-secret'),
+          tempPasswordExpiresAt: new Date(Date.now() + 60_000),
+        }),
+      );
+      (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+
+      const result = await service.changeEmail('tenant-1', 'user-1', {
+        email: ' NEW@Example.com ',
+        currentPassword: 'current-password',
+      });
+
+      expect(usersRepository.update).toHaveBeenCalledWith(
+        'tenant-1',
+        'user-1',
+        { email: 'new@example.com' },
+      );
+      expect(result.email).toBe('new@example.com');
+      expect(result).not.toHaveProperty('passwordHash');
+      expect(result).not.toHaveProperty('tempPasswordEncrypted');
+      expect(result).not.toHaveProperty('sessionsValidAfter');
+      expect(result.tempPassword).toBeNull();
+      expect(eventEmitter.emit).toHaveBeenCalledWith('audit.log', {
+        tenantId: 'tenant-1',
+        userId: 'user-1',
+        module: 'users',
+        action: 'user.email_changed',
+        resourceId: 'user-1',
+        before: { email: 'user@example.com' },
+        after: { email: 'new@example.com' },
+      });
+    });
+
+    it('rejects a wrong current password with a stable unauthorized response', async () => {
+      usersRepository.findByIdForAuth.mockResolvedValue(makeUser());
+      (bcrypt.compare as jest.Mock).mockResolvedValue(false);
+
+      await expect(
+        service.changeEmail('tenant-1', 'user-1', {
+          email: 'new@example.com',
+          currentPassword: 'wrong-password',
+        }),
+      ).rejects.toMatchObject({
+        status: 401,
+        response: {
+          statusCode: 401,
+          message: 'La contraseña actual es incorrecta',
+          error: 'Unauthorized',
+        },
+      });
+      expect(usersRepository.update).not.toHaveBeenCalled();
+    });
+
+    it('requires the current password even when the normalized email is unchanged', async () => {
+      usersRepository.findByIdForAuth.mockResolvedValue(makeUser());
+      (bcrypt.compare as jest.Mock).mockResolvedValue(false);
+
+      await expect(
+        service.changeEmail('tenant-1', 'user-1', {
+          email: ' USER@Example.com ',
+          currentPassword: 'wrong-password',
+        }),
+      ).rejects.toBeInstanceOf(UnauthorizedException);
+      expect(usersRepository.findByEmailInsensitive).not.toHaveBeenCalled();
+      expect(usersRepository.update).not.toHaveBeenCalled();
+    });
+
+    it('treats an unchanged normalized email as a no-op after password verification', async () => {
+      usersRepository.findByIdForAuth.mockResolvedValue(makeUser());
+      usersRepository.findById.mockResolvedValue(
+        makeUser({
+          mustChangePassword: true,
+          tempPasswordEncrypted: encryptTempPassword('temporary-secret'),
+          tempPasswordExpiresAt: new Date(Date.now() + 60_000),
+        }),
+      );
+      (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+
+      const result = await service.changeEmail('tenant-1', 'user-1', {
+        email: ' USER@Example.com ',
+        currentPassword: 'current-password',
+      });
+
+      expect(result.email).toBe('user@example.com');
+      expect(result).not.toHaveProperty('passwordHash');
+      expect(result.tempPassword).toBeNull();
+      expect(usersRepository.findByEmailInsensitive).not.toHaveBeenCalled();
+      expect(usersRepository.update).not.toHaveBeenCalled();
+      expect(eventEmitter.emit).not.toHaveBeenCalled();
+    });
+
+    it('does not let an authenticated user cross the tenant boundary', async () => {
+      usersRepository.findByIdForAuth.mockResolvedValue(
+        makeUser({ tenantId: 'tenant-2' }),
+      );
+
+      await expect(
+        service.changeEmail('tenant-1', 'user-1', {
+          email: 'new@example.com',
+          currentPassword: 'current-password',
+        }),
+      ).rejects.toBeInstanceOf(NotFoundException);
+      expect(usersRepository.findByEmailInsensitive).not.toHaveBeenCalled();
+      expect(usersRepository.update).not.toHaveBeenCalled();
+    });
+
+    it('rejects an email already used by another account', async () => {
+      usersRepository.findByIdForAuth.mockResolvedValue(makeUser());
+      usersRepository.findByEmailInsensitive.mockResolvedValue(
+        makeUser({ id: 'another-user', email: 'taken@example.com' }),
+      );
+      (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+
+      await expect(
+        service.changeEmail('tenant-1', 'user-1', {
+          email: 'taken@example.com',
+          currentPassword: 'current-password',
+        }),
+      ).rejects.toBeInstanceOf(ConflictException);
+      expect(usersRepository.update).not.toHaveBeenCalled();
+    });
+
+    it('rejects a normalized email used by a historical mixed-case account', async () => {
+      usersRepository.findByIdForAuth.mockResolvedValue(makeUser());
+      usersRepository.findByEmailInsensitive.mockResolvedValue(
+        makeUser({ id: 'another-user', email: 'Taken@Example.com' }),
+      );
+      usersRepository.findById.mockResolvedValue(
+        makeUser({ email: 'taken@example.com' }),
+      );
+      (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+
+      await expect(
+        service.changeEmail('tenant-1', 'user-1', {
+          email: 'taken@example.com',
+          currentPassword: 'current-password',
+        }),
+      ).rejects.toBeInstanceOf(ConflictException);
+      expect(usersRepository.update).not.toHaveBeenCalled();
+    });
+
+    it('returns the stable conflict response when the unique constraint wins a race', async () => {
+      usersRepository.findByIdForAuth.mockResolvedValue(makeUser());
+      usersRepository.findByEmailInsensitive.mockResolvedValue(null);
+      usersRepository.update.mockRejectedValue(
+        new Prisma.PrismaClientKnownRequestError('unique email', {
+          code: 'P2002',
+          clientVersion: 'test',
+        }),
+      );
+      (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+
+      await expect(
+        service.changeEmail('tenant-1', 'user-1', {
+          email: 'taken@example.com',
+          currentPassword: 'current-password',
+        }),
+      ).rejects.toMatchObject({
+        status: 409,
+        response: {
+          statusCode: 409,
+          message: 'El email ya está en uso',
+          error: 'Conflict',
+        },
+      });
+      expect(eventEmitter.emit).not.toHaveBeenCalled();
     });
   });
 

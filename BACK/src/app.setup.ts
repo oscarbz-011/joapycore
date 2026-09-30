@@ -1,10 +1,10 @@
-import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import type { NextFunction, Request, Response } from 'express';
 import helmet from 'helmet';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { corsOrigin } from './config/security.config';
+import { AppValidationPipe } from './common/pipes/app-validation.pipe';
 
 /**
  * Middlewares y configuración global de la app HTTP. Vive fuera de main.ts
@@ -37,6 +37,6 @@ export function configureApp(app: NestExpressApplication): void {
   );
 
   app.enableCors({ origin: corsOrigin });
-  app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
+  app.useGlobalPipes(new AppValidationPipe());
   app.useGlobalFilters(new HttpExceptionFilter());
 }

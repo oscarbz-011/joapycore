@@ -178,7 +178,13 @@ describe('InterestInvoiceOnIssueListener', () => {
       }),
     );
     expect(prisma.invoice.updateMany).toHaveBeenCalledWith({
-      where: { id: INVOICE_ID, tenantId: TENANT },
+      where: {
+        id: INVOICE_ID,
+        tenantId: TENANT,
+        status: 'PAID',
+        pdfFileId: null,
+        issuedAt: new Date('2026-08-26'),
+      },
       data: { pdfFileId: 'file-1' },
     });
   });

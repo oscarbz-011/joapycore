@@ -1,9 +1,9 @@
-import { apiClient, LONG_REQUEST_TIMEOUT_MS } from './client';
+import { apiClient, LONG_REQUEST_TIMEOUT_MS } from "./client";
 
-export type DocType = 'INTERNAL' | 'CONTRACT' | 'COMPLIANCE' | 'BILLING';
-export type DocVisibility = 'PUBLIC' | 'PRIVATE' | 'ROLE_BASED';
-export type TemplateKind = 'SALE_CONTRACT' | 'INVOICE' | 'PAYMENT_RECEIPT';
-export type DocContentFormat = 'TIPTAP' | 'HTML' | 'DOCX';
+export type DocType = "INTERNAL" | "CONTRACT" | "COMPLIANCE" | "BILLING";
+export type DocVisibility = "PUBLIC" | "PRIVATE" | "ROLE_BASED";
+export type TemplateKind = "SALE_CONTRACT" | "INVOICE" | "PAYMENT_RECEIPT";
+export type DocContentFormat = "TIPTAP" | "HTML" | "DOCX";
 
 export interface DocumentCategory {
   id: string;
@@ -77,59 +77,71 @@ export interface DocumentFilters {
   search?: string;
 }
 
+export interface EmailDeliveryResult {
+  to: string;
+  messageId: string | null;
+  accepted: string[];
+}
+
 export const TYPE_LABELS: Record<DocType, string> = {
-  INTERNAL: 'Interno',
-  CONTRACT: 'Contrato',
-  COMPLIANCE: 'Compliance',
-  BILLING: 'Facturación',
+  INTERNAL: "Interno",
+  CONTRACT: "Contrato",
+  COMPLIANCE: "Compliance",
+  BILLING: "Facturación",
 };
 
 export const VISIBILITY_LABELS: Record<DocVisibility, string> = {
-  PUBLIC: 'Público',
-  PRIVATE: 'Privado',
-  ROLE_BASED: 'Por rol',
+  PUBLIC: "Público",
+  PRIVATE: "Privado",
+  ROLE_BASED: "Por rol",
 };
 
 export const TEMPLATE_KIND_LABELS: Record<TemplateKind, string> = {
-  SALE_CONTRACT: 'Contrato de compra-venta',
-  INVOICE: 'Factura',
-  PAYMENT_RECEIPT: 'Recibo de dinero',
+  SALE_CONTRACT: "Contrato de compra-venta",
+  INVOICE: "Factura",
+  PAYMENT_RECEIPT: "Recibo de dinero",
 };
 
 // Tipo de documento sugerido al elegir cada templateKind — el usuario puede
 // cambiarlo igual, es solo un valor inicial razonable.
 export const TEMPLATE_KIND_DEFAULT_DOC_TYPE: Record<TemplateKind, DocType> = {
-  SALE_CONTRACT: 'CONTRACT',
-  INVOICE: 'BILLING',
-  PAYMENT_RECEIPT: 'BILLING',
+  SALE_CONTRACT: "CONTRACT",
+  INVOICE: "BILLING",
+  PAYMENT_RECEIPT: "BILLING",
 };
 
 // Factura/Recibo necesitan control de layout fino (columnas, encabezado
 // bicolumna con borde) que el editor WYSIWYG de TipTap no puede dar — se
 // editan como HTML/CSS crudo. El contrato de venta sigue en TipTap.
-export const TEMPLATE_KIND_DEFAULT_CONTENT_FORMAT: Record<TemplateKind, DocContentFormat> = {
-  SALE_CONTRACT: 'TIPTAP',
-  INVOICE: 'HTML',
-  PAYMENT_RECEIPT: 'HTML',
+export const TEMPLATE_KIND_DEFAULT_CONTENT_FORMAT: Record<
+  TemplateKind,
+  DocContentFormat
+> = {
+  SALE_CONTRACT: "TIPTAP",
+  INVOICE: "HTML",
+  PAYMENT_RECEIPT: "HTML",
 };
 
 export const CONTENT_FORMAT_LABELS: Record<DocContentFormat, string> = {
-  TIPTAP: 'Editor de texto enriquecido',
-  HTML: 'HTML/CSS crudo',
-  DOCX: 'Archivo Word (.docx)',
+  TIPTAP: "Editor de texto enriquecido",
+  HTML: "HTML/CSS crudo",
+  DOCX: "Archivo Word (.docx)",
 };
 
 export const documentsApi = {
   list: (filters: DocumentFilters = {}): Promise<Document[]> =>
-    apiClient.get('/documents', { params: filters }).then((r) => r.data),
+    apiClient.get("/documents", { params: filters }).then((r) => r.data),
 
   get: (id: string): Promise<Document> =>
     apiClient.get(`/documents/${id}`).then((r) => r.data),
 
   create: (payload: CreateDocumentPayload): Promise<Document> =>
-    apiClient.post('/documents', payload).then((r) => r.data),
+    apiClient.post("/documents", payload).then((r) => r.data),
 
-  update: (id: string, payload: Partial<CreateDocumentPayload>): Promise<Document> =>
+  update: (
+    id: string,
+    payload: Partial<CreateDocumentPayload>,
+  ): Promise<Document> =>
     apiClient.patch(`/documents/${id}`, payload).then((r) => r.data),
 
   remove: (id: string): Promise<void> =>
@@ -137,10 +149,10 @@ export const documentsApi = {
 
   uploadFile: (id: string, file: File): Promise<Document> => {
     const form = new FormData();
-    form.append('file', file);
+    form.append("file", file);
     return apiClient
       .post(`/documents/${id}/file`, form, {
-        headers: { 'Content-Type': 'multipart/form-data' },
+        headers: { "Content-Type": "multipart/form-data" },
         timeout: LONG_REQUEST_TIMEOUT_MS,
       })
       .then((r) => r.data);
@@ -149,24 +161,36 @@ export const documentsApi = {
   removeFile: (id: string): Promise<Document> =>
     apiClient.delete(`/documents/${id}/file`).then((r) => r.data),
 
-  templateKinds: (): Promise<{ key: TemplateKind; label: string; variables: TemplateVariable[] }[]> =>
-    apiClient.get('/documents/template-kinds').then((r) => r.data),
+  templateKinds: (): Promise<
+    { key: TemplateKind; label: string; variables: TemplateVariable[] }[]
+  > => apiClient.get("/documents/template-kinds").then((r) => r.data),
 
-  sendEmail: (id: string, to?: string): Promise<void> =>
+  sendEmail: (id: string, to?: string): Promise<EmailDeliveryResult> =>
     apiClient
-      .post(`/documents/${id}/email`, { to }, { timeout: LONG_REQUEST_TIMEOUT_MS })
+      .post(
+        `/documents/${id}/email`,
+        { to },
+        { timeout: LONG_REQUEST_TIMEOUT_MS },
+      )
       .then((r) => r.data),
 
-  generate: (id: string, values: Record<string, string>): Promise<{ fileId: string }> =>
+  generate: (
+    id: string,
+    values: Record<string, string>,
+  ): Promise<{ fileId: string }> =>
     apiClient
-      .post(`/documents/${id}/generate`, { values }, { timeout: LONG_REQUEST_TIMEOUT_MS })
+      .post(
+        `/documents/${id}/generate`,
+        { values },
+        { timeout: LONG_REQUEST_TIMEOUT_MS },
+      )
       .then((r) => r.data),
 };
 
 export interface TemplateVariable {
   key: string;
   label: string;
-  type: 'text' | 'table';
+  type: "text" | "table";
   columns?: string[];
 }
 
@@ -195,13 +219,15 @@ export function countTemplateVariables(contentJson?: string): number {
 
 export const documentCategoriesApi = {
   list: (): Promise<DocumentCategory[]> =>
-    apiClient.get('/documents/categories').then((r) => r.data),
+    apiClient.get("/documents/categories").then((r) => r.data),
 
   create: (name: string): Promise<DocumentCategory> =>
-    apiClient.post('/documents/categories', { name }).then((r) => r.data),
+    apiClient.post("/documents/categories", { name }).then((r) => r.data),
 
   update: (id: string, name: string): Promise<DocumentCategory> =>
-    apiClient.patch(`/documents/categories/${id}`, { name }).then((r) => r.data),
+    apiClient
+      .patch(`/documents/categories/${id}`, { name })
+      .then((r) => r.data),
 
   remove: (id: string): Promise<void> =>
     apiClient.delete(`/documents/categories/${id}`).then((r) => r.data),

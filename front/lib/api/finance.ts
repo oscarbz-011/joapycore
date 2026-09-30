@@ -1,7 +1,7 @@
-import { apiClient } from './client';
+import { apiClient } from "./client";
 
-export type LoanStatus = 'ACTIVE' | 'PAID' | 'CANCELLED';
-export type InstallmentStatus = 'PENDING' | 'PARTIAL' | 'PAID' | 'OVERDUE';
+export type LoanStatus = "ACTIVE" | "PAID" | "CANCELLED";
+export type InstallmentStatus = "PENDING" | "PARTIAL" | "PAID" | "OVERDUE";
 
 export interface InstallmentInterestCharge {
   id: string;
@@ -49,6 +49,14 @@ export interface Loan {
   customer: { id: string; firstName: string; lastName: string };
   saleOrder: { id: string; orderDate: string; items: LoanOrderItem[] };
   installments: Installment[];
+  moraPolicy?: {
+    graceDays: number;
+    components: Array<{
+      name: string;
+      frequency: "ONE_TIME" | "DAILY" | "MONTHLY";
+      percentage: number;
+    }>;
+  };
 }
 
 export interface PayInstallmentPayload {
@@ -67,7 +75,7 @@ export interface PayInstallmentsPayload {
   notes?: string;
 }
 
-export type PaymentReceiptItemKind = 'PRINCIPAL' | 'INTEREST_COMPONENT';
+export type PaymentReceiptItemKind = "PRINCIPAL" | "INTEREST_COMPONENT";
 
 export interface PaymentReceiptItem {
   id: string;
@@ -125,7 +133,7 @@ export interface PaymentReceipt {
 
 export const financeApi = {
   listLoans: (): Promise<Loan[]> =>
-    apiClient.get('/finance/loans').then((r) => r.data),
+    apiClient.get("/finance/loans").then((r) => r.data),
 
   getLoan: (id: string): Promise<Loan> =>
     apiClient.get(`/finance/loans/${id}`).then((r) => r.data),
@@ -133,15 +141,22 @@ export const financeApi = {
   getLoanByOrder: (saleOrderId: string): Promise<Loan> =>
     apiClient.get(`/finance/loans/by-order/${saleOrderId}`).then((r) => r.data),
 
-  getOverdueInstallments: (): Promise<(Installment & { loan: Pick<Loan, 'id' | 'customer'> })[]> =>
-    apiClient.get('/finance/loans/overdue-installments').then((r) => r.data),
+  getOverdueInstallments: (): Promise<
+    (Installment & { loan: Pick<Loan, "id" | "customer"> })[]
+  > => apiClient.get("/finance/loans/overdue-installments").then((r) => r.data),
 
-  payInstallment: (installmentId: string, dto: PayInstallmentPayload): Promise<{ installment: Installment; receipt: PaymentReceipt }> =>
+  payInstallment: (
+    installmentId: string,
+    dto: PayInstallmentPayload,
+  ): Promise<{ installment: Installment; receipt: PaymentReceipt }> =>
     apiClient
       .post(`/finance/loans/installments/${installmentId}/pay`, dto)
       .then((r) => r.data),
 
-  payInstallments: (loanId: string, dto: PayInstallmentsPayload): Promise<{ loan: Loan; receipt: PaymentReceipt }> =>
+  payInstallments: (
+    loanId: string,
+    dto: PayInstallmentsPayload,
+  ): Promise<{ loan: Loan; receipt: PaymentReceipt }> =>
     apiClient
       .post(`/finance/loans/${loanId}/pay-installments`, dto)
       .then((r) => r.data),
@@ -150,5 +165,7 @@ export const financeApi = {
     apiClient.get(`/finance/loans/receipts/${id}`).then((r) => r.data),
 
   getReceiptForInstallment: (installmentId: string): Promise<PaymentReceipt> =>
-    apiClient.get(`/finance/loans/installments/${installmentId}/receipt`).then((r) => r.data),
+    apiClient
+      .get(`/finance/loans/installments/${installmentId}/receipt`)
+      .then((r) => r.data),
 };

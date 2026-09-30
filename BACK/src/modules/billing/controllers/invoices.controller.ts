@@ -42,6 +42,17 @@ export class InvoicesController {
     return this.invoicesService.issue(tenantId, id, dto, user.sub);
   }
 
+  @Post('invoices/:id/pdf/retry')
+  @Permissions('billing:issue')
+  @ApiOperation({ summary: 'Regenerar el PDF faltante de una factura emitida' })
+  retryPdf(
+    @CurrentTenant() tenantId: string,
+    @CurrentUser() user: JwtPayload,
+    @Param('id') id: string,
+  ) {
+    return this.invoicesService.retryPdf(tenantId, id, user.sub);
+  }
+
   @Post('invoices/:id/cancel')
   @Permissions('billing:cancel')
   @ApiOperation({

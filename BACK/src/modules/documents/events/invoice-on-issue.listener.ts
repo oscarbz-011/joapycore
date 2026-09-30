@@ -19,6 +19,8 @@ interface InvoicePdfRequestedEvent {
   total: number;
   dueDate: string | null;
   issuedById?: string;
+  attemptAt: Date;
+  expectedStatus: 'PENDING' | 'ISSUED' | 'PAID';
 }
 
 function formatMoney(value: unknown): string {
@@ -81,7 +83,10 @@ export class InvoiceOnIssueListener {
     private readonly docxTemplateService: DocxTemplateService,
   ) {}
 
-  @OnEvent('invoice.pdf.requested')
+  // Este listener forma parte de la transacción lógica de emisión. Nest
+  // suprime los errores de listeners por defecto; si eso ocurre, emitAsync()
+  // resuelve aunque no exista PDF y la factura podría avanzar igualmente.
+  @OnEvent('invoice.pdf.requested', { suppressErrors: false })
   async handle(event: InvoicePdfRequestedEvent) {
     try {
       await this.generate(event);
@@ -102,7 +107,17 @@ export class InvoiceOnIssueListener {
     // INTEREST) — pero esas nunca emiten 'invoice.issued' (ver
     // interest-invoice-on-issue.listener.ts, evento separado), así que este
     // guard es puramente defensivo.
-    if (!invoice || !invoice.saleOrder) return;
+    // Los eventos pueden repetirse tras un reintento o una respuesta perdida.
+    // Un PDF ya vinculado es el resultado durable de la primera ejecución.
+    if (!invoice || !invoice.saleOrder || invoice.pdfFileId) return;
+    if (
+      invoice.status !== event.expectedStatus ||
+      invoice.issuedAt?.getTime() !== event.attemptAt.getTime()
+    ) {
+      throw new Error(
+        `La factura ${event.invoiceId} cambió durante la generación del PDF`,
+      );
+    }
 
     const customerName = [
       invoice.saleOrder.customer.firstName,
@@ -273,6 +288,12 @@ export class InvoiceOnIssueListener {
       { module: 'billing', entityType: 'invoice', entityId: invoice.id },
     );
 
-    await this.sources.setInvoicePdf(event.tenantId, invoice.id, fileRecord.id);
+    await this.sources.setInvoicePdf(
+      event.tenantId,
+      invoice.id,
+      fileRecord.id,
+      event.attemptAt,
+      event.expectedStatus,
+    );
   }
 }

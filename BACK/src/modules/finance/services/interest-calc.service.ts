@@ -18,12 +18,12 @@ export class InterestCalcService {
     return Math.floor((now.getTime() - graceDeadline.getTime()) / MS_PER_DAY);
   }
 
-  // Períodos completos de 30 días transcurridos desde que venció la
-  // tolerancia — usado tanto por componentes MONTHLY como por el umbral de
-  // Morosos ("meses de mora").
+  // Meses de mora iniciados desde que venció la tolerancia. El primer cargo
+  // mensual nace el primer día de mora (días 1..30 = período 1), no recién al
+  // día 30. Esto es especialmente importante para gastos de cobranza.
   periodsElapsed(dueDate: Date, graceDays: number, now: Date): number {
     const days = this.daysOverdue(dueDate, graceDays, now);
-    return Math.floor(days / DAYS_PER_PERIOD);
+    return days > 0 ? Math.ceil(days / DAYS_PER_PERIOD) : 0;
   }
 
   // Cargo vigente de un componente sobre una cuota, en guaraníes — nunca

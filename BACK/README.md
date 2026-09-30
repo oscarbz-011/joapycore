@@ -61,6 +61,7 @@ pnpm lint           # ESLint con auto-fix
 | `JWT_ACCESS_EXPIRES_IN` | Duración del access token (ej. `15m`) |
 | `JWT_REFRESH_EXPIRES_IN` | Duración del refresh token (ej. `7d`) |
 | `PORT` | Puerto del servidor (default `3000`) |
+| `INTEGRATIONS_ENCRYPTION_KEY` | Clave de al menos 32 caracteres para cifrar credenciales de integraciones por tenant |
 
 ## Estructura
 

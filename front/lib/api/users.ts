@@ -36,6 +36,51 @@ export interface ChangePasswordPayload {
   newPassword: string;
 }
 
+export interface ChangeEmailPayload {
+  email: string;
+  currentPassword: string;
+}
+
+export interface SaveOwnProfileInput {
+  currentEmail: string;
+  email: string;
+  currentPassword: string;
+  profile: UpdateProfilePayload;
+  sessionRefreshPending: boolean;
+}
+
+export interface SaveOwnProfileDependencies {
+  changeEmail: (dto: ChangeEmailPayload) => Promise<UserResponse>;
+  updateMe: (dto: UpdateProfilePayload) => Promise<UserResponse>;
+  refreshSession: () => Promise<void>;
+  onEmailCommitted: (user: UserResponse) => void;
+  onSessionRefreshCompleted: () => void;
+}
+
+export async function saveOwnProfile(
+  input: SaveOwnProfileInput,
+  dependencies: SaveOwnProfileDependencies,
+): Promise<UserResponse> {
+  const email = input.email.trim().toLowerCase();
+  let sessionRefreshPending = input.sessionRefreshPending;
+
+  if (email !== input.currentEmail.toLowerCase()) {
+    const emailUpdatedUser = await dependencies.changeEmail({
+      email,
+      currentPassword: input.currentPassword,
+    });
+    sessionRefreshPending = true;
+    dependencies.onEmailCommitted(emailUpdatedUser);
+  }
+
+  if (sessionRefreshPending) {
+    await dependencies.refreshSession();
+    dependencies.onSessionRefreshCompleted();
+  }
+
+  return dependencies.updateMe(input.profile);
+}
+
 export interface Role {
   id: string;
   name: string;
@@ -54,6 +99,9 @@ export const usersApi = {
 
   changePassword: (dto: ChangePasswordPayload): Promise<void> =>
     apiClient.post('/users/me/change-password', dto).then((r) => r.data),
+
+  changeEmail: (dto: ChangeEmailPayload): Promise<UserResponse> =>
+    apiClient.post('/users/me/change-email', dto).then((r) => r.data),
 
   list: (): Promise<UserResponse[]> =>
     apiClient.get('/users').then((r) => r.data),

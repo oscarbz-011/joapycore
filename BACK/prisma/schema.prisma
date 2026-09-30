@@ -490,6 +490,9 @@ model Tenant {
   paymentReceipts        PaymentReceipt[]
   interestComponents     InterestComponent[]
   delinquencyReports     DelinquencyReport[]
+  integrations           TenantIntegration[]
+  appEmailMessages       AppEmailMessage[]
+  appEmailInboxMessages  AppEmailInboxMessage[]
 
   @@map("tenants")
 }
@@ -648,6 +651,7 @@ model User {
   recordedDeliveryTrackingEvents DeliveryTrackingEvent[]
   createdSupplierPayments        SupplierPayment[]
   reviewedDelinquencyReports     DelinquencyReport[]     @relation("DelinquencyReportReviewedBy")
+  sentAppEmailMessages           AppEmailMessage[]       @relation("AppEmailSender")
 
   @@index([tenantId])
   @@map("users")
@@ -2138,7 +2142,7 @@ model CreditPlan {
 enum InterestComponentFrequency {
   ONE_TIME // se cobra una vez, no crece con el tiempo (ej. gastos administrativos)
   DAILY // se acumula por día de atraso (ej. interés diario)
-  MONTHLY // se acumula por período de 30 días de atraso
+  MONTHLY // se aplica por cada período de 30 días iniciado desde el primer día de mora
 }
 
 // Cada tenant define sus propios recargos por mora — pueden coexistir varios
@@ -2158,7 +2162,7 @@ model InterestComponent {
   // Solo aplica a MONTHLY: si true, el cargo crece con cada período vencido
   // (mes 1=10%, mes 2=20%, mes 3=30% — acumulación lineal, no interés
   // compuesto). Si false, se cobra el % base una sola vez apenas se cruza
-  // el primer período y no vuelve a crecer. DAILY siempre es acumulativo
+  // el primer día de mora y no vuelve a crecer. DAILY siempre es acumulativo
   // por diseño (más días = más interés); ONE_TIME nunca lo es.
   cumulative     Boolean                    @default(false)
   isActive       Boolean                    @default(true) @map("is_active")
@@ -2546,6 +2550,92 @@ enum OutboxStatus {
   FAILED
 }
 
+// ─── Aplicaciones e integraciones ─────────────────────────────────────────────
+
+enum IntegrationStatus {
+  DISCONNECTED
+  CONNECTED
+  ERROR
+}
+
+// Una integración es una conexión opcional por tenant, no un módulo de negocio.
+// `key` queda como texto para poder sumar proveedores sin migrar un enum.
+model TenantIntegration {
+  id              String            @id @default(uuid())
+  tenantId        String            @map("tenant_id")
+  key             String
+  enabled         Boolean           @default(false)
+  status          IntegrationStatus @default(DISCONNECTED)
+  encryptedConfig String?           @map("encrypted_config") @db.Text
+  lastTestedAt    DateTime?         @map("last_tested_at")
+  lastTestOk      Boolean?          @map("last_test_ok")
+  lastError       String?           @map("last_error")
+  createdAt       DateTime          @default(now()) @map("created_at")
+  updatedAt       DateTime          @updatedAt @map("updated_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, key])
+  @@index([tenantId, enabled])
+  @@map("tenant_integrations")
+}
+
+enum AppEmailStatus {
+  SENDING
+  UNKNOWN
+  SENT
+  FAILED
+}
+
+// Historial de la aplicación nativa de correo. La primera versión cubre salida
+// SMTP; bandejas Gmail/Outlook se incorporarán como integraciones posteriores.
+model AppEmailMessage {
+  id        String         @id @default(uuid())
+  tenantId  String         @map("tenant_id")
+  sentById  String         @map("sent_by_id")
+  recipient String
+  subject   String
+  bodyText  String         @map("body_text") @db.Text
+  status    AppEmailStatus @default(SENDING)
+  error     String?        @db.Text
+  sentAt    DateTime?      @map("sent_at")
+  createdAt DateTime       @default(now()) @map("created_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  sentBy User   @relation("AppEmailSender", fields: [sentById], references: [id])
+
+  @@index([tenantId, createdAt])
+  @@index([sentById])
+  @@map("app_email_messages")
+}
+
+// Copia local de los mensajes recibidos por IMAP. El UID es único solamente
+// dentro de cada buzón, por eso forma parte de la clave compuesta.
+model AppEmailInboxMessage {
+  id          String   @id @default(uuid())
+  tenantId    String   @map("tenant_id")
+  mailbox     String
+  uidValidity String   @map("uid_validity")
+  uid         String
+  messageId   String?  @map("message_id")
+  senderName  String?  @map("sender_name")
+  senderEmail String   @map("sender_email")
+  recipients  String
+  subject     String
+  bodyText    String   @map("body_text") @db.Text
+  receivedAt  DateTime @map("received_at")
+  isRead      Boolean  @default(false) @map("is_read")
+  starred     Boolean  @default(false)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, mailbox, uidValidity, uid], map: "app_email_inbox_epoch_uid_key")
+  @@index([tenantId, receivedAt])
+  @@map("app_email_inbox_messages")
+}
+
 // Eventos críticos entre módulos (sale.order.completed, invoice.issued, …)
 // guardados en la misma transacción que el cambio que los origina y
 // despachados después, con reintentos: si un listener falla, el efecto
@@ -2565,4 +2655,135 @@ model OutboxEvent {
   @@index([status, nextAttemptAt])
   @@index([tenantId])
   @@map("outbox_events")
+}
+
+// Communications v1: tenant-scoped projections and durable delivery intent.
+// Business references remain scalar across module boundaries, as in OutboxEvent.
+enum CommunicationMessageStatus {
+  QUEUED
+  PROCESSING
+  SENT
+  FAILED
+  UNKNOWN
+}
+
+model CommunicationSettings {
+  tenantId            String   @id @map("tenant_id")
+  enabled             Boolean  @default(false)
+  emailEnabled        Boolean  @default(false) @map("email_enabled")
+  invoiceEmailEnabled Boolean  @default(false) @map("invoice_email_enabled")
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  @@map("communication_settings")
+}
+
+model CommunicationIdentity {
+  id              String   @id @default(uuid())
+  tenantId        String   @map("tenant_id")
+  type            String   @default("SYSTEM")
+  name            String?
+  fromEmail       String   @map("from_email")
+  fromName        String?  @map("from_name")
+  replyTo         String?  @map("reply_to")
+  outboundEnabled Boolean  @default(false) @map("outbound_enabled")
+  isDefault       Boolean  @default(false) @map("is_default")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@unique([tenantId, fromEmail])
+  @@index([tenantId, isDefault])
+  @@map("communication_identities")
+}
+
+model CommunicationTemplateVersion {
+  id        String   @id @default(uuid())
+  tenantId  String   @map("tenant_id")
+  code      String
+  version   Int
+  subject   String
+  bodyText  String   @map("body_text") @db.Text
+  createdBy String?  @map("created_by")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([tenantId, code, version])
+  @@map("communication_template_versions")
+}
+
+model CommunicationMessage {
+  id                String                     @id @default(uuid())
+  tenantId          String                     @map("tenant_id")
+  entityType        String                     @default("INVOICE") @map("entity_type")
+  entityId          String                     @map("entity_id")
+  invoiceId         String                     @map("invoice_id")
+  recipient         String
+  pdfFileId         String                     @map("pdf_file_id")
+  identityId        String                     @map("identity_id")
+  templateVersionId String                     @map("template_version_id")
+  subject           String
+  bodyText          String                     @map("body_text") @db.Text
+  fromEmail         String                     @map("from_email")
+  fromName          String?                    @map("from_name")
+  replyTo           String?                    @map("reply_to")
+  status            CommunicationMessageStatus @default(QUEUED)
+  idempotencyKey    String                     @map("idempotency_key")
+  requestedBy       String?                    @map("requested_by")
+  attempts          Int                        @default(0)
+  availableAt       DateTime                   @default(now()) @map("available_at")
+  lockedAt          DateTime?                  @map("locked_at")
+  sentAt            DateTime?                  @map("sent_at")
+  lastError         String?                    @map("last_error")
+  providerMessageId String?                    @map("provider_message_id")
+  createdAt         DateTime                   @default(now()) @map("created_at")
+  updatedAt         DateTime                   @updatedAt @map("updated_at")
+
+  @@unique([tenantId, idempotencyKey])
+  @@index([tenantId, entityType, entityId, createdAt])
+  @@index([status, availableAt])
+  @@index([status, lockedAt])
+  @@map("communication_messages")
+}
+
+model CommunicationDeliveryAttempt {
+  id           String    @id @default(uuid())
+  tenantId     String    @map("tenant_id")
+  messageId    String    @map("message_id")
+  attempt      Int
+  status       String
+  errorCode    String?   @map("error_code")
+  errorMessage String?   @map("error_message")
+  startedAt    DateTime  @default(now()) @map("started_at")
+  finishedAt   DateTime? @map("finished_at")
+
+  @@unique([tenantId, messageId, attempt])
+  @@map("communication_delivery_attempts")
+}
+
+model CommunicationNote {
+  id         String   @id @default(uuid())
+  tenantId   String   @map("tenant_id")
+  entityType String   @map("entity_type")
+  entityId   String   @map("entity_id")
+  body       String   @db.Text
+  createdBy  String   @map("created_by")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@index([tenantId, entityType, entityId, createdAt])
+  @@map("communication_notes")
+}
+
+model CommunicationNotification {
+  id             String    @id @default(uuid())
+  tenantId       String    @map("tenant_id")
+  userId         String    @map("user_id")
+  messageId      String?   @map("message_id")
+  title          String
+  body           String?
+  readAt         DateTime? @map("read_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  idempotencyKey String    @map("idempotency_key")
+
+  @@unique([tenantId, idempotencyKey])
+  @@index([tenantId, userId, readAt, createdAt])
+  @@map("communication_notifications")
 }

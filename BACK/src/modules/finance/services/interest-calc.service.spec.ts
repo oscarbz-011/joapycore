@@ -18,10 +18,29 @@ describe('InterestCalcService', () => {
       expect(service.daysOverdue(dueDate, 5, now)).toBe(10);
     });
 
-    it('computes full 30-day periods elapsed', () => {
+    it('charges monthly components from the first overdue day and increments every 30 days', () => {
       const dueDate = new Date('2026-01-01T00:00:00.000Z');
-      const now = new Date('2026-03-02T00:00:00.000Z'); // 60 days after deadline (grace=0)
-      expect(service.periodsElapsed(dueDate, 0, now)).toBe(2);
+      expect(
+        service.periodsElapsed(
+          dueDate,
+          0,
+          new Date('2026-01-02T00:00:00.000Z'),
+        ),
+      ).toBe(1);
+      expect(
+        service.periodsElapsed(
+          dueDate,
+          0,
+          new Date('2026-01-31T00:00:00.000Z'),
+        ),
+      ).toBe(1);
+      expect(
+        service.periodsElapsed(
+          dueDate,
+          0,
+          new Date('2026-02-01T00:00:00.000Z'),
+        ),
+      ).toBe(2);
     });
   });
 
@@ -62,6 +81,9 @@ describe('InterestCalcService', () => {
       };
       expect(service.computeComponentCharge(component, 1_000_000, 0, 0)).toBe(
         0,
+      );
+      expect(service.computeComponentCharge(component, 1_000_000, 1, 1)).toBe(
+        100_000,
       );
       expect(service.computeComponentCharge(component, 1_000_000, 40, 1)).toBe(
         100_000,
