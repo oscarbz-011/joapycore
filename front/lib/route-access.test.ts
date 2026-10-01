@@ -18,6 +18,24 @@ describe('findRouteRule', () => {
     expect(findRouteRule('/dashboard/settings/profile')).toBeUndefined();
     expect(findRouteRule('/dashboard')).toBeUndefined();
   });
+
+  it.each([
+    ['/dashboard/inventory/products', 'inventory:products:read'],
+    ['/dashboard/inventory/stock', 'inventory:products:read'],
+    ['/dashboard/inventory/categories', 'inventory:categories:read'],
+    ['/dashboard/inventory/brands', 'inventory:brands:read'],
+    ['/dashboard/inventory/movements', 'inventory:movements:read'],
+    ['/dashboard/inventory/stock-entries/initial', 'inventory:movements:create'],
+  ])('protects %s with its specific permission', (path, permission) => {
+    expect(findRouteRule(path)?.anyPermission).toEqual([permission]);
+    expect(checkRouteAccess(path, ['inventory'], [permission]).allowed).toBe(
+      true,
+    );
+    expect(checkRouteAccess(path, ['inventory'], [])).toEqual({
+      allowed: false,
+      reason: 'permission',
+    });
+  });
 });
 
 describe('checkRouteAccess', () => {

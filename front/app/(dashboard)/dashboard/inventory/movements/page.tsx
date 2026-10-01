@@ -5,9 +5,8 @@ import { RequirePermission } from '@/components/require-permission';
 import { apiErrorMessage } from '@/lib/api/api-error';
 
 import { useState } from 'react';
-import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeftRight, Package, Plus, ChartBarStacked, X } from 'lucide-react';
+import { Plus, X } from 'lucide-react';
 import { NumericInput } from '../../../../../components/numeric-input';
 import {
   inventoryApi,
@@ -48,35 +47,6 @@ const REASON_LABELS: Record<MovementReason, string> = {
 };
 
 const MANUAL_REASONS: MovementReason[] = ['PURCHASE', 'CUSTOMER_RETURN', 'ADJUSTMENT', 'TRANSFER'];
-
-// ── Tab nav ────────────────────────────────────────────────────────────────────
-
-function InventoryNav({ active }: { active: 'products' | 'movements' | 'config' }) {
-  const items = [
-    { key: 'products'  as const, label: 'Productos',   href: '/dashboard/inventory',           icon: Package        },
-    { key: 'movements' as const, label: 'Movimientos', href: '/dashboard/inventory/movements', icon: ArrowLeftRight },
-    { key: 'config'    as const, label: 'Categorias',  href: '/dashboard/inventory/config',    icon: ChartBarStacked },
-  ];
-  return (
-    <div className="flex border-b border-border mb-5">
-      {items.map(({ key, label, href, icon: Icon }) => (
-        <Link
-          key={key}
-          href={href}
-          className={cn(
-            'flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors',
-            active === key
-              ? 'border-primary text-foreground'
-              : 'border-transparent text-muted-foreground hover:text-foreground',
-          )}
-        >
-          <Icon size={14} />
-          {label}
-        </Link>
-      ))}
-    </div>
-  );
-}
 
 // ── New movement modal ─────────────────────────────────────────────────────────
 
@@ -290,7 +260,7 @@ export default function MovementsPage() {
     <div>
       <div className="mb-5 flex items-start justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-foreground">Inventario</h1>
+          <h1 className="text-2xl font-semibold text-foreground">Movimientos</h1>
           <p className="mt-1 text-sm text-muted-foreground">Historial de movimientos de stock</p>
         </div>
         <RequirePermission permission="inventory:movements:create">
@@ -300,8 +270,6 @@ export default function MovementsPage() {
           </Button>
         </RequirePermission>
       </div>
-
-      <InventoryNav active="movements" />
 
       {/* Filters */}
       <div className="mb-4">

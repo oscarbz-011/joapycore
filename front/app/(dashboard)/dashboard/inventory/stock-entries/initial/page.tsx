@@ -103,7 +103,7 @@ export default function InitialStockPage() {
     <div className="max-w-2xl">
       <div className="mb-5">
         <Link
-          href="/dashboard/inventory"
+          href="/dashboard/inventory/products"
           className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground mb-2"
         >
           <ArrowLeft size={12} />

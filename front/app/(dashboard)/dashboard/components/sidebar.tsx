@@ -30,6 +30,10 @@ import { useAuth } from "../../../../lib/auth-context";
 import { alertsApi } from "../../../../lib/api/alerts";
 import { useActiveModules } from "../../../../lib/use-active-modules";
 import { usePendingNotifications } from "../../../../lib/use-pending-notifications";
+import {
+  INVENTORY_NAV_ITEMS,
+  isInventoryItemActive,
+} from "../../../../lib/inventory-navigation";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -82,25 +86,9 @@ const STATIC_GROUPS: SidebarGroup[] = [
       "inventory:categories:read",
       "inventory:brands:read",
       "inventory:movements:read",
+      "inventory:movements:create",
     ],
-    items: [
-      { label: "Productos", href: "/dashboard/inventory" },
-      { label: "Categorías", href: "/dashboard/inventory", stub: true },
-      { label: "Marcas", href: "/dashboard/inventory", stub: true },
-      { label: "Movimientos", href: "/dashboard/inventory/movements" },
-      {
-        label: "Lotes",
-        href: "/dashboard/inventory/batches",
-        permission: "inventory:products:read",
-      },
-      {
-        label: "Carga inicial",
-        href: "/dashboard/inventory/stock-entries/initial",
-        permission: "inventory:movements:create",
-      },
-      { label: "Inventario", href: "/dashboard/inventory/config" },
-      { label: "Stock", href: "/dashboard/inventory", stub: true },
-    ],
+    items: [...INVENTORY_NAV_ITEMS],
   },
   {
     id: "sales",
@@ -524,7 +512,12 @@ function ModuleGroup({
   );
 
   const hasActive = visibleItems.some(
-    (item) => !item.stub && item.href !== "#" && pathname === item.href,
+    (item) =>
+      !item.stub &&
+      item.href !== "#" &&
+      (group.id === "inventory"
+        ? isInventoryItemActive(pathname, item.href)
+        : pathname === item.href),
   );
 
   const [open, setOpen] = useState(hasActive);
@@ -577,7 +570,11 @@ function ModuleGroup({
         <div className="mt-px flex flex-col gap-px pl-2.5">
           {visibleItems.map((item) => {
             const isActive =
-              !item.stub && item.href !== "#" && pathname === item.href;
+              !item.stub &&
+              item.href !== "#" &&
+              (group.id === "inventory"
+                ? isInventoryItemActive(pathname, item.href)
+                : pathname === item.href);
 
             if (item.stub) {
               return (
