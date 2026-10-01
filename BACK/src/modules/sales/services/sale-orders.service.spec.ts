@@ -703,7 +703,13 @@ describe('SaleOrdersService', () => {
       ]);
 
       await expect(
-        service.create('tenant-1', baseDto, undefined, false, ['sales:create']),
+        service.create(
+          'tenant-1',
+          { ...baseDto, customerId: 'customer-1' },
+          undefined,
+          false,
+          ['sales:create'],
+        ),
       ).rejects.toThrow(/Heladera Samsung.*NORMAL/);
       await expect(
         service.createPosSale('tenant-1', baseDto, 'session-1', 'user-1'),

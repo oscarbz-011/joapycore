@@ -44,6 +44,9 @@ describe('ProductsService', () => {
   let productUnitsRepository: {
     createMany: jest.Mock;
     findByProduct: jest.Mock;
+    moveInStockUnits: jest.Mock;
+    markAdjustedOut: jest.Mock;
+    restoreAdjustedOut: jest.Mock;
   };
   let productSuppliersRepository: {
     findByProduct: jest.Mock;

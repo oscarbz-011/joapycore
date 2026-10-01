@@ -64,6 +64,7 @@ describe('InventoryOnPurchaseReceiptListener', () => {
       tenantId: 'tenant-1',
       purchaseOrderId: 'po-1',
       purchaseReceiptId: 'ghost',
+      warehouseId: 'wh-1',
     });
 
     expect(prisma.$transaction).not.toHaveBeenCalled();
@@ -76,6 +77,7 @@ describe('InventoryOnPurchaseReceiptListener', () => {
       tenantId: 'tenant-1',
       purchaseOrderId: 'po-1',
       purchaseReceiptId: 'receipt-1',
+      warehouseId: 'wh-1',
     });
 
     expect(stockEntryService.registerEntry).toHaveBeenCalledWith(
@@ -102,6 +104,7 @@ describe('InventoryOnPurchaseReceiptListener', () => {
       tenantId: 'tenant-1',
       purchaseOrderId: 'po-1',
       purchaseReceiptId: 'receipt-1',
+      warehouseId: 'wh-1',
     });
 
     expect(stockEntryService.registerEntry).not.toHaveBeenCalled();
@@ -130,6 +133,7 @@ describe('InventoryOnPurchaseReceiptListener', () => {
       tenantId: 'tenant-1',
       purchaseOrderId: 'po-1',
       purchaseReceiptId: 'receipt-1',
+      warehouseId: 'wh-1',
     });
 
     expect(stockEntryService.registerEntry).toHaveBeenCalledWith(
@@ -147,6 +151,7 @@ describe('InventoryOnPurchaseReceiptListener', () => {
         tenantId: 'tenant-1',
         purchaseOrderId: 'po-1',
         purchaseReceiptId: 'receipt-1',
+        warehouseId: 'wh-1',
       }),
     ).resolves.toBeUndefined();
   });
