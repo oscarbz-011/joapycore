@@ -5,6 +5,7 @@ import { CategoriesController } from './controllers/categories.controller';
 import { MovementsController } from './controllers/movements.controller';
 import { ProductsController } from './controllers/products.controller';
 import { StockEntryController } from './controllers/stock-entry.controller';
+import { StockController } from './controllers/stock.controller';
 import { InventoryOnInvoiceListener } from './events/inventory-on-invoice.listener';
 import { InventoryOnPurchaseReceiptListener } from './events/inventory-on-purchase-receipt.listener';
 import { InventoryOnProductionListener } from './events/inventory-on-production.listener';
@@ -17,11 +18,13 @@ import { ProductUnitsRepository } from './repositories/product-units.repository'
 import { ProductsRepository } from './repositories/products.repository';
 import { ProductSuppliersRepository } from './repositories/product-suppliers.repository';
 import { StockMovementsRepository } from './repositories/stock-movements.repository';
+import { StockRepository } from './repositories/stock.repository';
 import { StockSourcesRepository } from './repositories/stock-sources.repository';
 import { BrandsService } from './services/brands.service';
 import { CategoriesService } from './services/categories.service';
 import { ProductsService } from './services/products.service';
 import { StockEntryService } from './services/stock-entry.service';
+import { StockService } from './services/stock.service';
 import { WarehousesModule } from '../warehouses/warehouses.module';
 
 @Module({
@@ -33,12 +36,14 @@ import { WarehousesModule } from '../warehouses/warehouses.module';
     ProductsController,
     BatchesController,
     StockEntryController,
+    StockController,
   ],
   providers: [
     BrandsService,
     CategoriesService,
     ProductsService,
     StockEntryService,
+    StockService,
     BrandsRepository,
     CategoriesRepository,
     ProductsRepository,
@@ -46,6 +51,7 @@ import { WarehousesModule } from '../warehouses/warehouses.module';
     ProductSuppliersRepository,
     ProductBatchesRepository,
     StockMovementsRepository,
+    StockRepository,
     StockSourcesRepository,
     InventoryOnTenantListener,
     InventoryOnInvoiceListener,
