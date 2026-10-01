@@ -5,14 +5,19 @@ import { RequirePermission } from '@/components/require-permission';
 import { apiErrorMessage } from '@/lib/api/api-error';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus, X } from 'lucide-react';
 import { NumericInput } from '../../../../../components/numeric-input';
 import {
   inventoryApi,
   type MovementReason,
-  type CreateGlobalMovementPayload,
 } from '../../../../../lib/api/inventory';
+import { warehousesApi } from '../../../../../lib/api/warehouses';
+import {
+  buildMovementPayload,
+  type MovementForm,
+} from '../../../../../lib/inventory-movement';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
@@ -52,33 +57,36 @@ const MANUAL_REASONS: MovementReason[] = ['PURCHASE', 'CUSTOMER_RETURN', 'ADJUST
 
 function NewMovementModal({ onClose }: { onClose: () => void }) {
   const queryClient = useQueryClient();
-  const [form, setForm] = useState<CreateGlobalMovementPayload>({
+  const [form, setForm] = useState<MovementForm>({
     productId: '',
+    isSerialized: false,
     reason: 'PURCHASE',
     quantity: 0,
     direction: 'IN',
-    warehouseId: undefined,
-    toWarehouseId: undefined,
+    serialNumbers: [],
+    warehouseId: '',
+    toWarehouseId: '',
     notes: '',
   });
   const [error, setError] = useState('');
 
   const { data: products = [] } = useQuery({
     queryKey: ['inventory-products'],
-    queryFn: () => inventoryApi.listProductsWithStock({ status: 'ACTIVE' }),
+    queryFn: () => inventoryApi.listProducts({ status: 'ACTIVE' }),
   });
+  const { data: warehouses = [] } = useQuery({
+    queryKey: ['warehouses'],
+    queryFn: warehousesApi.listWarehouses,
+  });
+  const activeWarehouses = warehouses.filter((warehouse) => warehouse.isActive);
+  const product = products.find((item) => item.id === form.productId) ?? null;
 
   const mutation = useMutation({
-    mutationFn: () => inventoryApi.createMovement({
-      ...form,
-      notes: form.notes || undefined,
-      warehouseId: form.warehouseId || undefined,
-      toWarehouseId: form.toWarehouseId || undefined,
-      direction: form.reason === 'ADJUSTMENT' ? form.direction : undefined,
-    }),
+    mutationFn: () => inventoryApi.createMovement(buildMovementPayload(form)),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['inventory-movements'] });
       void queryClient.invalidateQueries({ queryKey: ['inventory-products'] });
+      void queryClient.invalidateQueries({ queryKey: ['inventory-stock'] });
       onClose();
     },
     onError: (err: Error) => {
@@ -86,7 +94,7 @@ function NewMovementModal({ onClose }: { onClose: () => void }) {
     },
   });
 
-  const set = <K extends keyof CreateGlobalMovementPayload>(k: K, v: CreateGlobalMovementPayload[K]) =>
+  const set = <K extends keyof MovementForm>(k: K, v: MovementForm[K]) =>
     setForm((f) => ({ ...f, [k]: v }));
 
   return (
@@ -106,7 +114,20 @@ function NewMovementModal({ onClose }: { onClose: () => void }) {
         >
           <div className="space-y-1.5">
             <Label>Producto *</Label>
-            <Select value={form.productId || 'none'} onValueChange={(v) => set('productId', v && v !== 'none' ? v : '')}>
+            <Select
+              value={form.productId || 'none'}
+              onValueChange={(value) => {
+                const productId = value && value !== 'none' ? value : '';
+                const selected = products.find((item) => item.id === productId);
+                setForm((current) => ({
+                  ...current,
+                  productId,
+                  isSerialized: selected?.isSerialized ?? false,
+                  quantity: 0,
+                  serialNumbers: [],
+                }));
+              }}
+            >
               <SelectTrigger className="w-full">
                 <span className="flex-1 text-left text-sm truncate">
                   {products.find((p) => p.id === form.productId) ? `${products.find((p) => p.id === form.productId)!.name}${products.find((p) => p.id === form.productId)!.model ? ` — ${products.find((p) => p.id === form.productId)!.model}` : ''}` : '— Seleccionar —'}
@@ -114,16 +135,19 @@ function NewMovementModal({ onClose }: { onClose: () => void }) {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="none">— Seleccionar —</SelectItem>
-                {products
-                  .filter((p) => !p.isSerialized)
-                  .map((p) => (
-                    <SelectItem key={p.id} value={p.id}>
-                      {p.name}{p.model ? ` — ${p.model}` : ''}
-                    </SelectItem>
-                  ))}
+                {products.map((p) => (
+                  <SelectItem key={p.id} value={p.id}>
+                    {p.name}{p.model ? ` — ${p.model}` : ''}
+                    {p.isSerialized ? ' · Serializado' : ''}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
-            <p className="text-xs text-muted-foreground/60">Los productos serializados gestionan el stock por número de serie.</p>
+            {product?.isSerialized && (
+              <p className="text-xs text-muted-foreground/60">
+                La cantidad se calculará según los números de serie ingresados.
+              </p>
+            )}
           </div>
 
           <div className="space-y-1.5">
@@ -141,15 +165,17 @@ function NewMovementModal({ onClose }: { onClose: () => void }) {
           </div>
 
           <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <Label>Cantidad *</Label>
-              <NumericInput
-                value={form.quantity}
-                onChange={(v) => set('quantity', Math.max(1, Math.round(v)))}
-                className={NUM_CLS}
-                required
-              />
-            </div>
+            {!product?.isSerialized && (
+              <div className="space-y-1.5">
+                <Label>Cantidad *</Label>
+                <NumericInput
+                  value={form.quantity}
+                  onChange={(v) => set('quantity', Math.max(1, Math.round(v)))}
+                  className={NUM_CLS}
+                  required
+                />
+              </div>
+            )}
 
             {form.reason === 'ADJUSTMENT' && (
               <div className="space-y-1.5">
@@ -178,38 +204,113 @@ function NewMovementModal({ onClose }: { onClose: () => void }) {
             )}
           </div>
 
+          {product?.isSerialized && (
+            <div className="space-y-1.5">
+              <Label>Números de serie *</Label>
+              <textarea
+                rows={5}
+                value={form.serialNumbers.join('\n')}
+                onChange={(event) =>
+                  set('serialNumbers', event.target.value.split('\n'))
+                }
+                placeholder="Un número de serie por línea"
+                className="w-full resize-none rounded-2xl border border-transparent bg-input/50 px-3 py-2 font-mono text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30"
+                required
+              />
+            </div>
+          )}
+
           {form.reason === 'TRANSFER' ? (
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <Label>Depósito origen</Label>
-                <input
-                  className={NUM_CLS}
-                  placeholder="ID del depósito origen"
-                  value={form.warehouseId ?? ''}
-                  onChange={(e) => set('warehouseId', e.target.value || undefined)}
-                />
+                <Label>Depósito origen *</Label>
+                <Select
+                  value={form.warehouseId || 'none'}
+                  onValueChange={(value) =>
+                    set('warehouseId', value === 'none' ? '' : (value ?? ''))
+                  }
+                >
+                  <SelectTrigger className="w-full">
+                    <span className="min-w-0 flex-1 truncate text-left text-sm">
+                      {activeWarehouses.find(
+                        (warehouse) => warehouse.id === form.warehouseId,
+                      )?.name ?? '— Seleccionar —'}
+                    </span>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">— Seleccionar —</SelectItem>
+                    {activeWarehouses.map((warehouse) => (
+                      <SelectItem key={warehouse.id} value={warehouse.id}>
+                        {warehouse.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div className="space-y-1.5">
                 <Label>Depósito destino *</Label>
-                <input
-                  className={NUM_CLS}
-                  placeholder="ID del depósito destino"
-                  value={form.toWarehouseId ?? ''}
-                  onChange={(e) => set('toWarehouseId', e.target.value || undefined)}
-                  required
-                />
+                <Select
+                  value={form.toWarehouseId || 'none'}
+                  onValueChange={(value) =>
+                    set('toWarehouseId', value === 'none' ? '' : (value ?? ''))
+                  }
+                >
+                  <SelectTrigger className="w-full">
+                    <span className="min-w-0 flex-1 truncate text-left text-sm">
+                      {activeWarehouses.find(
+                        (warehouse) => warehouse.id === form.toWarehouseId,
+                      )?.name ?? '— Seleccionar —'}
+                    </span>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">— Seleccionar —</SelectItem>
+                    {activeWarehouses.map((warehouse) => (
+                      <SelectItem key={warehouse.id} value={warehouse.id}>
+                        {warehouse.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
           ) : (
             <div className="space-y-1.5">
-              <Label>Depósito (opcional)</Label>
-              <input
-                className={NUM_CLS}
-                placeholder="ID del depósito"
-                value={form.warehouseId ?? ''}
-                onChange={(e) => set('warehouseId', e.target.value || undefined)}
-              />
+              <Label>Depósito *</Label>
+              <Select
+                value={form.warehouseId || 'none'}
+                onValueChange={(value) =>
+                  set('warehouseId', value === 'none' ? '' : (value ?? ''))
+                }
+              >
+                <SelectTrigger className="w-full">
+                  <span className="min-w-0 flex-1 truncate text-left text-sm">
+                    {activeWarehouses.find(
+                      (warehouse) => warehouse.id === form.warehouseId,
+                    )?.name ?? '— Seleccionar —'}
+                  </span>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">— Seleccionar —</SelectItem>
+                  {activeWarehouses.map((warehouse) => (
+                    <SelectItem key={warehouse.id} value={warehouse.id}>
+                      {warehouse.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
+          )}
+
+          {activeWarehouses.length === 0 && (
+            <p className="rounded-xl border border-warn/30 bg-warn-subtle px-3 py-2 text-xs text-warn">
+              No hay depósitos activos.{' '}
+              <Link
+                href="/dashboard/settings/warehouses"
+                className="font-semibold underline"
+              >
+                Configurar depósitos
+              </Link>
+            </p>
           )}
 
           <div className="space-y-1.5">
@@ -234,7 +335,18 @@ function NewMovementModal({ onClose }: { onClose: () => void }) {
             </Button>
             <Button
               type="submit"
-              disabled={mutation.isPending || !form.productId || form.quantity < 1}
+              disabled={
+                mutation.isPending ||
+                activeWarehouses.length === 0 ||
+                !form.productId ||
+                !form.warehouseId ||
+                (form.isSerialized
+                  ? form.serialNumbers.every((serial) => !serial.trim())
+                  : form.quantity < 1) ||
+                (form.reason === 'TRANSFER' &&
+                  (!form.toWarehouseId ||
+                    form.toWarehouseId === form.warehouseId))
+              }
             >
               {mutation.isPending ? 'Registrando...' : 'Registrar'}
             </Button>

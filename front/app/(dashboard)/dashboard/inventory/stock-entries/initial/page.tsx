@@ -61,6 +61,7 @@ export default function InitialStockPage() {
     queryKey: ['warehouses'],
     queryFn: warehousesApi.listWarehouses,
   });
+  const activeWarehouses = warehouses.filter((warehouse) => warehouse.isActive);
 
   const product = products.find((p) => p.id === form.productId) ?? null;
   const set = <K extends keyof typeof EMPTY_FORM>(k: K, v: (typeof EMPTY_FORM)[K]) =>
@@ -77,7 +78,7 @@ export default function InitialStockPage() {
       inventoryApi.createInitialStock({
         productId: form.productId,
         quantity: effectiveQuantity,
-        warehouseId: form.warehouseId || undefined,
+        warehouseId: form.warehouseId,
         initialSourceType: form.initialSourceType as StockInitialSourceType,
         batchNumber: product?.usesLots && form.batchNumber.trim() ? form.batchNumber.trim() : undefined,
         unitCost: product?.usesLots && form.batchNumber.trim() ? Number(form.unitCost) : undefined,
@@ -89,6 +90,7 @@ export default function InitialStockPage() {
       void queryClient.invalidateQueries({ queryKey: ['inventory-products'] });
       void queryClient.invalidateQueries({ queryKey: ['inventory-movements'] });
       void queryClient.invalidateQueries({ queryKey: ['product-batches'] });
+      void queryClient.invalidateQueries({ queryKey: ['inventory-stock'] });
       setForm(EMPTY_FORM);
       setSuccess(true);
     },
@@ -97,7 +99,11 @@ export default function InitialStockPage() {
     },
   });
 
-  const canSubmit = !!form.productId && effectiveQuantity > 0 && !!form.initialSourceType;
+  const canSubmit =
+    !!form.productId &&
+    effectiveQuantity > 0 &&
+    !!form.warehouseId &&
+    !!form.initialSourceType;
 
   return (
     <div className="max-w-2xl">
@@ -165,20 +171,32 @@ export default function InitialStockPage() {
               )}
             </div>
             <div className="space-y-1">
-              <Label>Depósito</Label>
+              <Label>Depósito *</Label>
               <Select value={form.warehouseId || 'none'} onValueChange={(v) => set('warehouseId', v && v !== 'none' ? v : '')}>
                 <SelectTrigger className="w-full">
                   <span className="flex-1 text-left text-sm truncate">
-                    {warehouses.find((w) => w.id === form.warehouseId)?.name ?? '— Sin especificar —'}
+                    {activeWarehouses.find((w) => w.id === form.warehouseId)?.name ?? '— Seleccionar depósito —'}
                   </span>
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="none">— Sin especificar —</SelectItem>
-                  {warehouses.map((w) => <SelectItem key={w.id} value={w.id}>{w.name}</SelectItem>)}
+                  <SelectItem value="none">— Seleccionar depósito —</SelectItem>
+                  {activeWarehouses.map((w) => <SelectItem key={w.id} value={w.id}>{w.name}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
           </div>
+
+          {activeWarehouses.length === 0 && (
+            <p className="rounded-xl border border-warn/30 bg-warn-subtle px-3 py-2 text-xs text-warn">
+              No hay depósitos activos.{' '}
+              <Link
+                href="/dashboard/settings/warehouses"
+                className="font-semibold underline"
+              >
+                Configurar depósitos
+              </Link>
+            </p>
+          )}
 
           <div className="space-y-1">
             <Label>Origen de este stock *</Label>
