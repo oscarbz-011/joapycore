@@ -1,0 +1,44 @@
+# JoapyCore Spartan project configuration
+stack: nestjs-nextjs
+architecture: modular-monolith
+
+workspaces:
+  backend: BACK
+  frontend: front
+
+git:
+  integration-branch: develop
+  production-branch: main
+  policy: CONTRIBUTING.md
+
+rules:
+  shared:
+    - .claude/rules/shared-backend/ARCHITECTURE.md
+  backend:
+    - .claude/rules/backend-nestjs/ARCHITECTURE.md
+    - .claude/rules/backend-nestjs/PRISMA.md
+    - .claude/rules/backend-nestjs/TESTING.md
+  frontend:
+    - .claude/rules/frontend-react/FRONTEND.md
+
+file-types:
+  backend: [.ts]
+  frontend: [.tsx, .ts, .css]
+  migration: [.sql]
+  config: [.yaml, .yml, .json, .toml]
+
+review-stages: [standards, tests, security, tenant-isolation]
+
+commands:
+  test:
+    backend: pnpm --dir BACK test --runInBand
+    frontend: pnpm --dir front test
+  build:
+    backend: pnpm --dir BACK build
+    frontend: pnpm --dir front build
+  lint:
+    backend: pnpm --dir BACK exec eslint "{src,test}/**/*.ts"
+    frontend: pnpm --dir front lint
+  typecheck:
+    backend: pnpm --dir BACK exec tsc --noEmit
+    frontend: pnpm --dir front exec tsc --noEmit

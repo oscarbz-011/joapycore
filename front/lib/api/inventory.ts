@@ -70,6 +70,7 @@ export interface Product {
   salePrice: number | null;
   additionalMarkup: number | null;
   additionalMarkupType: MarkupType | null;
+  stockMin: number;
   status: ProductStatus;
   kind: ProductKind;
   isPurchasable: boolean;

@@ -23,6 +23,7 @@ function product(id: string, status: ProductStatus): Product {
     salePrice: null,
     additionalMarkup: null,
     additionalMarkupType: null,
+    stockMin: 0,
     status,
     kind: 'RESALE',
     isPurchasable: true,
