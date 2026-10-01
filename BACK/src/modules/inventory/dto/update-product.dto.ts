@@ -1,5 +1,7 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import {
+  ArrayUnique,
+  IsArray,
   IsBoolean,
   IsEnum,
   IsNumber,
@@ -9,7 +11,12 @@ import {
   IsUUID,
   Min,
 } from 'class-validator';
-import { MarkupType, ProductKind, ProductStatus } from '@prisma/client';
+import {
+  MarkupType,
+  OrderChannel,
+  ProductKind,
+  ProductStatus,
+} from '@prisma/client';
 
 export class UpdateProductDto {
   @ApiPropertyOptional()
@@ -61,9 +68,8 @@ export class UpdateProductDto {
   @IsEnum(ProductStatus)
   status?: ProductStatus;
 
-  // Cambiar el tipo NO recalcula isPurchasable/isSellable: si el usuario ya
-  // los ajustó a mano, pisarlos sería perder su decisión. Para volver a los
-  // defaults del tipo se mandan los flags explícitos.
+  // Cambiar el tipo NO recalcula isPurchasable ni salesChannels: si el usuario
+  // ya los ajustó a mano, pisarlos sería perder su decisión.
   @ApiPropertyOptional({ enum: ProductKind })
   @IsOptional()
   @IsEnum(ProductKind)
@@ -76,8 +82,10 @@ export class UpdateProductDto {
 
   @ApiPropertyOptional()
   @IsOptional()
-  @IsBoolean()
-  isSellable?: boolean;
+  @IsArray()
+  @ArrayUnique()
+  @IsEnum(OrderChannel, { each: true })
+  salesChannels?: OrderChannel[];
 
   @ApiPropertyOptional({
     description:

@@ -14,6 +14,7 @@ import {
 import {
   KIND_DEFAULT_FLAGS,
   defaultKindForIndustry,
+  defaultSalesChannelsForKind,
 } from '../constants/product-kind.constant';
 import {
   ProductsRepository,
@@ -108,7 +109,7 @@ export class ProductsService {
 
     // El tipo se pide solo si el caller lo manda; si no, lo define el rubro
     // del tenant (una carpintería fabrica lo que vende, una ferretería
-    // revende). Los flags de flujo salen del tipo salvo que vengan explícitos.
+    // revende). Los defaults de flujo salen del tipo salvo que vengan explícitos.
     const kind =
       dto.kind ??
       defaultKindForIndustry(
@@ -119,7 +120,7 @@ export class ProductsService {
     return this.productsRepository.create(tenantId, {
       kind,
       isPurchasable: dto.isPurchasable ?? flags.isPurchasable,
-      isSellable: dto.isSellable ?? flags.isSellable,
+      salesChannels: dto.salesChannels ?? defaultSalesChannelsForKind(kind),
       categoryId: dto.categoryId,
       brandId: dto.brandId,
       model: dto.model,

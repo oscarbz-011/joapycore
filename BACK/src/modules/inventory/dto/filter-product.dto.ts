@@ -7,7 +7,7 @@ import {
   IsString,
   IsUUID,
 } from 'class-validator';
-import { ProductKind, ProductStatus } from '@prisma/client';
+import { OrderChannel, ProductKind, ProductStatus } from '@prisma/client';
 
 export class FilterProductDto {
   @ApiPropertyOptional()
@@ -36,20 +36,18 @@ export class FilterProductDto {
   @IsEnum(ProductKind)
   kind?: ProductKind;
 
-  // Filtros por flujo — los usan los selectores de producto de Compras
-  // (isPurchasable) y Ventas/POS (isSellable) para no ofrecer lo que después
-  // el backend va a rechazar.
+  // Filtros por flujo — los usan los selectores de producto para no ofrecer lo
+  // que después el backend va a rechazar.
   @ApiPropertyOptional()
   @IsOptional()
   @Transform(({ value }) => value === 'true')
   @IsBoolean()
   isPurchasable?: boolean;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ enum: OrderChannel })
   @IsOptional()
-  @Transform(({ value }) => value === 'true')
-  @IsBoolean()
-  isSellable?: boolean;
+  @IsEnum(OrderChannel)
+  salesChannel?: OrderChannel;
 
   @ApiPropertyOptional()
   @IsOptional()

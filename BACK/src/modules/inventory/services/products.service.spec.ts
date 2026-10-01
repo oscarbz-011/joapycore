@@ -189,6 +189,45 @@ describe('ProductsService', () => {
       salePrice: 2_500_000,
     };
 
+    it('defaults sellable product kinds to NORMAL only', async () => {
+      productsRepository.create.mockResolvedValue(makeProduct());
+
+      await service.create('tenant-1', baseDto);
+
+      expect(productsRepository.create).toHaveBeenCalledWith(
+        'tenant-1',
+        expect.objectContaining({ salesChannels: ['NORMAL'] }),
+      );
+    });
+
+    it('leaves raw materials without sales channels', async () => {
+      productsRepository.create.mockResolvedValue(makeProduct());
+
+      await service.create('tenant-1', {
+        ...baseDto,
+        kind: 'RAW_MATERIAL',
+      });
+
+      expect(productsRepository.create).toHaveBeenCalledWith(
+        'tenant-1',
+        expect.objectContaining({ salesChannels: [] }),
+      );
+    });
+
+    it('preserves explicitly supplied channels', async () => {
+      productsRepository.create.mockResolvedValue(makeProduct());
+
+      await service.create('tenant-1', {
+        ...baseDto,
+        salesChannels: ['POS', 'ECOMMERCE'],
+      } as any);
+
+      expect(productsRepository.create).toHaveBeenCalledWith(
+        'tenant-1',
+        expect.objectContaining({ salesChannels: ['POS', 'ECOMMERCE'] }),
+      );
+    });
+
     it('passes dto fields to repository with default unit', async () => {
       productsRepository.create.mockResolvedValue(makeProduct());
 
@@ -224,7 +263,7 @@ describe('ProductsService', () => {
         expect.objectContaining({
           kind: 'RESALE',
           isPurchasable: true,
-          isSellable: true,
+          salesChannels: ['NORMAL'],
         }),
       );
     });
@@ -241,7 +280,7 @@ describe('ProductsService', () => {
           kind: 'MANUFACTURED',
           // No se le compra a un proveedor: sale de una orden de producción.
           isPurchasable: false,
-          isSellable: true,
+          salesChannels: ['NORMAL'],
         }),
       );
     });
@@ -270,21 +309,21 @@ describe('ProductsService', () => {
           kind: 'RAW_MATERIAL',
           // La madera se compra pero no se vende en el mostrador.
           isPurchasable: true,
-          isSellable: false,
+          salesChannels: [],
         }),
       );
       // No hace falta consultar el rubro si el caller ya definió el tipo.
       expect(productsRepository.findTenantIndustry).not.toHaveBeenCalled();
     });
 
-    it('explicit flags win over the kind defaults — el tornillo que además se vende suelto', async () => {
+    it('explicit channels win over the kind defaults — el tornillo que además se vende suelto', async () => {
       productsRepository.findTenantIndustry.mockResolvedValue('MUEBLERIA');
       productsRepository.create.mockResolvedValue(makeProduct());
 
       await service.create('tenant-1', {
         ...baseDto,
         kind: 'RAW_MATERIAL',
-        isSellable: true,
+        salesChannels: ['NORMAL'],
       });
 
       expect(productsRepository.create).toHaveBeenCalledWith(
@@ -292,7 +331,7 @@ describe('ProductsService', () => {
         expect.objectContaining({
           kind: 'RAW_MATERIAL',
           isPurchasable: true,
-          isSellable: true,
+          salesChannels: ['NORMAL'],
         }),
       );
     });

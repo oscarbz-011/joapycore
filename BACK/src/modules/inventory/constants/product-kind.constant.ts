@@ -1,4 +1,4 @@
-import { Industry, ProductKind } from '@prisma/client';
+import { Industry, OrderChannel, ProductKind } from '@prisma/client';
 
 // Con qué tipo nace un producto según el rubro del tenant. Es solo el DEFAULT
 // del formulario: la clasificación es por producto y siempre se puede cambiar
@@ -24,18 +24,26 @@ export function defaultKindForIndustry(
   return industry ? INDUSTRY_DEFAULT_KIND[industry] : DEFAULT_PRODUCT_KIND;
 }
 
-// En qué flujos participa cada tipo, por defecto. Son los valores iniciales de
-// `isPurchasable`/`isSellable`; quedan editables por producto porque los casos
-// mixtos son reales (un tornillo que es materia prima de un mueble y además se
-// vende suelto en el mostrador).
+// En qué flujos participa cada tipo por defecto. La compra y los canales de
+// venta quedan editables por producto porque los casos mixtos son reales.
 export const KIND_DEFAULT_FLAGS: Record<
   ProductKind,
-  { isPurchasable: boolean; isSellable: boolean }
+  { isPurchasable: boolean }
 > = {
   // Se compra terminado y se vende tal cual.
-  RESALE: { isPurchasable: true, isSellable: true },
+  RESALE: { isPurchasable: true },
   // Se compra para consumir en producción — no va al mostrador.
-  RAW_MATERIAL: { isPurchasable: true, isSellable: false },
+  RAW_MATERIAL: { isPurchasable: true },
   // Sale de una orden de producción, no de un proveedor.
-  MANUFACTURED: { isPurchasable: false, isSellable: true },
+  MANUFACTURED: { isPurchasable: false },
 };
+
+export const KIND_DEFAULT_CHANNELS: Record<ProductKind, OrderChannel[]> = {
+  RESALE: [OrderChannel.NORMAL],
+  RAW_MATERIAL: [],
+  MANUFACTURED: [OrderChannel.NORMAL],
+};
+
+export function defaultSalesChannelsForKind(kind: ProductKind): OrderChannel[] {
+  return [...KIND_DEFAULT_CHANNELS[kind]];
+}
