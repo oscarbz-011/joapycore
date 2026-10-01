@@ -777,9 +777,6 @@ model Product {
   // editables a propósito para contemplar casos mixtos.
   isPurchasable        Boolean        @default(true) @map("is_purchasable")
   salesChannels        OrderChannel[] @default([]) @map("sales_channels")
-  // Compatibilidad transitoria: Task 2 elimina esta columna una vez que Ventas
-  // deje de consumirla. Ninguna escritura nueva depende de este campo.
-  isSellable           Boolean        @default(true) @map("is_sellable")
   unit                 String         @default("unidad")
   weightKg             Float?         @map("weight_kg")
   heightCm             Float?         @map("height_cm")
