@@ -2,6 +2,7 @@
 
 import { apiErrorMessage } from "@/lib/api/api-error";
 import { findStockIssues } from "@/lib/sales-stock";
+import { salesChannelProductFilters } from "@/lib/product-catalog";
 
 import { useState } from "react";
 import { useParams, useRouter } from "next/navigation";
@@ -43,10 +44,7 @@ export default function AdjustOrderPage() {
   const { data: products = [] } = useQuery({
     queryKey: ["inventory-products-active-with-stock"],
     queryFn: () =>
-      inventoryApi.listProductsWithStock({
-        status: "ACTIVE",
-        isSellable: true,
-      }),
+      inventoryApi.listProductsWithStock(salesChannelProductFilters("NORMAL")),
   });
   const { data: creditConfig } = useQuery({
     queryKey: ["credit-config"],

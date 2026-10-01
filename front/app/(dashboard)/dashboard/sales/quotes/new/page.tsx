@@ -1,6 +1,7 @@
 'use client';
 
 import { apiErrorMessage } from '@/lib/api/api-error';
+import { salesChannelProductFilters } from '@/lib/product-catalog';
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -136,7 +137,11 @@ export default function NewQuotePage() {
   const [error, setError] = useState('');
 
   const { data: customers = [] } = useQuery({ queryKey: ['sale-customers'], queryFn: salesApi.listCustomers });
-  const { data: products = [] } = useQuery({ queryKey: ['products'], queryFn: () => inventoryApi.listProducts() });
+  const { data: products = [] } = useQuery({
+    queryKey: ['products', 'NORMAL'],
+    queryFn: () =>
+      inventoryApi.listProducts(salesChannelProductFilters('NORMAL')),
+  });
 
   // Al volver de crear un cliente nuevo, restaura el presupuesto en progreso
   // y selecciona el cliente recién creado (mismo patrón que "Nuevo pedido").

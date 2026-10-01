@@ -14,8 +14,10 @@ import {
 import { NumericInput } from '../../../../../../components/numeric-input';
 import {
   inventoryApi,
+  SALES_CHANNEL_LABEL,
   type MovementReason,
   type CreateStockMovementPayload,
+  type OrderChannel,
   type ProductStatus,
   type UpdateProductPayload,
 } from '../../../../../../lib/api/inventory';
@@ -58,6 +60,7 @@ const REASON_LABELS: Record<MovementReason, string> = {
 };
 
 const MANUAL_REASONS: MovementReason[] = ['PURCHASE', 'CUSTOMER_RETURN', 'ADJUSTMENT', 'TRANSFER'];
+const SALES_CHANNELS = Object.keys(SALES_CHANNEL_LABEL) as OrderChannel[];
 
 type Tab = 'info' | 'movements' | 'recipe' | 'suppliers' | 'units';
 
@@ -248,7 +251,7 @@ export default function ProductDetailPage() {
 
   const deleteMutation = useMutation({
     mutationFn: () => inventoryApi.deleteProduct(id),
-    onSuccess: () => router.replace('/dashboard/inventory'),
+    onSuccess: () => router.replace('/dashboard/inventory/products'),
   });
 
   const unitsMutation = useMutation({
@@ -347,8 +350,8 @@ export default function ProductDetailPage() {
     return (
       <div className="py-20 text-center">
         <p className="text-sm text-muted-foreground/60">Producto no encontrado.</p>
-        <button onClick={() => router.replace('/dashboard/inventory')} className="mt-3 text-sm font-medium text-foreground underline underline-offset-2">
-          Volver al inventario
+        <button onClick={() => router.replace('/dashboard/inventory/products')} className="mt-3 text-sm font-medium text-foreground underline underline-offset-2">
+          Volver a productos
         </button>
       </div>
     );
@@ -391,7 +394,7 @@ export default function ProductDetailPage() {
         className="mb-5 flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
       >
         <ArrowLeft size={14} />
-        Volver al inventario
+        Volver a productos
       </button>
 
       {/* Header */}
@@ -414,6 +417,11 @@ export default function ProductDetailPage() {
             {product.status === 'BLOCKED' && (
               <Badge variant="destructive" className="text-xs">Bloqueado</Badge>
             )}
+            {product.salesChannels.map((channel) => (
+              <Badge key={channel} variant="outline" className="text-xs">
+                {SALES_CHANNEL_LABEL[channel]}
+              </Badge>
+            ))}
           </div>
         </div>
         <div className="flex gap-2">
@@ -428,6 +436,8 @@ export default function ProductDetailPage() {
                 description: product.description ?? undefined,
                 costPrice: product.costPrice ?? undefined,
                 salePrice: product.salePrice ?? undefined,
+                isPurchasable: product.isPurchasable,
+                salesChannels: [...product.salesChannels],
               });
               setShowEdit(true);
             }}
@@ -445,14 +455,24 @@ export default function ProductDetailPage() {
             </Button>
           )}
           {canUpdate && product.status === 'ACTIVE' && (
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={statusMutation.isPending}
-              onClick={() => statusMutation.mutate('BLOCKED')}
-            >
-              Bloquear
-            </Button>
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={statusMutation.isPending}
+                onClick={() => statusMutation.mutate('INACTIVE')}
+              >
+                Descontinuar
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={statusMutation.isPending}
+                onClick={() => statusMutation.mutate('BLOCKED')}
+              >
+                Bloquear
+              </Button>
+            </>
           )}
           {canMove && activeTab === 'movements' && (
             <Button size="sm" onClick={() => setShowMovement(true)}>
@@ -549,6 +569,37 @@ export default function ProductDetailPage() {
                   value={editForm.description ?? ''}
                   onChange={(e) => setEditForm((f) => ({ ...f, description: e.target.value || undefined }))}
                 />
+              </div>
+              <div className="space-y-2">
+                <Label>Canales de venta</Label>
+                <div className="grid grid-cols-3 gap-2">
+                  {SALES_CHANNELS.map((channel) => {
+                    const selected = editForm.salesChannels ?? [];
+                    return (
+                      <label
+                        key={channel}
+                        className="flex cursor-pointer items-center gap-2 rounded-xl border border-border px-3 py-2 text-sm"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selected.includes(channel)}
+                          onChange={(event) =>
+                            setEditForm((form) => ({
+                              ...form,
+                              salesChannels: event.target.checked
+                                ? [...new Set([...(form.salesChannels ?? []), channel])]
+                                : (form.salesChannels ?? []).filter(
+                                    (current) => current !== channel,
+                                  ),
+                            }))
+                          }
+                          className="h-4 w-4 rounded border-border accent-primary"
+                        />
+                        {SALES_CHANNEL_LABEL[channel]}
+                      </label>
+                    );
+                  })}
+                </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5">

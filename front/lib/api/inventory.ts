@@ -14,6 +14,14 @@ export interface Brand {
 
 export type MarkupType = 'PERCENTAGE' | 'FIXED';
 
+export type OrderChannel = 'NORMAL' | 'POS' | 'ECOMMERCE';
+
+export const SALES_CHANNEL_LABEL: Record<OrderChannel, string> = {
+  NORMAL: 'Venta normal',
+  POS: 'POS',
+  ECOMMERCE: 'ECOMMERCE',
+};
+
 // Estado de la FICHA del producto, no del stock (el stock son movimientos,
 // ver StockMovement). DRAFT = creada incompleta, no opera; ACTIVE = completa,
 // se puede comprar y vender; INACTIVE = descontinuada; BLOCKED = restringida.
@@ -65,7 +73,7 @@ export interface Product {
   status: ProductStatus;
   kind: ProductKind;
   isPurchasable: boolean;
-  isSellable: boolean;
+  salesChannels: OrderChannel[];
   deletedAt: string | null;
   category: { id: string; name: string } | null;
   brand: { id: string; name: string } | null;
@@ -89,10 +97,9 @@ export interface ProductFilters {
   status?: ProductStatus;
   kind?: ProductKind;
   // Los usan los selectores de producto de cada flujo para no ofrecer lo que
-  // el backend después va a rechazar (Compras: isPurchasable, Ventas/POS:
-  // isSellable).
+  // el backend después va a rechazar.
   isPurchasable?: boolean;
-  isSellable?: boolean;
+  salesChannel?: OrderChannel;
 }
 
 export interface CreateProductPayload {
@@ -112,7 +119,7 @@ export interface CreateProductPayload {
   // Si se omite, el backend lo deriva del rubro del tenant.
   kind?: ProductKind;
   isPurchasable?: boolean;
-  isSellable?: boolean;
+  salesChannels?: OrderChannel[];
 }
 
 export type UpdateProductPayload =
@@ -126,7 +133,7 @@ export type UpdateProductPayload =
     status?: ProductStatus;
     kind?: ProductKind;
     isPurchasable?: boolean;
-    isSellable?: boolean;
+    salesChannels?: OrderChannel[];
   };
 
 export type MovementReason =
