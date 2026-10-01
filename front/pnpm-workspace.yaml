@@ -10,6 +10,10 @@ packages:
 # Cada override queda acotado a la misma versión mayor que ya resolvía el
 # lockfile: `pnpm audit --fix` genera rangos abiertos (">=x") que suben de
 # major (brace-expansion 1→5, js-yaml 4→5, nanoid 3→6) y rompen a quien los usa.
+allowBuilds:
+  esbuild: true
+  unrs-resolver: false
+
 overrides:
   brace-expansion@<1.1.18: ^1.1.18
   brace-expansion@>=5.0.0 <5.0.11: ^5.0.11

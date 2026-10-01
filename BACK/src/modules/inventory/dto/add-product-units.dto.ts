@@ -1,7 +1,11 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsArray, IsString, MinLength } from 'class-validator';
+import { IsArray, IsString, IsUUID, MinLength } from 'class-validator';
 
 export class AddProductUnitsDto {
+  @ApiProperty({ description: 'Depósito donde ingresan las unidades' })
+  @IsUUID()
+  warehouseId: string;
+
   @ApiProperty({
     type: [String],
     description: 'Lista de números de serie a ingresar',

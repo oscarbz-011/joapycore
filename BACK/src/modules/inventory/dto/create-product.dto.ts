@@ -1,5 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
+  ArrayUnique,
+  IsArray,
   IsBoolean,
   IsEnum,
   IsNumber,
@@ -10,7 +12,7 @@ import {
   Min,
   MinLength,
 } from 'class-validator';
-import { MarkupType, ProductKind } from '@prisma/client';
+import { MarkupType, OrderChannel, ProductKind } from '@prisma/client';
 
 export class CreateProductDto {
   @ApiPropertyOptional()
@@ -68,9 +70,8 @@ export class CreateProductDto {
   @IsEnum(ProductKind)
   kind?: ProductKind;
 
-  // Si se omiten, se derivan del `kind` (ver KIND_DEFAULT_FLAGS). Se mandan
-  // explícitos solo para los casos mixtos: materia prima que además se vende
-  // suelta, o producto fabricado que a veces también se compra hecho.
+  // Si se omiten, se derivan del `kind`. Se mandan explícitos solo para los
+  // casos mixtos.
   @ApiPropertyOptional({
     description: 'Participa en órdenes de compra. Default según el tipo',
   })
@@ -78,12 +79,12 @@ export class CreateProductDto {
   @IsBoolean()
   isPurchasable?: boolean;
 
-  @ApiPropertyOptional({
-    description: 'Participa en ventas. Default según el tipo',
-  })
+  @ApiPropertyOptional({ enum: OrderChannel, isArray: true })
   @IsOptional()
-  @IsBoolean()
-  isSellable?: boolean;
+  @IsArray()
+  @ArrayUnique()
+  @IsEnum(OrderChannel, { each: true })
+  salesChannels?: OrderChannel[];
 
   // Opcionales a propósito: la ficha del producto se puede crear incompleta
   // (queda en DRAFT) para no frenar la carga de catálogo. Los precios se

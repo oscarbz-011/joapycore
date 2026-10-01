@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
@@ -43,6 +44,9 @@ describe('ProductsService', () => {
   let productUnitsRepository: {
     createMany: jest.Mock;
     findByProduct: jest.Mock;
+    moveInStockUnits: jest.Mock;
+    markAdjustedOut: jest.Mock;
+    restoreAdjustedOut: jest.Mock;
   };
   let productSuppliersRepository: {
     findByProduct: jest.Mock;
@@ -58,6 +62,13 @@ describe('ProductsService', () => {
     findAll: jest.Mock;
   };
   let eventEmitter: { emit: jest.Mock };
+  let prisma: { $transaction: jest.Mock };
+  let warehousesRepository: { findById: jest.Mock };
+  let stockMovementsRepository: {
+    lockProducts: jest.Mock;
+    sumByProductsAndWarehouse: jest.Mock;
+    create: jest.Mock;
+  };
 
   beforeEach(() => {
     productsRepository = {
@@ -74,6 +85,9 @@ describe('ProductsService', () => {
     productUnitsRepository = {
       createMany: jest.fn(),
       findByProduct: jest.fn(),
+      moveInStockUnits: jest.fn(),
+      markAdjustedOut: jest.fn(),
+      restoreAdjustedOut: jest.fn().mockResolvedValue(0),
     };
     productSuppliersRepository = {
       findByProduct: jest.fn(),
@@ -89,6 +103,19 @@ describe('ProductsService', () => {
       findAll: jest.fn(),
     };
     eventEmitter = { emit: jest.fn() };
+    prisma = {
+      $transaction: jest.fn().mockImplementation((callback) => callback({})),
+    };
+    warehousesRepository = {
+      findById: jest.fn().mockResolvedValue({ id: 'wh-1', isActive: true }),
+    };
+    stockMovementsRepository = {
+      lockProducts: jest.fn(),
+      sumByProductsAndWarehouse: jest
+        .fn()
+        .mockResolvedValue(new Map([['prod-1::wh-1', 10]])),
+      create: jest.fn(),
+    };
 
     service = new ProductsService(
       productsRepository as any,
@@ -96,6 +123,9 @@ describe('ProductsService', () => {
       productSuppliersRepository as any,
       productBatchesRepository as any,
       eventEmitter as any,
+      prisma as any,
+      warehousesRepository as any,
+      stockMovementsRepository as any,
     );
   });
 
@@ -189,6 +219,45 @@ describe('ProductsService', () => {
       salePrice: 2_500_000,
     };
 
+    it('defaults sellable product kinds to NORMAL only', async () => {
+      productsRepository.create.mockResolvedValue(makeProduct());
+
+      await service.create('tenant-1', baseDto);
+
+      expect(productsRepository.create).toHaveBeenCalledWith(
+        'tenant-1',
+        expect.objectContaining({ salesChannels: ['NORMAL'] }),
+      );
+    });
+
+    it('leaves raw materials without sales channels', async () => {
+      productsRepository.create.mockResolvedValue(makeProduct());
+
+      await service.create('tenant-1', {
+        ...baseDto,
+        kind: 'RAW_MATERIAL',
+      });
+
+      expect(productsRepository.create).toHaveBeenCalledWith(
+        'tenant-1',
+        expect.objectContaining({ salesChannels: [] }),
+      );
+    });
+
+    it('preserves explicitly supplied channels', async () => {
+      productsRepository.create.mockResolvedValue(makeProduct());
+
+      await service.create('tenant-1', {
+        ...baseDto,
+        salesChannels: ['POS', 'ECOMMERCE'],
+      } as any);
+
+      expect(productsRepository.create).toHaveBeenCalledWith(
+        'tenant-1',
+        expect.objectContaining({ salesChannels: ['POS', 'ECOMMERCE'] }),
+      );
+    });
+
     it('passes dto fields to repository with default unit', async () => {
       productsRepository.create.mockResolvedValue(makeProduct());
 
@@ -224,7 +293,7 @@ describe('ProductsService', () => {
         expect.objectContaining({
           kind: 'RESALE',
           isPurchasable: true,
-          isSellable: true,
+          salesChannels: ['NORMAL'],
         }),
       );
     });
@@ -241,7 +310,7 @@ describe('ProductsService', () => {
           kind: 'MANUFACTURED',
           // No se le compra a un proveedor: sale de una orden de producción.
           isPurchasable: false,
-          isSellable: true,
+          salesChannels: ['NORMAL'],
         }),
       );
     });
@@ -270,21 +339,21 @@ describe('ProductsService', () => {
           kind: 'RAW_MATERIAL',
           // La madera se compra pero no se vende en el mostrador.
           isPurchasable: true,
-          isSellable: false,
+          salesChannels: [],
         }),
       );
       // No hace falta consultar el rubro si el caller ya definió el tipo.
       expect(productsRepository.findTenantIndustry).not.toHaveBeenCalled();
     });
 
-    it('explicit flags win over the kind defaults — el tornillo que además se vende suelto', async () => {
+    it('explicit channels win over the kind defaults — el tornillo que además se vende suelto', async () => {
       productsRepository.findTenantIndustry.mockResolvedValue('MUEBLERIA');
       productsRepository.create.mockResolvedValue(makeProduct());
 
       await service.create('tenant-1', {
         ...baseDto,
         kind: 'RAW_MATERIAL',
-        isSellable: true,
+        salesChannels: ['NORMAL'],
       });
 
       expect(productsRepository.create).toHaveBeenCalledWith(
@@ -292,7 +361,7 @@ describe('ProductsService', () => {
         expect.objectContaining({
           kind: 'RAW_MATERIAL',
           isPurchasable: true,
-          isSellable: true,
+          salesChannels: ['NORMAL'],
         }),
       );
     });
@@ -505,7 +574,10 @@ describe('ProductsService', () => {
       );
 
       await expect(
-        service.addUnits('tenant-1', 'prod-1', { serialNumbers: ['SN001'] }),
+        service.addUnits('tenant-1', 'prod-1', {
+          warehouseId: 'wh-1',
+          serialNumbers: ['SN001'],
+        }),
       ).rejects.toBeInstanceOf(UnprocessableEntityException);
 
       expect(productUnitsRepository.createMany).not.toHaveBeenCalled();
@@ -518,6 +590,7 @@ describe('ProductsService', () => {
       productUnitsRepository.createMany.mockResolvedValue({ count: 2 });
 
       const result = await service.addUnits('tenant-1', 'prod-1', {
+        warehouseId: 'wh-1',
         serialNumbers: ['SN001', 'SN002'],
       });
 
@@ -525,6 +598,7 @@ describe('ProductsService', () => {
         'tenant-1',
         'prod-1',
         ['SN001', 'SN002'],
+        { warehouseId: 'wh-1' },
       );
       expect(eventEmitter.emit).toHaveBeenCalledWith(
         'stock.movement.created',
@@ -536,6 +610,106 @@ describe('ProductsService', () => {
         }),
       );
       expect(result.created).toBe(2);
+    });
+  });
+
+  describe('addStockMovement', () => {
+    it('rejects a movement without an active warehouse', async () => {
+      productsRepository.findById.mockResolvedValue(makeProduct());
+      warehousesRepository.findById.mockResolvedValue({
+        id: 'wh-1',
+        isActive: false,
+      });
+
+      await expect(
+        service.addStockMovement('tenant-1', 'prod-1', {
+          reason: 'ADJUSTMENT',
+          direction: 'IN',
+          quantity: 1,
+          warehouseId: 'wh-1',
+        }),
+      ).rejects.toBeInstanceOf(UnprocessableEntityException);
+    });
+
+    it('rejects a transfer to the same warehouse', async () => {
+      productsRepository.findById.mockResolvedValue(makeProduct());
+
+      await expect(
+        service.addStockMovement('tenant-1', 'prod-1', {
+          reason: 'TRANSFER',
+          quantity: 1,
+          warehouseId: 'wh-1',
+          toWarehouseId: 'wh-1',
+        }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('rejects a non-serialized OUT that exceeds origin stock', async () => {
+      productsRepository.findById.mockResolvedValue(makeProduct());
+      stockMovementsRepository.sumByProductsAndWarehouse.mockResolvedValue(
+        new Map([['prod-1::wh-1', 1]]),
+      );
+
+      await expect(
+        service.addStockMovement('tenant-1', 'prod-1', {
+          reason: 'ADJUSTMENT',
+          direction: 'OUT',
+          quantity: 2,
+          warehouseId: 'wh-1',
+        }),
+      ).rejects.toBeInstanceOf(UnprocessableEntityException);
+      expect(stockMovementsRepository.create).not.toHaveBeenCalled();
+    });
+
+    it('moves only the selected serialized units and records paired history', async () => {
+      productsRepository.findById.mockResolvedValue(
+        makeProduct({ isSerialized: true }),
+      );
+      warehousesRepository.findById
+        .mockResolvedValueOnce({ id: 'wh-1', isActive: true })
+        .mockResolvedValueOnce({ id: 'wh-2', isActive: true });
+      productUnitsRepository.moveInStockUnits.mockResolvedValue(2);
+
+      await service.addStockMovement('tenant-1', 'prod-1', {
+        reason: 'TRANSFER',
+        quantity: 2,
+        warehouseId: 'wh-1',
+        toWarehouseId: 'wh-2',
+        serialNumbers: ['SN-1', 'SN-2'],
+      } as any);
+
+      expect(productUnitsRepository.moveInStockUnits).toHaveBeenCalledWith(
+        'tenant-1',
+        'prod-1',
+        ['SN-1', 'SN-2'],
+        'wh-1',
+        'wh-2',
+        expect.anything(),
+      );
+      expect(stockMovementsRepository.create).toHaveBeenCalledTimes(2);
+    });
+
+    it('marks a serialized negative adjustment as ADJUSTED_OUT', async () => {
+      productsRepository.findById.mockResolvedValue(
+        makeProduct({ isSerialized: true }),
+      );
+      productUnitsRepository.markAdjustedOut.mockResolvedValue(1);
+
+      await service.addStockMovement('tenant-1', 'prod-1', {
+        reason: 'ADJUSTMENT',
+        direction: 'OUT',
+        quantity: 1,
+        warehouseId: 'wh-1',
+        serialNumbers: ['SN-1'],
+      } as any);
+
+      expect(productUnitsRepository.markAdjustedOut).toHaveBeenCalledWith(
+        'tenant-1',
+        'prod-1',
+        ['SN-1'],
+        'wh-1',
+        expect.anything(),
+      );
     });
   });
 });

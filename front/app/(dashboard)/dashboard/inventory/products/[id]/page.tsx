@@ -9,13 +9,14 @@ import { useParams, useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft, Building2, ChevronDown, Package, Plus,
-  Star, Trash2, X,
+  Star, Trash2,
 } from 'lucide-react';
 import { NumericInput } from '../../../../../../components/numeric-input';
 import {
   inventoryApi,
+  SALES_CHANNEL_LABEL,
   type MovementReason,
-  type CreateStockMovementPayload,
+  type OrderChannel,
   type ProductStatus,
   type UpdateProductPayload,
 } from '../../../../../../lib/api/inventory';
@@ -57,145 +58,9 @@ const REASON_LABELS: Record<MovementReason, string> = {
   PRODUCTION_OUT:  'Consumo en producción',
 };
 
-const MANUAL_REASONS: MovementReason[] = ['PURCHASE', 'CUSTOMER_RETURN', 'ADJUSTMENT', 'TRANSFER'];
+const SALES_CHANNELS = Object.keys(SALES_CHANNEL_LABEL) as OrderChannel[];
 
 type Tab = 'info' | 'movements' | 'recipe' | 'suppliers' | 'units';
-
-// ── Movement modal ─────────────────────────────────────────────────────────────
-
-function MovementModal({ productId, onClose }: { productId: string; onClose: () => void }) {
-  const queryClient = useQueryClient();
-  const [dto, setDto] = useState<CreateStockMovementPayload>({
-    reason: 'PURCHASE',
-    quantity: 0,
-    direction: 'IN',
-    notes: '',
-  });
-  const [error, setError] = useState('');
-
-  const mutation = useMutation({
-    mutationFn: () =>
-      inventoryApi.addStockMovement(productId, {
-        ...dto,
-        notes: dto.notes || undefined,
-        warehouseId: dto.warehouseId || undefined,
-        toWarehouseId: dto.toWarehouseId || undefined,
-        direction: dto.reason === 'ADJUSTMENT' ? dto.direction : undefined,
-      }),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['inventory-product', productId] });
-      void queryClient.invalidateQueries({ queryKey: ['inventory-product-movements', productId] });
-      void queryClient.invalidateQueries({ queryKey: ['inventory-products'] });
-      onClose();
-    },
-    onError: (err: Error) => {
-      setError(apiErrorMessage(err, 'Error al registrar movimiento'));
-    },
-  });
-
-  const set = <K extends keyof CreateStockMovementPayload>(k: K, v: CreateStockMovementPayload[K]) =>
-    setDto((d) => ({ ...d, [k]: v }));
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-      <div className="relative z-10 w-full max-w-lg rounded-2xl border border-border bg-card shadow-lg">
-        <div className="flex items-center justify-between border-b border-border px-6 py-4">
-          <h2 className="text-sm font-semibold text-foreground">Registrar movimiento</h2>
-          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onClose}>
-            <X size={16} />
-          </Button>
-        </div>
-
-        <form
-          onSubmit={(e) => { e.preventDefault(); setError(''); mutation.mutate(); }}
-          className="px-6 py-5 space-y-4"
-        >
-          <div className="space-y-1.5">
-            <Label>Motivo *</Label>
-            <Select value={dto.reason} onValueChange={(v) => v && set('reason', v as MovementReason)}>
-              <SelectTrigger className="w-full">
-                <span className="flex-1 text-left text-sm truncate">{REASON_LABELS[dto.reason as MovementReason] ?? dto.reason}</span>
-              </SelectTrigger>
-              <SelectContent>
-                {MANUAL_REASONS.map((r) => (
-                  <SelectItem key={r} value={r}>{REASON_LABELS[r]}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <Label>Cantidad *</Label>
-              <NumericInput
-                value={dto.quantity}
-                onChange={(v) => set('quantity', Math.max(1, Math.round(v)))}
-                className={NUM_CLS}
-              />
-            </div>
-
-            {dto.reason === 'ADJUSTMENT' && (
-              <div className="space-y-1.5">
-                <Label>Dirección *</Label>
-                <div className="flex gap-2">
-                  {(['IN', 'OUT'] as const).map((d) => (
-                    <label
-                      key={d}
-                      className={cn(
-                        'flex-1 flex items-center justify-center rounded-xl border px-3 py-2 text-sm font-medium cursor-pointer transition-colors',
-                        dto.direction === d
-                          ? 'border-primary bg-primary text-primary-foreground'
-                          : 'border-border text-muted-foreground hover:border-border',
-                      )}
-                    >
-                      <input type="radio" className="sr-only" checked={dto.direction === d} onChange={() => set('direction', d)} />
-                      {d === 'IN' ? '+ Agregar' : '− Reducir'}
-                    </label>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-
-          {dto.reason === 'TRANSFER' ? (
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <Label>Depósito origen</Label>
-                <input className={NUM_CLS} placeholder="ID origen" value={dto.warehouseId ?? ''} onChange={(e) => set('warehouseId', e.target.value || undefined)} />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Depósito destino *</Label>
-                <input className={NUM_CLS} placeholder="ID destino" value={dto.toWarehouseId ?? ''} onChange={(e) => set('toWarehouseId', e.target.value || undefined)} required />
-              </div>
-            </div>
-          ) : (
-            <div className="space-y-1.5">
-              <Label>Depósito (opcional)</Label>
-              <input className={NUM_CLS} placeholder="ID del depósito" value={dto.warehouseId ?? ''} onChange={(e) => set('warehouseId', e.target.value || undefined)} />
-            </div>
-          )}
-
-          <div className="space-y-1.5">
-            <Label>Notas (opcional)</Label>
-            <input className={NUM_CLS} placeholder="Ej: recepción factura #001" value={dto.notes ?? ''} onChange={(e) => set('notes', e.target.value)} />
-          </div>
-
-          {error && (
-            <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">{error}</div>
-          )}
-
-          <div className="flex justify-end gap-3 border-t border-border pt-4">
-            <Button type="button" variant="outline" onClick={onClose}>Cancelar</Button>
-            <Button type="submit" disabled={mutation.isPending || dto.quantity < 1}>
-              {mutation.isPending ? 'Registrando...' : 'Registrar'}
-            </Button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-}
 
 // ── Main page ──────────────────────────────────────────────────────────────────
 
@@ -204,15 +69,11 @@ export default function ProductDetailPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<Tab>('info');
-  const [showMovement, setShowMovement] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   // Acciones visibles solo con el permiso que exige el backend para cada una.
   const canUpdate = usePermission('inventory:products:update');
   const canDelete = usePermission('inventory:products:delete');
-  const canMove = usePermission('inventory:movements:create');
-  const canAddUnits = usePermission('inventory:products:create');
   const [showEdit, setShowEdit] = useState(false);
-  const [serialInput, setSerialInput] = useState('');
   const [selectedSupplierId, setSelectedSupplierId] = useState('');
   const [supplierCostPrice, setSupplierCostPrice] = useState<number>(0);
 
@@ -248,16 +109,7 @@ export default function ProductDetailPage() {
 
   const deleteMutation = useMutation({
     mutationFn: () => inventoryApi.deleteProduct(id),
-    onSuccess: () => router.replace('/dashboard/inventory'),
-  });
-
-  const unitsMutation = useMutation({
-    mutationFn: (serialNumbers: string[]) => inventoryApi.addProductUnits(id, serialNumbers),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['inventory-product-units', id] });
-      void queryClient.invalidateQueries({ queryKey: ['inventory-product', id] });
-      setSerialInput('');
-    },
+    onSuccess: () => router.replace('/dashboard/inventory/products'),
   });
 
   const addSupplierMutation = useMutation({
@@ -347,8 +199,8 @@ export default function ProductDetailPage() {
     return (
       <div className="py-20 text-center">
         <p className="text-sm text-muted-foreground/60">Producto no encontrado.</p>
-        <button onClick={() => router.replace('/dashboard/inventory')} className="mt-3 text-sm font-medium text-foreground underline underline-offset-2">
-          Volver al inventario
+        <button onClick={() => router.replace('/dashboard/inventory/products')} className="mt-3 text-sm font-medium text-foreground underline underline-offset-2">
+          Volver a productos
         </button>
       </div>
     );
@@ -391,7 +243,7 @@ export default function ProductDetailPage() {
         className="mb-5 flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
       >
         <ArrowLeft size={14} />
-        Volver al inventario
+        Volver a productos
       </button>
 
       {/* Header */}
@@ -414,6 +266,11 @@ export default function ProductDetailPage() {
             {product.status === 'BLOCKED' && (
               <Badge variant="destructive" className="text-xs">Bloqueado</Badge>
             )}
+            {product.salesChannels.map((channel) => (
+              <Badge key={channel} variant="outline" className="text-xs">
+                {SALES_CHANNEL_LABEL[channel]}
+              </Badge>
+            ))}
           </div>
         </div>
         <div className="flex gap-2">
@@ -428,6 +285,8 @@ export default function ProductDetailPage() {
                 description: product.description ?? undefined,
                 costPrice: product.costPrice ?? undefined,
                 salePrice: product.salePrice ?? undefined,
+                isPurchasable: product.isPurchasable,
+                salesChannels: [...product.salesChannels],
               });
               setShowEdit(true);
             }}
@@ -445,20 +304,24 @@ export default function ProductDetailPage() {
             </Button>
           )}
           {canUpdate && product.status === 'ACTIVE' && (
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={statusMutation.isPending}
-              onClick={() => statusMutation.mutate('BLOCKED')}
-            >
-              Bloquear
-            </Button>
-          )}
-          {canMove && activeTab === 'movements' && (
-            <Button size="sm" onClick={() => setShowMovement(true)}>
-              <Plus size={13} />
-              Registrar
-            </Button>
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={statusMutation.isPending}
+                onClick={() => statusMutation.mutate('INACTIVE')}
+              >
+                Descontinuar
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={statusMutation.isPending}
+                onClick={() => statusMutation.mutate('BLOCKED')}
+              >
+                Bloquear
+              </Button>
+            </>
           )}
         </div>
       </div>
@@ -549,6 +412,37 @@ export default function ProductDetailPage() {
                   value={editForm.description ?? ''}
                   onChange={(e) => setEditForm((f) => ({ ...f, description: e.target.value || undefined }))}
                 />
+              </div>
+              <div className="space-y-2">
+                <Label>Canales de venta</Label>
+                <div className="grid grid-cols-3 gap-2">
+                  {SALES_CHANNELS.map((channel) => {
+                    const selected = editForm.salesChannels ?? [];
+                    return (
+                      <label
+                        key={channel}
+                        className="flex cursor-pointer items-center gap-2 rounded-xl border border-border px-3 py-2 text-sm"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selected.includes(channel)}
+                          onChange={(event) =>
+                            setEditForm((form) => ({
+                              ...form,
+                              salesChannels: event.target.checked
+                                ? [...new Set([...(form.salesChannels ?? []), channel])]
+                                : (form.salesChannels ?? []).filter(
+                                    (current) => current !== channel,
+                                  ),
+                            }))
+                          }
+                          className="h-4 w-4 rounded border-border accent-primary"
+                        />
+                        {SALES_CHANNEL_LABEL[channel]}
+                      </label>
+                    );
+                  })}
+                </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5">
@@ -669,11 +563,6 @@ export default function ProductDetailPage() {
           {movements.length === 0 ? (
             <div className="py-12 text-center">
               <p className="text-sm text-muted-foreground/60">Sin movimientos registrados para este producto.</p>
-              {canMove && (
-              <button onClick={() => setShowMovement(true)} className="mt-3 text-sm font-medium text-foreground underline underline-offset-2">
-                Registrar el primero
-              </button>
-              )}
             </div>
           ) : (
             <div className="overflow-hidden rounded-xl border border-border bg-card">
@@ -812,51 +701,23 @@ export default function ProductDetailPage() {
                                                  'bg-warn-subtle text-warn border-warn/30',
                     )}
                   >
-                    {u.status === 'IN_STOCK' ? 'En stock' : u.status === 'SOLD' ? 'Vendido' : 'Reservado'}
+                    {u.status === 'IN_STOCK'
+                      ? 'En stock'
+                      : u.status === 'SOLD'
+                        ? 'Vendido'
+                        : u.status === 'ADJUSTED_OUT'
+                          ? 'Ajustado'
+                          : u.status === 'DAMAGED'
+                            ? 'Dañado'
+                            : 'Reservado'}
                   </Badge>
                 </div>
               ))}
             </div>
           )}
 
-          <div className="rounded-xl border border-border bg-card p-4 space-y-3">
-            <p className="text-xs font-semibold text-muted-foreground">
-              Ingresar números de serie <span className="font-normal text-muted-foreground/60">(uno por línea)</span>
-            </p>
-            <textarea
-              rows={4}
-              className={cn(TEXTAREA_CLS, 'font-mono')}
-              placeholder={'SN-001\nSN-002\nSN-003'}
-              value={serialInput}
-              onChange={(e) => setSerialInput(e.target.value)}
-            />
-            {serialInput.trim() && (
-              <p className="text-xs text-muted-foreground/60">
-                {serialInput.split('\n').filter((s) => s.trim()).length} número(s) a registrar
-              </p>
-            )}
-            {unitsMutation.isError && (
-              <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-                {apiErrorMessage(unitsMutation.error, 'Error al registrar unidades')}
-              </div>
-            )}
-            {canAddUnits && (
-            <Button
-              type="button"
-              disabled={!serialInput.trim() || unitsMutation.isPending}
-              onClick={() => {
-                const sns = serialInput.split('\n').map((s) => s.trim()).filter(Boolean);
-                unitsMutation.mutate(sns);
-              }}
-            >
-              {unitsMutation.isPending ? 'Registrando...' : 'Registrar unidades'}
-            </Button>
-            )}
-          </div>
         </div>
       )}
-
-      {showMovement && <MovementModal productId={id} onClose={() => setShowMovement(false)} />}
 
       {canUpdate && activeTab === 'info' && !showEdit && (
         <div className="mt-4 flex justify-end">

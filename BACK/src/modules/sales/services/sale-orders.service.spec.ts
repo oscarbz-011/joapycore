@@ -26,7 +26,7 @@ function makeProduct(overrides = {}) {
     status: 'ACTIVE',
     kind: 'RESALE',
     isPurchasable: true,
-    isSellable: true,
+    salesChannels: ['NORMAL', 'POS'],
     deletedAt: null,
     ...overrides,
   };
@@ -58,6 +58,7 @@ function makeOrderItem(overrides = {}) {
     id: 'item-1',
     saleOrderId: 'order-1',
     productId: 'prod-1',
+    warehouseId: 'wh-1',
     quantity: 2,
     unitPrice: 2_500_000,
     productUnits: [],
@@ -168,22 +169,22 @@ describe('SaleOrdersService', () => {
         // stock sobreescriben esto.
         groupBy: jest
           .fn()
-          .mockImplementation(
-            ({
-              by,
-              where,
-            }: {
-              by: string[];
-              where: { productId?: { in: string[] } };
-            }) =>
-              Promise.resolve(
-                by[0] === 'productId'
-                  ? (where.productId?.in ?? []).map((productId) => ({
+          .mockImplementation(({ by, where }: { by: string[]; where: any }) =>
+            Promise.resolve(
+              by[0] === 'productId'
+                ? by.includes('warehouseId')
+                  ? (where.OR ?? []).map(
+                      (pair: { productId: string; warehouseId: string }) => ({
+                        ...pair,
+                        _sum: { quantity: 1000 },
+                      }),
+                    )
+                  : (where.productId?.in ?? []).map((productId: string) => ({
                       productId,
                       _sum: { quantity: 1000 },
                     }))
-                  : [],
-              ),
+                : [],
+            ),
           ),
       },
       posSession: {
@@ -234,6 +235,9 @@ describe('SaleOrdersService', () => {
       new StockLedgerService(
         new StockMovementsRepository(prisma as any),
         new ProductUnitsRepository(prisma as any),
+        {
+          findById: jest.fn().mockResolvedValue({ id: 'wh-1', isActive: true }),
+        } as any,
       ),
       outbox as any,
       new CreditSourcesRepository(prisma as any),
@@ -339,8 +343,25 @@ describe('SaleOrdersService', () => {
   describe('create', () => {
     const baseDto = {
       customerId: 'cust-1',
-      items: [{ productId: 'prod-1', quantity: 2, unitPrice: 2_500_000 }],
+      items: [
+        {
+          productId: 'prod-1',
+          warehouseId: 'wh-1',
+          quantity: 2,
+          unitPrice: 2_500_000,
+        },
+      ],
     };
+
+    it('accepts NORMAL sales only when NORMAL is enabled', async () => {
+      productsRepository.findManyByIds.mockResolvedValue([
+        makeProduct({ salesChannels: ['NORMAL'] }),
+      ]);
+
+      await expect(
+        service.create('tenant-1', baseDto, undefined, false, ['sales:create']),
+      ).resolves.toBeDefined();
+    });
 
     it('creates a PENDING order with non-serialized product', async () => {
       productsRepository.findManyByIds.mockResolvedValue([
@@ -396,21 +417,21 @@ describe('SaleOrdersService', () => {
 
     it('refuses to sell a raw material — la madera entra por compra y sale por producción', async () => {
       productsRepository.findManyByIds.mockResolvedValue([
-        makeProduct({ name: 'Tablero MDF 18mm', isSellable: false }),
+        makeProduct({ name: 'Tablero MDF 18mm', salesChannels: [] }),
       ]);
 
       await expect(
         service.create('tenant-1', baseDto, undefined, false, ['sales:create']),
-      ).rejects.toThrow(/no se vende, es de uso interno: Tablero MDF 18mm/);
+      ).rejects.toThrow(/Tablero MDF 18mm.*NORMAL/);
 
       expect(prisma.$transaction).not.toHaveBeenCalled();
     });
 
     it('sells a raw material that was explicitly marked as sellable', async () => {
       // El tornillo que es materia prima de un mueble y además se vende
-      // suelto en el mostrador — por eso el flag es editable, no derivado.
+      // suelto — por eso los canales se configuran por producto.
       productsRepository.findManyByIds.mockResolvedValue([
-        makeProduct({ kind: 'RAW_MATERIAL', isSellable: true }),
+        makeProduct({ kind: 'RAW_MATERIAL', salesChannels: ['NORMAL'] }),
       ]);
 
       await service.create('tenant-1', baseDto, undefined, false, [
@@ -454,7 +475,14 @@ describe('SaleOrdersService', () => {
           customerId: 'cust-1',
           saleType: 'CREDIT',
           installments: 10,
-          items: [{ productId: 'prod-1', quantity: 2, unitPrice: 2_500_000 }],
+          items: [
+            {
+              productId: 'prod-1',
+              warehouseId: 'wh-1',
+              quantity: 2,
+              unitPrice: 2_500_000,
+            },
+          ],
         },
         undefined,
         false,
@@ -473,7 +501,7 @@ describe('SaleOrdersService', () => {
         makeProduct({ isSerialized: false }),
       ]);
       tx.stockMovement.groupBy.mockResolvedValue([
-        { productId: 'prod-1', _sum: { quantity: 0 } },
+        { productId: 'prod-1', warehouseId: 'wh-1', _sum: { quantity: 0 } },
       ]);
 
       await expect(
@@ -483,7 +511,14 @@ describe('SaleOrdersService', () => {
             customerId: 'cust-1',
             saleType: 'CREDIT',
             installments: 10,
-            items: [{ productId: 'prod-1', quantity: 1, unitPrice: 2_500_000 }],
+            items: [
+              {
+                productId: 'prod-1',
+                warehouseId: 'wh-1',
+                quantity: 1,
+                unitPrice: 2_500_000,
+              },
+            ],
           },
           undefined,
           false,
@@ -631,9 +666,55 @@ describe('SaleOrdersService', () => {
 
   describe('createPosSale', () => {
     const baseDto = {
-      items: [{ productId: 'prod-1', quantity: 2, unitPrice: 2_500_000 }],
+      items: [
+        {
+          productId: 'prod-1',
+          warehouseId: 'wh-1',
+          quantity: 2,
+          unitPrice: 2_500_000,
+        },
+      ],
       payments: [{ amount: 5_000_000, paymentMethod: 'CASH' as const }],
     };
+
+    it('accepts POS sales only when POS is enabled', async () => {
+      productsRepository.findManyByIds.mockResolvedValue([
+        makeProduct({ salesChannels: ['POS'] }),
+      ]);
+
+      await expect(
+        service.createPosSale('tenant-1', baseDto, 'session-1', 'user-1'),
+      ).resolves.toBeDefined();
+    });
+
+    it('rejects POS when only NORMAL is enabled', async () => {
+      productsRepository.findManyByIds.mockResolvedValue([
+        makeProduct({ salesChannels: ['NORMAL'] }),
+      ]);
+
+      await expect(
+        service.createPosSale('tenant-1', baseDto, 'session-1', 'user-1'),
+      ).rejects.toThrow(/Heladera Samsung.*POS/);
+    });
+
+    it('rejects every channel for an active product with no channels', async () => {
+      productsRepository.findManyByIds.mockResolvedValue([
+        makeProduct({ salesChannels: [] }),
+      ]);
+
+      await expect(
+        service.create(
+          'tenant-1',
+          { ...baseDto, customerId: 'customer-1' },
+          undefined,
+          false,
+          ['sales:create'],
+        ),
+      ).rejects.toThrow(/Heladera Samsung.*NORMAL/);
+      await expect(
+        service.createPosSale('tenant-1', baseDto, 'session-1', 'user-1'),
+      ).rejects.toThrow(/Heladera Samsung.*POS/);
+    });
 
     it('creates a DELIVERED order in one transaction and emits sale.payment.collected', async () => {
       productsRepository.findManyByIds.mockResolvedValue([
@@ -678,7 +759,7 @@ describe('SaleOrdersService', () => {
         makeProduct({ isSerialized: false }),
       ]);
       tx.stockMovement.groupBy.mockResolvedValue([
-        { productId: 'prod-1', _sum: { quantity: 1 } },
+        { productId: 'prod-1', warehouseId: 'wh-1', _sum: { quantity: 1 } },
       ]);
 
       await expect(
@@ -819,7 +900,7 @@ describe('SaleOrdersService', () => {
       tx.saleOrderItem.findMany.mockResolvedValue([
         {
           ...makeOrderItem(),
-          warehouseId: null,
+          warehouseId: 'wh-1',
           product: { name: 'Heladera', isSerialized: false },
         },
       ]);
@@ -842,7 +923,7 @@ describe('SaleOrdersService', () => {
       tx.saleOrderItem.findMany.mockResolvedValue([
         {
           ...makeOrderItem(),
-          warehouseId: null,
+          warehouseId: 'wh-1',
           product: { name: 'Heladera', isSerialized: false },
         },
       ]);
@@ -866,14 +947,20 @@ describe('SaleOrdersService', () => {
       tx.saleOrderItem.findMany.mockResolvedValue([
         {
           ...makeOrderItem({ quantity: 5 }),
-          warehouseId: null,
+          warehouseId: 'wh-1',
           product: { name: 'Heladera', isSerialized: false },
         },
       ]);
       tx.stockMovement.groupBy.mockImplementation(({ by }: { by: string[] }) =>
         Promise.resolve(
           by[0] === 'productId'
-            ? [{ productId: 'prod-1', _sum: { quantity: 3 } }]
+            ? [
+                {
+                  productId: 'prod-1',
+                  warehouseId: 'wh-1',
+                  _sum: { quantity: 3 },
+                },
+              ]
             : [],
         ),
       );
@@ -1005,14 +1092,20 @@ describe('SaleOrdersService', () => {
       tx.saleOrderItem.findMany.mockResolvedValue([
         {
           ...makeOrderItem({ quantity: 2 }),
-          warehouseId: null,
+          warehouseId: 'wh-1',
           product: { name: 'Heladera Samsung', isSerialized: false },
         },
       ]);
       tx.stockMovement.groupBy.mockImplementation(({ by }: { by: string[] }) =>
         Promise.resolve(
           by[0] === 'productId'
-            ? [{ productId: 'prod-1', _sum: { quantity: 0 } }]
+            ? [
+                {
+                  productId: 'prod-1',
+                  warehouseId: 'wh-1',
+                  _sum: { quantity: 0 },
+                },
+              ]
             : [],
         ),
       );
@@ -1346,7 +1439,14 @@ describe('SaleOrdersService', () => {
         'order-1',
         {
           installments: 6,
-          items: [{ productId: 'prod-1', quantity: 1, unitPrice: 2_500_000 }],
+          items: [
+            {
+              productId: 'prod-1',
+              warehouseId: 'wh-1',
+              quantity: 1,
+              unitPrice: 2_500_000,
+            },
+          ],
         },
         'user-1',
       );

@@ -30,7 +30,11 @@ export class ProductUnitsRepository {
     tenantId: string,
     productId: string,
     serials: string[],
-    opts: { purchaseOrderItemId?: string; purchaseReceiptItemId?: string } = {},
+    opts: {
+      purchaseOrderItemId?: string;
+      purchaseReceiptItemId?: string;
+      warehouseId?: string;
+    } = {},
     client: PrismaClientOrTx = this.prisma,
   ) {
     return client.productUnit.createMany({
@@ -40,9 +44,74 @@ export class ProductUnitsRepository {
         serialNumber,
         purchaseOrderItemId: opts.purchaseOrderItemId,
         purchaseReceiptItemId: opts.purchaseReceiptItemId,
+        warehouseId: opts.warehouseId,
       })),
       skipDuplicates: true,
     });
+  }
+
+  async moveInStockUnits(
+    tenantId: string,
+    productId: string,
+    serialNumbers: string[],
+    fromWarehouseId: string,
+    toWarehouseId: string,
+    client: PrismaClientOrTx = this.prisma,
+  ): Promise<number> {
+    const result = await client.productUnit.updateMany({
+      where: {
+        tenantId,
+        productId,
+        serialNumber: { in: serialNumbers },
+        status: 'IN_STOCK',
+        warehouseId: fromWarehouseId,
+      },
+      data: { warehouseId: toWarehouseId },
+    });
+    return result.count;
+  }
+
+  async markAdjustedOut(
+    tenantId: string,
+    productId: string,
+    serialNumbers: string[],
+    warehouseId: string,
+    client: PrismaClientOrTx = this.prisma,
+  ): Promise<number> {
+    const result = await client.productUnit.updateMany({
+      where: {
+        tenantId,
+        productId,
+        serialNumber: { in: serialNumbers },
+        status: 'IN_STOCK',
+        warehouseId,
+      },
+      data: { status: 'ADJUSTED_OUT' },
+    });
+    return result.count;
+  }
+
+  async restoreAdjustedOut(
+    tenantId: string,
+    productId: string,
+    serialNumbers: string[],
+    warehouseId: string,
+    client: PrismaClientOrTx = this.prisma,
+  ): Promise<number> {
+    const result = await client.productUnit.updateMany({
+      where: {
+        tenantId,
+        productId,
+        serialNumber: { in: serialNumbers },
+        status: 'ADJUSTED_OUT',
+      },
+      data: {
+        status: 'IN_STOCK',
+        warehouseId,
+        saleOrderItemId: null,
+      },
+    });
+    return result.count;
   }
 
   updateStatus(

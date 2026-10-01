@@ -1,75 +1,79 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from 'vitest';
+import type { StockResult, StockRow } from './api/inventory';
+import { stockColumns, stockQuantity } from './inventory-stock';
 
-import {
-  filterStockProducts,
-  getStockLevel,
-  summarizeStock,
-} from "./inventory-stock";
-
-const products = [
-  {
-    id: "available",
-    name: "Taladro",
-    model: "T-20",
-    category: { name: "Herramientas" },
-    brand: { name: "Acme" },
-    stock: 8,
-    stockMin: 3,
-  },
-  {
-    id: "critical",
-    name: "Tornillo",
+const row: StockRow = {
+  product: {
+    id: 'product-1',
+    name: 'Producto',
     model: null,
-    category: { name: "Fijaciones" },
-    brand: null,
-    stock: 2,
-    stockMin: 2,
-  },
-  {
-    id: "out",
-    name: "Martillo",
-    model: "M-1",
     category: null,
-    brand: { name: "Herramax" },
-    stock: 0,
-    stockMin: 0,
+    brand: null,
+    salesChannels: ['NORMAL'],
   },
-];
+  totalStock: 5,
+  stockByWarehouse: [
+    {
+      warehouseId: 'active',
+      warehouseName: 'Central',
+      isActive: true,
+      quantity: 5,
+    },
+    {
+      warehouseId: 'inactive',
+      warehouseName: 'Anterior',
+      isActive: false,
+      quantity: 0,
+    },
+  ],
+  unassignedStock: 0,
+};
 
-describe("inventory stock view", () => {
-  it("classifies current stock against the configured minimum", () => {
-    expect(getStockLevel(products[0])).toBe("available");
-    expect(getStockLevel(products[1])).toBe("critical");
-    expect(getStockLevel(products[2])).toBe("out");
+const result: StockResult = {
+  warehouses: [
+    { id: 'active', name: 'Central', isActive: true },
+    { id: 'inactive', name: 'Anterior', isActive: false },
+  ],
+  items: [row],
+};
+
+describe('inventory stock columns', () => {
+  it('shows company total, every location, and unassigned stock in Todos', () => {
+    expect(stockColumns(result, null).map((column) => column.key)).toEqual([
+      'total',
+      'warehouse:active',
+      'warehouse:inactive',
+      'unassigned',
+    ]);
   });
 
-  it("filters critical stock including products that are out of stock", () => {
+  it('shows company total and only the selected warehouse', () => {
     expect(
-      filterStockProducts(products, "", "critical").map((p) => p.id),
-    ).toEqual(["out", "critical"]);
+      stockColumns(result, 'inactive').map((column) => ({
+        key: column.key,
+        inactive: column.isInactive,
+      })),
+    ).toEqual([
+      { key: 'total', inactive: false },
+      { key: 'warehouse:inactive', inactive: true },
+    ]);
   });
 
-  it("searches product, model, category, and brand without case sensitivity", () => {
+  it('keeps unassigned and zero quantities as explicit values', () => {
+    const allColumns = stockColumns(result, null);
     expect(
-      filterStockProducts(products, "TALADRO", "all").map((p) => p.id),
-    ).toEqual(["available"]);
+      stockQuantity(
+        row,
+        allColumns.find((column) => column.key === 'unassigned')!,
+      ),
+    ).toBe(0);
     expect(
-      filterStockProducts(products, "t-20", "all").map((p) => p.id),
-    ).toEqual(["available"]);
-    expect(
-      filterStockProducts(products, "herramientas", "all").map((p) => p.id),
-    ).toEqual(["available"]);
-    expect(
-      filterStockProducts(products, "herramax", "all").map((p) => p.id),
-    ).toEqual(["out"]);
-  });
-
-  it("reports totals for available, critical, and out-of-stock products", () => {
-    expect(summarizeStock(products)).toEqual({
-      total: 3,
-      available: 1,
-      critical: 2,
-      out: 1,
-    });
+      stockQuantity(
+        row,
+        allColumns.find(
+          (column) => column.key === 'warehouse:inactive',
+        )!,
+      ),
+    ).toBe(0);
   });
 });

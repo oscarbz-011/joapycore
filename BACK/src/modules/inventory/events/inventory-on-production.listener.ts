@@ -10,7 +10,7 @@ interface ProductionOrderCompletedEvent {
   productionOrderId: string;
   productId: string;
   quantity: number;
-  warehouseId: string | null;
+  warehouseId: string;
   consumed: { productId: string; quantity: number }[];
 }
 
@@ -66,7 +66,7 @@ export class InventoryOnProductionListener {
             reason: MovementReason.PRODUCTION_OUT,
             // Negativo: el stock se calcula sumando movimientos.
             quantity: -Math.abs(line.quantity),
-            warehouseId: event.warehouseId ?? undefined,
+            warehouseId: event.warehouseId,
             referenceId: productionOrderId,
           },
           tx,
@@ -81,7 +81,7 @@ export class InventoryOnProductionListener {
           productId: event.productId,
           quantity: event.quantity,
           reason: MovementReason.PRODUCTION_IN,
-          warehouseId: event.warehouseId ?? undefined,
+          warehouseId: event.warehouseId,
           referenceId: productionOrderId,
         },
         tx,

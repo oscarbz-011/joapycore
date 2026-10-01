@@ -7,7 +7,13 @@ import {
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
-import { MarkupType, Prisma, Product, ProductStatus } from '@prisma/client';
+import {
+  MarkupType,
+  OrderChannel,
+  Prisma,
+  Product,
+  ProductStatus,
+} from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { AdjustOrderDto } from '../dto/adjust-order.dto';
 import { CollectPaymentDto } from '../dto/collect-payment.dto';
@@ -505,7 +511,7 @@ export class SaleOrdersService implements SalesGateway {
         tenantId,
         productIds,
       );
-      this.assertSellable(products);
+      this.assertSellable(products, OrderChannel.NORMAL);
       productMap = new Map(products.map((p) => [p.id, p]));
     }
 
@@ -623,16 +629,14 @@ export class SaleOrdersService implements SalesGateway {
   // calidad/auditoría — ninguno de los tres puede entrar en una venta nueva,
   // pero los tres siguen existiendo en el historial de ventas viejas (por eso
   // se valida acá, sobre los ítems entrantes, y no filtrando el catálogo).
-  private assertSellable(products: Product[]) {
-    // Además del estado, no todo producto se vende: una materia prima
-    // (RAW_MATERIAL, ej. la madera de una carpintería) entra por compra y sale
-    // por producción, nunca por el mostrador. El flag es editable por producto
-    // para los casos mixtos — ver ProductKind / KIND_DEFAULT_FLAGS.
-    const notForSale = products.filter((p) => !p.isSellable);
+  private assertSellable(products: Product[], channel: OrderChannel) {
+    const notForSale = products.filter(
+      (product) => !product.salesChannels.includes(channel),
+    );
     if (notForSale.length) {
       const detail = notForSale.map((p) => p.name).join(', ');
       throw new UnprocessableEntityException(
-        `Este producto no se vende, es de uso interno: ${detail}`,
+        `Canal no habilitado: ${detail} (${channel})`,
       );
     }
 
@@ -734,6 +738,12 @@ export class SaleOrdersService implements SalesGateway {
         }
       }
 
+      if (product && !item.warehouseId) {
+        throw new UnprocessableEntityException(
+          `Product "${product.name}" requires an active warehouse`,
+        );
+      }
+
       const saleItem = await this.saleOrdersRepository.createItem(
         {
           saleOrderId: orderId,
@@ -763,6 +773,7 @@ export class SaleOrdersService implements SalesGateway {
           item.productId!,
           item.serialNumbers!,
           saleItem.id,
+          item.warehouseId!,
         );
       }
 
@@ -784,7 +795,10 @@ export class SaleOrdersService implements SalesGateway {
     tx: Prisma.TransactionClient,
     tenantId: string,
     items: Array<
-      Pick<CreatedItemInfo, 'productId' | 'quantity' | 'isSerialized'>
+      Pick<
+        CreatedItemInfo,
+        'productId' | 'quantity' | 'isSerialized' | 'warehouseId'
+      >
     >,
     productMap: Map<string, Pick<Product, 'name'>>,
   ): Promise<void> {
@@ -795,6 +809,7 @@ export class SaleOrdersService implements SalesGateway {
         .filter((i) => i.productId && !i.isSerialized)
         .map((i) => ({
           productId: i.productId!,
+          warehouseId: i.warehouseId!,
           quantity: i.quantity,
           name: productMap.get(i.productId!)?.name,
         })),
@@ -880,7 +895,7 @@ export class SaleOrdersService implements SalesGateway {
       tenantId,
       productIds,
     );
-    this.assertSellable(products);
+    this.assertSellable(products, OrderChannel.NORMAL);
     const productMap = new Map(products.map((p) => [p.id, p]));
 
     // Validate free-text items have a description
@@ -1324,7 +1339,7 @@ export class SaleOrdersService implements SalesGateway {
       tenantId,
       productIds,
     );
-    this.assertSellable(products);
+    this.assertSellable(products, OrderChannel.POS);
     const productMap = new Map(products.map((p) => [p.id, p]));
 
     const { subtotal, total } = this.computeTotals(dto);

@@ -12,6 +12,7 @@ import { randomUUID } from 'node:crypto';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { ProductUnitsRepository } from '../src/modules/inventory/repositories/product-units.repository';
 import { StockMovementsRepository } from '../src/modules/inventory/repositories/stock-movements.repository';
+import { StockLocationsRepository } from '../src/modules/inventory/repositories/stock-locations.repository';
 import { StockLedgerService } from '../src/modules/inventory/services/stock-ledger.service';
 
 describe('StockLedgerService.assertAvailable (PostgreSQL)', () => {
@@ -19,6 +20,7 @@ describe('StockLedgerService.assertAvailable (PostgreSQL)', () => {
   let ledger: StockLedgerService;
   let tenantId: string;
   let productId: string;
+  let warehouseId: string;
 
   beforeAll(async () => {
     prisma = new PrismaService(new ConfigService(process.env));
@@ -26,12 +28,18 @@ describe('StockLedgerService.assertAvailable (PostgreSQL)', () => {
     ledger = new StockLedgerService(
       new StockMovementsRepository(prisma),
       new ProductUnitsRepository(prisma),
+      new StockLocationsRepository(prisma),
     );
     const tenant = await prisma.tenant.create({
       data: { name: `TEST stock lock ${randomUUID()}` },
       select: { id: true },
     });
     tenantId = tenant.id;
+    const warehouse = await prisma.warehouse.create({
+      data: { tenantId, name: `TEST warehouse ${randomUUID()}` },
+      select: { id: true },
+    });
+    warehouseId = warehouse.id;
     const product = await prisma.product.create({
       data: {
         tenantId,
@@ -41,7 +49,7 @@ describe('StockLedgerService.assertAvailable (PostgreSQL)', () => {
     });
     productId = product.id;
     await prisma.stockMovement.create({
-      data: { tenantId, productId, type: 'IN', quantity: 1 },
+      data: { tenantId, productId, warehouseId, type: 'IN', quantity: 1 },
     });
   });
 
@@ -50,6 +58,9 @@ describe('StockLedgerService.assertAvailable (PostgreSQL)', () => {
     if (productId) {
       await prisma.stockMovement.deleteMany({ where: { tenantId, productId } });
       await prisma.product.deleteMany({ where: { id: productId } });
+    }
+    if (warehouseId) {
+      await prisma.warehouse.deleteMany({ where: { id: warehouseId } });
     }
     if (tenantId) {
       await prisma.tenant.deleteMany({ where: { id: tenantId } });
@@ -60,12 +71,18 @@ describe('StockLedgerService.assertAvailable (PostgreSQL)', () => {
   const sellOne = () =>
     prisma.$transaction(async (tx) => {
       await ledger.assertAvailable(tx, tenantId, [
-        { productId, quantity: 1, name: 'Última unidad' },
+        { productId, warehouseId, quantity: 1, name: 'Última unidad' },
       ]);
       // Ventana amplia entre leer y escribir: sin lock, ambas pasarían.
       await new Promise((r) => setTimeout(r, 300));
       await tx.stockMovement.create({
-        data: { tenantId, productId, type: 'OUT', quantity: -1 },
+        data: {
+          tenantId,
+          productId,
+          warehouseId,
+          type: 'OUT',
+          quantity: -1,
+        },
       });
     });
 

@@ -2,6 +2,10 @@ import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { PrismaClientOrTx } from '../../../prisma/types';
+import {
+  stockDemandKey,
+  type StockDemand,
+} from '../../../common/utils/stock-availability.util';
 
 /**
  * Escrituras y lecturas puntuales de stock_movements usadas por los flujos de
@@ -73,6 +77,38 @@ export class StockMovementsRepository {
       _sum: { quantity: true },
     });
     return new Map(sums.map((s) => [s.productId, s._sum.quantity ?? 0]));
+  }
+
+  async sumByProductsAndWarehouse(
+    tenantId: string,
+    demands: StockDemand[],
+    client: PrismaClientOrTx = this.prisma,
+  ): Promise<Map<string, number>> {
+    if (demands.length === 0) return new Map();
+    const pairs = [
+      ...new Map(
+        demands.map((d) => [
+          stockDemandKey(d.productId, d.warehouseId),
+          { productId: d.productId, warehouseId: d.warehouseId },
+        ]),
+      ).values(),
+    ];
+    const sums = await client.stockMovement.groupBy({
+      by: ['productId', 'warehouseId'],
+      where: {
+        tenantId,
+        OR: pairs,
+      },
+      _sum: { quantity: true },
+    });
+    return new Map(
+      sums
+        .filter((sum) => sum.warehouseId)
+        .map((sum) => [
+          stockDemandKey(sum.productId, sum.warehouseId!),
+          sum._sum.quantity ?? 0,
+        ]),
+    );
   }
 
   /** Suma de movimientos RESERVED por ítem de venta. */

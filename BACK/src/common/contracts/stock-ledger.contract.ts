@@ -63,6 +63,7 @@ export interface StockLedger {
     productId: string,
     serialNumbers: string[],
     saleItemId: string,
+    warehouseId: string,
   ): Promise<void>;
   /** Desasigna las unidades de líneas que se van a reemplazar. */
   detachSerialUnits(

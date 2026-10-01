@@ -26,10 +26,9 @@ export class CreateInitialStockDto {
   @Min(1)
   quantity: number;
 
-  @ApiPropertyOptional()
-  @IsOptional()
+  @ApiProperty()
   @IsUUID()
-  warehouseId?: string;
+  warehouseId: string;
 
   @ApiPropertyOptional()
   @IsOptional()

@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import {
   MovementReason,
+  OrderChannel,
   Prisma,
   ProductKind,
   ProductStatus,
@@ -16,7 +17,7 @@ export interface ProductFilters {
   status?: ProductStatus;
   kind?: ProductKind;
   isPurchasable?: boolean;
-  isSellable?: boolean;
+  salesChannel?: OrderChannel;
   search?: string;
 }
 
@@ -38,8 +39,8 @@ export class ProductsRepository {
       ...(filters.isPurchasable !== undefined && {
         isPurchasable: filters.isPurchasable,
       }),
-      ...(filters.isSellable !== undefined && {
-        isSellable: filters.isSellable,
+      ...(filters.salesChannel && {
+        salesChannels: { has: filters.salesChannel },
       }),
       ...(filters.search && {
         OR: [

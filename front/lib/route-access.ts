@@ -39,7 +39,17 @@ export const ROUTE_RULES: RouteRule[] = [
     anyPermission: ["inventory:products:read"],
   },
   {
+    prefix: "/dashboard/inventory/stock",
+    modules: ["inventory"],
+    anyPermission: ["inventory:products:read"],
+  },
+  {
     prefix: "/dashboard/inventory/categories",
+    modules: ["inventory"],
+    anyPermission: ["inventory:categories:read"],
+  },
+  {
+    prefix: "/dashboard/inventory/config",
     modules: ["inventory"],
     anyPermission: ["inventory:categories:read"],
   },
@@ -55,11 +65,6 @@ export const ROUTE_RULES: RouteRule[] = [
   },
   {
     prefix: "/dashboard/inventory/batches",
-    modules: ["inventory"],
-    anyPermission: ["inventory:products:read"],
-  },
-  {
-    prefix: "/dashboard/inventory/stock",
     modules: ["inventory"],
     anyPermission: ["inventory:products:read"],
   },

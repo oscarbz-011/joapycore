@@ -17,7 +17,7 @@ const MODULE_LINKS = [
   { icon: LayoutDashboard, label: 'Dashboard',    href: '/dashboard' },
   { icon: ShoppingCart,    label: 'Ventas',        href: '/dashboard/sales' },
   { icon: Target,          label: 'Metas',         href: '/dashboard/sales/targets' },
-  { icon: Package,         label: 'Inventario',    href: '/dashboard/inventory' },
+  { icon: Package,         label: 'Inventario',    href: '/dashboard/inventory/products' },
   { icon: FileText,        label: 'Facturación',   href: '/dashboard/billing' },
   { icon: CreditCard,      label: 'Pagos',         href: '/dashboard/payments' },
   { icon: Truck,           label: 'Compras',       href: '/dashboard/procurement' },
@@ -257,7 +257,7 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
                   label={p.name + (p.model ? ` — ${p.model}` : '')}
                   sub={[p.category?.name, p.brand?.name].filter(Boolean).join(' · ')}
                   right={p.salePrice == null ? 'Pendiente' : fmtGs(p.salePrice)}
-                  onClick={() => navigate('/dashboard/inventory')}
+                  onClick={() => navigate(`/dashboard/inventory/products/${p.id}`)}
                 />
               ))}
             </div>

@@ -1,75 +1,61 @@
-export type StockLevel = "available" | "critical" | "out";
-export type StockLevelFilter = "all" | "available" | "critical";
+import type { StockResult, StockRow } from './api/inventory';
 
-export interface StockProductLike {
-  id: string;
-  name: string;
-  model: string | null;
-  category: { name: string } | null;
-  brand: { name: string } | null;
-  stock: number;
-  stockMin: number;
+export interface StockColumn {
+  key: string;
+  label: string;
+  warehouseId: string | null;
+  kind: 'total' | 'warehouse' | 'unassigned';
+  isInactive: boolean;
 }
 
-export function getStockLevel(product: StockProductLike): StockLevel {
-  if (product.stock <= 0) return "out";
-  if (product.stock <= product.stockMin) return "critical";
-  return "available";
-}
+export function stockColumns(
+  result: StockResult,
+  selectedWarehouseId: string | null,
+): StockColumn[] {
+  const columns: StockColumn[] = [
+    {
+      key: 'total',
+      label: 'Total general',
+      warehouseId: null,
+      kind: 'total',
+      isInactive: false,
+    },
+  ];
+  const warehouses = selectedWarehouseId
+    ? result.warehouses.filter(
+        (warehouse) => warehouse.id === selectedWarehouseId,
+      )
+    : result.warehouses;
 
-function normalize(value: string) {
-  return value
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLocaleLowerCase("es");
-}
+  columns.push(
+    ...warehouses.map((warehouse) => ({
+      key: `warehouse:${warehouse.id}`,
+      label: warehouse.name,
+      warehouseId: warehouse.id,
+      kind: 'warehouse' as const,
+      isInactive: !warehouse.isActive,
+    })),
+  );
 
-export function filterStockProducts<T extends StockProductLike>(
-  products: readonly T[],
-  search: string,
-  level: StockLevelFilter,
-): T[] {
-  const query = normalize(search.trim());
-  const levelOrder: Record<StockLevel, number> = {
-    out: 0,
-    critical: 1,
-    available: 2,
-  };
-
-  return products
-    .filter((product) => {
-      const stockLevel = getStockLevel(product);
-      if (level === "critical" && stockLevel === "available") return false;
-      if (level === "available" && stockLevel !== "available") return false;
-      if (!query) return true;
-
-      return [
-        product.name,
-        product.model,
-        product.category?.name,
-        product.brand?.name,
-      ].some((value) => value && normalize(value).includes(query));
-    })
-    .sort((left, right) => {
-      const byLevel =
-        levelOrder[getStockLevel(left)] - levelOrder[getStockLevel(right)];
-      if (byLevel !== 0) return byLevel;
-      if (left.stock !== right.stock) return left.stock - right.stock;
-      return left.name.localeCompare(right.name, "es");
+  if (!selectedWarehouseId) {
+    columns.push({
+      key: 'unassigned',
+      label: 'Sin depósito asignado',
+      warehouseId: null,
+      kind: 'unassigned',
+      isInactive: false,
     });
-}
-
-export function summarizeStock(products: readonly StockProductLike[]) {
-  let available = 0;
-  let critical = 0;
-  let out = 0;
-
-  for (const product of products) {
-    const level = getStockLevel(product);
-    if (level === "available") available += 1;
-    else critical += 1;
-    if (level === "out") out += 1;
   }
 
-  return { total: products.length, available, critical, out };
+  return columns;
+}
+
+export function stockQuantity(row: StockRow, column: StockColumn): number {
+  if (column.kind === 'total') return row.totalStock;
+  if (column.kind === 'unassigned') return row.unassignedStock;
+  return (
+    row.stockByWarehouse.find(
+      (quantity) => quantity.warehouseId === column.warehouseId,
+    )?.quantity ?? 0
+  );
 }

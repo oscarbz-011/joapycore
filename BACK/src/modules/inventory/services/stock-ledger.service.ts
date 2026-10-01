@@ -16,6 +16,7 @@ import {
 } from '../../../common/utils/stock-availability.util';
 import { ProductUnitsRepository } from '../repositories/product-units.repository';
 import { StockMovementsRepository } from '../repositories/stock-movements.repository';
+import { StockLocationsRepository } from '../repositories/stock-locations.repository';
 
 /**
  * Implementación de StockLedger: operaciones de stock que Ventas y POS usan
@@ -26,6 +27,7 @@ export class StockLedgerService implements StockLedger {
   constructor(
     private readonly stockMovements: StockMovementsRepository,
     private readonly productUnits: ProductUnitsRepository,
+    private readonly stockLocations: StockLocationsRepository,
   ) {}
 
   /**
@@ -42,11 +44,18 @@ export class StockLedgerService implements StockLedger {
   ): Promise<void> {
     const totals = aggregateDemands(demands);
     if (totals.size === 0) return;
-    const productIds = [...totals.keys()];
+    for (const warehouseId of new Set(
+      demands.map((demand) => demand.warehouseId),
+    )) {
+      await this.assertActiveWarehouse(tx, tenantId, warehouseId);
+    }
+    const productIds = [
+      ...new Set([...totals.values()].map((demand) => demand.productId)),
+    ];
     await this.stockMovements.lockProducts(tx, tenantId, productIds);
-    const available = await this.stockMovements.sumByProducts(
+    const available = await this.stockMovements.sumByProductsAndWarehouse(
       tenantId,
-      productIds,
+      demands,
       tx,
     );
     assertDemandsCovered(totals, available);
@@ -121,7 +130,9 @@ export class StockLedgerService implements StockLedger {
     productId: string,
     serialNumbers: string[],
     saleItemId: string,
+    warehouseId: string,
   ): Promise<void> {
+    await this.assertActiveWarehouse(tx, tenantId, warehouseId);
     for (const serial of serialNumbers) {
       const unit = await this.productUnits.findBySerialForUpdate(
         tenantId,
@@ -137,7 +148,29 @@ export class StockLedgerService implements StockLedger {
           `Serial "${serial}" is not available (status: ${unit.status})`,
         );
       }
+      if (unit.warehouseId !== warehouseId) {
+        throw new UnprocessableEntityException(
+          `Serial "${serial}" is not available in warehouse ${warehouseId}`,
+        );
+      }
       await this.productUnits.assignToSaleItem(unit.id, saleItemId, tx);
+    }
+  }
+
+  private async assertActiveWarehouse(
+    tx: Prisma.TransactionClient,
+    tenantId: string,
+    warehouseId: string,
+  ): Promise<void> {
+    const warehouse = await this.stockLocations.findById(
+      tenantId,
+      warehouseId,
+      tx,
+    );
+    if (!warehouse?.isActive) {
+      throw new UnprocessableEntityException(
+        'El depósito no existe o está inactivo',
+      );
     }
   }
 

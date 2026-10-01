@@ -5,6 +5,7 @@ import { usePermission } from '@/lib/permissions';
 import { RequirePermission } from '@/components/require-permission';
 
 import { apiErrorMessage } from '@/lib/api/api-error';
+import { salesChannelProductFilters } from '@/lib/product-catalog';
 
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -275,8 +276,9 @@ interface PaymentLine {
 function SaleScreen({ session }: { session: PosSession }) {
   const queryClient = useQueryClient();
   const { data: products = [] } = useQuery({
-    queryKey: ['products-with-stock'],
-    queryFn: () => inventoryApi.listProductsWithStock({ status: 'ACTIVE', isSellable: true }),
+    queryKey: ['products-with-stock', 'POS'],
+    queryFn: () =>
+      inventoryApi.listProductsWithStock(salesChannelProductFilters('POS')),
   });
   const { data: customers = [] } = useQuery({
     queryKey: ['customers'],

@@ -1,5 +1,5 @@
-import { redirect } from "next/navigation";
+import { redirect } from 'next/navigation';
 
-export default function LegacyInventoryConfigPage() {
-  redirect("/dashboard/inventory/categories");
+export default function InventoryConfigPage() {
+  redirect('/dashboard/inventory/categories');
 }

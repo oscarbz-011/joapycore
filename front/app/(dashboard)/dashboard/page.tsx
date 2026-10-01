@@ -594,7 +594,7 @@ export default function DashboardPage() {
                     <CardHeader>
                       <CardTitle>Stock crítico</CardTitle>
                       <CardAction>
-                        <Link href="/dashboard/inventory" className="text-[12px] font-semibold text-primary hover:underline">
+                        <Link href="/dashboard/inventory/stock" className="text-[12px] font-semibold text-primary hover:underline">
                           Ver todo
                         </Link>
                       </CardAction>
@@ -710,7 +710,7 @@ export default function DashboardPage() {
               <div className="grid grid-cols-3 gap-3">
                 {([
                   { key: 'sales',       label: 'Ventas',      href: '/dashboard/sales',       icon: ShoppingCart },
-                  { key: 'inventory',   label: 'Inventario',  href: '/dashboard/inventory',   icon: Package },
+                  { key: 'inventory',   label: 'Inventario',  href: '/dashboard/inventory/products', icon: Package },
                   { key: 'billing',     label: 'Facturación', href: '/dashboard/billing',     icon: FileText },
                   { key: 'procurement', label: 'Compras',     href: '/dashboard/procurement', icon: Truck },
                   { key: 'payments',    label: 'Cuentas',     href: '/dashboard/payments',    icon: CreditCard },

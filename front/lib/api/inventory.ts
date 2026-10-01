@@ -14,6 +14,14 @@ export interface Brand {
 
 export type MarkupType = 'PERCENTAGE' | 'FIXED';
 
+export type OrderChannel = 'NORMAL' | 'POS' | 'ECOMMERCE';
+
+export const SALES_CHANNEL_LABEL: Record<OrderChannel, string> = {
+  NORMAL: 'Venta normal',
+  POS: 'POS',
+  ECOMMERCE: 'ECOMMERCE',
+};
+
 // Estado de la FICHA del producto, no del stock (el stock son movimientos,
 // ver StockMovement). DRAFT = creada incompleta, no opera; ACTIVE = completa,
 // se puede comprar y vender; INACTIVE = descontinuada; BLOCKED = restringida.
@@ -66,7 +74,7 @@ export interface Product {
   status: ProductStatus;
   kind: ProductKind;
   isPurchasable: boolean;
-  isSellable: boolean;
+  salesChannels: OrderChannel[];
   deletedAt: string | null;
   category: { id: string; name: string } | null;
   brand: { id: string; name: string } | null;
@@ -79,7 +87,8 @@ export interface ProductWithStock extends Product {
 export interface ProductUnit {
   id: string;
   serialNumber: string;
-  status: 'IN_STOCK' | 'SOLD' | 'RESERVED';
+  warehouseId: string | null;
+  status: 'IN_STOCK' | 'SOLD' | 'RESERVED' | 'DAMAGED' | 'ADJUSTED_OUT';
 }
 
 export interface ProductFilters {
@@ -90,10 +99,9 @@ export interface ProductFilters {
   status?: ProductStatus;
   kind?: ProductKind;
   // Los usan los selectores de producto de cada flujo para no ofrecer lo que
-  // el backend después va a rechazar (Compras: isPurchasable, Ventas/POS:
-  // isSellable).
+  // el backend después va a rechazar.
   isPurchasable?: boolean;
-  isSellable?: boolean;
+  salesChannel?: OrderChannel;
 }
 
 export interface CreateProductPayload {
@@ -113,7 +121,7 @@ export interface CreateProductPayload {
   // Si se omite, el backend lo deriva del rubro del tenant.
   kind?: ProductKind;
   isPurchasable?: boolean;
-  isSellable?: boolean;
+  salesChannels?: OrderChannel[];
 }
 
 export type UpdateProductPayload =
@@ -127,7 +135,7 @@ export type UpdateProductPayload =
     status?: ProductStatus;
     kind?: ProductKind;
     isPurchasable?: boolean;
-    isSellable?: boolean;
+    salesChannels?: OrderChannel[];
   };
 
 export type MovementReason =
@@ -163,6 +171,7 @@ export interface CreateStockMovementPayload {
   direction?: 'IN' | 'OUT';
   warehouseId?: string;
   toWarehouseId?: string;
+  serialNumbers?: string[];
   notes?: string;
 }
 
@@ -176,6 +185,41 @@ export interface MovementFilters {
   reason?: MovementReason;
   take?: number;
   skip?: number;
+}
+
+export interface StockWarehouse {
+  id: string;
+  name: string;
+  isActive: boolean;
+}
+
+export interface StockWarehouseQuantity {
+  warehouseId: string;
+  warehouseName: string;
+  isActive: boolean;
+  quantity: number;
+}
+
+export interface StockRow {
+  product: Pick<Product, 'id' | 'name' | 'model' | 'salesChannels'> & {
+    category: { id: string; name: string } | null;
+    brand: { id: string; name: string } | null;
+  };
+  totalStock: number;
+  stockByWarehouse: StockWarehouseQuantity[];
+  unassignedStock: number;
+}
+
+export interface StockResult {
+  warehouses: StockWarehouse[];
+  items: StockRow[];
+}
+
+export interface StockFilters {
+  search?: string;
+  categoryId?: string;
+  brandId?: string;
+  warehouseId?: string;
 }
 
 export interface ProductBatch {
@@ -200,7 +244,7 @@ export type StockInitialSourceType =
 export interface CreateInitialStockPayload {
   productId: string;
   quantity: number;
-  warehouseId?: string;
+  warehouseId: string;
   branchId?: string;
   initialSourceType: StockInitialSourceType;
   batchNumber?: string;
@@ -238,14 +282,14 @@ export const inventoryApi = {
   listProductsWithStock: (filters?: ProductFilters): Promise<ProductWithStock[]> =>
     apiClient.get('/inventory/products/with-stock', { params: filters }).then((r) => r.data),
 
-  addStockMovement: (id: string, dto: CreateStockMovementPayload): Promise<StockMovement | StockMovement[]> =>
-    apiClient.post(`/inventory/products/${id}/stock-movements`, dto).then((r) => r.data),
-
   listMovements: (filters?: MovementFilters): Promise<StockMovement[]> =>
     apiClient.get('/inventory/movements', { params: filters }).then((r) => r.data),
 
   createMovement: (dto: CreateGlobalMovementPayload): Promise<StockMovement | StockMovement[]> =>
     apiClient.post('/inventory/movements', dto).then((r) => r.data),
+
+  getStock: (filters?: StockFilters): Promise<StockResult> =>
+    apiClient.get('/inventory/stock', { params: filters }).then((r) => r.data),
 
   getProduct: (id: string): Promise<ProductWithStock> =>
     apiClient.get(`/inventory/products/${id}`).then((r) => r.data),
@@ -261,9 +305,6 @@ export const inventoryApi = {
 
   getProductUnits: (id: string): Promise<ProductUnit[]> =>
     apiClient.get(`/inventory/products/${id}/units`).then((r) => r.data),
-
-  addProductUnits: (id: string, serialNumbers: string[]): Promise<{ created: number }> =>
-    apiClient.post(`/inventory/products/${id}/units`, { serialNumbers }).then((r) => r.data),
 
   // Batches (lotes)
   listProductBatches: (id: string): Promise<ProductBatch[]> =>
