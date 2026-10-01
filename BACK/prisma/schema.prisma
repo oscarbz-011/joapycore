@@ -32,6 +32,7 @@ enum ProductUnitStatus {
   SOLD
   RETURNED
   DAMAGED
+  ADJUSTED_OUT
 }
 
 enum StockMovementType {
@@ -584,6 +585,7 @@ model Warehouse {
   saleOrderItems   SaleOrderItem[]
   purchaseReceipts PurchaseReceipt[]
   productionOrders ProductionOrder[]
+  productUnits     ProductUnit[]
 
   @@unique([tenantId, name])
   @@map("warehouses")
@@ -965,6 +967,7 @@ model ProductUnit {
   purchaseOrderItemId   String?           @map("purchase_order_item_id")
   purchaseReceiptItemId String?           @map("purchase_receipt_item_id")
   saleOrderItemId       String?           @map("sale_order_item_id")
+  warehouseId           String?           @map("warehouse_id")
   createdAt             DateTime          @default(now()) @map("created_at")
   updatedAt             DateTime          @updatedAt @map("updated_at")
 
@@ -973,10 +976,12 @@ model ProductUnit {
   purchaseOrderItem   PurchaseOrderItem?   @relation(fields: [purchaseOrderItemId], references: [id])
   purchaseReceiptItem PurchaseReceiptItem? @relation(fields: [purchaseReceiptItemId], references: [id])
   saleOrderItem       SaleOrderItem?       @relation(fields: [saleOrderItemId], references: [id])
+  warehouse           Warehouse?           @relation(fields: [warehouseId], references: [id])
 
   @@unique([tenantId, productId, serialNumber])
   @@index([productId])
   @@index([saleOrderItemId])
+  @@index([warehouseId])
   @@map("product_units")
 }
 

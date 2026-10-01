@@ -22,8 +22,10 @@ import { BrandsService } from './services/brands.service';
 import { CategoriesService } from './services/categories.service';
 import { ProductsService } from './services/products.service';
 import { StockEntryService } from './services/stock-entry.service';
+import { WarehousesModule } from '../warehouses/warehouses.module';
 
 @Module({
+  imports: [WarehousesModule],
   controllers: [
     BrandsController,
     CategoriesController,

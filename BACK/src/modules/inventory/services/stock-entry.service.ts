@@ -12,6 +12,7 @@ import { ProductsRepository } from '../repositories/products.repository';
 import { ProductUnitsRepository } from '../repositories/product-units.repository';
 import { ProductBatchesRepository } from '../repositories/product-batches.repository';
 import { StockMovementsRepository } from '../repositories/stock-movements.repository';
+import { WarehousesRepository } from '../../warehouses/repositories/warehouses.repository';
 
 export interface RegisterStockEntryParams {
   productId: string;
@@ -44,6 +45,7 @@ export class StockEntryService {
     private readonly productUnitsRepository: ProductUnitsRepository,
     private readonly productBatchesRepository: ProductBatchesRepository,
     private readonly stockMovements: StockMovementsRepository,
+    private readonly warehousesRepository: WarehousesRepository,
   ) {}
 
   async registerEntry(
@@ -56,6 +58,21 @@ export class StockEntryService {
       params.productId,
     );
     if (!product) throw new NotFoundException('Product not found');
+
+    if (!params.warehouseId) {
+      throw new UnprocessableEntityException(
+        'Se requiere un depósito para registrar stock',
+      );
+    }
+    const warehouse = await this.warehousesRepository.findById(
+      tenantId,
+      params.warehouseId,
+    );
+    if (!warehouse?.isActive) {
+      throw new UnprocessableEntityException(
+        'El depósito no existe o está inactivo',
+      );
+    }
 
     if (product.isSerialized) {
       const serials = params.serialNumbers ?? [];
@@ -71,6 +88,7 @@ export class StockEntryService {
         {
           purchaseOrderItemId: params.purchaseOrderItemId,
           purchaseReceiptItemId: params.purchaseReceiptItemId,
+          warehouseId: params.warehouseId,
         },
         client,
       );

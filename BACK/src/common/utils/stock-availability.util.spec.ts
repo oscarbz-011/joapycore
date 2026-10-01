@@ -7,19 +7,42 @@ import {
 describe('aggregateDemands', () => {
   it('adds up repeated lines of the same product and ignores empty ones', () => {
     const totals = aggregateDemands([
-      { productId: 'a', quantity: 2, name: 'Heladera' },
-      { productId: 'a', quantity: 2, name: 'Heladera' },
-      { productId: 'b', quantity: 0 },
+      { productId: 'a', warehouseId: 'wh-1', quantity: 2, name: 'Heladera' },
+      { productId: 'a', warehouseId: 'wh-1', quantity: 2, name: 'Heladera' },
+      { productId: 'a', warehouseId: 'wh-2', quantity: 1, name: 'Heladera' },
+      { productId: 'b', warehouseId: 'wh-1', quantity: 0 },
     ]);
     expect([...totals.entries()]).toEqual([
-      ['a', { quantity: 4, name: 'Heladera' }],
+      [
+        'a::wh-1',
+        {
+          productId: 'a',
+          warehouseId: 'wh-1',
+          quantity: 4,
+          name: 'Heladera',
+        },
+      ],
+      [
+        'a::wh-2',
+        {
+          productId: 'a',
+          warehouseId: 'wh-2',
+          quantity: 1,
+          name: 'Heladera',
+        },
+      ],
     ]);
   });
 });
 
 describe('assertDemandsCovered', () => {
   const totals = (entries: [string, number, string?][]) =>
-    new Map(entries.map(([id, quantity, name]) => [id, { quantity, name }]));
+    new Map(
+      entries.map(([id, quantity, name]) => [
+        `${id}::wh-1`,
+        { productId: id, warehouseId: 'wh-1', quantity, name },
+      ]),
+    );
 
   it('passes when every product has enough stock', () => {
     expect(() =>
@@ -29,8 +52,8 @@ describe('assertDemandsCovered', () => {
           ['b', 1],
         ]),
         new Map([
-          ['a', 5],
-          ['b', 2],
+          ['a::wh-1', 5],
+          ['b::wh-1', 2],
         ]),
       ),
     ).not.toThrow();
@@ -43,7 +66,7 @@ describe('assertDemandsCovered', () => {
           ['a', 4, 'Heladera'],
           ['b', 1, 'Tornillo'],
         ]),
-        new Map([['a', 3]]),
+        new Map([['a::wh-1', 3]]),
       ),
     ).toThrow(
       'No hay stock suficiente de: Heladera (disponible 3, pedido 4); Tornillo (disponible 0, pedido 1)',
@@ -52,7 +75,7 @@ describe('assertDemandsCovered', () => {
 
   it('never reports negative availability', () => {
     expect(() =>
-      assertDemandsCovered(totals([['a', 1, 'A']]), new Map([['a', -2]])),
+      assertDemandsCovered(totals([['a', 1, 'A']]), new Map([['a::wh-1', -2]])),
     ).toThrow('A (disponible 0, pedido 1)');
   });
 

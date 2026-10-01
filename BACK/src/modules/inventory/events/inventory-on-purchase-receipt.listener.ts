@@ -11,7 +11,7 @@ interface PurchaseReceiptCreatedEvent {
   tenantId: string;
   purchaseOrderId: string;
   purchaseReceiptId: string;
-  warehouseId?: string;
+  warehouseId: string;
 }
 
 // Único lugar donde una recepción de compra se convierte en stock real —
@@ -68,7 +68,7 @@ export class InventoryOnPurchaseReceiptListener {
             productId: item.productId,
             quantity: item.quantity,
             reason: MovementReason.PURCHASE,
-            warehouseId: receipt.warehouseId ?? undefined,
+            warehouseId: receipt.warehouseId ?? event.warehouseId,
             referenceId: item.id,
             unitCost: Number(item.unitCost),
             batchNumber: item.batchNumber ?? undefined,

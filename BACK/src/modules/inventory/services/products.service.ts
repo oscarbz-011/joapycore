@@ -6,6 +6,7 @@ import {
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
+import { randomUUID } from 'crypto';
 import {
   MovementReason,
   ProductStatus,
@@ -33,6 +34,13 @@ import {
 import { FilterStockMovementDto } from '../dto/filter-stock-movement.dto';
 import { CreateProductSupplierDto } from '../dto/create-product-supplier.dto';
 import { UpdateProductSupplierDto } from '../dto/update-product-supplier.dto';
+import { PrismaService } from '../../../prisma/prisma.service';
+import { WarehousesRepository } from '../../warehouses/repositories/warehouses.repository';
+import { StockMovementsRepository } from '../repositories/stock-movements.repository';
+import {
+  aggregateDemands,
+  assertDemandsCovered,
+} from '../../../common/utils/stock-availability.util';
 
 @Injectable()
 export class ProductsService {
@@ -42,6 +50,9 @@ export class ProductsService {
     private readonly productSuppliersRepository: ProductSuppliersRepository,
     private readonly productBatchesRepository: ProductBatchesRepository,
     private readonly eventEmitter: EventEmitter2,
+    private readonly prisma: PrismaService,
+    private readonly warehousesRepository: WarehousesRepository,
+    private readonly stockMovementsRepository: StockMovementsRepository,
   ) {}
 
   findAll(tenantId: string, filters: ProductFilters) {
@@ -169,10 +180,12 @@ export class ProductsService {
     if (!product.isSerialized) {
       throw new UnprocessableEntityException('Product is not serialized');
     }
+    await this.assertActiveWarehouse(tenantId, dto.warehouseId);
     const result = await this.productUnitsRepository.createMany(
       tenantId,
       productId,
       dto.serialNumbers,
+      { warehouseId: dto.warehouseId },
     );
     this.eventEmitter.emit('stock.movement.created', {
       tenantId,
@@ -205,11 +218,12 @@ export class ProductsService {
     dto: CreateStockMovementDto,
   ) {
     const product = await this.findOne(tenantId, productId);
-    if (product.isSerialized) {
+    if (!dto.warehouseId) {
       throw new UnprocessableEntityException(
-        'Los productos serializados gestionan el stock a través de unidades con número de serie',
+        'Se requiere el depósito de origen',
       );
     }
+    await this.assertActiveWarehouse(tenantId, dto.warehouseId);
 
     if (dto.reason === MovementReason.TRANSFER) {
       if (!dto.toWarehouseId) {
@@ -217,23 +231,12 @@ export class ProductsService {
           'Se requiere el depósito de destino para transferencias',
         );
       }
-      const movements = await this.productsRepository.createTransferMovements(
-        tenantId,
-        productId,
-        {
-          quantity: dto.quantity,
-          fromWarehouseId: dto.warehouseId,
-          toWarehouseId: dto.toWarehouseId,
-          notes: dto.notes,
-        },
-      );
-      this.eventEmitter.emit('stock.movement.created', {
-        tenantId,
-        productId,
-        type: 'TRANSFER',
-        quantity: dto.quantity,
-      });
-      return movements;
+      if (dto.toWarehouseId === dto.warehouseId) {
+        throw new BadRequestException(
+          'Los depósitos de origen y destino deben ser distintos',
+        );
+      }
+      await this.assertActiveWarehouse(tenantId, dto.toWarehouseId);
     }
 
     if (dto.reason === MovementReason.ADJUSTMENT && !dto.direction) {
@@ -242,39 +245,233 @@ export class ProductsService {
       );
     }
 
-    let movementType: StockMovementType;
-    let effectiveQty: number;
-
-    if (dto.reason === MovementReason.ADJUSTMENT) {
-      movementType = StockMovementType.ADJUSTMENT;
-      effectiveQty =
-        dto.direction === 'OUT'
-          ? -Math.abs(dto.quantity)
-          : Math.abs(dto.quantity);
-    } else {
-      const isOut = dto.reason === MovementReason.SALE_OUT;
-      movementType = isOut ? StockMovementType.OUT : StockMovementType.IN;
-      effectiveQty = isOut ? -Math.abs(dto.quantity) : Math.abs(dto.quantity);
+    const serialNumbers = dto.serialNumbers ?? [];
+    if (product.isSerialized && serialNumbers.length !== dto.quantity) {
+      throw new UnprocessableEntityException(
+        `Se requieren ${dto.quantity} números de serie para ${product.name}`,
+      );
     }
 
-    const movement = await this.productsRepository.createStockMovement(
-      tenantId,
-      productId,
-      {
-        type: movementType,
-        reason: dto.reason,
-        quantity: effectiveQty,
-        warehouseId: dto.warehouseId,
-        notes: dto.notes,
-      },
-    );
-    this.eventEmitter.emit('stock.movement.created', {
-      tenantId,
-      productId,
-      type: movementType,
-      quantity: dto.quantity,
+    const result = await this.prisma.$transaction(async (tx) => {
+      if (product.isSerialized) {
+        const referenceId = randomUUID();
+        if (dto.reason === MovementReason.TRANSFER) {
+          const moved = await this.productUnitsRepository.moveInStockUnits(
+            tenantId,
+            productId,
+            serialNumbers,
+            dto.warehouseId,
+            dto.toWarehouseId!,
+            tx,
+          );
+          if (moved !== dto.quantity) {
+            throw new UnprocessableEntityException(
+              'Una o más series no están disponibles en el depósito de origen',
+            );
+          }
+          const out = await this.stockMovementsRepository.create(
+            {
+              tenantId,
+              productId,
+              type: StockMovementType.OUT,
+              reason: MovementReason.TRANSFER,
+              quantity: -dto.quantity,
+              warehouseId: dto.warehouseId,
+              referenceId,
+              notes: dto.notes,
+            },
+            tx,
+          );
+          const incoming = await this.stockMovementsRepository.create(
+            {
+              tenantId,
+              productId,
+              type: StockMovementType.IN,
+              reason: MovementReason.TRANSFER,
+              quantity: dto.quantity,
+              warehouseId: dto.toWarehouseId,
+              referenceId,
+              notes: dto.notes,
+            },
+            tx,
+          );
+          return [out, incoming];
+        }
+
+        if (
+          dto.reason === MovementReason.ADJUSTMENT &&
+          dto.direction === 'OUT'
+        ) {
+          const changed = await this.productUnitsRepository.markAdjustedOut(
+            tenantId,
+            productId,
+            serialNumbers,
+            dto.warehouseId,
+            tx,
+          );
+          if (changed !== dto.quantity) {
+            throw new UnprocessableEntityException(
+              'Una o más series no están disponibles en el depósito indicado',
+            );
+          }
+          return this.stockMovementsRepository.create(
+            {
+              tenantId,
+              productId,
+              type: StockMovementType.ADJUSTMENT,
+              reason: MovementReason.ADJUSTMENT,
+              quantity: -dto.quantity,
+              warehouseId: dto.warehouseId,
+              referenceId,
+              notes: dto.notes,
+            },
+            tx,
+          );
+        }
+
+        const restored = await this.productUnitsRepository.restoreAdjustedOut(
+          tenantId,
+          productId,
+          serialNumbers,
+          dto.warehouseId,
+          tx,
+        );
+        const created = await this.productUnitsRepository.createMany(
+          tenantId,
+          productId,
+          serialNumbers,
+          { warehouseId: dto.warehouseId },
+          tx,
+        );
+        if (restored + created.count !== dto.quantity) {
+          throw new UnprocessableEntityException(
+            'Una o más series ya existen y no se pueden ingresar nuevamente',
+          );
+        }
+        return this.stockMovementsRepository.create(
+          {
+            tenantId,
+            productId,
+            type:
+              dto.reason === MovementReason.ADJUSTMENT
+                ? StockMovementType.ADJUSTMENT
+                : StockMovementType.IN,
+            reason: dto.reason,
+            quantity: dto.quantity,
+            warehouseId: dto.warehouseId,
+            referenceId,
+            notes: dto.notes,
+          },
+          tx,
+        );
+      }
+
+      const isTransfer = dto.reason === MovementReason.TRANSFER;
+      const isOut =
+        isTransfer ||
+        dto.reason === MovementReason.SALE_OUT ||
+        (dto.reason === MovementReason.ADJUSTMENT && dto.direction === 'OUT');
+      if (isOut) {
+        const demand = {
+          productId,
+          warehouseId: dto.warehouseId,
+          quantity: dto.quantity,
+          name: product.name,
+        };
+        await this.stockMovementsRepository.lockProducts(tx, tenantId, [
+          productId,
+        ]);
+        const available =
+          await this.stockMovementsRepository.sumByProductsAndWarehouse(
+            tenantId,
+            [demand],
+            tx,
+          );
+        assertDemandsCovered(aggregateDemands([demand]), available);
+      }
+
+      if (isTransfer) {
+        const referenceId = randomUUID();
+        const out = await this.stockMovementsRepository.create(
+          {
+            tenantId,
+            productId,
+            type: StockMovementType.OUT,
+            reason: MovementReason.TRANSFER,
+            quantity: -dto.quantity,
+            warehouseId: dto.warehouseId,
+            referenceId,
+            notes: dto.notes,
+          },
+          tx,
+        );
+        const incoming = await this.stockMovementsRepository.create(
+          {
+            tenantId,
+            productId,
+            type: StockMovementType.IN,
+            reason: MovementReason.TRANSFER,
+            quantity: dto.quantity,
+            warehouseId: dto.toWarehouseId,
+            referenceId,
+            notes: dto.notes,
+          },
+          tx,
+        );
+        return [out, incoming];
+      }
+
+      const movementType =
+        dto.reason === MovementReason.ADJUSTMENT
+          ? StockMovementType.ADJUSTMENT
+          : isOut
+            ? StockMovementType.OUT
+            : StockMovementType.IN;
+      return this.stockMovementsRepository.create(
+        {
+          tenantId,
+          productId,
+          type: movementType,
+          reason: dto.reason,
+          quantity: isOut ? -dto.quantity : dto.quantity,
+          warehouseId: dto.warehouseId,
+          notes: dto.notes,
+        },
+        tx,
+      );
     });
-    return movement;
+
+    if (dto.reason === MovementReason.TRANSFER) {
+      this.eventEmitter.emit('stock.movement.created', {
+        tenantId,
+        productId,
+        type: 'TRANSFER',
+        quantity: dto.quantity,
+      });
+    } else {
+      this.eventEmitter.emit('stock.movement.created', {
+        tenantId,
+        productId,
+        type:
+          dto.reason === MovementReason.ADJUSTMENT
+            ? StockMovementType.ADJUSTMENT
+            : StockMovementType.IN,
+        quantity: dto.quantity,
+      });
+    }
+    return result;
+  }
+
+  private async assertActiveWarehouse(tenantId: string, warehouseId: string) {
+    const warehouse = await this.warehousesRepository.findById(
+      tenantId,
+      warehouseId,
+    );
+    if (!warehouse?.isActive) {
+      throw new UnprocessableEntityException(
+        'El depósito no existe o está inactivo',
+      );
+    }
   }
 
   async createGlobalMovement(

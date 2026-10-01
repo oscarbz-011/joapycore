@@ -2,26 +2,39 @@ import { UnprocessableEntityException } from '@nestjs/common';
 
 export interface StockDemand {
   productId: string;
+  warehouseId: string;
   quantity: number;
   /** Nombre para el mensaje de error; si falta se muestra el id. */
   name?: string;
 }
 
 export interface AggregatedDemand {
+  productId: string;
+  warehouseId: string;
   quantity: number;
   name?: string;
 }
 
-/** Suma las cantidades pedidas por producto (ignora cantidades ≤ 0). */
+export function stockDemandKey(productId: string, warehouseId: string): string {
+  return `${productId}::${warehouseId}`;
+}
+
+/** Suma cantidades por producto y depósito (ignora cantidades ≤ 0). */
 export function aggregateDemands(
   demands: StockDemand[],
 ): Map<string, AggregatedDemand> {
   const totals = new Map<string, AggregatedDemand>();
   for (const d of demands) {
     if (d.quantity <= 0) continue;
-    const entry = totals.get(d.productId) ?? { quantity: 0, name: d.name };
+    const key = stockDemandKey(d.productId, d.warehouseId);
+    const entry = totals.get(key) ?? {
+      productId: d.productId,
+      warehouseId: d.warehouseId,
+      quantity: 0,
+      name: d.name,
+    };
     entry.quantity += d.quantity;
-    totals.set(d.productId, entry);
+    totals.set(key, entry);
   }
   return totals;
 }

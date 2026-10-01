@@ -26,6 +26,7 @@ describe('StockEntryService', () => {
     findAvailableFifo: jest.Mock;
     decrementRemaining: jest.Mock;
   };
+  let warehousesRepository: { findById: jest.Mock };
   let prisma: {
     stockMovement: {
       create: jest.Mock;
@@ -42,6 +43,9 @@ describe('StockEntryService', () => {
       findAvailableFifo: jest.fn(),
       decrementRemaining: jest.fn(),
     };
+    warehousesRepository = {
+      findById: jest.fn().mockResolvedValue({ id: 'wh-1', isActive: true }),
+    };
     prisma = {
       stockMovement: {
         create: jest.fn(),
@@ -50,12 +54,13 @@ describe('StockEntryService', () => {
       },
     };
 
-    service = new StockEntryService(
+    service = new (StockEntryService as any)(
       prisma as any,
       productsRepository as any,
       productUnitsRepository as any,
       productBatchesRepository as any,
       new StockMovementsRepository(prisma as any),
+      warehousesRepository,
     );
   });
 
@@ -81,6 +86,7 @@ describe('StockEntryService', () => {
         productId: 'prod-1',
         quantity: 2,
         reason: 'PURCHASE',
+        warehouseId: 'wh-1',
         serialNumbers: ['SN1', 'SN2'],
       });
 
@@ -88,10 +94,39 @@ describe('StockEntryService', () => {
         'tenant-1',
         'prod-1',
         ['SN1', 'SN2'],
-        expect.objectContaining({}),
+        expect.objectContaining({ warehouseId: 'wh-1' }),
         prisma,
       );
       expect(prisma.stockMovement.create).not.toHaveBeenCalled();
+    });
+
+    it('rejects a stock entry without a warehouse', async () => {
+      productsRepository.findById.mockResolvedValue(makeProduct());
+
+      await expect(
+        service.registerEntry('tenant-1', {
+          productId: 'prod-1',
+          quantity: 1,
+          reason: 'PURCHASE',
+        }),
+      ).rejects.toBeInstanceOf(UnprocessableEntityException);
+    });
+
+    it('rejects a stock entry into an inactive warehouse', async () => {
+      productsRepository.findById.mockResolvedValue(makeProduct());
+      warehousesRepository.findById.mockResolvedValue({
+        id: 'wh-1',
+        isActive: false,
+      });
+
+      await expect(
+        service.registerEntry('tenant-1', {
+          productId: 'prod-1',
+          quantity: 1,
+          reason: 'PURCHASE',
+          warehouseId: 'wh-1',
+        }),
+      ).rejects.toBeInstanceOf(UnprocessableEntityException);
     });
 
     it('rejects a serialized entry whose serial count does not match quantity', async () => {
@@ -104,6 +139,7 @@ describe('StockEntryService', () => {
           productId: 'prod-1',
           quantity: 3,
           reason: 'PURCHASE',
+          warehouseId: 'wh-1',
           serialNumbers: ['SN1'],
         }),
       ).rejects.toBeInstanceOf(UnprocessableEntityException);
@@ -144,6 +180,7 @@ describe('StockEntryService', () => {
           productId: 'prod-1',
           quantity: 10,
           reason: 'PURCHASE',
+          warehouseId: 'wh-1',
           batchNumber: 'LOTE-001',
         }),
       ).rejects.toBeInstanceOf(BadRequestException);
@@ -159,6 +196,7 @@ describe('StockEntryService', () => {
         productId: 'prod-1',
         quantity: 10,
         reason: 'PURCHASE',
+        warehouseId: 'wh-1',
         batchNumber: 'LOTE-001',
         unitCost: 65_000,
       });
@@ -187,6 +225,7 @@ describe('StockEntryService', () => {
         productId: 'prod-1',
         quantity: 5,
         reason: 'PURCHASE',
+        warehouseId: 'wh-1',
         initialSourceType: 'MIGRATION',
       });
 

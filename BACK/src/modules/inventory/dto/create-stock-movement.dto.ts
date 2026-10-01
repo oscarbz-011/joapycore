@@ -1,6 +1,8 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { MovementReason } from '@prisma/client';
 import {
+  ArrayUnique,
+  IsArray,
   IsEnum,
   IsIn,
   IsInt,
@@ -33,10 +35,9 @@ export class CreateStockMovementDto {
   @IsIn(['IN', 'OUT'])
   direction?: 'IN' | 'OUT';
 
-  @ApiPropertyOptional({ description: 'Depósito de origen' })
-  @IsOptional()
+  @ApiProperty({ description: 'Depósito de origen' })
   @IsUUID()
-  warehouseId?: string;
+  warehouseId: string;
 
   @ApiPropertyOptional({
     description: 'Depósito de destino (solo para TRANSFER)',
@@ -44,6 +45,16 @@ export class CreateStockMovementDto {
   @IsOptional()
   @IsUUID()
   toWarehouseId?: string;
+
+  @ApiPropertyOptional({
+    type: [String],
+    description: 'Series exactas afectadas cuando el producto es serializado',
+  })
+  @IsOptional()
+  @IsArray()
+  @ArrayUnique()
+  @IsString({ each: true })
+  serialNumbers?: string[];
 
   @ApiPropertyOptional()
   @IsOptional()

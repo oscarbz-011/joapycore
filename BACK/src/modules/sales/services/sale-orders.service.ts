@@ -738,6 +738,12 @@ export class SaleOrdersService implements SalesGateway {
         }
       }
 
+      if (product && !item.warehouseId) {
+        throw new UnprocessableEntityException(
+          `Product "${product.name}" requires an active warehouse`,
+        );
+      }
+
       const saleItem = await this.saleOrdersRepository.createItem(
         {
           saleOrderId: orderId,
@@ -767,6 +773,7 @@ export class SaleOrdersService implements SalesGateway {
           item.productId!,
           item.serialNumbers!,
           saleItem.id,
+          item.warehouseId!,
         );
       }
 
@@ -788,7 +795,10 @@ export class SaleOrdersService implements SalesGateway {
     tx: Prisma.TransactionClient,
     tenantId: string,
     items: Array<
-      Pick<CreatedItemInfo, 'productId' | 'quantity' | 'isSerialized'>
+      Pick<
+        CreatedItemInfo,
+        'productId' | 'quantity' | 'isSerialized' | 'warehouseId'
+      >
     >,
     productMap: Map<string, Pick<Product, 'name'>>,
   ): Promise<void> {
@@ -799,6 +809,7 @@ export class SaleOrdersService implements SalesGateway {
         .filter((i) => i.productId && !i.isSerialized)
         .map((i) => ({
           productId: i.productId!,
+          warehouseId: i.warehouseId!,
           quantity: i.quantity,
           name: productMap.get(i.productId!)?.name,
         })),
