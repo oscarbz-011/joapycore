@@ -55,4 +55,46 @@ describe('ProductUnitsRepository', () => {
     });
     expect(changed).toBe(2);
   });
+
+  it('locates only in-stock units that have no warehouse', async () => {
+    const located = await repository.locateUnassignedUnits(
+      'tenant-1',
+      'prod-1',
+      'wh-1',
+      ['SN-1'],
+      prisma as any,
+    );
+
+    expect(prisma.productUnit.updateMany).toHaveBeenCalledWith({
+      where: {
+        tenantId: 'tenant-1',
+        productId: 'prod-1',
+        status: 'IN_STOCK',
+        warehouseId: null,
+        serialNumber: { in: ['SN-1'] },
+      },
+      data: { warehouseId: 'wh-1' },
+    });
+    expect(located).toBe(2);
+  });
+
+  it('locates every unassigned in-stock unit when no serials are given', async () => {
+    await repository.locateUnassignedUnits(
+      'tenant-1',
+      'prod-1',
+      'wh-1',
+      undefined,
+      prisma as any,
+    );
+
+    expect(prisma.productUnit.updateMany).toHaveBeenCalledWith({
+      where: {
+        tenantId: 'tenant-1',
+        productId: 'prod-1',
+        status: 'IN_STOCK',
+        warehouseId: null,
+      },
+      data: { warehouseId: 'wh-1' },
+    });
+  });
 });

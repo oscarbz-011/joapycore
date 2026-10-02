@@ -25,6 +25,7 @@ import { CategoriesService } from './services/categories.service';
 import { ProductsService } from './services/products.service';
 import { StockEntryService } from './services/stock-entry.service';
 import { StockService } from './services/stock.service';
+import { UnlocatedStockService } from './services/unlocated-stock.service';
 import { WarehousesModule } from '../warehouses/warehouses.module';
 
 @Module({
@@ -44,6 +45,7 @@ import { WarehousesModule } from '../warehouses/warehouses.module';
     ProductsService,
     StockEntryService,
     StockService,
+    UnlocatedStockService,
     BrandsRepository,
     CategoriesRepository,
     ProductsRepository,
