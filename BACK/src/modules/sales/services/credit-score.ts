@@ -1,3 +1,5 @@
+import { startOfBusinessDay } from '../../../common/utils/business-date.util';
+
 const DAY_MS = 86_400_000;
 
 /** Calificación del cliente: 1 = paga al día … 5 = se atrasa mucho, 6 = incobrable/judicial. */
@@ -16,7 +18,16 @@ export interface DelayInput {
   status: string;
 }
 
-const dayNumber = (date: Date) => Math.floor(date.getTime() / DAY_MS);
+/**
+ * Día calendario de una fecha. Los vencimientos se guardan como medianoche
+ * UTC de su día; un instante real (un cobro registrado "ahora") se lleva al
+ * día del negocio, si no un pago hecho de noche en Paraguay caería al día
+ * siguiente en UTC y contaría un día de atraso que no existió.
+ */
+function dayNumber(date: Date): number {
+  const day = date.getTime() % DAY_MS === 0 ? date : startOfBusinessDay(date);
+  return day.getTime() / DAY_MS;
+}
 
 /**
  * Días de atraso de una cuota. Una cuota pagada cuenta hasta el día en que se

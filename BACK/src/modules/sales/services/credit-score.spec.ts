@@ -32,6 +32,33 @@ describe('installmentDelayDays', () => {
     ).toBe(0);
   });
 
+  it('does not count a payment made late at night on the due date in Paraguay', () => {
+    // 05/09 22:30 en Asunción ya es 06/09 en UTC.
+    expect(
+      installmentDelayDays(
+        {
+          dueDate: due,
+          paidAt: new Date('2026-09-06T01:30:00Z'),
+          status: 'PAID',
+        },
+        today,
+      ),
+    ).toBe(0);
+  });
+
+  it('keeps a payment date entered as a calendar day on that day', () => {
+    expect(
+      installmentDelayDays(
+        {
+          dueDate: due,
+          paidAt: new Date('2026-09-06T00:00:00Z'),
+          status: 'PAID',
+        },
+        today,
+      ),
+    ).toBe(1);
+  });
+
   it('counts the days between the due date and the payment', () => {
     expect(
       installmentDelayDays(
