@@ -38,28 +38,18 @@ const NUM_CLS =
 
 interface StockTransferDialogProps {
   onClose: () => void;
-  /** Producto preseleccionado (al abrir desde una fila de Stock). */
-  productId?: string;
-  /** Origen preseleccionado: un depósito o UNLOCATED_SOURCE. */
-  fromId?: string;
-  quantity?: number;
 }
 
 /**
  * Traslada stock entre depósitos sin cambiar el total. El origen "Sin depósito
  * asignado" regulariza la existencia histórica que no tiene ubicación.
  */
-export function StockTransferDialog({
-  onClose,
-  productId: initialProductId = '',
-  fromId: initialFromId = '',
-  quantity: initialQuantity = 0,
-}: StockTransferDialogProps) {
+export function StockTransferDialog({ onClose }: StockTransferDialogProps) {
   const queryClient = useQueryClient();
-  const [productId, setProductId] = useState(initialProductId);
-  const [fromId, setFromId] = useState(initialFromId);
+  const [productId, setProductId] = useState('');
+  const [fromId, setFromId] = useState('');
   const [toWarehouseId, setToWarehouseId] = useState('');
-  const [quantity, setQuantity] = useState(initialQuantity);
+  const [quantity, setQuantity] = useState(0);
   // null = el usuario todavía no tocó la lista: se usa la selección por defecto.
   const [pickedSerials, setPickedSerials] = useState<string[] | null>(null);
   const [notes, setNotes] = useState('');
@@ -201,7 +191,6 @@ export function StockTransferDialog({
             <Label>Producto *</Label>
             <Select
               value={productId || 'none'}
-              disabled={Boolean(initialProductId)}
               onValueChange={(value) =>
                 selectProduct(value && value !== 'none' ? value : '')
               }

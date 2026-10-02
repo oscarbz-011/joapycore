@@ -5,7 +5,6 @@ import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import {
-  ArrowLeftRight,
   Package,
   Search,
   SlidersHorizontal,
@@ -23,9 +22,6 @@ import {
   stockLevel,
   stockQuantity,
 } from '../../../../../lib/inventory-stock';
-import { UNLOCATED_SOURCE } from '../../../../../lib/inventory-transfer';
-import { usePermission } from '@/lib/permissions';
-import { StockTransferDialog } from '@/components/inventory/stock-transfer-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -51,12 +47,6 @@ const LEVEL_TEXT = {
   ok: 'text-foreground',
 } as const;
 
-interface TransferTarget {
-  productId?: string;
-  fromId?: string;
-  quantity?: number;
-}
-
 export default function StockPage() {
   const router = useRouter();
   const [search, setSearch] = useState('');
@@ -64,8 +54,6 @@ export default function StockPage() {
   const [brandId, setBrandId] = useState('');
   const [warehouseId, setWarehouseId] = useState('');
   const [onlyRestock, setOnlyRestock] = useState(false);
-  const [transfer, setTransfer] = useState<TransferTarget | null>(null);
-  const canMove = usePermission('inventory:movements:create');
 
   const { data: categories = [] } = useQuery({
     queryKey: ['inventory-categories'],
@@ -103,21 +91,13 @@ export default function StockPage() {
 
   return (
     <div>
-      <div className="mb-5 flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-[25px] font-extrabold tracking-tight text-foreground">
-            Stock
-          </h1>
-          <p className="mt-1 text-[14px] text-muted-foreground">
-            Inventario físico disponible para la venta, total y por depósito
-          </p>
-        </div>
-        {canMove && (
-          <Button onClick={() => setTransfer({})}>
-            <ArrowLeftRight size={15} />
-            Trasladar entre depósitos
-          </Button>
-        )}
+      <div className="mb-5">
+        <h1 className="text-[25px] font-extrabold tracking-tight text-foreground">
+          Stock
+        </h1>
+        <p className="mt-1 text-[14px] text-muted-foreground">
+          Inventario físico disponible para la venta, total y por depósito
+        </p>
       </div>
 
       <div className="mb-4 flex items-center gap-3">
@@ -278,11 +258,6 @@ export default function StockPage() {
                       )}
                     </th>
                   ))}
-                  {canMove && (
-                    <th className="px-4 py-3">
-                      <span className="sr-only">Acciones</span>
-                    </th>
-                  )}
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
@@ -361,57 +336,19 @@ export default function StockPage() {
                         ? '—'
                         : fmtGs(row.product.salePrice)}
                     </td>
-                    {columns.map((column) => {
-                      const quantity = stockQuantity(row, column);
-                      return (
-                        <td
-                          key={column.key}
-                          className={cn(
-                            'px-4 py-3 text-right font-mono font-semibold tabular-nums',
-                            column.kind === 'total'
-                              ? LEVEL_TEXT[level]
-                              : 'text-foreground',
-                          )}
-                        >
-                          {quantity}
-                          {column.kind === 'unassigned' &&
-                            quantity !== 0 &&
-                            canMove && (
-                              <Button
-                                variant="outline"
-                                size="xs"
-                                className="ml-2 font-sans"
-                                onClick={(event) => {
-                                  event.stopPropagation();
-                                  setTransfer({
-                                    productId: row.product.id,
-                                    fromId: UNLOCATED_SOURCE,
-                                    quantity: Math.abs(quantity),
-                                  });
-                                }}
-                              >
-                                Asignar
-                              </Button>
-                            )}
-                        </td>
-                      );
-                    })}
-                    {canMove && (
-                      <td className="px-2 py-3 text-right">
-                        <Button
-                          variant="ghost"
-                          size="icon-sm"
-                          aria-label={`Trasladar ${row.product.name} entre depósitos`}
-                          title="Trasladar entre depósitos"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            setTransfer({ productId: row.product.id });
-                          }}
-                        >
-                          <ArrowLeftRight size={15} />
-                        </Button>
+                    {columns.map((column) => (
+                      <td
+                        key={column.key}
+                        className={cn(
+                          'px-4 py-3 text-right font-mono font-semibold tabular-nums',
+                          column.kind === 'total'
+                            ? LEVEL_TEXT[level]
+                            : 'text-foreground',
+                        )}
+                      >
+                        {stockQuantity(row, column)}
                       </td>
-                    )}
+                    ))}
                   </tr>
                   );
                 })}
@@ -419,15 +356,6 @@ export default function StockPage() {
             </table>
           </div>
         </Card>
-      )}
-
-      {transfer && (
-        <StockTransferDialog
-          productId={transfer.productId}
-          fromId={transfer.fromId}
-          quantity={transfer.quantity}
-          onClose={() => setTransfer(null)}
-        />
       )}
     </div>
   );
