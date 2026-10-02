@@ -129,6 +129,8 @@ export class TenantsController {
       dto.dueDayOfMonth,
       dto.moraGraceDays,
       dto.delinquencyThresholdDays,
+      dto.ratingDelayThresholds,
+      dto.uncollectibleAfterDays,
     );
   }
 

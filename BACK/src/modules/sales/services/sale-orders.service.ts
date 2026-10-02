@@ -135,6 +135,20 @@ export class SaleOrdersService implements SalesGateway {
       );
     }
 
+    // Calificación 6 (incobrable/judicial), por marca manual o por superar
+    // los días de atraso configurados: no admite un crédito nuevo. Va antes
+    // del chequeo de mora porque ese cliente casi siempre tiene cuotas
+    // vencidas, y el motivo que importa mostrar es este.
+    const history = await this.creditEvaluationService.getCustomerCreditHistory(
+      tenantId,
+      order.customerId,
+    );
+    if (history.score === 6) {
+      throw new UnprocessableEntityException(
+        'El cliente está calificado como incobrable/judicial (nivel 6). No se puede aprobar un crédito nuevo.',
+      );
+    }
+
     // Check for overdue installments (morosidad)
     const overdueCount = await this.creditSources.countOverdueInstallments(
       tenantId,

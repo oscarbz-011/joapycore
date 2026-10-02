@@ -25,6 +25,8 @@ export class CreditConfigRepository {
     dueDayOfMonth?: number,
     moraGraceDays?: number,
     delinquencyThresholdDays?: number | null,
+    ratingDelayThresholds?: number[],
+    uncollectibleAfterDays?: number | null,
   ) {
     return this.prisma.creditConfig.upsert({
       where: { tenantId },
@@ -35,6 +37,8 @@ export class CreditConfigRepository {
         dueDayOfMonth,
         moraGraceDays,
         delinquencyThresholdDays,
+        ratingDelayThresholds,
+        uncollectibleAfterDays,
       },
       update: {
         isEnabled,
@@ -43,6 +47,12 @@ export class CreditConfigRepository {
         ...(moraGraceDays !== undefined ? { moraGraceDays } : {}),
         ...(delinquencyThresholdDays !== undefined
           ? { delinquencyThresholdDays }
+          : {}),
+        ...(ratingDelayThresholds !== undefined
+          ? { ratingDelayThresholds }
+          : {}),
+        ...(uncollectibleAfterDays !== undefined
+          ? { uncollectibleAfterDays }
           : {}),
       },
       include: {

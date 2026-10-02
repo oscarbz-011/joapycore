@@ -1,5 +1,12 @@
 import { Injectable } from '@nestjs/common';
 import { CreditSourcesRepository } from '../repositories/credit-sources.repository';
+import {
+  DEFAULT_RATING_DELAY_THRESHOLDS,
+  averageDelayDays,
+  installmentDelayDays,
+  scoreFromAverageDelay,
+  type CreditScore,
+} from './credit-score';
 
 function toNum(value: unknown): number {
   if (typeof value === 'object' && value !== null && 'toNumber' in value) {
@@ -8,12 +15,29 @@ function toNum(value: unknown): number {
   return Number(value);
 }
 
-export type CreditRating = 'SIN_HISTORIAL' | 'BUENO' | 'REGULAR' | 'RIESGO';
+export type LoanHistoryStatus = 'ACTIVE' | 'PAID';
 
-export interface ActiveLoanSummary {
+export interface InstallmentDetail {
+  number: number;
+  dueDate: Date;
+  amount: number;
+  paidAmount: number;
+  balance: number;
+  paidAt: Date | null;
+  status: string;
+  // null = todavía no venció y no está pagada: no se puede evaluar.
+  delayDays: number | null;
+}
+
+export interface LoanSummary {
   loanId: string;
+  status: LoanHistoryStatus;
+  // Factura de la venta que originó el crédito (null si todavía no se emitió).
+  invoiceId: string | null;
+  invoiceNumber: string | null;
   productNames: string[];
   totalAmount: number;
+  paidAmount: number;
   outstandingBalance: number;
   monthlyInstallment: number;
   installmentsPaid: number;
@@ -22,11 +46,24 @@ export interface ActiveLoanSummary {
   firstDueDate: Date | null;
   finalDueDate: Date | null;
   nextDueDate: Date | null;
+  averageDelayDays: number | null;
+  maxDelayDays: number;
+  lateInstallments: number;
+  installments: InstallmentDetail[];
 }
 
 export interface CreditHistory {
-  rating: CreditRating;
-  activeLoans: ActiveLoanSummary[];
+  // null = sin historial evaluable (nunca tuvo una cuota vencida o pagada).
+  score: CreditScore | null;
+  averageDelayDays: number | null;
+  uncollectible: {
+    // Marca manual vigente, con su motivo.
+    manual: { markedAt: Date; reason: string | null } | null;
+    // Una cuota impaga superó los días configurados por el tenant.
+    automatic: boolean;
+  };
+  activeLoans: LoanSummary[];
+  finishedLoans: LoanSummary[];
   overdueCount: number;
   overdueAmount: number;
 }
@@ -56,6 +93,12 @@ export interface BureauCheckStatus {
   latestResult: 'CLEAN' | 'FLAGGED' | null;
 }
 
+function evaluatedDelays(installments: InstallmentDetail[]): number[] {
+  return installments
+    .map((installment) => installment.delayDays)
+    .filter((days): days is number => days !== null);
+}
+
 // Servicio de solo-lectura: agrega el historial crediticio de un cliente
 // (otros préstamos activos, morosidad, calificación interna) y la capacidad
 // de pago por sueldo, para que el analista los vea antes de aprobar un
@@ -68,83 +111,100 @@ export class CreditEvaluationService {
   async getCustomerCreditHistory(
     tenantId: string,
     customerId: string,
+    today: Date = new Date(),
   ): Promise<CreditHistory> {
-    const loans = await this.creditSources.findLoanHistory(
-      tenantId,
-      customerId,
-    );
+    const [allLoans, config, mark] = await Promise.all([
+      this.creditSources.findLoanHistory(tenantId, customerId),
+      this.creditSources.findRatingConfig(tenantId),
+      this.creditSources.findCustomerUncollectibleMark(tenantId, customerId),
+    ]);
+    // Un préstamo anulado nunca se cobró: no habla del comportamiento de pago.
+    const loans = allLoans.filter((loan) => loan.status !== 'CANCELLED');
 
-    if (loans.length === 0) {
-      return {
-        rating: 'SIN_HISTORIAL',
-        activeLoans: [],
-        overdueCount: 0,
-        overdueAmount: 0,
-      };
-    }
-
-    const activeLoans: ActiveLoanSummary[] = loans
-      .filter((loan) => loan.status === 'ACTIVE')
-      .map((loan) => {
-        const paid = loan.installments.reduce(
-          (sum, i) => sum + toNum(i.paidAmount),
-          0,
-        );
-        const outstandingBalance = Math.max(toNum(loan.totalAmount) - paid, 0);
-        const monthlyInstallment = loan.installments[0]
-          ? toNum(loan.installments[0].amount)
-          : toNum(loan.totalAmount) / loan.totalInstallments;
-        const nextUnpaid = loan.installments.find((i) => i.status !== 'PAID');
-        const installmentsPaid = loan.installments.filter(
-          (i) => i.status === 'PAID',
-        ).length;
-        // installments viene ordenado por number asc — la primera y la última
-        // marcan el rango real de vencimientos, distinto de la fecha de compra
-        // (startDate) y del próximo vencimiento pendiente (nextDueDate).
-        const firstInstallment = loan.installments[0];
-        const lastInstallment = loan.installments[loan.installments.length - 1];
-        const productNames = loan.saleOrder.items.map(
-          (i) => i.product?.name ?? i.description ?? '—',
-        );
+    const summaries = loans.map((loan): LoanSummary => {
+      const installments = loan.installments.map((inst): InstallmentDetail => {
+        const amount = toNum(inst.amount);
+        const paidAmount = toNum(inst.paidAmount);
         return {
-          loanId: loan.id,
-          productNames,
-          totalAmount: toNum(loan.totalAmount),
-          outstandingBalance,
-          monthlyInstallment,
-          installmentsPaid,
-          totalInstallments: loan.totalInstallments,
-          startDate: loan.createdAt,
-          firstDueDate: firstInstallment?.dueDate ?? null,
-          finalDueDate: lastInstallment?.dueDate ?? null,
-          nextDueDate: nextUnpaid?.dueDate ?? null,
+          number: inst.number,
+          dueDate: inst.dueDate,
+          amount,
+          paidAmount,
+          balance: Math.max(amount - paidAmount, 0),
+          paidAt: inst.paidAt,
+          status: inst.status,
+          delayDays: installmentDelayDays(inst, today),
         };
       });
+      const paidAmount = installments.reduce((sum, i) => sum + i.paidAmount, 0);
+      const delays = evaluatedDelays(installments);
+      // installments viene ordenado por number asc — la primera y la última
+      // marcan el rango real de vencimientos, distinto de la fecha de compra
+      // (startDate) y del próximo vencimiento pendiente (nextDueDate).
+      const first = installments[0];
+      const last = installments[installments.length - 1];
+      return {
+        loanId: loan.id,
+        status: loan.status === 'PAID' ? 'PAID' : 'ACTIVE',
+        invoiceId: loan.saleOrder.invoice?.id ?? null,
+        invoiceNumber: loan.saleOrder.invoice?.invoiceNumber ?? null,
+        productNames: loan.saleOrder.items.map(
+          (i) => i.product?.name ?? i.description ?? '—',
+        ),
+        totalAmount: toNum(loan.totalAmount),
+        paidAmount,
+        outstandingBalance: Math.max(toNum(loan.totalAmount) - paidAmount, 0),
+        monthlyInstallment: first
+          ? first.amount
+          : toNum(loan.totalAmount) / loan.totalInstallments,
+        installmentsPaid: installments.filter((i) => i.status === 'PAID')
+          .length,
+        totalInstallments: loan.totalInstallments,
+        startDate: loan.createdAt,
+        firstDueDate: first?.dueDate ?? null,
+        finalDueDate: last?.dueDate ?? null,
+        nextDueDate:
+          installments.find((i) => i.status !== 'PAID')?.dueDate ?? null,
+        averageDelayDays: averageDelayDays(delays),
+        maxDelayDays: Math.max(0, ...delays),
+        lateInstallments: delays.filter((days) => days > 0).length,
+        installments,
+      };
+    });
 
-    let overdueCount = 0;
-    let overdueAmount = 0;
-    // Comparar paidAt contra dueDate en vez de depender de un cargo de mora
-    // acumulado: es una señal que existe siempre (independiente de si el
-    // tenant configuró algún InterestComponent) y no se resetea al cobrar
-    // el recargo, a diferencia de InstallmentInterestCharge.amount que sí
-    // vuelve a 0 una vez saldado.
-    let everLate = false;
-    for (const loan of loans) {
-      for (const inst of loan.installments) {
-        if (inst.status === 'OVERDUE') {
-          overdueCount += 1;
-          overdueAmount += toNum(inst.amount) - toNum(inst.paidAmount);
-        }
-        if (inst.paidAt && inst.paidAt > inst.dueDate) everLate = true;
-      }
+    const allInstallments = summaries.flatMap((loan) => loan.installments);
+    const overdue = allInstallments.filter((i) => i.status === 'OVERDUE');
+    const average = averageDelayDays(evaluatedDelays(allInstallments));
+
+    const limit = config?.uncollectibleAfterDays ?? null;
+    const automatic =
+      limit !== null &&
+      allInstallments.some(
+        (i) =>
+          i.status !== 'PAID' && i.delayDays !== null && i.delayDays > limit,
+      );
+    const manual = mark?.uncollectibleAt
+      ? { markedAt: mark.uncollectibleAt, reason: mark.uncollectibleReason }
+      : null;
+
+    let score: CreditScore | null = null;
+    if (manual || automatic) score = 6;
+    else if (average !== null) {
+      score = scoreFromAverageDelay(
+        average,
+        config?.ratingDelayThresholds ?? DEFAULT_RATING_DELAY_THRESHOLDS,
+      );
     }
 
-    let rating: CreditRating;
-    if (overdueCount > 0) rating = 'RIESGO';
-    else if (everLate) rating = 'REGULAR';
-    else rating = 'BUENO';
-
-    return { rating, activeLoans, overdueCount, overdueAmount };
+    return {
+      score,
+      averageDelayDays: average,
+      uncollectible: { manual, automatic },
+      activeLoans: summaries.filter((loan) => loan.status === 'ACTIVE'),
+      finishedLoans: summaries.filter((loan) => loan.status === 'PAID'),
+      overdueCount: overdue.length,
+      overdueAmount: overdue.reduce((sum, i) => sum + i.balance, 0),
+    };
   }
 
   // guarantorIncomes: ingresos mensuales declarados de los garantes del

@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   Injectable,
   NotFoundException,
@@ -24,7 +25,19 @@ export class CreditConfigService {
     dueDayOfMonth?: number,
     moraGraceDays?: number,
     delinquencyThresholdDays?: number | null,
+    ratingDelayThresholds?: number[],
+    uncollectibleAfterDays?: number | null,
   ) {
+    if (
+      ratingDelayThresholds?.some(
+        (limit, level) =>
+          level > 0 && limit <= ratingDelayThresholds[level - 1],
+      )
+    ) {
+      throw new BadRequestException(
+        'Los rangos de atraso de la calificación deben ir en orden creciente',
+      );
+    }
     return this.repo.upsertConfig(
       tenantId,
       isEnabled,
@@ -32,6 +45,8 @@ export class CreditConfigService {
       dueDayOfMonth,
       moraGraceDays,
       delinquencyThresholdDays,
+      ratingDelayThresholds,
+      uncollectibleAfterDays,
     );
   }
 

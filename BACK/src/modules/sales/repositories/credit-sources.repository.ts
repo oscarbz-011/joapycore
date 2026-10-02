@@ -18,8 +18,14 @@ export class CreditSourcesRepository {
       where: { tenantId, customerId },
       include: {
         installments: { orderBy: { number: 'asc' } },
-        saleOrder: { include: { items: { include: { product: true } } } },
+        saleOrder: {
+          include: {
+            items: { include: { product: true } },
+            invoice: { select: { id: true, invoiceNumber: true } },
+          },
+        },
       },
+      orderBy: { createdAt: 'desc' },
     });
   }
 
@@ -63,6 +69,13 @@ export class CreditSourcesRepository {
     });
   }
 
+  findCustomerUncollectibleMark(tenantId: string, customerId: string) {
+    return this.prisma.customer.findFirst({
+      where: { id: customerId, tenantId },
+      select: { uncollectibleAt: true, uncollectibleReason: true },
+    });
+  }
+
   findCustomerCreditLimit(tenantId: string, customerId: string) {
     return this.prisma.customer.findFirst({
       where: { id: customerId, tenantId },
@@ -76,6 +89,13 @@ export class CreditSourcesRepository {
     return this.prisma.creditConfig.findUnique({
       where: { tenantId },
       select: { maxIncomePercentage: true },
+    });
+  }
+
+  findRatingConfig(tenantId: string) {
+    return this.prisma.creditConfig.findUnique({
+      where: { tenantId },
+      select: { ratingDelayThresholds: true, uncollectibleAfterDays: true },
     });
   }
 
