@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import type { StockResult, StockRow } from './api/inventory';
-import { stockColumns, stockQuantity } from './inventory-stock';
+import {
+  needsRestock,
+  stockColumns,
+  stockLevel,
+  stockQuantity,
+} from './inventory-stock';
 
 const row: StockRow = {
   product: {
@@ -10,6 +15,8 @@ const row: StockRow = {
     category: null,
     brand: null,
     salesChannels: ['NORMAL'],
+    salePrice: 1725000,
+    stockMin: 0,
   },
   totalStock: 5,
   stockByWarehouse: [
@@ -75,5 +82,29 @@ describe('inventory stock columns', () => {
         )!,
       ),
     ).toBe(0);
+  });
+});
+
+describe('stock level', () => {
+  it('flags a product with no stock regardless of its minimum', () => {
+    expect(stockLevel(0, 0)).toBe('out');
+    expect(stockLevel(-2, 5)).toBe('out');
+  });
+
+  it('flags a product at or below its minimum', () => {
+    expect(stockLevel(5, 5)).toBe('low');
+    expect(stockLevel(2, 5)).toBe('low');
+  });
+
+  it('does not flag a product above its minimum or without a minimum', () => {
+    expect(stockLevel(6, 5)).toBe('ok');
+    expect(stockLevel(1, 0)).toBe('ok');
+  });
+
+  it('uses the company total, not one warehouse, to decide restocking', () => {
+    expect(needsRestock(row)).toBe(false);
+    expect(
+      needsRestock({ ...row, product: { ...row.product, stockMin: 5 } }),
+    ).toBe(true);
   });
 });

@@ -136,6 +136,7 @@ export type UpdateProductPayload =
     kind?: ProductKind;
     isPurchasable?: boolean;
     salesChannels?: OrderChannel[];
+    stockMin?: number;
   };
 
 export type MovementReason =
@@ -201,7 +202,10 @@ export interface StockWarehouseQuantity {
 }
 
 export interface StockRow {
-  product: Pick<Product, 'id' | 'name' | 'model' | 'salesChannels'> & {
+  product: Pick<
+    Product,
+    'id' | 'name' | 'model' | 'salesChannels' | 'salePrice' | 'stockMin'
+  > & {
     category: { id: string; name: string } | null;
     brand: { id: string; name: string } | null;
   };
@@ -220,6 +224,17 @@ export interface StockFilters {
   categoryId?: string;
   brandId?: string;
   warehouseId?: string;
+  // Devuelve solo ese producto, aunque no esté habilitado para la venta.
+  productId?: string;
+}
+
+export interface AssignUnlocatedStockPayload {
+  productId: string;
+  warehouseId: string;
+  // Si se omite se asigna todo el saldo sin depósito.
+  quantity?: number;
+  serialNumbers?: string[];
+  notes?: string;
 }
 
 export interface ProductBatch {
@@ -290,6 +305,9 @@ export const inventoryApi = {
 
   getStock: (filters?: StockFilters): Promise<StockResult> =>
     apiClient.get('/inventory/stock', { params: filters }).then((r) => r.data),
+
+  assignUnlocatedStock: (dto: AssignUnlocatedStockPayload): Promise<StockMovement[]> =>
+    apiClient.post('/inventory/stock/unlocated/assign', dto).then((r) => r.data),
 
   getProduct: (id: string): Promise<ProductWithStock> =>
     apiClient.get(`/inventory/products/${id}`).then((r) => r.data),
