@@ -34,6 +34,7 @@ describe('CustomersService', () => {
     create: jest.Mock;
     update: jest.Mock;
     softDelete: jest.Mock;
+    setUncollectible: jest.Mock;
   };
   let eventEmitter: { emit: jest.Mock };
 
@@ -47,6 +48,7 @@ describe('CustomersService', () => {
       create: jest.fn(),
       update: jest.fn(),
       softDelete: jest.fn(),
+      setUncollectible: jest.fn().mockResolvedValue({ count: 1 }),
     };
     eventEmitter = { emit: jest.fn() };
 
@@ -234,6 +236,79 @@ describe('CustomersService', () => {
         'tenant-1',
         'cust-1',
       );
+    });
+  });
+
+  // ── incobrable/judicial ────────────────────────────────────────────────────
+
+  describe('uncollectible mark', () => {
+    it('marks the customer with the trimmed reason and audits who did it', async () => {
+      customersRepository.findById.mockResolvedValue(makeCustomer());
+
+      await service.markUncollectible(
+        'tenant-1',
+        'cust-1',
+        '  En gestión judicial ',
+        'user-1',
+      );
+
+      expect(customersRepository.setUncollectible).toHaveBeenCalledWith(
+        'tenant-1',
+        'cust-1',
+        {
+          uncollectibleAt: expect.any(Date),
+          uncollectibleReason: 'En gestión judicial',
+        },
+      );
+      expect(eventEmitter.emit).toHaveBeenCalledWith(
+        'audit.log',
+        expect.objectContaining({
+          tenantId: 'tenant-1',
+          userId: 'user-1',
+          action: 'customer.uncollectible.marked',
+          resourceId: 'cust-1',
+        }),
+      );
+    });
+
+    it('clears the mark and audits the previous reason', async () => {
+      const markedAt = new Date('2026-09-30');
+      customersRepository.findById.mockResolvedValue(
+        makeCustomer({
+          uncollectibleAt: markedAt,
+          uncollectibleReason: 'Judicial',
+        }),
+      );
+
+      await service.clearUncollectible('tenant-1', 'cust-1', 'user-1');
+
+      expect(customersRepository.setUncollectible).toHaveBeenCalledWith(
+        'tenant-1',
+        'cust-1',
+        { uncollectibleAt: null, uncollectibleReason: null },
+      );
+      expect(eventEmitter.emit).toHaveBeenCalledWith(
+        'audit.log',
+        expect.objectContaining({
+          action: 'customer.uncollectible.cleared',
+          before: {
+            uncollectibleAt: markedAt,
+            uncollectibleReason: 'Judicial',
+          },
+        }),
+      );
+    });
+
+    it('does not touch a customer of another tenant', async () => {
+      customersRepository.findById.mockResolvedValue(null);
+
+      await expect(
+        service.markUncollectible('tenant-2', 'cust-1', 'Judicial'),
+      ).rejects.toBeInstanceOf(NotFoundException);
+      await expect(
+        service.clearUncollectible('tenant-2', 'cust-1'),
+      ).rejects.toBeInstanceOf(NotFoundException);
+      expect(customersRepository.setUncollectible).not.toHaveBeenCalled();
     });
   });
 });

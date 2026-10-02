@@ -112,6 +112,55 @@ export class CustomersService {
     return customer;
   }
 
+  // Calificación 6: el cliente no puede recibir un crédito nuevo hasta que
+  // se le quite la marca. Ver CreditEvaluationService.
+  async markUncollectible(
+    tenantId: string,
+    id: string,
+    reason: string,
+    userId?: string,
+  ) {
+    await this.findOne(tenantId, id);
+    const mark = {
+      uncollectibleAt: new Date(),
+      uncollectibleReason: reason.trim(),
+    };
+    await this.customersRepository.setUncollectible(tenantId, id, mark);
+    this.emitUncollectibleChange(tenantId, id, userId, 'marked', mark);
+    return this.findOne(tenantId, id);
+  }
+
+  async clearUncollectible(tenantId: string, id: string, userId?: string) {
+    const before = await this.findOne(tenantId, id);
+    await this.customersRepository.setUncollectible(tenantId, id, {
+      uncollectibleAt: null,
+      uncollectibleReason: null,
+    });
+    this.emitUncollectibleChange(tenantId, id, userId, 'cleared', {
+      uncollectibleAt: before.uncollectibleAt,
+      uncollectibleReason: before.uncollectibleReason,
+    });
+    return this.findOne(tenantId, id);
+  }
+
+  private emitUncollectibleChange(
+    tenantId: string,
+    customerId: string,
+    userId: string | undefined,
+    change: 'marked' | 'cleared',
+    mark: { uncollectibleAt: Date | null; uncollectibleReason: string | null },
+  ) {
+    this.eventEmitter.emit('customer.updated', { tenantId, customerId });
+    this.eventEmitter.emit('audit.log', {
+      tenantId,
+      userId,
+      module: 'sales',
+      action: `customer.uncollectible.${change}`,
+      resourceId: customerId,
+      ...(change === 'marked' ? { after: mark } : { before: mark }),
+    } satisfies AuditLogEvent);
+  }
+
   async delete(tenantId: string, id: string, userId?: string) {
     await this.findOne(tenantId, id);
     const customer = await this.customersRepository.softDelete(tenantId, id);
