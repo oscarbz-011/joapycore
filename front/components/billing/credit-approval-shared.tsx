@@ -10,8 +10,12 @@ import {
   type SaleOrder,
   type SaleOrderItem,
   type CreditAdjustmentSuggestion,
-  type CreditRating,
 } from '../../lib/api/sales';
+import {
+  CreditScoreBadge,
+  LoanHistoryTabs,
+  UncollectibleControls,
+} from './credit-history-detail';
 import { creditBureauApi } from '../../lib/api/credit-bureau';
 import { formatDatePY } from '../../lib/date';
 import { Button } from '@/components/ui/button';
@@ -64,20 +68,6 @@ export function orderTotal(order: SaleOrder) {
 }
 
 export const TEXTAREA_CLS = 'w-full min-w-0 rounded-2xl border border-transparent bg-input/50 px-3 py-2 text-sm outline-none resize-none transition-[color,box-shadow,background-color] focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30';
-
-export const RATING_STYLES: Record<CreditRating, string> = {
-  SIN_HISTORIAL: 'bg-muted/40 text-muted-foreground',
-  BUENO: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400',
-  REGULAR: 'bg-amber-500/15 text-amber-600 dark:text-amber-400',
-  RIESGO: 'bg-destructive/15 text-destructive',
-};
-
-export const RATING_LABELS: Record<CreditRating, string> = {
-  SIN_HISTORIAL: 'Sin historial',
-  BUENO: 'Bueno',
-  REGULAR: 'Regular',
-  RIESGO: 'Riesgo',
-};
 
 export const ADJUSTMENT_OPTIONS: { value: CreditAdjustmentSuggestion; label: string }[] = [
   { value: 'LOWER_VALUE_PRODUCT', label: 'Ofrecer un producto de menor valor' },
@@ -332,6 +322,7 @@ export function BureauCheckForm({ order }: { order: SaleOrder }) {
 // espacio de sobra y no tiene sentido esconder la información por defecto.
 
 export function CreditHistorySection({ order, collapsible = true }: { order: SaleOrder; collapsible?: boolean }) {
+  const queryClient = useQueryClient();
   const [open, setOpen] = useState(true);
   const isOpen = collapsible ? open : true;
 
@@ -339,6 +330,11 @@ export function CreditHistorySection({ order, collapsible = true }: { order: Sal
     queryKey: ['credit-evaluation', order.id],
     queryFn: () => salesApi.getCreditEvaluation(order.id),
   });
+  const hasLoans =
+    !!evaluation &&
+    evaluation.history.activeLoans.length +
+      evaluation.history.finishedLoans.length >
+      0;
 
   return (
     <div className="rounded-xl border border-border mb-4">
@@ -351,9 +347,7 @@ export function CreditHistorySection({ order, collapsible = true }: { order: Sal
           <span className="flex items-center gap-2">
             Historial crediticio
             {evaluation && !isLoading && (
-              <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${RATING_STYLES[evaluation.history.rating]}`}>
-                {RATING_LABELS[evaluation.history.rating]}
-              </span>
+              <CreditScoreBadge history={evaluation.history} />
             )}
           </span>
           {open ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
@@ -362,9 +356,7 @@ export function CreditHistorySection({ order, collapsible = true }: { order: Sal
         <div className="flex items-center gap-2 px-4 py-3">
           <span className="text-sm font-medium text-foreground">Historial crediticio</span>
           {evaluation && !isLoading && (
-            <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${RATING_STYLES[evaluation.history.rating]}`}>
-              {RATING_LABELS[evaluation.history.rating]}
-            </span>
+            <CreditScoreBadge history={evaluation.history} />
           )}
         </div>
       )}
@@ -382,29 +374,17 @@ export function CreditHistorySection({ order, collapsible = true }: { order: Sal
                 </p>
               )}
 
-              {evaluation.history.activeLoans.length > 0 && (
-                <div className="space-y-2">
-                  <p className="text-[11px] font-medium text-muted-foreground/70 uppercase tracking-wide">Otros créditos activos</p>
-                  {evaluation.history.activeLoans.map((loan) => (
-                    <div key={loan.loanId} className="text-xs border-b border-border/50 last:border-0 pb-1.5 last:pb-0">
-                      <div className="flex items-center justify-between">
-                        <span className="text-foreground font-medium truncate flex-1">{loan.productNames.join(', ')}</span>
-                        <span className="text-muted-foreground ml-2 shrink-0 tabular-nums">{formatPrice(loan.totalAmount)}</span>
-                      </div>
-                      <div className="flex items-center justify-between text-muted-foreground mt-0.5">
-                        <span>{loan.installmentsPaid}/{loan.totalInstallments} cuotas · {formatPrice(loan.monthlyInstallment)}/mes · {formatPrice(loan.outstandingBalance)} pend.</span>
-                      </div>
-                      <div className="text-muted-foreground/70 mt-0.5">Compra: {formatDateShortLocal(loan.startDate)}</div>
-                      <div className="text-muted-foreground/70 mt-0.5">
-                        1ª cuota: {loan.firstDueDate ? formatDateShort(loan.firstDueDate) : '—'} → última: {loan.finalDueDate ? formatDateShort(loan.finalDueDate) : '—'}
-                      </div>
-                      {loan.nextDueDate && (
-                        <div className="text-muted-foreground/70 mt-0.5">Próx. vence: {formatDateShort(loan.nextDueDate)}</div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
+              <UncollectibleControls
+                customerId={order.customer.id}
+                history={evaluation.history}
+                onChanged={() =>
+                  void queryClient.invalidateQueries({
+                    queryKey: ['credit-evaluation', order.id],
+                  })
+                }
+              />
+
+              {hasLoans && <LoanHistoryTabs history={evaluation.history} />}
 
               {evaluation.capacity.applicable && (
                 <div className={`rounded-lg p-2.5 text-xs ${evaluation.capacity.exceeds ? 'bg-destructive/10' : 'bg-muted/30'}`}>
@@ -448,8 +428,7 @@ export function CreditHistorySection({ order, collapsible = true }: { order: Sal
 
               {evaluation.bureau.required && <BureauCheckForm order={order} />}
 
-              {evaluation.history.rating === 'SIN_HISTORIAL' &&
-                evaluation.history.overdueCount === 0 &&
+              {!hasLoans &&
                 !evaluation.capacity.applicable &&
                 !evaluation.bureau.required && (
                   <p className="text-xs text-muted-foreground/60">Sin historial crediticio previo ni datos de sueldo para evaluar capacidad.</p>
