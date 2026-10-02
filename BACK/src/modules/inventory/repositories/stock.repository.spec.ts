@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import { StockRepository } from './stock.repository';
 
 describe('StockRepository', () => {
@@ -20,6 +21,8 @@ describe('StockRepository', () => {
             model: null,
             isSerialized: false,
             salesChannels: ['NORMAL'],
+            salePrice: new Prisma.Decimal('1725000.00'),
+            stockMin: 10,
             category: null,
             brand: null,
           },
@@ -29,6 +32,8 @@ describe('StockRepository', () => {
             model: 'S-1',
             isSerialized: true,
             salesChannels: ['POS'],
+            salePrice: null,
+            stockMin: 0,
             category: null,
             brand: null,
           },
@@ -38,6 +43,8 @@ describe('StockRepository', () => {
             model: null,
             isSerialized: false,
             salesChannels: ['NORMAL'],
+            salePrice: new Prisma.Decimal('0'),
+            stockMin: 0,
             category: null,
             brand: null,
           },
@@ -151,5 +158,32 @@ describe('StockRepository', () => {
         ],
       },
     );
+  });
+
+  it('exposes the sale price as a number and the reorder threshold of each product', async () => {
+    const result = await repository.findAll('tenant-1', {});
+
+    expect(result.items.map((row) => row.product)).toEqual([
+      expect.objectContaining({
+        id: 'plain',
+        salePrice: 1725000,
+        stockMin: 10,
+      }),
+      expect.objectContaining({ id: 'serial', salePrice: null, stockMin: 0 }),
+      expect.objectContaining({ id: 'zero', salePrice: 0, stockMin: 0 }),
+    ]);
+  });
+
+  it('returns a requested product even when it is not eligible for sale', async () => {
+    await repository.findAll('tenant-1', { productId: 'plain' });
+
+    const where = prisma.product.findMany.mock.calls[0][0].where;
+    expect(where).toMatchObject({
+      tenantId: 'tenant-1',
+      deletedAt: null,
+      id: 'plain',
+    });
+    expect(where).not.toHaveProperty('status');
+    expect(where).not.toHaveProperty('salesChannels');
   });
 });

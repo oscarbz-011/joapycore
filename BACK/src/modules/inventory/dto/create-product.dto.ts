@@ -4,6 +4,7 @@ import {
   IsArray,
   IsBoolean,
   IsEnum,
+  IsInt,
   IsNumber,
   IsOptional,
   IsPositive,
@@ -52,6 +53,16 @@ export class CreateProductDto {
   @IsOptional()
   @IsBoolean()
   usesLots?: boolean;
+
+  @ApiPropertyOptional({
+    minimum: 0,
+    description:
+      'Stock mínimo: al llegar a esta cantidad el producto se marca para reposición',
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  stockMin?: number;
 
   @ApiPropertyOptional({ default: 'unidad' })
   @IsOptional()
