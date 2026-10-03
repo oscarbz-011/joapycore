@@ -2,7 +2,7 @@
 
 import { apiErrorMessage } from '@/lib/api/api-error';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, CheckCircle, XCircle, Wrench, Clock, CreditCard, ShieldAlert } from 'lucide-react';
@@ -52,6 +52,17 @@ export default function ApprovalDetailPage() {
       router.push('/dashboard/billing/approvals');
     },
   });
+
+  // Abrir la evaluación le quita la marca de "Nuevo" en la bandeja, para
+  // todos los analistas.
+  const needsViewedMark = order?.status === 'PENDING_CREDIT_APPROVAL' && !order.creditViewedAt;
+  useEffect(() => {
+    if (!needsViewedMark) return;
+    void salesApi
+      .markCreditViewed(id)
+      .then(() => queryClient.invalidateQueries({ queryKey: ['pending-approvals'] }))
+      .catch(() => undefined);
+  }, [needsViewedMark, id, queryClient]);
 
   function backToList() {
     void queryClient.invalidateQueries({ queryKey: ['pending-approvals'] });

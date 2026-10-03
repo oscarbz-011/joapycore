@@ -205,6 +205,8 @@ export interface SaleOrder {
   installments: number | null;
   interestRate: number | null;
   orderDate: string;
+  // Primera vez que un analista abrió la evaluación de crédito; null = nueva.
+  creditViewedAt: string | null;
   notes: string | null;
   quoteNumber: string | null;
   quotePdfFileId: string | null;
@@ -376,6 +378,11 @@ export const salesApi = {
   // Credit approval
   listPendingApprovals: (): Promise<SaleOrder[]> =>
     apiClient.get('/sales/orders/pending-approvals').then((r) => r.data),
+
+  markCreditViewed: (id: string): Promise<{ marked: boolean }> =>
+    apiClient
+      .post(`/sales/orders/${id}/credit-evaluation/viewed`)
+      .then((r) => r.data),
 
   approveCredit: (id: string): Promise<SaleOrder> =>
     apiClient.post(`/sales/orders/${id}/approve`).then((r) => r.data),
