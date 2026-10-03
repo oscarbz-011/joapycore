@@ -36,6 +36,8 @@ import { settingsApi } from "../../../../lib/api/settings";
 import { usersApi } from "../../../../lib/api/users";
 import { useAuth } from "../../../../lib/auth-context";
 import { formatDatePY } from "../../../../lib/date";
+import { resolveWarehouseId, warehouseChoices } from "../../../../lib/sale-warehouse";
+import { useSaleStock } from "../../../../lib/use-sale-stock";
 import { SearchSelect } from "../components/search-select";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -433,6 +435,8 @@ function CreateOrderModal({
       : total;
   const stockIssues = findStockIssues(items, products);
 
+  const stock = useSaleStock();
+
   const mutation = useMutation({
     mutationFn: () => {
       const dto: Parameters<typeof salesApi.createOrder>[0] = {
@@ -446,6 +450,12 @@ function CreateOrderModal({
             productId: it.productId,
             quantity: Number(it.quantity),
             unitPrice: Number(it.unitPrice),
+            warehouseId:
+              resolveWarehouseId(
+                it.warehouseId,
+                warehouseChoices(stock, it.productId),
+                Number(it.quantity),
+              ) || undefined,
             serialNumbers: it.product?.isSerialized
               ? it.serialInput
                   .split("\n")
@@ -746,6 +756,7 @@ function CreateOrderModal({
                           key={idx}
                           item={items[idx]}
                           products={products}
+                          stock={stock}
                           onChange={(updated) =>
                             setItems((prev) =>
                               prev.map((it, i) => (i === idx ? updated : it)),
@@ -763,6 +774,7 @@ function CreateOrderModal({
                         key={idx}
                         item={items[idx]}
                         products={products}
+                        stock={stock}
                         onChange={(updated) =>
                           setItems((prev) =>
                             prev.map((it, i) => (i === idx ? updated : it)),
