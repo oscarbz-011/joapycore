@@ -55,9 +55,19 @@ export class ReceiptOnPaymentListener {
     private readonly docxTemplateService: DocxTemplateService,
   ) {}
 
-  // payment.receipt.pdf.requested = reintento manual cuando el PDF falló.
-  @OnEvent(['payment.receipt.created', 'payment.receipt.pdf.requested'])
+  @OnEvent('payment.receipt.created')
   async handle(event: PaymentReceiptCreatedEvent) {
+    await this.generateSafely(event);
+  }
+
+  // Reintento manual cuando el PDF falló al cobrar. Va en un método aparte:
+  // EventEmitter2 toma un array de eventos como la ruta de uno solo.
+  @OnEvent('payment.receipt.pdf.requested')
+  async handleRetry(event: PaymentReceiptCreatedEvent) {
+    await this.generateSafely(event);
+  }
+
+  private async generateSafely(event: PaymentReceiptCreatedEvent) {
     try {
       await this.generate(event);
     } catch (error) {
