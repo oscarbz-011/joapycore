@@ -14,6 +14,31 @@ export interface InvoiceRow {
   total: number;
   // Solo facturas de intereses: se abren por su PDF, no por el detalle.
   pdfFileId: string | null;
+  // Número fiscal ("001-001-0000027"); null en borradores sin numerar.
+  fiscalNumber: string | null;
+}
+
+function fiscalNumber(invoice: {
+  invoiceNumber: string | null;
+  invoicePrefix: string | null;
+}): string | null {
+  return invoice.invoiceNumber
+    ? `${invoice.invoicePrefix ?? ''}${invoice.invoiceNumber}`
+    : null;
+}
+
+/**
+ * Orden fiscal: por número de factura, de mayor a menor (el número tiene
+ * ancho fijo, así que se compara como texto). Los borradores sin número van
+ * primero, por fecha. No se ordena por fecha porque una fecha mal tomada (un
+ * reloj atrasado) sacaría la factura de su lugar en la secuencia.
+ */
+function compareRows(a: InvoiceRow, b: InvoiceRow): number {
+  if (!a.fiscalNumber || !b.fiscalNumber) {
+    if (a.fiscalNumber === b.fiscalNumber) return b.date.localeCompare(a.date);
+    return a.fiscalNumber ? 1 : -1;
+  }
+  return b.fiscalNumber.localeCompare(a.fiscalNumber);
 }
 
 function invoiceNumber(invoice: {
@@ -26,7 +51,7 @@ function invoiceNumber(invoice: {
     : `#${invoice.id.slice(0, 8).toUpperCase()}`;
 }
 
-/** Une facturas de venta y de intereses en una sola lista, más recientes primero. */
+/** Une facturas de venta y de intereses en una sola lista, en orden fiscal. */
 export function toInvoiceRows(
   sales: Invoice[],
   interests: InterestInvoice[],
@@ -46,6 +71,7 @@ export function toInvoiceRows(
       status: invoice.status,
       total: Number(invoice.total),
       pdfFileId: null,
+      fiscalNumber: fiscalNumber(invoice),
     }),
   );
   const interestRows = interests.map((invoice): InvoiceRow => {
@@ -65,11 +91,10 @@ export function toInvoiceRows(
       status: invoice.status,
       total: Number(invoice.total),
       pdfFileId: invoice.pdfFileId,
+      fiscalNumber: fiscalNumber(invoice),
     };
   });
-  return [...saleRows, ...interestRows].sort((a, b) =>
-    b.date.localeCompare(a.date),
-  );
+  return [...saleRows, ...interestRows].sort(compareRows);
 }
 
 export function filterInvoiceRows(

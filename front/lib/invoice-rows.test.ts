@@ -37,6 +37,7 @@ describe('toInvoiceRows', () => {
   it('lists interest invoices next to sale invoices, newest first', () => {
     const rows = toInvoiceRows([sale], [interest]);
 
+    // 0000011 (intereses) es posterior a 0000010 (venta) en la secuencia.
     expect(rows.map((row) => row.id)).toEqual(['interest-1', 'sale-0001']);
     expect(rows[0]).toMatchObject({
       kind: 'INTEREST',
@@ -57,6 +58,56 @@ describe('toInvoiceRows', () => {
     const [row] = toInvoiceRows([], [{ ...interest, paymentReceipt: null }]);
 
     expect(row).toMatchObject({ customerName: '—', typeLabel: 'Intereses' });
+  });
+});
+
+describe('fiscal order', () => {
+  const withNumber = (id: string, number: string, issuedAt: string) =>
+    ({
+      ...sale,
+      id,
+      invoiceNumber: number,
+      issuedAt,
+    }) as unknown as Invoice;
+
+  it('orders by invoice number even when a date is out of sequence', () => {
+    const rows = toInvoiceRows(
+      [
+        withNumber('n26', '0000026', '2026-09-19T18:51:55.000Z'),
+        // Emitida con el reloj atrasado: fecha de abril, número 27.
+        withNumber('n27', '0000027', '2026-04-02T01:27:27.000Z'),
+      ],
+      [interest],
+    );
+
+    expect(rows.map((row) => row.fiscalNumber)).toEqual([
+      '001-001-0000027',
+      '001-001-0000026',
+      '001-001-0000011',
+    ]);
+  });
+
+  it('lists drafts without a number first, newest first', () => {
+    const draft = (id: string, createdAt: string) =>
+      ({
+        ...sale,
+        id,
+        status: 'PENDING',
+        invoiceNumber: null,
+        issuedAt: null,
+        createdAt,
+      }) as unknown as Invoice;
+
+    const rows = toInvoiceRows(
+      [
+        withNumber('n26', '0000026', '2026-09-19T18:51:55.000Z'),
+        draft('old-draft', '2026-09-01T10:00:00.000Z'),
+        draft('new-draft', '2026-10-01T10:00:00.000Z'),
+      ],
+      [],
+    );
+
+    expect(rows.map((row) => row.id)).toEqual(['new-draft', 'old-draft', 'n26']);
   });
 });
 
