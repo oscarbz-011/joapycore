@@ -6,6 +6,13 @@ import { useQuery } from '@tanstack/react-query';
 import { Search } from 'lucide-react';
 import { billingApi, type CreditNote, type InvoiceStatus } from '../../../../lib/api/billing';
 import { formatDatePY } from '../../../../lib/date';
+import {
+  filterInvoiceRows,
+  toInvoiceRows,
+  type InvoiceKind,
+  type InvoiceRow,
+} from '../../../../lib/invoice-rows';
+import { openPdf } from '../../../../lib/open-pdf';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -91,14 +98,34 @@ export default function BillingPage() {
   const [tab, setTab]               = useState<Tab>('invoices');
   const [statusFilter, setStatusFilter] = useState<'' | InvoiceStatus>('');
   const [search, setSearch]         = useState('');
+  const [kindFilter, setKindFilter] = useState<'' | InvoiceKind>('');
+  const [openError, setOpenError]   = useState('');
 
   const { data: invoices = [], isLoading } = useQuery({ queryKey: ['invoices'], queryFn: billingApi.listInvoices });
-
-  const filtered = invoices.filter((inv) => {
-    const name = `${inv.saleOrder.customer.firstName} ${inv.saleOrder.customer.lastName}`.toLowerCase();
-    return (!search || name.includes(search.toLowerCase()) || inv.id.startsWith(search.toLowerCase()))
-      && (!statusFilter || inv.status === statusFilter);
+  // Las facturas de intereses moratorios no tienen pedido de venta: llegan
+  // por su propia consulta y se muestran en la misma tabla.
+  const { data: interestInvoices = [], isLoading: loadingInterest } = useQuery({
+    queryKey: ['invoices', 'interest'],
+    queryFn: billingApi.listInterestInvoices,
   });
+
+  const rows = toInvoiceRows(invoices, interestInvoices);
+  const filtered = filterInvoiceRows(rows, { search, status: statusFilter, kind: kindFilter });
+
+  async function openRow(row: InvoiceRow) {
+    setOpenError('');
+    if (row.kind === 'SALE') return router.push(`/dashboard/billing/invoices/${row.id}`);
+    if (!row.pdfFileId) {
+      return setOpenError(
+        `La factura de intereses ${row.number} no tiene PDF. Generalo desde el recibo de la cuota (botón "Factura int.").`,
+      );
+    }
+    try {
+      await openPdf(row.pdfFileId);
+    } catch {
+      setOpenError(`No se pudo abrir el PDF de la factura ${row.number}.`);
+    }
+  }
 
   const pendingCount = invoices.filter((inv) => inv.status === 'PENDING').length;
 
@@ -141,8 +168,20 @@ export default function BillingPage() {
           <div className="mb-4 flex items-center gap-3">
             <div className="relative flex-1 min-w-48">
               <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground/50" />
-              <Input className="pl-8" placeholder="Buscar por cliente..." value={search} onChange={(e) => setSearch(e.target.value)} />
+              <Input className="pl-8" placeholder="Buscar por cliente o número..." value={search} onChange={(e) => setSearch(e.target.value)} />
             </div>
+            <Select value={kindFilter || 'all'} onValueChange={(v) => setKindFilter(v === 'all' ? '' : v as InvoiceKind)}>
+              <SelectTrigger>
+                <span className="min-w-0 flex-1 truncate text-left text-sm">
+                  {kindFilter === 'SALE' ? 'Venta' : kindFilter === 'INTEREST' ? 'Intereses' : 'Todos los tipos'}
+                </span>
+              </SelectTrigger>
+              <SelectContent className="w-auto min-w-[9rem]">
+                <SelectItem value="all">Todos los tipos</SelectItem>
+                <SelectItem value="SALE">Venta</SelectItem>
+                <SelectItem value="INTEREST">Intereses</SelectItem>
+              </SelectContent>
+            </Select>
             <Select value={statusFilter || 'all'} onValueChange={(v) => setStatusFilter(v === 'all' ? '' : v as InvoiceStatus)}>
               <SelectTrigger>
                 <span className="min-w-0 flex-1 truncate text-left text-sm">
@@ -159,13 +198,19 @@ export default function BillingPage() {
             </Select>
           </div>
 
+          {openError && (
+            <p role="alert" className="mb-3 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-2.5 text-sm text-destructive">
+              {openError}
+            </p>
+          )}
+
           {/* Table */}
-          {isLoading ? (
+          {isLoading || loadingInterest ? (
             <div className="py-16 text-center text-sm text-muted-foreground">Cargando facturas...</div>
           ) : filtered.length === 0 ? (
             <div className="py-16 text-center">
               <p className="text-sm text-muted-foreground">
-                {invoices.length === 0 ? 'Aún no hay facturas. Se generan al confirmar un pedido de venta.' : 'No se encontraron facturas con los filtros aplicados.'}
+                {rows.length === 0 ? 'Aún no hay facturas. Se generan al confirmar un pedido de venta.' : 'No se encontraron facturas con los filtros aplicados.'}
               </p>
             </div>
           ) : (
@@ -183,25 +228,21 @@ export default function BillingPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border">
-                    {filtered.map((invoice) => (
+                    {filtered.map((row) => (
                       <tr
-                        key={invoice.id}
-                        onClick={() => router.push(`/dashboard/billing/invoices/${invoice.id}`)}
+                        key={row.id}
+                        onClick={() => void openRow(row)}
                         className="cursor-pointer hover:bg-muted/20 transition-colors"
                       >
-                        <td className="px-4 py-3 font-mono text-xs text-muted-foreground">
-                          {invoice.invoiceNumber ? `${invoice.invoicePrefix ?? ''}${invoice.invoiceNumber}` : `#${invoice.id.slice(0, 8).toUpperCase()}`}
-                        </td>
+                        <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{row.number}</td>
                         <td className="px-4 py-3">
-                          <div className="font-medium text-foreground">{invoice.saleOrder.customer.firstName} {invoice.saleOrder.customer.lastName}</div>
-                          {invoice.saleOrder.customer.email && <div className="text-xs text-muted-foreground">{invoice.saleOrder.customer.email}</div>}
+                          <div className="font-medium text-foreground">{row.customerName}</div>
+                          {row.customerEmail && <div className="text-xs text-muted-foreground">{row.customerEmail}</div>}
                         </td>
-                        <td className="px-4 py-3 hidden sm:table-cell text-muted-foreground text-xs">
-                          {invoice.saleOrder.saleType === 'CREDIT' ? `Crédito${invoice.saleOrder.installments ? ` · ${invoice.saleOrder.installments}c` : ''}` : 'Contado'}
-                        </td>
-                        <td className="px-4 py-3 text-muted-foreground">{formatDatePY(invoice.issuedAt ?? invoice.createdAt, 'local')}</td>
-                        <td className="px-4 py-3"><StatusBadge status={invoice.status} /></td>
-                        <td className="px-4 py-3 text-right font-mono font-medium text-foreground">{formatPrice(Number(invoice.total))}</td>
+                        <td className="px-4 py-3 hidden sm:table-cell text-muted-foreground text-xs">{row.typeLabel}</td>
+                        <td className="px-4 py-3 text-muted-foreground">{formatDatePY(row.date, 'local')}</td>
+                        <td className="px-4 py-3"><StatusBadge status={row.status} /></td>
+                        <td className="px-4 py-3 text-right font-mono font-medium text-foreground">{formatPrice(row.total)}</td>
                       </tr>
                     ))}
                   </tbody>

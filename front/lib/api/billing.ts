@@ -42,6 +42,29 @@ export interface InvoiceBranch {
   puntoExpedicion: string | null;
 }
 
+// Factura de intereses moratorios: no tiene pedido de venta, el cliente sale
+// del recibo de cobro que la originó. El total llega como texto (Decimal).
+export interface InterestInvoice {
+  id: string;
+  status: InvoiceStatus;
+  issuedAt: string | null;
+  createdAt: string;
+  total: number | string;
+  invoiceNumber: string | null;
+  invoicePrefix: string | null;
+  pdfFileId: string | null;
+  paymentReceipt: {
+    id: string;
+    receiptNumber: string;
+    customer: {
+      id: string;
+      firstName: string;
+      lastName: string;
+      email: string | null;
+    };
+  } | null;
+}
+
 export interface Invoice {
   id: string;
   status: InvoiceStatus;
@@ -143,6 +166,9 @@ export function invoicePdfAction(
 }
 
 export const billingApi = {
+  listInterestInvoices: (): Promise<InterestInvoice[]> =>
+    apiClient.get('/billing/invoices/interest').then((r) => r.data),
+
   listInvoices: (): Promise<Invoice[]> =>
     apiClient.get("/billing/invoices").then((r) => r.data),
 
