@@ -133,6 +133,47 @@ export class LoansService {
     return receipt;
   }
 
+  /**
+   * Regenera los PDFs que hayan quedado sin generar para un cobro: el recibo
+   * y, si el cobro incluyó intereses, su factura. La generación es
+   * best-effort al cobrar (si falla, el pago igual queda registrado), así que
+   * sin esto un PDF fallido quedaba imposible de reimprimir.
+   */
+  async retryReceiptPdf(tenantId: string, id: string, userId?: string) {
+    const receipt = await this.findReceiptById(tenantId, id);
+    if (!this.missingReceiptPdf(receipt)) return receipt;
+
+    await this.eventEmitter.emitAsync('payment.receipt.pdf.requested', {
+      tenantId,
+      receiptId: id,
+    });
+
+    const updated = await this.findReceiptById(tenantId, id);
+    if (this.missingReceiptPdf(updated)) {
+      throw new UnprocessableEntityException(
+        'No se pudo generar el PDF. Volvé a intentar en unos segundos.',
+      );
+    }
+    this.eventEmitter.emit('audit.log', {
+      tenantId,
+      userId,
+      module: 'finance',
+      action: 'payment.receipt.pdf.regenerated',
+      resourceId: id,
+    } satisfies AuditLogEvent);
+    return updated;
+  }
+
+  private missingReceiptPdf(receipt: {
+    pdfFileId: string | null;
+    interestInvoice: { pdfFileId: string | null } | null;
+  }): boolean {
+    return (
+      !receipt.pdfFileId ||
+      (receipt.interestInvoice !== null && !receipt.interestInvoice.pdfFileId)
+    );
+  }
+
   // Una cuota puede haberse cobrado sola (payInstallment) o como parte de un
   // pago que también tocó otras cuotas (payByAmount) — en ambos casos hay
   // exactamente un recibo con un PaymentReceiptItem para esta cuota.

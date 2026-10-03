@@ -79,12 +79,29 @@ export class InterestInvoiceOnIssueListener {
     }
   }
 
+  // Reintento manual desde el recibo: regenera la factura de intereses de
+  // ese cobro si existe y quedó sin PDF.
+  @OnEvent('payment.receipt.pdf.requested')
+  async handleRetry(event: { tenantId: string; receiptId: string }) {
+    const invoice = await this.sources.findInterestInvoiceByReceipt(
+      event.tenantId,
+      event.receiptId,
+    );
+    if (!invoice || invoice.pdfFileId) return;
+    await this.handle({
+      tenantId: event.tenantId,
+      invoiceId: invoice.id,
+      paymentReceiptId: event.receiptId,
+      total: Number(invoice.total),
+    });
+  }
+
   private async generate(event: InterestInvoiceIssuedEvent) {
     const invoice = await this.sources.findInterestInvoiceForPdf(
       event.tenantId,
       event.invoiceId,
     );
-    if (!invoice || !invoice.paymentReceipt) return;
+    if (!invoice || !invoice.paymentReceipt || invoice.pdfFileId) return;
     if (!invoice.issuedAt) {
       throw new Error(
         `La factura de intereses ${event.invoiceId} no tiene fecha de emisión`,

@@ -58,6 +58,21 @@ export class LoansController {
     return this.loansService.findReceiptById(tenantId, id);
   }
 
+  @Post('receipts/:id/pdf/retry')
+  @HttpCode(HttpStatus.OK)
+  @Permissions('finance:installments:pay')
+  @ApiOperation({
+    summary:
+      'Regenerar los PDFs faltantes de un cobro (recibo y factura de intereses)',
+  })
+  retryReceiptPdf(
+    @CurrentTenant() tenantId: string,
+    @CurrentUser() user: JwtPayload,
+    @Param('id') id: string,
+  ) {
+    return this.loansService.retryReceiptPdf(tenantId, id, user.sub);
+  }
+
   @Get('installments/:installmentId/receipt')
   @Permissions('finance:read')
   @ApiOperation({

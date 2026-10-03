@@ -55,7 +55,8 @@ export class ReceiptOnPaymentListener {
     private readonly docxTemplateService: DocxTemplateService,
   ) {}
 
-  @OnEvent('payment.receipt.created')
+  // payment.receipt.pdf.requested = reintento manual cuando el PDF falló.
+  @OnEvent(['payment.receipt.created', 'payment.receipt.pdf.requested'])
   async handle(event: PaymentReceiptCreatedEvent) {
     try {
       await this.generate(event);
@@ -71,7 +72,7 @@ export class ReceiptOnPaymentListener {
       event.tenantId,
       event.receiptId,
     );
-    if (!receipt) return;
+    if (!receipt || receipt.pdfFileId) return;
 
     const customerName = `${receipt.customer.firstName} ${receipt.customer.lastName}`;
     const customerDoc = receipt.customer.documentNumber
