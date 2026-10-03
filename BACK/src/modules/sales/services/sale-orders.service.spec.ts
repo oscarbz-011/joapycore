@@ -1554,6 +1554,34 @@ describe('SaleOrdersService', () => {
 
   // ── resubmitForApproval ──────────────────────────────────────────────────
 
+  describe('markCreditViewed', () => {
+    it('marks a pending request as viewed only the first time, scoped to the tenant', async () => {
+      prisma.saleOrder.updateMany.mockResolvedValue({ count: 1 });
+
+      await expect(
+        service.markCreditViewed('tenant-1', 'order-1', 'user-1'),
+      ).resolves.toEqual({ marked: true });
+
+      expect(prisma.saleOrder.updateMany).toHaveBeenCalledWith({
+        where: {
+          id: 'order-1',
+          tenantId: 'tenant-1',
+          status: 'PENDING_CREDIT_APPROVAL',
+          creditViewedAt: null,
+        },
+        data: { creditViewedAt: expect.any(Date), creditViewedById: 'user-1' },
+      });
+    });
+
+    it('does nothing for a request already viewed, decided or of another tenant', async () => {
+      prisma.saleOrder.updateMany.mockResolvedValue({ count: 0 });
+
+      await expect(
+        service.markCreditViewed('tenant-2', 'order-1', 'user-1'),
+      ).resolves.toEqual({ marked: false });
+    });
+  });
+
   describe('resubmitForApproval', () => {
     it('moves the order back to PENDING_CREDIT_APPROVAL', async () => {
       saleOrdersRepository.findById.mockResolvedValue(
@@ -1568,7 +1596,12 @@ describe('SaleOrdersService', () => {
           tenantId: 'tenant-1',
           status: 'CREDIT_NEEDS_ADJUSTMENT',
         },
-        data: { status: 'PENDING_CREDIT_APPROVAL' },
+        // Reenviada = nueva otra vez en la bandeja del analista.
+        data: {
+          status: 'PENDING_CREDIT_APPROVAL',
+          creditViewedAt: null,
+          creditViewedById: null,
+        },
       });
     });
 

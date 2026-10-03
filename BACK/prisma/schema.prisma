@@ -1281,6 +1281,11 @@ model SaleOrder {
   adjustmentNote        String?                      @map("adjustment_note")
   suggestedAlternatives CreditAdjustmentSuggestion[] @map("suggested_alternatives")
 
+  // Primera vez que un analista abrió la evaluación de esta solicitud. null =
+  // "nueva" en la bandeja de Evaluación de crédito. Se limpia al reenviarla.
+  creditViewedAt   DateTime? @map("credit_viewed_at")
+  creditViewedById String?   @map("credit_viewed_by_id")
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 

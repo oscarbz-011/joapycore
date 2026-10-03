@@ -29,7 +29,7 @@ export class SaleOrdersRepository {
     return this.prisma.saleOrder.findMany({
       where: { tenantId, status: 'PENDING_CREDIT_APPROVAL' },
       include: this.include,
-      orderBy: { createdAt: 'asc' },
+      orderBy: { createdAt: 'desc' },
     });
   }
 

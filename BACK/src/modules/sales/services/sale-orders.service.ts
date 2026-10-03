@@ -381,6 +381,18 @@ export class SaleOrdersService implements SalesGateway {
     return { proposedMonthlyPayment, history, capacity, bureau };
   }
 
+  // La solicitud deja de ser "nueva" en la bandeja la primera vez que un
+  // analista abre su evaluación. Idempotente: las siguientes no cambian nada.
+  async markCreditViewed(tenantId: string, id: string, userId?: string) {
+    const result = await this.saleOrdersRepository.transition(
+      tenantId,
+      id,
+      { status: 'PENDING_CREDIT_APPROVAL', creditViewedAt: null },
+      { creditViewedAt: new Date(), creditViewedById: userId ?? null },
+    );
+    return { marked: result.count > 0 };
+  }
+
   async requestAdjustment(
     tenantId: string,
     id: string,
@@ -605,7 +617,12 @@ export class SaleOrdersService implements SalesGateway {
       tenantId,
       id,
       { status: 'CREDIT_NEEDS_ADJUSTMENT' },
-      { status: 'PENDING_CREDIT_APPROVAL' },
+      // Vuelve a la bandeja como solicitud nueva: hay que revisarla de nuevo.
+      {
+        status: 'PENDING_CREDIT_APPROVAL',
+        creditViewedAt: null,
+        creditViewedById: null,
+      },
     );
     if (result.count === 0) {
       throw new UnprocessableEntityException(
