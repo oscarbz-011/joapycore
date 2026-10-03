@@ -36,6 +36,8 @@ import { settingsApi } from "../../../../lib/api/settings";
 import { usersApi } from "../../../../lib/api/users";
 import { useAuth } from "../../../../lib/auth-context";
 import { formatDatePY } from "../../../../lib/date";
+import { useTableSort } from "../../../../lib/use-table-sort";
+import { SortableHeader } from "@/components/sortable-header";
 import { SearchSelect } from "../components/search-select";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -1466,6 +1468,23 @@ function OrderDetailPanel({
 
 // ── Main page ──────────────────────────────────────────────────────────────────
 
+const sellerName = (order: SaleOrder) => {
+  const s = order.seller ?? order.createdBy;
+  return s ? `${s.firstName} ${s.lastName}` : null;
+};
+
+const ORDER_SORT = {
+  customer: (order: SaleOrder) =>
+    `${order.customer.firstName} ${order.customer.lastName}`,
+  date: (order: SaleOrder) => new Date(order.orderDate),
+  status: (order: SaleOrder) => STATUS_LABEL[order.status] ?? order.status,
+  type: (order: SaleOrder) =>
+    order.saleType === "CREDIT" ? `Crédito ${order.installments ?? ""}` : "Contado",
+  seller: sellerName,
+  items: (order: SaleOrder) => order.items.length,
+  total: (order: SaleOrder) => orderTotal(order),
+};
+
 export default function SalesPage() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"" | SaleOrderStatus>("");
@@ -1498,6 +1517,8 @@ export default function SalesPage() {
       (!statusFilter || o.status === statusFilter)
     );
   });
+
+  const { sorted, sort, toggle } = useTableSort(filtered, ORDER_SORT);
 
   function openPanel(order: SaleOrder) {
     setPanelOrder(order);
@@ -1595,21 +1616,17 @@ export default function SalesPage() {
             <table className="w-full text-sm">
               <thead className="border-b border-border bg-muted/30 text-xs font-bold uppercase tracking-wider text-muted-foreground">
                 <tr>
-                  <th className="px-4 py-3 text-left">Cliente</th>
-                  <th className="px-4 py-3 text-left">Fecha</th>
-                  <th className="px-4 py-3 text-left">Estado</th>
-                  <th className="px-4 py-3 text-left hidden lg:table-cell">
-                    Tipo
-                  </th>
-                  <th className="px-4 py-3 text-left hidden lg:table-cell">
-                    Vendedor
-                  </th>
-                  <th className="px-4 py-3 text-center">Prods.</th>
-                  <th className="px-4 py-3 text-right">Total</th>
+                  <SortableHeader label="Cliente" sortKey="customer" sort={sort} onSort={toggle} />
+                  <SortableHeader label="Fecha" sortKey="date" sort={sort} onSort={toggle} />
+                  <SortableHeader label="Estado" sortKey="status" sort={sort} onSort={toggle} />
+                  <SortableHeader label="Tipo" sortKey="type" sort={sort} onSort={toggle} className="hidden lg:table-cell" />
+                  <SortableHeader label="Vendedor" sortKey="seller" sort={sort} onSort={toggle} className="hidden lg:table-cell" />
+                  <SortableHeader label="Prods." sortKey="items" sort={sort} onSort={toggle} align="center" />
+                  <SortableHeader label="Total" sortKey="total" sort={sort} onSort={toggle} align="right" />
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {filtered.map((order) => (
+                {sorted.map((order) => (
                   <tr
                     key={order.id}
                     onClick={() => openPanel(order)}
@@ -1644,10 +1661,7 @@ export default function SalesPage() {
                       )}
                     </td>
                     <td className="px-4 py-3 hidden lg:table-cell text-xs text-muted-foreground">
-                      {(() => {
-                        const s = order.seller ?? order.createdBy;
-                        return s ? `${s.firstName} ${s.lastName}` : "—";
-                      })()}
+                      {sellerName(order) ?? "—"}
                     </td>
                     <td className="px-4 py-3 text-center text-muted-foreground">
                       {order.items.length}

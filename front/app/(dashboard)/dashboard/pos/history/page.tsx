@@ -3,7 +3,9 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Receipt } from 'lucide-react';
-import { posApi, type PosPaymentMethod, type PosTerminal } from '../../../../../lib/api/pos';
+import { posApi, type PosPaymentMethod, type PosSaleOrder, type PosTerminal } from '../../../../../lib/api/pos';
+import { useTableSort } from '../../../../../lib/use-table-sort';
+import { SortableHeader } from '@/components/sortable-header';
 import { Card } from '@/components/ui/card';
 import { DatePicker } from '@/components/ui/date-picker';
 
@@ -28,6 +30,19 @@ function formatDateTime(iso: string) {
   return new Date(iso).toLocaleString('es-PY', { dateStyle: 'short', timeStyle: 'short' });
 }
 
+const saleTotal = (sale: PosSaleOrder) =>
+  sale.items.reduce((sum, i) => sum + i.quantity * i.unitPrice, 0);
+
+const POS_SALE_SORT = {
+  date: (sale: PosSaleOrder) => new Date(sale.orderDate),
+  customer: (sale: PosSaleOrder) =>
+    `${sale.customer.firstName} ${sale.customer.lastName}`,
+  items: (sale: PosSaleOrder) => sale.items.length,
+  payment: (sale: PosSaleOrder) =>
+    sale.salePayments.map((p) => PAYMENT_METHOD_LABELS[p.paymentMethod]).join(', '),
+  total: saleTotal,
+};
+
 export default function PosHistoryPage() {
   const [terminalId, setTerminalId] = useState('');
   const [from, setFrom] = useState('');
@@ -47,6 +62,8 @@ export default function PosHistoryPage() {
         to: to || undefined,
       }),
   });
+
+  const { sorted, sort, toggle } = useTableSort(sales, POS_SALE_SORT);
 
   const total = sales.reduce(
     (sum, s) => sum + s.items.reduce((iSum, i) => iSum + i.quantity * i.unitPrice, 0),
@@ -94,15 +111,15 @@ export default function PosHistoryPage() {
             <table className="w-full text-sm">
               <thead className="border-b border-border bg-muted/30 text-xs font-bold uppercase tracking-wider text-muted-foreground">
                 <tr>
-                  <th className="px-4 py-3 text-left">Fecha</th>
-                  <th className="px-4 py-3 text-left">Cliente</th>
-                  <th className="px-4 py-3 text-left">Ítems</th>
-                  <th className="px-4 py-3 text-left">Pago</th>
-                  <th className="px-4 py-3 text-right">Total</th>
+                  <SortableHeader label="Fecha" sortKey="date" sort={sort} onSort={toggle} />
+                  <SortableHeader label="Cliente" sortKey="customer" sort={sort} onSort={toggle} />
+                  <SortableHeader label="Ítems" sortKey="items" sort={sort} onSort={toggle} />
+                  <SortableHeader label="Pago" sortKey="payment" sort={sort} onSort={toggle} />
+                  <SortableHeader label="Total" sortKey="total" sort={sort} onSort={toggle} align="right" />
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {sales.map((sale) => (
+                {sorted.map((sale) => (
                   <tr key={sale.id} className="transition-colors hover:bg-muted/20">
                     <td className="px-4 py-3 text-muted-foreground">{formatDateTime(sale.orderDate)}</td>
                     <td className="px-4 py-3 font-medium text-foreground">
@@ -115,7 +132,7 @@ export default function PosHistoryPage() {
                       {sale.salePayments.map((p) => PAYMENT_METHOD_LABELS[p.paymentMethod]).join(', ') || '—'}
                     </td>
                     <td className="px-4 py-3 text-right font-mono font-medium text-foreground">
-                      {formatPrice(sale.items.reduce((sum, i) => sum + i.quantity * i.unitPrice, 0))}
+                      {formatPrice(saleTotal(sale))}
                     </td>
                   </tr>
                 ))}

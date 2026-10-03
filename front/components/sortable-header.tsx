@@ -9,7 +9,7 @@ interface SortableHeaderProps<K extends string> {
   sortKey: K;
   sort: SortState<K> | null;
   onSort: (key: K) => void;
-  align?: 'left' | 'right';
+  align?: 'left' | 'center' | 'right';
   className?: string;
 }
 
@@ -35,7 +35,11 @@ export function SortableHeader<K extends string>({
             ? 'descending'
             : 'none'
       }
-      className={cn('px-4 py-3', align === 'right' ? 'text-right' : 'text-left', className)}
+      className={cn(
+        'px-4 py-3',
+        align === 'right' ? 'text-right' : align === 'center' ? 'text-center' : 'text-left',
+        className,
+      )}
     >
       <button
         type="button"
