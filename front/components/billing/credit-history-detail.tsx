@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { ChevronDown, ChevronUp, Gavel } from 'lucide-react';
+import { ChevronDown, ChevronRight, Gavel } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -23,7 +23,12 @@ import {
   type InstallmentStatus,
   type LoanSummary,
 } from '@/lib/api/sales';
-import { formatDelay, scoreLabel, scoreStyle } from '@/lib/credit-score';
+import {
+  SCORE_LABELS,
+  formatDelay,
+  historyTotals,
+  scoreStyle,
+} from '@/lib/credit-score';
 import { formatDatePY } from '@/lib/date';
 import { cn } from '@/lib/utils';
 
@@ -42,18 +47,103 @@ const INSTALLMENT_STATUS: Record<InstallmentStatus, string> = {
   OVERDUE: 'Vencida',
 };
 
-// ── Calificación ───────────────────────────────────────────────────────────────
+// ── Resumen destacado de la evaluación ─────────────────────────────────────────
 
-export function CreditScoreBadge({ history }: { history: CreditHistory }) {
+function Kpi({
+  label,
+  value,
+  hint,
+  tone = 'default',
+}: {
+  label: string;
+  value: string;
+  hint?: string;
+  tone?: 'default' | 'warn' | 'danger';
+}) {
   return (
-    <span
-      className={cn(
-        'rounded-full px-2 py-0.5 text-[11px] font-semibold',
-        scoreStyle(history.score),
-      )}
-    >
-      {scoreLabel(history.score)}
-    </span>
+    <div className="rounded-xl border border-border bg-muted/20 px-3 py-2.5">
+      <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+        {label}
+      </p>
+      <p
+        className={cn(
+          'mt-0.5 text-lg font-bold tabular-nums',
+          tone === 'danger'
+            ? 'text-destructive'
+            : tone === 'warn'
+              ? 'text-warn'
+              : 'text-foreground',
+        )}
+      >
+        {value}
+      </p>
+      {hint && <p className="text-[11px] text-muted-foreground">{hint}</p>}
+    </div>
+  );
+}
+
+/** Calificación en grande + los números que deciden la aprobación. */
+export function CreditSummary({ history }: { history: CreditHistory }) {
+  const totals = historyTotals(history);
+  const average = history.averageDelayDays;
+
+  return (
+    <div className="space-y-3">
+      <div
+        className={cn(
+          'flex items-center gap-3 rounded-xl px-4 py-3',
+          scoreStyle(history.score),
+        )}
+      >
+        <span className="text-4xl font-extrabold leading-none tabular-nums">
+          {history.score ?? '—'}
+        </span>
+        <div>
+          <p className="text-[11px] font-medium uppercase tracking-wide opacity-80">
+            Calificación del cliente
+          </p>
+          <p className="text-base font-semibold leading-tight">
+            {history.score === null
+              ? 'Sin historial'
+              : SCORE_LABELS[history.score]}
+          </p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-2">
+        <Kpi
+          label="Atraso promedio"
+          value={formatDelay(average)}
+          hint={
+            totals.maxDelayDays > 0
+              ? `Máximo ${formatDelay(totals.maxDelayDays)}`
+              : undefined
+          }
+          tone={average !== null && average > 0 ? 'warn' : 'default'}
+        />
+        <Kpi
+          label="Cuotas vencidas"
+          value={String(history.overdueCount)}
+          hint={
+            history.overdueCount > 0
+              ? formatPrice(history.overdueAmount)
+              : 'Ninguna hoy'
+          }
+          tone={history.overdueCount > 0 ? 'danger' : 'default'}
+        />
+        <Kpi
+          label="Saldo adeudado"
+          value={formatPrice(totals.outstanding)}
+          hint={`${totals.activeCount} crédito${totals.activeCount === 1 ? '' : 's'} activo${totals.activeCount === 1 ? '' : 's'}`}
+        />
+        <Kpi
+          label="Cuotas con atraso"
+          value={String(totals.lateInstallments)}
+          hint={`${totals.finishedCount} crédito${totals.finishedCount === 1 ? '' : 's'} culminado${totals.finishedCount === 1 ? '' : 's'}`}
+          tone={totals.lateInstallments > 0 ? 'warn' : 'default'}
+        />
+      </div>
+    </div>
   );
 }
 
@@ -184,159 +274,190 @@ export function UncollectibleControls({
 
 // ── Créditos activos y culminados ──────────────────────────────────────────────
 
-function LoanCard({ loan }: { loan: LoanSummary }) {
+function LoanRow({ loan }: { loan: LoanSummary }) {
   const [open, setOpen] = useState(false);
+  const late = (loan.averageDelayDays ?? 0) > 0;
 
   return (
-    <div className="rounded-lg border border-border/60 p-2.5 text-xs">
-      <div className="flex items-start justify-between gap-2">
-        <span className="min-w-0 flex-1 font-medium text-foreground">
-          {loan.productNames.join(', ')}
-        </span>
-        <span className="shrink-0 tabular-nums text-muted-foreground">
-          {formatPrice(loan.totalAmount)}
-        </span>
-      </div>
-
-      <div className="mt-0.5">
-        {loan.invoiceId ? (
-          <Link
-            href={`/dashboard/billing/invoices/${loan.invoiceId}`}
-            className="text-primary hover:underline"
-          >
-            Factura {loan.invoiceNumber ?? 'sin número'}
-          </Link>
+    <div className="rounded-lg border border-border/60 text-xs">
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={() => setOpen((value) => !value)}
+        className="grid w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 rounded-lg px-3 py-2.5 text-left transition-colors hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 sm:grid-cols-[auto_minmax(0,1fr)_7rem_4.5rem_6.5rem]"
+      >
+        {open ? (
+          <ChevronDown size={14} className="text-muted-foreground" />
         ) : (
-          <span className="text-muted-foreground/70">Sin factura emitida</span>
+          <ChevronRight size={14} className="text-muted-foreground" />
         )}
-        <span className="text-muted-foreground/70">
-          {' '}
-          · Compra {formatDatePY(loan.startDate, 'local')}
+        <span className="min-w-0">
+          <span className="block truncate font-medium text-foreground">
+            {loan.productNames.join(', ')}
+          </span>
+          <span className="block truncate text-muted-foreground">
+            {loan.invoiceNumber
+              ? `Factura ${loan.invoiceNumber}`
+              : 'Sin factura emitida'}{' '}
+            · {formatDatePY(loan.startDate, 'local')}
+          </span>
         </span>
-      </div>
-
-      <dl className="mt-1.5 grid grid-cols-3 gap-x-3 gap-y-1">
-        <div>
-          <dt className="text-muted-foreground/70">Pagado</dt>
-          <dd className="tabular-nums text-foreground">
-            {formatPrice(loan.paidAmount)}
-          </dd>
-        </div>
-        <div>
-          <dt className="text-muted-foreground/70">Adeudado</dt>
-          <dd
+        <span className="text-right">
+          <span className="block text-[10px] uppercase tracking-wide text-muted-foreground/70">
+            Adeudado
+          </span>
+          <span
             className={cn(
-              'tabular-nums',
+              'block tabular-nums',
               loan.outstandingBalance > 0
-                ? 'font-medium text-foreground'
+                ? 'font-semibold text-foreground'
                 : 'text-muted-foreground',
             )}
           >
             {formatPrice(loan.outstandingBalance)}
-          </dd>
-        </div>
-        <div>
-          <dt className="text-muted-foreground/70">Cuotas pagadas</dt>
-          <dd className="tabular-nums text-foreground">
-            {loan.installmentsPaid}/{loan.totalInstallments} ·{' '}
-            {formatPrice(loan.monthlyInstallment)}
-          </dd>
-        </div>
-        <div>
-          <dt className="text-muted-foreground/70">Atraso promedio</dt>
-          <dd className="text-foreground">
+          </span>
+        </span>
+        <span className="hidden text-right sm:block">
+          <span className="block text-[10px] uppercase tracking-wide text-muted-foreground/70">
+            Cuotas
+          </span>
+          <span className="block tabular-nums text-foreground">
+            {loan.installmentsPaid}/{loan.totalInstallments}
+          </span>
+        </span>
+        <span className="hidden text-right sm:block">
+          <span className="block text-[10px] uppercase tracking-wide text-muted-foreground/70">
+            Atraso prom.
+          </span>
+          <span
+            className={cn(
+              'block font-medium',
+              late ? 'text-warn' : 'text-foreground',
+            )}
+          >
             {formatDelay(loan.averageDelayDays)}
-          </dd>
-        </div>
-        <div>
-          <dt className="text-muted-foreground/70">Atraso máximo</dt>
-          <dd className="text-foreground">
-            {loan.averageDelayDays === null
-              ? '—'
-              : formatDelay(loan.maxDelayDays)}
-          </dd>
-        </div>
-        <div>
-          <dt className="text-muted-foreground/70">Cuotas con atraso</dt>
-          <dd className="tabular-nums text-foreground">
-            {loan.lateInstallments}
-          </dd>
-        </div>
-      </dl>
-
-      <p className="mt-1.5 text-muted-foreground/70">
-        1ª cuota {loan.firstDueDate ? formatDatePY(loan.firstDueDate) : '—'} →
-        última {loan.finalDueDate ? formatDatePY(loan.finalDueDate) : '—'}
-        {loan.nextDueDate
-          ? ` · Próx. vence ${formatDatePY(loan.nextDueDate)}`
-          : ''}
-      </p>
-
-      <Button
-        variant="ghost"
-        size="xs"
-        className="mt-1 -ml-2 text-muted-foreground"
-        aria-expanded={open}
-        onClick={() => setOpen((value) => !value)}
-      >
-        {open ? <ChevronUp /> : <ChevronDown />}
-        {open ? 'Ocultar cuotas' : 'Ver detalle de cuotas'}
-      </Button>
+          </span>
+        </span>
+      </button>
 
       {open && (
-        <div className="mt-1 overflow-x-auto">
-          <table className="w-full text-[11px]">
-            <thead className="text-left text-muted-foreground/70">
-              <tr>
-                <th className="py-1 pr-2 font-medium">N°</th>
-                <th className="py-1 pr-2 font-medium">Vence</th>
-                <th className="py-1 pr-2 font-medium">Pagó</th>
-                <th className="py-1 pr-2 font-medium">Atraso</th>
-                <th className="py-1 pr-2 text-right font-medium">Pagado</th>
-                <th className="py-1 pr-2 text-right font-medium">Saldo</th>
-                <th className="py-1 font-medium">Estado</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border/50">
-              {loan.installments.map((installment) => (
-                <tr key={installment.number}>
-                  <td className="py-1 pr-2 tabular-nums">
-                    {installment.number}
-                  </td>
-                  <td className="py-1 pr-2 whitespace-nowrap">
-                    {formatDatePY(installment.dueDate)}
-                  </td>
-                  <td className="py-1 pr-2 whitespace-nowrap">
-                    {installment.paidAt
-                      ? formatDatePY(installment.paidAt, 'local')
-                      : '—'}
-                  </td>
-                  <td
-                    className={cn(
-                      'py-1 pr-2 whitespace-nowrap',
-                      (installment.delayDays ?? 0) > 0 && 'text-destructive',
-                    )}
-                  >
-                    {formatDelay(installment.delayDays)}
-                  </td>
-                  <td className="py-1 pr-2 text-right tabular-nums">
-                    {formatPrice(installment.paidAmount)}
-                  </td>
-                  <td className="py-1 pr-2 text-right tabular-nums">
-                    {formatPrice(installment.balance)}
-                  </td>
-                  <td
-                    className={cn(
-                      'py-1',
-                      installment.status === 'OVERDUE' && 'text-destructive',
-                    )}
-                  >
-                    {INSTALLMENT_STATUS[installment.status]}
-                  </td>
+        <div className="border-t border-border/60 px-3 py-3">
+          <dl className="grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-4">
+            <div>
+              <dt className="text-muted-foreground/70">Total del crédito</dt>
+              <dd className="tabular-nums text-foreground">
+                {formatPrice(loan.totalAmount)}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-muted-foreground/70">Pagado</dt>
+              <dd className="tabular-nums text-foreground">
+                {formatPrice(loan.paidAmount)}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-muted-foreground/70">Cuota mensual</dt>
+              <dd className="tabular-nums text-foreground">
+                {formatPrice(loan.monthlyInstallment)}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-muted-foreground/70">Atraso máximo</dt>
+              <dd className="text-foreground">
+                {loan.averageDelayDays === null
+                  ? '—'
+                  : formatDelay(loan.maxDelayDays)}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-muted-foreground/70">Cuotas con atraso</dt>
+              <dd className="tabular-nums text-foreground">
+                {loan.lateInstallments}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-muted-foreground/70">Primera cuota</dt>
+              <dd className="text-foreground">
+                {loan.firstDueDate ? formatDatePY(loan.firstDueDate) : '—'}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-muted-foreground/70">Última cuota</dt>
+              <dd className="text-foreground">
+                {loan.finalDueDate ? formatDatePY(loan.finalDueDate) : '—'}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-muted-foreground/70">Próximo vencimiento</dt>
+              <dd className="text-foreground">
+                {loan.nextDueDate ? formatDatePY(loan.nextDueDate) : '—'}
+              </dd>
+            </div>
+          </dl>
+
+          {loan.invoiceId && (
+            <Link
+              href={`/dashboard/billing/invoices/${loan.invoiceId}`}
+              className="mt-2 inline-block text-primary hover:underline"
+            >
+              Ver factura {loan.invoiceNumber ?? ''}
+            </Link>
+          )}
+
+          <div className="mt-3 overflow-x-auto">
+            <table className="w-full text-[11px]">
+              <thead className="text-left text-muted-foreground/70">
+                <tr>
+                  <th className="py-1 pr-2 font-medium">N°</th>
+                  <th className="py-1 pr-2 font-medium">Vence</th>
+                  <th className="py-1 pr-2 font-medium">Pagó</th>
+                  <th className="py-1 pr-2 font-medium">Atraso</th>
+                  <th className="py-1 pr-2 text-right font-medium">Pagado</th>
+                  <th className="py-1 pr-2 text-right font-medium">Saldo</th>
+                  <th className="py-1 font-medium">Estado</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-border/50">
+                {loan.installments.map((installment) => (
+                  <tr key={installment.number}>
+                    <td className="py-1 pr-2 tabular-nums">
+                      {installment.number}
+                    </td>
+                    <td className="py-1 pr-2 whitespace-nowrap">
+                      {formatDatePY(installment.dueDate)}
+                    </td>
+                    <td className="py-1 pr-2 whitespace-nowrap">
+                      {installment.paidAt
+                        ? formatDatePY(installment.paidAt, 'local')
+                        : '—'}
+                    </td>
+                    <td
+                      className={cn(
+                        'py-1 pr-2 whitespace-nowrap',
+                        (installment.delayDays ?? 0) > 0 && 'text-destructive',
+                      )}
+                    >
+                      {formatDelay(installment.delayDays)}
+                    </td>
+                    <td className="py-1 pr-2 text-right tabular-nums">
+                      {formatPrice(installment.paidAmount)}
+                    </td>
+                    <td className="py-1 pr-2 text-right tabular-nums">
+                      {formatPrice(installment.balance)}
+                    </td>
+                    <td
+                      className={cn(
+                        'py-1',
+                        installment.status === 'OVERDUE' && 'text-destructive',
+                      )}
+                    >
+                      {INSTALLMENT_STATUS[installment.status]}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
     </div>
@@ -376,12 +497,6 @@ export function LoanHistoryTabs({ history }: { history: CreditHistory }) {
             </Button>
           ))}
         </div>
-        <p className="text-xs text-muted-foreground">
-          Atraso promedio general:{' '}
-          <span className="font-medium text-foreground">
-            {formatDelay(history.averageDelayDays)}
-          </span>
-        </p>
       </div>
 
       {current.loans.length === 0 ? (
@@ -391,9 +506,9 @@ export function LoanHistoryTabs({ history }: { history: CreditHistory }) {
             : 'No tiene créditos culminados.'}
         </p>
       ) : (
-        <div className="space-y-2">
+        <div className="space-y-1.5">
           {current.loans.map((loan) => (
-            <LoanCard key={loan.loanId} loan={loan} />
+            <LoanRow key={loan.loanId} loan={loan} />
           ))}
         </div>
       )}

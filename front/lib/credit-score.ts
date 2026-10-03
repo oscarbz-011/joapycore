@@ -1,4 +1,4 @@
-import type { CreditScore } from './api/sales';
+import type { CreditHistory, CreditScore } from './api/sales';
 
 // 1 = paga al día … 5 = se atrasa mucho; 6 = incobrable/judicial.
 export const SCORE_LABELS: Record<CreditScore, string> = {
@@ -62,4 +62,25 @@ export function thresholdsError(thresholds: number[]): string | null {
     return 'Cada nivel debe admitir más días de atraso que el anterior';
   }
   return null;
+}
+
+/** Totales del historial para el resumen de la evaluación. */
+export function historyTotals(history: CreditHistory) {
+  const loans = [...history.activeLoans, ...history.finishedLoans];
+  return {
+    activeCount: history.activeLoans.length,
+    finishedCount: history.finishedLoans.length,
+    outstanding: history.activeLoans.reduce(
+      (sum, loan) => sum + loan.outstandingBalance,
+      0,
+    ),
+    lateInstallments: loans.reduce(
+      (sum, loan) => sum + loan.lateInstallments,
+      0,
+    ),
+    maxDelayDays: loans.reduce(
+      (max, loan) => Math.max(max, loan.maxDelayDays),
+      0,
+    ),
+  };
 }

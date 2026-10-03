@@ -3,19 +3,15 @@
 import { apiErrorMessage } from '@/lib/api/api-error';
 
 import { useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ChevronDown, ChevronUp, AlertTriangle, ShieldAlert, X } from 'lucide-react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { ShieldAlert, X } from 'lucide-react';
 import {
   salesApi,
   type SaleOrder,
   type SaleOrderItem,
   type CreditAdjustmentSuggestion,
+  type IncomeCapacity,
 } from '../../lib/api/sales';
-import {
-  CreditScoreBadge,
-  LoanHistoryTabs,
-  UncollectibleControls,
-} from './credit-history-detail';
 import { creditBureauApi } from '../../lib/api/credit-bureau';
 import { formatDatePY } from '../../lib/date';
 import { Button } from '@/components/ui/button';
@@ -317,125 +313,43 @@ export function BureauCheckForm({ order }: { order: SaleOrder }) {
   );
 }
 
-// ── Credit history panel ────────────────────────────────────────────────────────
-// collapsible=false lo usa la vista de detalle a página completa, donde hay
-// espacio de sobra y no tiene sentido esconder la información por defecto.
+// ── Capacidad de pago por sueldo ────────────────────────────────────────────────
 
-export function CreditHistorySection({ order, collapsible = true }: { order: SaleOrder; collapsible?: boolean }) {
-  const queryClient = useQueryClient();
-  const [open, setOpen] = useState(true);
-  const isOpen = collapsible ? open : true;
-
-  const { data: evaluation, isLoading } = useQuery({
-    queryKey: ['credit-evaluation', order.id],
-    queryFn: () => salesApi.getCreditEvaluation(order.id),
-  });
-  const hasLoans =
-    !!evaluation &&
-    evaluation.history.activeLoans.length +
-      evaluation.history.finishedLoans.length >
-      0;
-
+export function IncomeCapacityBlock({ capacity }: { capacity: IncomeCapacity }) {
+  if (!capacity.applicable) return null;
+  const row = 'flex justify-between gap-3';
   return (
-    <div className="rounded-xl border border-border mb-4">
-      {collapsible ? (
-        <button
-          type="button"
-          onClick={() => setOpen((o) => !o)}
-          className="flex w-full items-center justify-between px-3 py-2 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
-        >
-          <span className="flex items-center gap-2">
-            Historial crediticio
-            {evaluation && !isLoading && (
-              <CreditScoreBadge history={evaluation.history} />
-            )}
-          </span>
-          {open ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-        </button>
-      ) : (
-        <div className="flex items-center gap-2 px-4 py-3">
-          <span className="text-sm font-medium text-foreground">Historial crediticio</span>
-          {evaluation && !isLoading && (
-            <CreditScoreBadge history={evaluation.history} />
-          )}
-        </div>
+    <div className={`rounded-xl p-3 text-xs ${capacity.exceeds ? 'bg-destructive/10' : 'bg-muted/30'}`}>
+      <p className="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+        Capacidad de pago
+      </p>
+      <div className={row}>
+        <span className="text-muted-foreground">
+          Ingreso declarado{capacity.guarantorIncome > 0 ? ' (cliente + garante)' : ''}
+        </span>
+        <span className="tabular-nums text-foreground">{formatPrice(capacity.monthlyIncome!)}</span>
+      </div>
+      {capacity.guarantorIncome > 0 && (
+        <p className="text-muted-foreground/70">
+          · Cliente {formatPrice(capacity.customerIncome ?? 0)} + Garante {formatPrice(capacity.guarantorIncome)}
+        </p>
       )}
-
-      {isOpen && (
-        <div className={collapsible ? 'border-t border-border px-3 py-3 space-y-3' : 'border-t border-border px-4 py-4 space-y-4'}>
-          {isLoading || !evaluation ? (
-            <div className="h-16 animate-pulse rounded-lg bg-muted/30" />
-          ) : (
-            <>
-              {evaluation.history.overdueCount > 0 && (
-                <p className="flex items-center gap-1.5 text-xs text-destructive">
-                  <AlertTriangle size={12} />
-                  {evaluation.history.overdueCount} cuota(s) vencida(s) por {formatPrice(evaluation.history.overdueAmount)}
-                </p>
-              )}
-
-              <UncollectibleControls
-                customerId={order.customer.id}
-                history={evaluation.history}
-                onChanged={() =>
-                  void queryClient.invalidateQueries({
-                    queryKey: ['credit-evaluation', order.id],
-                  })
-                }
-              />
-
-              {hasLoans && <LoanHistoryTabs history={evaluation.history} />}
-
-              {evaluation.capacity.applicable && (
-                <div className={`rounded-lg p-2.5 text-xs ${evaluation.capacity.exceeds ? 'bg-destructive/10' : 'bg-muted/30'}`}>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">
-                      Ingreso declarado{evaluation.capacity.guarantorIncome > 0 ? ' (cliente + garante)' : ''}
-                    </span>
-                    <span className="tabular-nums text-foreground">{formatPrice(evaluation.capacity.monthlyIncome!)}</span>
-                  </div>
-                  {evaluation.capacity.guarantorIncome > 0 && (
-                    <div className="flex justify-between text-muted-foreground/70">
-                      <span>· Cliente {formatPrice(evaluation.capacity.customerIncome ?? 0)} + Garante {formatPrice(evaluation.capacity.guarantorIncome)}</span>
-                    </div>
-                  )}
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Máximo permitido ({evaluation.capacity.maxIncomePercentage}%)</span>
-                    <span className="tabular-nums text-foreground">{formatPrice(evaluation.capacity.maxAllowed!)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Compromiso actual</span>
-                    <span className="tabular-nums text-foreground">{formatPrice(evaluation.capacity.currentCommitment)}</span>
-                  </div>
-                  <div className="flex justify-between font-medium">
-                    <span className={evaluation.capacity.exceeds ? 'text-destructive' : 'text-foreground'}>Esta solicitud</span>
-                    <span className={`tabular-nums ${evaluation.capacity.exceeds ? 'text-destructive' : 'text-foreground'}`}>
-                      {formatPrice(evaluation.capacity.proposedMonthlyPayment)}
-                    </span>
-                  </div>
-                  {evaluation.capacity.exceeds && (
-                    <p className="mt-1 text-destructive">Supera la capacidad de pago disponible ({formatPrice(evaluation.capacity.available!)}).</p>
-                  )}
-                </div>
-              )}
-
-              {evaluation.bureau.latestResult === 'FLAGGED' && (
-                <p className="flex items-center gap-1.5 text-xs text-destructive">
-                  <ShieldAlert size={12} />
-                  Cliente reportado en el buró de crédito
-                </p>
-              )}
-
-              {evaluation.bureau.required && <BureauCheckForm order={order} />}
-
-              {!hasLoans &&
-                !evaluation.capacity.applicable &&
-                !evaluation.bureau.required && (
-                  <p className="text-xs text-muted-foreground/60">Sin historial crediticio previo ni datos de sueldo para evaluar capacidad.</p>
-                )}
-            </>
-          )}
-        </div>
+      <div className={row}>
+        <span className="text-muted-foreground">Máximo permitido ({capacity.maxIncomePercentage}%)</span>
+        <span className="tabular-nums text-foreground">{formatPrice(capacity.maxAllowed!)}</span>
+      </div>
+      <div className={row}>
+        <span className="text-muted-foreground">Compromiso actual</span>
+        <span className="tabular-nums text-foreground">{formatPrice(capacity.currentCommitment)}</span>
+      </div>
+      <div className={`${row} mt-1 border-t border-border/60 pt-1 text-sm font-semibold ${capacity.exceeds ? 'text-destructive' : 'text-foreground'}`}>
+        <span>Esta solicitud</span>
+        <span className="tabular-nums">{formatPrice(capacity.proposedMonthlyPayment)}</span>
+      </div>
+      {capacity.exceeds && (
+        <p className="mt-1 text-destructive">
+          Supera la capacidad de pago disponible ({formatPrice(capacity.available!)}).
+        </p>
       )}
     </div>
   );

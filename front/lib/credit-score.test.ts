@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
+import type { CreditHistory, LoanSummary } from './api/sales';
 import {
   formatDelay,
+  historyTotals,
   ratingRanges,
   scoreLabel,
   scoreStyle,
@@ -65,5 +67,45 @@ describe('thresholdsError', () => {
     expect(thresholdsError([-1, 5, 15, 30])).toMatch('número entero');
     expect(thresholdsError([0, 5.5, 15, 30])).toMatch('número entero');
     expect(thresholdsError([0, 5, NaN, 30])).toMatch('número entero');
+  });
+});
+
+describe('historyTotals', () => {
+  const loan = (overrides: Partial<LoanSummary>) =>
+    ({
+      outstandingBalance: 0,
+      lateInstallments: 0,
+      maxDelayDays: 0,
+      ...overrides,
+    }) as LoanSummary;
+
+  it('adds what is owed on active loans and the delays of every loan', () => {
+    const history = {
+      activeLoans: [
+        loan({ outstandingBalance: 312_000, lateInstallments: 1, maxDelayDays: 21 }),
+        loan({ outstandingBalance: 351_000, lateInstallments: 1, maxDelayDays: 9 }),
+      ],
+      finishedLoans: [loan({ lateInstallments: 3, maxDelayDays: 40 })],
+    } as CreditHistory;
+
+    expect(historyTotals(history)).toEqual({
+      activeCount: 2,
+      finishedCount: 1,
+      outstanding: 663_000,
+      lateInstallments: 5,
+      maxDelayDays: 40,
+    });
+  });
+
+  it('is all zeros for a customer without loans', () => {
+    expect(
+      historyTotals({ activeLoans: [], finishedLoans: [] } as unknown as CreditHistory),
+    ).toEqual({
+      activeCount: 0,
+      finishedCount: 0,
+      outstanding: 0,
+      lateInstallments: 0,
+      maxDelayDays: 0,
+    });
   });
 });
