@@ -206,6 +206,10 @@ export interface StockRow {
     Product,
     'id' | 'name' | 'model' | 'salesChannels' | 'salePrice' | 'stockMin'
   > & {
+    // Mínimo propio del producto o, si no tiene, el umbral de la alerta
+    // "Stock bajo" activa. 0 = sin punto de reposición.
+    reorderPoint: number;
+    reorderPointSource: 'PRODUCT' | 'ALERT' | null;
     category: { id: string; name: string } | null;
     brand: { id: string; name: string } | null;
   };

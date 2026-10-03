@@ -63,15 +63,15 @@ export function stockQuantity(row: StockRow, column: StockColumn): number {
 export type StockLevel = 'out' | 'low' | 'ok';
 
 /**
- * Nivel de reposición según el total de la empresa. stockMin = 0 significa
+ * Nivel de reposición según el total de la empresa. minimum = 0 significa
  * "sin mínimo configurado": el producto solo se marca cuando se queda sin stock.
  */
-export function stockLevel(total: number, stockMin: number): StockLevel {
+export function stockLevel(total: number, minimum: number): StockLevel {
   if (total <= 0) return 'out';
-  if (stockMin > 0 && total <= stockMin) return 'low';
+  if (minimum > 0 && total <= minimum) return 'low';
   return 'ok';
 }
 
 export function needsRestock(row: StockRow): boolean {
-  return stockLevel(row.totalStock, row.product.stockMin) !== 'ok';
+  return stockLevel(row.totalStock, row.product.reorderPoint) !== 'ok';
 }

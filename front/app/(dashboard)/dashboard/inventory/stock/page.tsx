@@ -264,7 +264,7 @@ export default function StockPage() {
                 {rows.map((row) => {
                   const level = stockLevel(
                     row.totalStock,
-                    row.product.stockMin,
+                    row.product.reorderPoint,
                   );
                   return (
                   <tr
@@ -304,8 +304,12 @@ export default function StockPage() {
                       <p className="font-mono text-xs text-muted-foreground">
                         {[
                           row.product.model,
-                          row.product.stockMin > 0
-                            ? `mín. ${row.product.stockMin}`
+                          row.product.reorderPoint > 0
+                            ? `mín. ${row.product.reorderPoint}${
+                                row.product.reorderPointSource === 'ALERT'
+                                  ? ' (alerta general)'
+                                  : ''
+                              }`
                             : null,
                         ]
                           .filter(Boolean)

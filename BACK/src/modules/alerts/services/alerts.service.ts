@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { AlertType } from '@prisma/client';
 import { AlertsRepository } from '../repositories/alerts.repository';
 import { UpsertAlertDto } from '../dto/upsert-alert.dto';
 
@@ -8,6 +9,15 @@ export class AlertsService {
 
   findAll(tenantId: string) {
     return this.alertsRepository.findAll(tenantId);
+  }
+
+  /** Umbral de una alerta activa del tenant; null si está apagada o sin umbral. */
+  async findActiveThreshold(
+    tenantId: string,
+    type: AlertType,
+  ): Promise<number | null> {
+    const config = await this.alertsRepository.findByType(tenantId, type);
+    return config?.isActive ? (config.threshold ?? null) : null;
   }
 
   upsert(tenantId: string, dto: UpsertAlertDto) {

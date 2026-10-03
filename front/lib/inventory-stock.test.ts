@@ -17,6 +17,8 @@ const row: StockRow = {
     salesChannels: ['NORMAL'],
     salePrice: 1725000,
     stockMin: 0,
+    reorderPoint: 0,
+    reorderPointSource: null,
   },
   totalStock: 5,
   stockByWarehouse: [
@@ -104,7 +106,10 @@ describe('stock level', () => {
   it('uses the company total, not one warehouse, to decide restocking', () => {
     expect(needsRestock(row)).toBe(false);
     expect(
-      needsRestock({ ...row, product: { ...row.product, stockMin: 5 } }),
+      needsRestock({
+        ...row,
+        product: { ...row.product, reorderPoint: 5, reorderPointSource: 'ALERT' },
+      }),
     ).toBe(true);
   });
 });

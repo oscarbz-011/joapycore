@@ -18,6 +18,8 @@ const row: StockRow = {
     salesChannels: ['NORMAL'],
     salePrice: 100,
     stockMin: 0,
+    reorderPoint: 0,
+    reorderPointSource: null,
   },
   totalStock: 8,
   stockByWarehouse: [
