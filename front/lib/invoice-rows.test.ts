@@ -111,6 +111,30 @@ describe('fiscal order', () => {
   });
 });
 
+describe('legacy invoices without a number', () => {
+  it('go after numbered invoices, not before them like drafts', () => {
+    const legacy = {
+      ...sale,
+      id: 'legacy',
+      status: 'ISSUED',
+      invoiceNumber: null,
+      issuedAt: '2026-08-17T12:00:00.000Z',
+    } as unknown as Invoice;
+    const draft = {
+      ...sale,
+      id: 'draft',
+      status: 'PENDING',
+      invoiceNumber: null,
+      issuedAt: null,
+      createdAt: '2026-08-01T12:00:00.000Z',
+    } as unknown as Invoice;
+
+    const rows = toInvoiceRows([legacy, sale, draft], []);
+
+    expect(rows.map((row) => row.id)).toEqual(['draft', 'sale-0001', 'legacy']);
+  });
+});
+
 describe('filterInvoiceRows', () => {
   const rows = toInvoiceRows([sale], [interest]);
 

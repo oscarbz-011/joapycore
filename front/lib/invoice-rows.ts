@@ -27,18 +27,26 @@ function fiscalNumber(invoice: {
     : null;
 }
 
+// 0 = borrador (todavía sin número), 1 = numerada, 2 = emitida antes de que
+// existiera la numeración (agosto de 2026): queda al final.
+function sortGroup(row: InvoiceRow): number {
+  if (row.fiscalNumber) return 1;
+  return row.status === 'PENDING' ? 0 : 2;
+}
+
 /**
- * Orden fiscal: por número de factura, de mayor a menor (el número tiene
- * ancho fijo, así que se compara como texto). Los borradores sin número van
- * primero, por fecha. No se ordena por fecha porque una fecha mal tomada (un
+ * Orden fiscal: borradores primero; después las numeradas de mayor a menor
+ * (el número tiene ancho fijo, así que se compara como texto); al final las
+ * emitidas sin número. No se ordena por fecha porque una fecha mal tomada (un
  * reloj atrasado) sacaría la factura de su lugar en la secuencia.
  */
-function compareRows(a: InvoiceRow, b: InvoiceRow): number {
-  if (!a.fiscalNumber || !b.fiscalNumber) {
-    if (a.fiscalNumber === b.fiscalNumber) return b.date.localeCompare(a.date);
-    return a.fiscalNumber ? 1 : -1;
+export function compareFiscalOrder(a: InvoiceRow, b: InvoiceRow): number {
+  const group = sortGroup(a) - sortGroup(b);
+  if (group !== 0) return group;
+  if (a.fiscalNumber && b.fiscalNumber) {
+    return b.fiscalNumber.localeCompare(a.fiscalNumber);
   }
-  return b.fiscalNumber.localeCompare(a.fiscalNumber);
+  return b.date.localeCompare(a.date);
 }
 
 function invoiceNumber(invoice: {
@@ -94,7 +102,7 @@ export function toInvoiceRows(
       fiscalNumber: fiscalNumber(invoice),
     };
   });
-  return [...saleRows, ...interestRows].sort(compareRows);
+  return [...saleRows, ...interestRows].sort(compareFiscalOrder);
 }
 
 export function filterInvoiceRows(
