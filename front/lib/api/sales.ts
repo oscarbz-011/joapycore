@@ -175,6 +175,8 @@ export interface SaleOrder {
   installments: number | null;
   interestRate: number | null;
   orderDate: string;
+  // Último cambio del pedido (confirmación, facturación, entrega, etc.).
+  updatedAt: string;
   notes: string | null;
   quoteNumber: string | null;
   quotePdfFileId: string | null;

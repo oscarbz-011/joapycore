@@ -1477,6 +1477,7 @@ const ORDER_SORT = {
   customer: (order: SaleOrder) =>
     `${order.customer.firstName} ${order.customer.lastName}`,
   date: (order: SaleOrder) => new Date(order.orderDate),
+  updated: (order: SaleOrder) => new Date(order.updatedAt),
   status: (order: SaleOrder) => STATUS_LABEL[order.status] ?? order.status,
   type: (order: SaleOrder) =>
     order.saleType === "CREDIT" ? `Crédito ${order.installments ?? ""}` : "Contado",
@@ -1618,6 +1619,7 @@ export default function SalesPage() {
                 <tr>
                   <SortableHeader label="Cliente" sortKey="customer" sort={sort} onSort={toggle} />
                   <SortableHeader label="Fecha" sortKey="date" sort={sort} onSort={toggle} />
+                  <SortableHeader label="Últ. movimiento" sortKey="updated" sort={sort} onSort={toggle} className="hidden md:table-cell" />
                   <SortableHeader label="Estado" sortKey="status" sort={sort} onSort={toggle} />
                   <SortableHeader label="Tipo" sortKey="type" sort={sort} onSort={toggle} className="hidden lg:table-cell" />
                   <SortableHeader label="Vendedor" sortKey="seller" sort={sort} onSort={toggle} className="hidden lg:table-cell" />
@@ -1644,6 +1646,9 @@ export default function SalesPage() {
                     </td>
                     <td className="px-4 py-3 text-muted-foreground">
                       {formatDatePY(order.orderDate, "local")}
+                    </td>
+                    <td className="px-4 py-3 hidden md:table-cell text-muted-foreground">
+                      {formatDatePY(order.updatedAt, "local")}
                     </td>
                     <td className="px-4 py-3">
                       <StatusBadge status={order.status} />
