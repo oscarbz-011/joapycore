@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import type { Browser } from 'puppeteer';
 import { interpolateHtmlTemplate } from './html-template.util';
+import { createSerialQueue } from './serial-queue.util';
 import {
   convertTiptapToHtml,
   type PdfTableVariable,
@@ -77,6 +78,11 @@ export function buildHeaderHtml(options?: PdfHeaderOptions): string {
   return `<div class="doc-header">${logo}${name}</div>`;
 }
 
+// Un Chromium a la vez en todo el proceso: al cobrar con intereses se generan
+// el recibo y la factura de intereses en paralelo, y dos Chromium simultáneos
+// se colgaban en máquinas con poca memoria (el PDF quedaba sin generar).
+const runExclusive = createSerialQueue();
+
 @Injectable()
 export class PdfService {
   // Plantillas TipTap (contrato de venta): el body se arma recorriendo el
@@ -135,7 +141,14 @@ ${bodyHtml}
     return this.renderHtmlToPdf(html, pageSize);
   }
 
-  private async renderHtmlToPdf(
+  private renderHtmlToPdf(
+    html: string,
+    pageSize: PdfPageSize,
+  ): Promise<Buffer> {
+    return runExclusive(() => this.launchAndRender(html, pageSize));
+  }
+
+  private async launchAndRender(
     html: string,
     pageSize: PdfPageSize,
   ): Promise<Buffer> {
