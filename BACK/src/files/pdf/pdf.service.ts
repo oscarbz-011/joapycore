@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import type { Browser } from 'puppeteer';
 import { interpolateHtmlTemplate } from './html-template.util';
-import { createSerialQueue } from './serial-queue.util';
+import { createSerialQueue, withTimeout } from './serial-queue.util';
 import {
   convertTiptapToHtml,
   type PdfTableVariable,
@@ -83,6 +83,11 @@ export function buildHeaderHtml(options?: PdfHeaderOptions): string {
 // se colgaban en máquinas con poca memoria (el PDF quedaba sin generar).
 const runExclusive = createSerialQueue();
 
+// Un PDF normal tarda pocos segundos. Si Chromium se cuelga, se lo mata al
+// pasar este límite: como se genera de a uno, un render colgado dejaría
+// esperando a todos los PDFs siguientes.
+const RENDER_TIMEOUT_MS = 60_000;
+
 @Injectable()
 export class PdfService {
   // Plantillas TipTap (contrato de venta): el body se arma recorriendo el
@@ -159,20 +164,35 @@ ${bodyHtml}
     const { default: puppeteer } = await import('puppeteer');
     const browser: Browser = await puppeteer.launch({ headless: true });
     try {
-      const page = await browser.newPage();
-      // Todo el contenido es HTML/CSS estático y el logo va embebido como
-      // data: URI — no hay actividad de red que esperar, 'load' alcanza.
-      await page.setContent(html, { waitUntil: 'load' });
-      const pdfBuffer = await page.pdf({
-        ...(pageSize === 'A4'
-          ? { format: 'A4' as const }
-          : { width: pageSize.width, height: pageSize.height }),
-        printBackground: true,
-        margin: { top: '0', bottom: '0', left: '0', right: '0' },
-      });
-      return Buffer.from(pdfBuffer);
+      return await withTimeout(
+        this.renderPage(browser, html, pageSize),
+        RENDER_TIMEOUT_MS,
+        () => {
+          browser.process()?.kill('SIGKILL');
+        },
+      );
     } finally {
-      await browser.close();
+      // Si el navegador ya fue matado por el límite de tiempo, close() falla.
+      await browser.close().catch(() => undefined);
     }
+  }
+
+  private async renderPage(
+    browser: Browser,
+    html: string,
+    pageSize: PdfPageSize,
+  ): Promise<Buffer> {
+    const page = await browser.newPage();
+    // Todo el contenido es HTML/CSS estático y el logo va embebido como
+    // data: URI — no hay actividad de red que esperar, 'load' alcanza.
+    await page.setContent(html, { waitUntil: 'load' });
+    const pdfBuffer = await page.pdf({
+      ...(pageSize === 'A4'
+        ? { format: 'A4' as const }
+        : { width: pageSize.width, height: pageSize.height }),
+      printBackground: true,
+      margin: { top: '0', bottom: '0', left: '0', right: '0' },
+    });
+    return Buffer.from(pdfBuffer);
   }
 }
