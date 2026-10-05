@@ -33,10 +33,12 @@ export default function QuoteDetailPage() {
 
   const convertMutation = useMutation({
     mutationFn: () => salesApi.convertQuote(id),
-    onSuccess: (updated) => {
+    onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['sale-order', id] });
       void qc.invalidateQueries({ queryKey: ['sale-orders'] });
-      router.push(`/dashboard/sales/${updated.id}`);
+      // Los pedidos no tienen página de detalle propia (se abren en un panel
+      // de Órdenes de venta): el convertido aparece primero en esa lista.
+      router.push('/dashboard/sales');
     },
   });
 
