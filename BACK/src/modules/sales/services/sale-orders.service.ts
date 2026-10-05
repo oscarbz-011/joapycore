@@ -367,6 +367,42 @@ export class SaleOrdersService implements SalesGateway {
     return { proposedMonthlyPayment, history, capacity, bureau };
   }
 
+  /**
+   * Regenera el PDF de un presupuesto que quedó sin generar. La generación al
+   * crear es best-effort (no bloquea la creación), así que sin esto un PDF
+   * fallido obligaba a crear el presupuesto de nuevo.
+   */
+  async retryQuotePdf(tenantId: string, id: string, userId?: string) {
+    const order = await this.findOne(tenantId, id);
+    if (order.orderType !== 'QUOTE') {
+      throw new UnprocessableEntityException(
+        'Solo los presupuestos tienen PDF de presupuesto',
+      );
+    }
+    if (order.quotePdfFileId) return order;
+
+    await this.eventEmitter.emitAsync('sale.order.quote_pdf.requested', {
+      tenantId,
+      saleOrderId: id,
+      issuedById: userId,
+    });
+
+    const updated = await this.findOne(tenantId, id);
+    if (!updated.quotePdfFileId) {
+      throw new UnprocessableEntityException(
+        'No se pudo generar el PDF. Volvé a intentar en unos segundos.',
+      );
+    }
+    this.eventEmitter.emit('audit.log', {
+      tenantId,
+      userId,
+      module: 'sales',
+      action: 'sale.quote.pdf.regenerated',
+      resourceId: id,
+    } satisfies AuditLogEvent);
+    return updated;
+  }
+
   async requestAdjustment(
     tenantId: string,
     id: string,

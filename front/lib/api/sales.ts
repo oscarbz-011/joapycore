@@ -368,6 +368,10 @@ export const salesApi = {
   resubmitOrder: (id: string): Promise<SaleOrder> =>
     apiClient.post(`/sales/orders/${id}/resubmit`).then((r) => r.data),
 
+  // Regenera el PDF de un presupuesto que quedó sin generar.
+  retryQuotePdf: (id: string): Promise<SaleOrder> =>
+    apiClient.post(`/sales/orders/${id}/quote-pdf/retry`).then((r) => r.data),
+
   convertQuote: (id: string): Promise<SaleOrder> =>
     apiClient.post(`/sales/orders/${id}/convert`).then((r) => r.data),
 
