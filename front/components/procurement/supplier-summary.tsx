@@ -1,9 +1,23 @@
 import type { ElementType, ReactNode } from 'react';
-import { CalendarClock, FileText, Mail, MapPin, Phone, User } from 'lucide-react';
+import {
+  CalendarClock,
+  FileText,
+  Mail,
+  MapPin,
+  PackageCheck,
+  Percent,
+  Phone,
+  Timer,
+  Truck,
+  User,
+} from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
 import type { Supplier } from '@/lib/api/procurement';
-import { paymentTermLabel, supplierInitials } from '@/lib/suppliers';
+import { volumeDiscountsSummary } from '@/lib/commercial-terms';
+import { leadTimeLabel, paymentTermLabel, supplierInitials } from '@/lib/suppliers';
+
+const gs = (n: number) => 'Gs. ' + new Intl.NumberFormat('es-PY').format(n);
 
 function Field({
   icon: Icon,
@@ -94,6 +108,29 @@ export function SupplierSummary({
         </Field>
         <Field icon={CalendarClock} label="Plazo de pago">
           {paymentTermLabel(supplier.paymentTermDays)}
+        </Field>
+      </dl>
+
+      <dl className="grid gap-x-6 gap-y-5 border-t border-border p-5 sm:grid-cols-2 lg:grid-cols-4">
+        <Field icon={Truck} label="Costo de envío">
+          {supplier.shippingCost === null
+            ? EMPTY
+            : supplier.shippingCost === 0
+              ? 'Sin cargo'
+              : gs(supplier.shippingCost)}
+        </Field>
+        <Field icon={Timer} label="Plazo de entrega">
+          {supplier.leadTimeDays === null ? EMPTY : leadTimeLabel(supplier.leadTimeDays)}
+        </Field>
+        <Field icon={PackageCheck} label="Pedido mínimo">
+          {supplier.minOrderAmount === null
+            ? EMPTY
+            : supplier.minOrderAmount === 0
+              ? 'Sin mínimo'
+              : gs(supplier.minOrderAmount)}
+        </Field>
+        <Field icon={Percent} label="Descuento por volumen">
+          {volumeDiscountsSummary(supplier.volumeDiscounts)}
         </Field>
       </dl>
     </Card>
