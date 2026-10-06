@@ -16,6 +16,8 @@ function makeOrder(overrides = {}) {
     purchaseType: 'LOCAL' as const,
     orderDate: new Date(),
     items: [],
+    advanceAmount: 0,
+    advancePayments: [] as { kind: string; amount: number }[],
     ...overrides,
   };
 }
@@ -37,6 +39,8 @@ describe('PurchaseOrdersService', () => {
     findCatalogItems: jest.Mock;
     transition: jest.Mock;
     recordStatusChange: jest.Mock;
+    advanceApplied: jest.Mock;
+    findSupplierAdvancePercent: jest.Mock;
   };
   let eventEmitter: { emit: jest.Mock };
   let prisma: { $transaction: jest.Mock };
@@ -64,6 +68,10 @@ describe('PurchaseOrdersService', () => {
       findCatalogItems: jest.fn().mockResolvedValue([]),
       transition: jest.fn().mockResolvedValue({ count: 1 }),
       recordStatusChange: jest.fn(),
+      advanceApplied: jest.fn().mockResolvedValue(0),
+      findSupplierAdvancePercent: jest
+        .fn()
+        .mockResolvedValue({ advancePercent: null }),
     };
     eventEmitter = { emit: jest.fn() };
 
@@ -106,6 +114,95 @@ describe('PurchaseOrdersService', () => {
       await expect(service.findOne('tenant-1', 'ghost')).rejects.toBeInstanceOf(
         NotFoundException,
       );
+    });
+
+    it('reports where the advance of the order stands', async () => {
+      purchaseOrdersRepository.findById.mockResolvedValue(
+        makeOrder({
+          advanceAmount: 500_000,
+          advancePayments: [{ kind: 'ADVANCE', amount: 300_000 }],
+        }),
+      );
+      purchaseOrdersRepository.advanceApplied.mockResolvedValue(100_000);
+
+      const result = await service.findOne('tenant-1', 'po-1');
+
+      expect(purchaseOrdersRepository.advanceApplied).toHaveBeenCalledWith(
+        'tenant-1',
+        'po-1',
+      );
+      expect(result.advance).toEqual({
+        required: 500_000,
+        paid: 300_000,
+        refunded: 0,
+        applied: 100_000,
+        available: 200_000,
+        pending: 200_000,
+      });
+    });
+  });
+
+  // ── anticipo ───────────────────────────────────────────────────────────────
+
+  describe('advance asked by the order', () => {
+    // Total: 5 × 2.000.000 = 10.000.000
+    const dto = {
+      supplierId: 'sup-1',
+      purchaseType: 'LOCAL' as const,
+      orderDate: '2026-10-07',
+      items: [{ productId: 'prod-1', quantity: 5, unitCost: 2_000_000 }],
+    };
+    const createdWith = () =>
+      purchaseOrdersRepository.create.mock.calls[0][1] as {
+        advanceAmount: number;
+      };
+
+    it('asks for none when the supplier does not require it', async () => {
+      await service.create('tenant-1', 'user-1', dto);
+
+      expect(createdWith().advanceAmount).toBe(0);
+    });
+
+    it('starts from the percentage the supplier usually asks for', async () => {
+      purchaseOrdersRepository.findSupplierAdvancePercent.mockResolvedValue({
+        advancePercent: '30.00',
+      });
+
+      await service.create('tenant-1', 'user-1', dto);
+
+      expect(
+        purchaseOrdersRepository.findSupplierAdvancePercent,
+      ).toHaveBeenCalledWith('tenant-1', 'sup-1');
+      expect(createdWith().advanceAmount).toBe(3_000_000);
+    });
+
+    it('lets the order set its own amount, even none', async () => {
+      purchaseOrdersRepository.findSupplierAdvancePercent.mockResolvedValue({
+        advancePercent: '30.00',
+      });
+
+      await service.create('tenant-1', 'user-1', {
+        ...dto,
+        advanceAmount: 0,
+      });
+
+      expect(createdWith().advanceAmount).toBe(0);
+    });
+
+    it('accepts the whole order up front but not more', async () => {
+      await service.create('tenant-1', 'user-1', {
+        ...dto,
+        advanceAmount: 10_000_000,
+      });
+      expect(createdWith().advanceAmount).toBe(10_000_000);
+
+      await expect(
+        service.create('tenant-1', 'user-1', {
+          ...dto,
+          advanceAmount: 10_000_001,
+        }),
+      ).rejects.toBeInstanceOf(UnprocessableEntityException);
+      expect(purchaseOrdersRepository.create).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -527,6 +624,37 @@ describe('PurchaseOrdersService', () => {
         }),
         expect.anything(),
       );
+    });
+
+    // Plata adelantada al proveedor: primero se registra que la devolvió.
+    it('does not cancel while the supplier still holds an advance', async () => {
+      purchaseOrdersRepository.findById.mockResolvedValue(
+        makeOrder({
+          status: 'SENT',
+          advancePayments: [{ kind: 'ADVANCE', amount: 300_000 }],
+        }),
+      );
+
+      await expect(
+        service.cancel('tenant-1', 'po-1', 'Sin stock', 'user-1'),
+      ).rejects.toThrow(/devolución/);
+      expect(purchaseOrdersRepository.transition).not.toHaveBeenCalled();
+    });
+
+    it('cancels once the advance was refunded', async () => {
+      purchaseOrdersRepository.findById.mockResolvedValue(
+        makeOrder({
+          status: 'SENT',
+          advancePayments: [
+            { kind: 'ADVANCE', amount: 300_000 },
+            { kind: 'ADVANCE_REFUND', amount: 300_000 },
+          ],
+        }),
+      );
+
+      await service.cancel('tenant-1', 'po-1', 'Sin stock', 'user-1');
+
+      expect(purchaseOrdersRepository.transition).toHaveBeenCalled();
     });
 
     // Con mercadería recibida ya hay stock y una cuenta por pagar: cancelar

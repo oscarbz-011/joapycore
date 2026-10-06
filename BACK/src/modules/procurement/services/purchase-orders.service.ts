@@ -14,6 +14,7 @@ import {
 } from '../repositories/purchase-orders.repository';
 import { CreatePurchaseOrderDto } from '../dto/create-purchase-order.dto';
 import type { AuditLogEvent } from '../../../audit/audit-log.event';
+import { advanceBalance, requiredAdvance } from '../advance.util';
 
 const PRODUCT_STATUS_LABEL: Record<ProductStatus, string> = {
   DRAFT: 'borrador',
@@ -48,7 +49,26 @@ export class PurchaseOrdersService {
   async findOne(tenantId: string, id: string) {
     const order = await this.purchaseOrdersRepository.findById(tenantId, id);
     if (!order) throw new NotFoundException('Purchase order not found');
-    return order;
+    return { ...order, advance: await this.advanceOf(tenantId, order) };
+  }
+
+  // Saldo del anticipo de la orden: pedido, pagado, aplicado y pendiente.
+  private async advanceOf(
+    tenantId: string,
+    order: {
+      id: string;
+      advanceAmount: unknown;
+      advancePayments: { kind: string; amount: unknown }[];
+    },
+  ) {
+    return advanceBalance({
+      required: order.advanceAmount,
+      payments: order.advancePayments,
+      applied: await this.purchaseOrdersRepository.advanceApplied(
+        tenantId,
+        order.id,
+      ),
+    });
   }
 
   async create(tenantId: string, userId: string, dto: CreatePurchaseOrderDto) {
@@ -118,6 +138,30 @@ export class PurchaseOrdersService {
       }
     }
 
+    // Anticipo: el monto que venga en la orden o, si no, el porcentaje que
+    // pide habitualmente el proveedor. Nunca más que el total.
+    const supplier =
+      await this.purchaseOrdersRepository.findSupplierAdvancePercent(
+        tenantId,
+        dto.supplierId,
+      );
+    const orderTotal = dto.items.reduce(
+      (sum, item) => sum + item.quantity * item.unitCost,
+      0,
+    );
+    const advanceAmount = requiredAdvance(orderTotal, {
+      amount: dto.advanceAmount,
+      percent:
+        supplier?.advancePercent == null
+          ? null
+          : Number(supplier.advancePercent),
+    });
+    if (advanceAmount > orderTotal + 0.01) {
+      throw new UnprocessableEntityException(
+        'El anticipo no puede superar el total de la orden',
+      );
+    }
+
     const createOrder = () =>
       this.prisma.$transaction(async (tx) => {
         const order = await this.purchaseOrdersRepository.create(
@@ -135,6 +179,7 @@ export class PurchaseOrdersService {
             customsDuty: dto.customsDuty,
             customsRef: dto.customsRef,
             notes: dto.notes,
+            advanceAmount,
           },
           tx,
         );
@@ -238,7 +283,15 @@ export class PurchaseOrdersService {
 
   // Con mercadería recibida ya hay stock y una cuenta por pagar que dependen
   // de la orden: a partir de ahí no se cancela.
-  cancel(tenantId: string, id: string, reason: string, userId?: string) {
+  async cancel(tenantId: string, id: string, reason: string, userId?: string) {
+    // Con plata adelantada al proveedor, primero se registra su devolución:
+    // cancelar la orden no puede dejar ese saldo sin dueño.
+    const { advance } = await this.findOne(tenantId, id);
+    if (advance.available > 0.01) {
+      throw new UnprocessableEntityException(
+        `Esta orden tiene un anticipo pagado de Gs. ${Math.round(advance.available).toLocaleString('es-PY')}. Registrá su devolución antes de cancelarla.`,
+      );
+    }
     return this.changeStatus(tenantId, id, {
       from: ['PENDING', 'SENT', 'CONFIRMED'],
       to: 'CANCELLED',
@@ -303,6 +356,6 @@ export class PurchaseOrdersService {
       before: { status: order.status },
       after: { status: change.to, reason: change.reason },
     } satisfies AuditLogEvent);
-    return this.purchaseOrdersRepository.findById(tenantId, id);
+    return this.findOne(tenantId, id);
   }
 }

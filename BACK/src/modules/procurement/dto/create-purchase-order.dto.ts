@@ -9,6 +9,7 @@ import {
   IsPositive,
   IsString,
   IsUUID,
+  Min,
   ValidateNested,
 } from 'class-validator';
 import { PurchaseType } from '@prisma/client';
@@ -77,6 +78,15 @@ export class CreatePurchaseOrderDto {
   @IsOptional()
   @IsString()
   notes?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Anticipo que pide esta orden antes de despachar. Si se omite, el porcentaje habitual del proveedor',
+  })
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  advanceAmount?: number;
 
   @ApiProperty({ type: [PurchaseOrderItemDto] })
   @IsArray()

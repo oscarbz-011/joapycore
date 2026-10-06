@@ -2,6 +2,13 @@ import { Injectable, Logger } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
 import { PurchaseReceiptsRepository } from '../repositories/purchase-receipts.repository';
 import { AccountsPayableRepository } from '../repositories/accounts-payable.repository';
+import { PurchaseOrdersRepository } from '../repositories/purchase-orders.repository';
+import { PrismaService } from '../../../prisma/prisma.service';
+import {
+  advanceBalance,
+  advanceToApply,
+  payableStatusAfterAdvance,
+} from '../advance.util';
 
 interface PurchaseReceiptCreatedEvent {
   tenantId: string;
@@ -22,6 +29,9 @@ export class ProcurementOnReceiptListener {
   constructor(
     private readonly purchaseReceiptsRepository: PurchaseReceiptsRepository,
     private readonly apRepository: AccountsPayableRepository,
+    private readonly purchaseOrdersRepository: PurchaseOrdersRepository,
+    // Solo para abrir la transacción; los accesos a datos van por repositorios.
+    private readonly prisma: PrismaService,
   ) {}
 
   @OnEvent('purchase.receipt.created')
@@ -59,12 +69,47 @@ export class ProcurementOnReceiptListener {
     const termDays = receipt.purchaseOrder.supplier.paymentTermDays ?? 0;
     const dueDate = new Date(receipt.receivedAt.getTime() + termDays * DAY_MS);
 
-    await this.apRepository.create({
-      tenantId,
-      purchaseReceiptId,
-      supplierId: receipt.purchaseOrder.supplierId,
-      amount,
-      dueDate,
+    // El anticipo pagado por la orden se descuenta de la cuenta que nace:
+    // queda a pagar solo la diferencia. Se bloquea la orden para que dos
+    // recepciones no descuenten el mismo saldo.
+    const orderId = receipt.purchaseOrder.id;
+    const applied = await this.prisma.$transaction(async (tx) => {
+      await this.purchaseOrdersRepository.lockForAdvance(tenantId, orderId, tx);
+      const balance = advanceBalance({
+        required: 0,
+        payments: await this.purchaseOrdersRepository.advanceMovements(
+          tenantId,
+          orderId,
+          tx,
+        ),
+        applied: await this.purchaseOrdersRepository.advanceApplied(
+          tenantId,
+          orderId,
+          tx,
+        ),
+      });
+      const toApply = advanceToApply(balance.available, amount);
+
+      await this.apRepository.create(
+        {
+          tenantId,
+          purchaseReceiptId,
+          supplierId: receipt.purchaseOrder.supplierId,
+          amount,
+          dueDate,
+          paidAmount: toApply,
+          advanceApplied: toApply,
+          status: payableStatusAfterAdvance(toApply, amount),
+        },
+        tx,
+      );
+      return toApply;
     });
+
+    if (applied > 0) {
+      this.logger.log(
+        `Anticipo de ${applied} aplicado a la cuenta por pagar de la recepción ${purchaseReceiptId}`,
+      );
+    }
   }
 }

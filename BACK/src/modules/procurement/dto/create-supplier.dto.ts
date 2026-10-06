@@ -87,6 +87,16 @@ export class CreateSupplierDto {
   @Min(0)
   paymentTermDays?: number;
 
+  @ApiPropertyOptional({
+    description:
+      'Anticipo que pide para despachar, en % del total de la orden (0 = no pide)',
+  })
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  @Max(100)
+  advancePercent?: number | null;
+
   @ApiPropertyOptional({ description: 'Costo de envío por orden' })
   @IsOptional()
   @IsNumber({ maxDecimalPlaces: 2 })

@@ -9,6 +9,9 @@ import { PurchaseOrdersService } from '../services/purchase-orders.service';
 import { CreatePurchaseOrderDto } from '../dto/create-purchase-order.dto';
 import { CancelPurchaseOrderDto } from '../dto/cancel-purchase-order.dto';
 import { EmailPurchaseOrderDto } from '../dto/email-purchase-order.dto';
+import { RegisterSupplierPaymentDto } from '../dto/register-supplier-payment.dto';
+import { SetOrderAdvanceDto } from '../dto/set-order-advance.dto';
+import { PurchaseOrderAdvancesService } from '../services/purchase-order-advances.service';
 import { PurchaseOrderDocumentService } from '../services/purchase-order-document.service';
 
 @ApiTags('Procurement')
@@ -19,6 +22,7 @@ export class PurchaseOrdersController {
   constructor(
     private readonly purchaseOrdersService: PurchaseOrdersService,
     private readonly documentService: PurchaseOrderDocumentService,
+    private readonly advancesService: PurchaseOrderAdvancesService,
   ) {}
 
   @Get()
@@ -44,6 +48,44 @@ export class PurchaseOrdersController {
     @Body() dto: CreatePurchaseOrderDto,
   ) {
     return this.purchaseOrdersService.create(tenantId, user.sub, dto);
+  }
+
+  @Post(':id/advance')
+  @Permissions('procurement:update')
+  @ApiOperation({ summary: 'Cambiar el anticipo que pide la orden' })
+  setAdvance(
+    @CurrentTenant() tenantId: string,
+    @CurrentUser() user: JwtPayload,
+    @Param('id') id: string,
+    @Body() dto: SetOrderAdvanceDto,
+  ) {
+    return this.advancesService.setRequired(tenantId, id, dto.amount, user.sub);
+  }
+
+  @Post(':id/advance-payments')
+  @Permissions('procurement:payables:register')
+  @ApiOperation({
+    summary: 'Registrar un anticipo pagado al proveedor, antes de recibir',
+  })
+  payAdvance(
+    @CurrentTenant() tenantId: string,
+    @CurrentUser() user: JwtPayload,
+    @Param('id') id: string,
+    @Body() dto: RegisterSupplierPaymentDto,
+  ) {
+    return this.advancesService.registerPayment(tenantId, id, dto, user.sub);
+  }
+
+  @Post(':id/advance-refunds')
+  @Permissions('procurement:payables:register')
+  @ApiOperation({ summary: 'Registrar la devolución de un anticipo' })
+  refundAdvance(
+    @CurrentTenant() tenantId: string,
+    @CurrentUser() user: JwtPayload,
+    @Param('id') id: string,
+    @Body() dto: RegisterSupplierPaymentDto,
+  ) {
+    return this.advancesService.registerRefund(tenantId, id, dto, user.sub);
   }
 
   @Post(':id/pdf')

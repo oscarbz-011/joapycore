@@ -75,6 +75,7 @@ export class SupplierCatalogRepository {
             name: true,
             email: true,
             paymentTermDays: true,
+            advancePercent: true,
             shippingCost: true,
             leadTimeDays: true,
             minOrderAmount: true,
