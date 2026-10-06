@@ -7,12 +7,15 @@ import { Search } from 'lucide-react';
 import { billingApi, type CreditNote, type InvoiceStatus } from '../../../../lib/api/billing';
 import { formatDatePY } from '../../../../lib/date';
 import {
+  compareFiscalOrder,
   filterInvoiceRows,
   toInvoiceRows,
   type InvoiceKind,
   type InvoiceRow,
 } from '../../../../lib/invoice-rows';
 import { openPdf } from '../../../../lib/open-pdf';
+import { useTableSort } from '../../../../lib/use-table-sort';
+import { SortableHeader } from '@/components/sortable-header';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -49,10 +52,33 @@ function StatusBadge({ status }: { status: InvoiceStatus }) {
   );
 }
 
+// ── Ordenamiento por columna ───────────────────────────────────────────────────
+
+const INVOICE_SORT = {
+  number: (row: InvoiceRow) => row.fiscalNumber,
+  customer: (row: InvoiceRow) => row.customerName,
+  type: (row: InvoiceRow) => row.typeLabel,
+  date: (row: InvoiceRow) => new Date(row.date),
+  status: (row: InvoiceRow) => STATUS_LABEL[row.status],
+  total: (row: InvoiceRow) => row.total,
+};
+
+const creditNoteCustomer = (note: CreditNote) =>
+  `${note.invoice.saleOrder.customer.firstName} ${note.invoice.saleOrder.customer.lastName}`;
+
+const CREDIT_NOTE_SORT = {
+  number: (note: CreditNote) => note.number,
+  customer: creditNoteCustomer,
+  reason: (note: CreditNote) => note.reason,
+  date: (note: CreditNote) => new Date(note.issuedAt),
+  total: (note: CreditNote) => Number(note.total),
+};
+
 // ── Credit notes tab ───────────────────────────────────────────────────────────
 
 function CreditNotesTab() {
   const { data: notes = [], isLoading } = useQuery({ queryKey: ['credit-notes'], queryFn: billingApi.listCreditNotes });
+  const { sorted, sort, toggle } = useTableSort(notes, CREDIT_NOTE_SORT);
   if (isLoading) return <div className="py-16 text-center text-sm text-muted-foreground">Cargando...</div>;
   if (notes.length === 0) return <div className="py-16 text-center"><p className="text-sm text-muted-foreground">No hay notas de crédito emitidas.</p></div>;
 
@@ -62,15 +88,15 @@ function CreditNotesTab() {
         <table className="w-full text-sm">
           <thead className="border-b border-border bg-muted/30 text-xs font-bold uppercase tracking-wider text-muted-foreground">
             <tr>
-              <th className="px-4 py-3 text-left">N° Nota</th>
-              <th className="px-4 py-3 text-left">Cliente</th>
-              <th className="px-4 py-3 text-left">Motivo</th>
-              <th className="px-4 py-3 text-left">Fecha</th>
-              <th className="px-4 py-3 text-right">Total</th>
+              <SortableHeader label="N° Nota" sortKey="number" sort={sort} onSort={toggle} />
+              <SortableHeader label="Cliente" sortKey="customer" sort={sort} onSort={toggle} />
+              <SortableHeader label="Motivo" sortKey="reason" sort={sort} onSort={toggle} />
+              <SortableHeader label="Fecha" sortKey="date" sort={sort} onSort={toggle} />
+              <SortableHeader label="Total" sortKey="total" sort={sort} onSort={toggle} align="right" />
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
-            {notes.map((note: CreditNote) => (
+            {sorted.map((note: CreditNote) => (
               <tr key={note.id} className="hover:bg-muted/20 transition-colors">
                 <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{note.number ?? `NC-${note.id.slice(0, 6).toUpperCase()}`}</td>
                 <td className="px-4 py-3">
@@ -111,6 +137,8 @@ export default function BillingPage() {
 
   const rows = toInvoiceRows(invoices, interestInvoices);
   const filtered = filterInvoiceRows(rows, { search, status: statusFilter, kind: kindFilter });
+  // Sin columna elegida, orden fiscal (por número de factura).
+  const { sorted, sort, toggle } = useTableSort(filtered, INVOICE_SORT, compareFiscalOrder);
 
   async function openRow(row: InvoiceRow) {
     setOpenError('');
@@ -219,16 +247,16 @@ export default function BillingPage() {
                 <table className="w-full text-sm">
                   <thead className="border-b border-border bg-muted/30 text-xs font-bold uppercase tracking-wider text-muted-foreground">
                     <tr>
-                      <th className="px-4 py-3 text-left">N° Factura</th>
-                      <th className="px-4 py-3 text-left">Cliente</th>
-                      <th className="px-4 py-3 text-left hidden sm:table-cell">Tipo</th>
-                      <th className="px-4 py-3 text-left">Fecha</th>
-                      <th className="px-4 py-3 text-left">Estado</th>
-                      <th className="px-4 py-3 text-right">Total</th>
+                      <SortableHeader label="N° Factura" sortKey="number" sort={sort} onSort={toggle} />
+                      <SortableHeader label="Cliente" sortKey="customer" sort={sort} onSort={toggle} />
+                      <SortableHeader label="Tipo" sortKey="type" sort={sort} onSort={toggle} className="hidden sm:table-cell" />
+                      <SortableHeader label="Fecha" sortKey="date" sort={sort} onSort={toggle} />
+                      <SortableHeader label="Estado" sortKey="status" sort={sort} onSort={toggle} />
+                      <SortableHeader label="Total" sortKey="total" sort={sort} onSort={toggle} align="right" />
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border">
-                    {filtered.map((row) => (
+                    {sorted.map((row) => (
                       <tr
                         key={row.id}
                         onClick={() => void openRow(row)}

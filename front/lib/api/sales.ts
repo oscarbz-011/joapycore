@@ -206,6 +206,8 @@ export interface SaleOrder {
   installments: number | null;
   interestRate: number | null;
   orderDate: string;
+  // Último cambio del pedido (confirmación, facturación, entrega, etc.).
+  updatedAt: string;
   // Primera vez que un analista abrió la evaluación de crédito; null = nueva.
   creditViewedAt: string | null;
   notes: string | null;

@@ -1,6 +1,8 @@
 'use client';
 
 import { RequirePermission } from '@/components/require-permission';
+import { SortableHeader } from '@/components/sortable-header';
+import { useTableSort } from '@/lib/use-table-sort';
 
 import { apiErrorMessage } from '@/lib/api/api-error';
 
@@ -64,6 +66,19 @@ function markup(p: Product) {
   if (!p.costPrice || !p.salePrice || p.costPrice <= 0) return null;
   return ((p.salePrice - p.costPrice) / p.costPrice) * 100;
 }
+
+const PRODUCT_SORT = {
+  name: (p: Product) => p.name,
+  category: (p: Product) => p.category?.name,
+  brand: (p: Product) => p.brand?.name,
+  status: (p: Product) => PRODUCT_STATUS_LABEL[p.status],
+  kind: (p: Product) => PRODUCT_KIND_LABEL[p.kind],
+  purchasable: (p: Product) => p.isPurchasable,
+  channels: (p: Product) => p.salesChannels.length,
+  cost: (p: Product) => p.costPrice,
+  sale: (p: Product) => p.salePrice,
+  margin: (p: Product) => markup(p),
+};
 
 // ── Estado de la ficha ─────────────────────────────────────────────────────────
 
@@ -677,6 +692,7 @@ export default function InventoryPage() {
   const { data: brands = [] }     = useQuery({ queryKey: ['inventory-brands'],     queryFn: inventoryApi.listBrands });
 
   const kpis = useMemo(() => catalogKpis(products), [products]);
+  const { sorted, sort, toggle } = useTableSort(products, PRODUCT_SORT);
 
   return (
     <div>
@@ -809,20 +825,20 @@ export default function InventoryPage() {
             <table className="w-full text-[13.5px]">
               <thead>
                 <tr className="border-b border-border bg-muted/30 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-                  <th className="px-4 py-3 text-left">Producto</th>
-                  <th className="px-4 py-3 text-left">Categoría</th>
-                  <th className="px-4 py-3 text-left">Marca</th>
-                  <th className="px-4 py-3 text-left">Estado</th>
-                  <th className="px-4 py-3 text-left">Tipo</th>
-                  <th className="px-4 py-3 text-left">Compra</th>
-                  <th className="px-4 py-3 text-left">Canales</th>
-                  <th className="px-4 py-3 text-right">P. Costo</th>
-                  <th className="px-4 py-3 text-right">P. Venta</th>
-                  <th className="px-4 py-3 text-right">Margen</th>
+                  <SortableHeader label="Producto" sortKey="name" sort={sort} onSort={toggle} />
+                  <SortableHeader label="Categoría" sortKey="category" sort={sort} onSort={toggle} />
+                  <SortableHeader label="Marca" sortKey="brand" sort={sort} onSort={toggle} />
+                  <SortableHeader label="Estado" sortKey="status" sort={sort} onSort={toggle} />
+                  <SortableHeader label="Tipo" sortKey="kind" sort={sort} onSort={toggle} />
+                  <SortableHeader label="Compra" sortKey="purchasable" sort={sort} onSort={toggle} />
+                  <SortableHeader label="Canales" sortKey="channels" sort={sort} onSort={toggle} />
+                  <SortableHeader label="P. Costo" sortKey="cost" sort={sort} onSort={toggle} align="right" />
+                  <SortableHeader label="P. Venta" sortKey="sale" sort={sort} onSort={toggle} align="right" />
+                  <SortableHeader label="Margen" sortKey="margin" sort={sort} onSort={toggle} align="right" />
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {products.map((product) => {
+                {sorted.map((product) => {
                   const m = markup(product);
                   return (
                     <tr

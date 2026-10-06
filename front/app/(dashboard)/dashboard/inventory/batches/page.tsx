@@ -4,7 +4,9 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { ArrowLeft, Boxes } from 'lucide-react';
-import { inventoryApi } from '../../../../../lib/api/inventory';
+import { inventoryApi, type ProductBatch } from '../../../../../lib/api/inventory';
+import { useTableSort } from '../../../../../lib/use-table-sort';
+import { SortableHeader } from '@/components/sortable-header';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
@@ -36,6 +38,16 @@ function isExpired(iso: string | null) {
 
 // ── Main page ──────────────────────────────────────────────────────────────────
 
+const BATCH_SORT = {
+  product: (b: ProductBatch) => b.product?.name,
+  batch: (b: ProductBatch) => b.batchNumber,
+  entry: (b: ProductBatch) => new Date(b.entryDate),
+  expires: (b: ProductBatch) => (b.expiresAt ? new Date(b.expiresAt) : null),
+  cost: (b: ProductBatch) => Number(b.unitCost),
+  quantity: (b: ProductBatch) => b.quantity,
+  remaining: (b: ProductBatch) => b.remainingQty,
+};
+
 export default function BatchesPage() {
   const [productId, setProductId] = useState('');
 
@@ -48,6 +60,8 @@ export default function BatchesPage() {
     queryKey: ['product-batches', productId],
     queryFn: () => inventoryApi.listAllBatches(productId ? { productId } : undefined),
   });
+
+  const { sorted, sort, toggle } = useTableSort(batches, BATCH_SORT);
 
   const lotManagedProducts = products.filter((p) => p.usesLots);
 
@@ -101,17 +115,17 @@ export default function BatchesPage() {
             <table className="w-full text-sm">
               <thead className="border-b border-border bg-muted/30 text-xs font-bold uppercase tracking-wider text-muted-foreground">
                 <tr>
-                  <th className="px-4 py-3 text-left">Producto</th>
-                  <th className="px-4 py-3 text-left">Lote</th>
-                  <th className="px-4 py-3 text-left">Ingreso</th>
-                  <th className="px-4 py-3 text-left">Vencimiento</th>
-                  <th className="px-4 py-3 text-right">Costo unit.</th>
-                  <th className="px-4 py-3 text-right">Original</th>
-                  <th className="px-4 py-3 text-right">Restante</th>
+                  <SortableHeader label="Producto" sortKey="product" sort={sort} onSort={toggle} />
+                  <SortableHeader label="Lote" sortKey="batch" sort={sort} onSort={toggle} />
+                  <SortableHeader label="Ingreso" sortKey="entry" sort={sort} onSort={toggle} />
+                  <SortableHeader label="Vencimiento" sortKey="expires" sort={sort} onSort={toggle} />
+                  <SortableHeader label="Costo unit." sortKey="cost" sort={sort} onSort={toggle} align="right" />
+                  <SortableHeader label="Original" sortKey="quantity" sort={sort} onSort={toggle} align="right" />
+                  <SortableHeader label="Restante" sortKey="remaining" sort={sort} onSort={toggle} align="right" />
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {batches.map((batch) => {
+                {sorted.map((batch) => {
                   const expired = isExpired(batch.expiresAt);
                   const expiringSoon = !expired && isExpiringSoon(batch.expiresAt);
                   const depleted = batch.remainingQty <= 0;
