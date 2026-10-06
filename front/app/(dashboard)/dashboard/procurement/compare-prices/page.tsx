@@ -1,9 +1,11 @@
 'use client';
 
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import Link from 'next/link';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { AlertTriangle, Link2, Plus, Trash2, Trophy } from 'lucide-react';
+import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
+import { AlertTriangle, Link2, Plus, ShoppingCart, Trash2, Trophy } from 'lucide-react';
+import { CompareOrderDialog } from '@/components/procurement/compare-order-dialog';
+import { RequirePermission } from '@/components/require-permission';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -18,7 +20,13 @@ import {
 } from '@/components/ui/select';
 import { apiErrorMessage } from '@/lib/api/api-error';
 import { inventoryApi } from '@/lib/api/inventory';
-import { procurementApi, type LinkSuggestion } from '@/lib/api/procurement';
+import {
+  procurementApi,
+  type CatalogOffer,
+  type CatalogSearchResult,
+  type LinkSuggestion,
+} from '@/lib/api/procurement';
+import { defaultPicks } from '@/lib/catalog-match';
 import { catalogUnitCost } from '@/lib/catalog-product';
 import { AVAILABILITY_LABEL } from '@/lib/commercial-terms';
 import { formatDatePY, localISODate } from '@/lib/date';
@@ -26,6 +34,7 @@ import { usePermission } from '@/lib/permissions';
 import {
   bestQuoteId,
   compareSuppliers,
+  type Need,
   type QuoteLine,
   type SupplierQuote,
 } from '@/lib/supplier-comparison';
@@ -36,14 +45,48 @@ const gs = (n: number) => 'Gs. ' + new Intl.NumberFormat('es-PY').format(Math.ro
 const plain = (n: number) =>
   new Intl.NumberFormat('es-PY', { maximumFractionDigits: 2 }).format(n);
 
+const MIN_QUERY = 2;
+// La búsqueda admite hasta 20 proveedores por consulta.
+const MAX_SEARCH_SUPPLIERS = 20;
+const NONE = 'none';
+
+type RowMode = 'product' | 'search';
+
+/**
+ * Una fila de lo que se quiere comprar. `product`: un producto del inventario.
+ * `search`: algo que todavía no existe como producto y se busca por texto o
+ * código en los catálogos, para comparar listas recién cargadas.
+ */
 interface NeedRow {
   key: number;
+  mode: RowMode;
   productId: string;
+  query: string;
   quantity: string;
+  /** Ítem elegido a mano por proveedor (o NONE); sin entrada, el más parecido. */
+  picks: Record<string, string>;
 }
 
 let nextKey = 1;
-const newRow = (): NeedRow => ({ key: nextKey++, productId: '', quantity: '1' });
+const newRow = (mode: RowMode): NeedRow => ({
+  key: nextKey++,
+  mode,
+  productId: '',
+  query: '',
+  quantity: '1',
+  picks: {},
+});
+const rowId = (row: NeedRow) => (row.mode === 'product' ? row.productId : `search:${row.key}`);
+
+/** El valor, con unos milisegundos de retraso: no busca en cada tecla. */
+function useDebounced<T>(value: T, delay = 350): T {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() => {
+    const timer = setTimeout(() => setDebounced(value), delay);
+    return () => clearTimeout(timer);
+  }, [value, delay]);
+  return debounced;
+}
 
 const AVAILABILITY_CLASS = {
   AVAILABLE: 'text-foreground',
@@ -83,8 +126,7 @@ function QuotedLine({ line }: { line: QuoteLine }) {
 
 /**
  * El proveedor no cotiza el producto. Si en su catálogo hay ítems sin vincular
- * que se le parecen, se ofrecen para vincular ahí mismo: es el caso típico de
- * dos proveedores con el mismo producto donde solo uno quedó vinculado.
+ * que se le parecen, se ofrecen para vincular ahí mismo.
  */
 function MissingLine({
   supplierId,
@@ -142,6 +184,66 @@ function MissingLine({
           </li>
         ))}
       </ul>
+    </div>
+  );
+}
+
+/**
+ * Celda de una fila de búsqueda: el ítem del catálogo de ese proveedor que se
+ * está comparando, con la posibilidad de elegir otro de los encontrados.
+ */
+function SearchCell({
+  results,
+  pickedId,
+  line,
+  onPick,
+}: {
+  results: CatalogSearchResult[];
+  pickedId: string | null;
+  line: QuoteLine | undefined;
+  onPick: (itemId: string) => void;
+}) {
+  if (results.length === 0) {
+    return <p className="text-muted-foreground">Sin resultados en su catálogo</p>;
+  }
+  const picked = results.find((item) => item.id === pickedId);
+  return (
+    <div className="space-y-2">
+      {picked ? (
+        <div>
+          <p className="text-xs font-medium text-foreground">{picked.description}</p>
+          <p className="text-xs text-muted-foreground">
+            <span className="font-mono">{picked.supplierSku}</span>
+            {picked.barcode && <> · cód. barras {picked.barcode}</>}
+            {' · '}
+            {picked.product ? `producto: ${picked.product.name}` : 'sin producto todavía'}
+          </p>
+        </div>
+      ) : (
+        <p className="text-xs text-muted-foreground">Ninguno elegido</p>
+      )}
+      {picked &&
+        (line ? (
+          <QuotedLine line={line} />
+        ) : (
+          <p className="text-xs text-warn">Sin precio en su lista</p>
+        ))}
+      <Select value={pickedId ?? NONE} onValueChange={(value) => onPick(value ?? NONE)}>
+        <SelectTrigger className="h-8 w-full" aria-label="Ítem a comparar de este proveedor">
+          <span className="min-w-0 flex-1 truncate text-left text-xs">
+            {results.length === 1 ? 'Único resultado' : `Cambiar (${results.length} resultados)`}
+          </span>
+        </SelectTrigger>
+        <SelectContent className="max-w-md">
+          {results.map((item) => (
+            <SelectItem key={item.id} value={item.id}>
+              {item.description}
+              {item.price !== null ? ` — ${gs(catalogUnitCost(item))}` : ' — sin precio'}
+            </SelectItem>
+          ))}
+          <SelectItem value={NONE}>Ninguno de estos</SelectItem>
+        </SelectContent>
+      </Select>
     </div>
   );
 }
@@ -205,12 +307,12 @@ const TERMS_ROWS: { label: string; cell: (q: SupplierQuote) => ReactNode }[] = [
 export default function CompareSuppliersPage() {
   const queryClient = useQueryClient();
   const canLink = usePermission('procurement:update');
-  const [rows, setRows] = useState<NeedRow[]>(() => [newRow()]);
+  const [rows, setRows] = useState<NeedRow[]>(() => [newRow('search')]);
   // Lo que el usuario marcó o desmarcó a mano. Sin entrada, un proveedor se
-  // muestra si tiene algo que ver con lo pedido (lo cotiza o tiene un ítem
-  // parecido sin vincular).
-  const [picked, setPicked] = useState<Record<string, boolean>>({});
+  // muestra si tiene algo que ver con lo pedido.
+  const [shownByHand, setShownByHand] = useState<Record<string, boolean>>({});
   const [linkError, setLinkError] = useState('');
+  const [orderingFrom, setOrderingFrom] = useState<string | null>(null);
 
   const { data: products = [], isLoading: loadingProducts } = useQuery({
     queryKey: ['inventory-products-active'],
@@ -221,18 +323,16 @@ export default function CompareSuppliersPage() {
     queryFn: procurementApi.listSuppliers,
   });
   const suppliers = allSuppliers.filter((supplier) => supplier.isActive);
+  const searchSupplierIds = suppliers
+    .slice(0, MAX_SEARCH_SUPPLIERS)
+    .map((supplier) => supplier.id)
+    .sort();
 
-  const needs = rows
-    .map((row) => ({ productId: row.productId, quantity: Number(row.quantity) }))
-    .filter((need) => need.productId && need.quantity > 0);
-  const productIds = [...new Set(needs.map((need) => need.productId))].sort();
-
-  const {
-    data: offers = [],
-    isLoading: loadingOffers,
-    isError,
-    refetch,
-  } = useQuery({
+  // ── Filas por producto: ofertas vinculadas y sugerencias de vínculo ──
+  const productIds = [
+    ...new Set(rows.filter((row) => row.mode === 'product' && row.productId).map((row) => row.productId)),
+  ].sort();
+  const offersQuery = useQuery({
     queryKey: ['catalog-offers', productIds],
     queryFn: () => procurementApi.listOffers(productIds),
     enabled: productIds.length > 0,
@@ -242,45 +342,126 @@ export default function CompareSuppliersPage() {
     queryFn: () => procurementApi.listLinkSuggestions(productIds),
     enabled: productIds.length > 0,
   });
+  const productOffers = productIds.length > 0 ? (offersQuery.data ?? []) : [];
+
+  // ── Filas de búsqueda: lo que encuentra cada catálogo, haya o no producto ──
+  const searchRows = rows.filter((row) => row.mode === 'search');
+  const typed = searchRows.map((row) => `${row.key}:${row.query.trim()}`).join('\u0000');
+  const settled = useDebounced(typed);
+  const queryOf = new Map(
+    settled.split('\u0000').map((entry) => {
+      const cut = entry.indexOf(':');
+      return [Number(entry.slice(0, cut)), entry.slice(cut + 1)] as const;
+    }),
+  );
+  const searches = useQueries({
+    queries: searchRows.map((row) => {
+      const query = queryOf.get(row.key) ?? '';
+      return {
+        queryKey: ['catalog-search', query, searchSupplierIds],
+        queryFn: () => procurementApi.searchCatalog(query, searchSupplierIds),
+        enabled: query.length >= MIN_QUERY && searchSupplierIds.length > 0,
+      };
+    }),
+  });
+  const resultsOf = new Map(
+    searchRows.map((row, index) => {
+      const query = queryOf.get(row.key) ?? '';
+      return [row.key, query.length >= MIN_QUERY ? (searches[index]?.data ?? []) : []] as const;
+    }),
+  );
+  const searching = searches.some((search) => search.isFetching) || typed !== settled;
+  const searchFailed = searches.some((search) => search.isError);
+
+  /** El ítem de ese proveedor que se compara en una fila de búsqueda. */
+  // Sin elección a mano se compara el mismo producto en todas las listas, no
+  // el primer resultado de cada una (ver defaultPicks).
+  const defaultsOf = new Map(
+    searchRows.map((row) => [row.key, defaultPicks(resultsOf.get(row.key) ?? [])] as const),
+  );
+  function pickedItem(row: NeedRow, supplierId: string): CatalogSearchResult | null {
+    const found = (resultsOf.get(row.key) ?? []).filter((item) => item.supplierId === supplierId);
+    const byHand = row.picks[supplierId];
+    if (byHand === NONE) return null;
+    const wanted = byHand ?? defaultsOf.get(row.key)?.[supplierId];
+    return found.find((item) => item.id === wanted) ?? found[0] ?? null;
+  }
+
+  const searchOffers: CatalogOffer[] = searchRows.flatMap((row) =>
+    suppliers.flatMap((supplier) => {
+      const item = pickedItem(row, supplier.id);
+      return item ? [{ ...item, supplier }] : [];
+    }),
+  );
+
+  const needs: Need[] = rows.flatMap((row) => {
+    const quantity = Number(row.quantity);
+    if (!(quantity > 0)) return [];
+    if (row.mode === 'product') {
+      return row.productId ? [{ productId: row.productId, quantity }] : [];
+    }
+    const itemIds = suppliers.flatMap((supplier) => pickedItem(row, supplier.id)?.id ?? []);
+    return [{ productId: rowId(row), quantity, itemIds }];
+  });
+  const hasInput = rows.some((row) =>
+    row.mode === 'product' ? row.productId : (queryOf.get(row.key) ?? '').length >= MIN_QUERY,
+  );
+
+  // ── Proveedores a mostrar ──
+  const related = new Set<string>([
+    ...productOffers.map((offer) => offer.supplier.id),
+    ...suggestions.map((suggestion) => suggestion.item.supplier.id),
+    ...[...resultsOf.values()].flat().map((item) => item.supplierId),
+  ]);
+  const quoting = new Set<string>([
+    ...productOffers.map((offer) => offer.supplier.id),
+    ...searchOffers.map((offer) => offer.supplier.id),
+  ]);
+  const isShown = (id: string) => shownByHand[id] ?? related.has(id);
+  const shownSuppliers = suppliers.filter((supplier) => isShown(supplier.id));
+
+  const quotes = compareSuppliers(
+    needs,
+    [...productOffers, ...searchOffers],
+    localISODate(new Date()),
+    shownSuppliers,
+  ).filter((quote) => isShown(quote.supplier.id));
+  const quotingCount = quotes.filter((quote) => quote.lines.length > 0).length;
+  const bestId = quotingCount > 1 ? bestQuoteId(quotes) : null;
+  const orderingQuote = quotes.find((quote) => quote.supplier.id === orderingFrom);
 
   const linkMutation = useMutation({
     mutationFn: (suggestion: LinkSuggestion) =>
       procurementApi.mapCatalogItem(suggestion.item.id, suggestion.productId),
     onSuccess: () => {
       setLinkError('');
-      void queryClient.invalidateQueries({ queryKey: ['catalog-offers'] });
-      void queryClient.invalidateQueries({ queryKey: ['catalog-link-suggestions'] });
-      void queryClient.invalidateQueries({ queryKey: ['supplier-catalog'] });
+      for (const key of ['catalog-offers', 'catalog-link-suggestions', 'catalog-search', 'supplier-catalog']) {
+        void queryClient.invalidateQueries({ queryKey: [key] });
+      }
     },
     onError: (err) => setLinkError(apiErrorMessage(err, 'No se pudo vincular el ítem')),
   });
-
-  const quoting = new Set(offers.map((offer) => offer.supplier.id));
-  const suggested = new Set(suggestions.map((s) => s.item.supplier.id));
-  const isShown = (id: string) => picked[id] ?? (quoting.has(id) || suggested.has(id));
-
-  const shownSuppliers = suppliers.filter((supplier) => isShown(supplier.id));
-  const quotes = compareSuppliers(needs, offers, localISODate(new Date()), shownSuppliers).filter(
-    (quote) => isShown(quote.supplier.id),
-  );
-  const quotingCount = quotes.filter((quote) => quote.lines.length > 0).length;
-  const bestId = quotingCount > 1 ? bestQuoteId(quotes) : null;
 
   const productName = (id: string) => products.find((p) => p.id === id)?.name ?? 'Producto';
   const chosen = new Set(rows.map((row) => row.productId).filter(Boolean));
   const suggestionsFor = (supplierId: string, productId: string) =>
     suggestions.filter((s) => s.item.supplier.id === supplierId && s.productId === productId);
-
   const patch = (key: number, change: Partial<NeedRow>) =>
     setRows((prev) => prev.map((row) => (row.key === key ? { ...row, ...change } : row)));
+
+  // Las filas que efectivamente se comparan, en el orden en que se cargaron.
+  const tableRows = rows.filter((row) => needs.some((need) => need.productId === rowId(row)));
+  const loading = (productIds.length > 0 && offersQuery.isLoading) || (searching && quotes.length === 0);
+  const failed = (productIds.length > 0 && offersQuery.isError) || searchFailed;
 
   return (
     <div>
       <div className="mb-6">
         <h1 className="text-2xl font-semibold text-foreground">Comparar proveedores</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Precio, descuentos, envío, pago, entrega y mínimos de cada proveedor para lo que
-          necesitás comprar: un solo producto o una lista.
+          Precio, descuentos, envío, pago, entrega y mínimos de cada proveedor. Sirve para
+          reponer un producto y también para comparar listas recién cargadas, antes de crear
+          ningún producto.
         </p>
       </div>
 
@@ -289,34 +470,60 @@ export default function CompareSuppliersPage() {
           <p className="text-sm font-semibold text-foreground">1. Qué necesitás comprar</p>
           <div className="space-y-2">
             {rows.map((row, index) => (
-              <div key={row.key} className="grid grid-cols-[1fr_7rem_2rem] items-end gap-2">
+              <div key={row.key} className="grid grid-cols-[11rem_1fr_6rem_2rem] items-end gap-2">
                 <div className="space-y-1.5">
-                  {index === 0 && <Label>Producto</Label>}
+                  {index === 0 && <Label>Buscar en</Label>}
                   <Select
-                    value={row.productId || 'none'}
-                    onValueChange={(v) => patch(row.key, { productId: v && v !== 'none' ? v : '' })}
+                    value={row.mode}
+                    onValueChange={(value) => patch(row.key, { mode: (value ?? 'search') as RowMode })}
                   >
-                    <SelectTrigger className="w-full" aria-label={`Producto ${index + 1}`}>
+                    <SelectTrigger className="w-full" aria-label={`Dónde buscar, fila ${index + 1}`}>
                       <span className="min-w-0 flex-1 truncate text-left text-sm">
-                        {row.productId
-                          ? productName(row.productId)
-                          : loadingProducts
-                            ? 'Cargando productos...'
-                            : '— Seleccionar producto —'}
+                        {row.mode === 'search' ? 'Catálogos' : 'Mis productos'}
                       </span>
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="none">— Seleccionar producto —</SelectItem>
-                      {products
-                        .filter((p) => p.id === row.productId || !chosen.has(p.id))
-                        .map((p) => (
-                          <SelectItem key={p.id} value={p.id}>
-                            {p.name}
-                            {p.model ? ` — ${p.model}` : ''}
-                          </SelectItem>
-                        ))}
+                      <SelectItem value="search">Catálogos de proveedores</SelectItem>
+                      <SelectItem value="product">Mis productos</SelectItem>
                     </SelectContent>
                   </Select>
+                </div>
+                <div className="space-y-1.5">
+                  {index === 0 && <Label>Qué buscás</Label>}
+                  {row.mode === 'search' ? (
+                    <Input
+                      aria-label={`Qué buscás, fila ${index + 1}`}
+                      placeholder="Descripción, código de barras o código del proveedor..."
+                      value={row.query}
+                      onChange={(e) => patch(row.key, { query: e.target.value, picks: {} })}
+                    />
+                  ) : (
+                    <Select
+                      value={row.productId || NONE}
+                      onValueChange={(v) => patch(row.key, { productId: v && v !== NONE ? v : '' })}
+                    >
+                      <SelectTrigger className="w-full" aria-label={`Producto ${index + 1}`}>
+                        <span className="min-w-0 flex-1 truncate text-left text-sm">
+                          {row.productId
+                            ? productName(row.productId)
+                            : loadingProducts
+                              ? 'Cargando productos...'
+                              : '— Seleccionar producto —'}
+                        </span>
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value={NONE}>— Seleccionar producto —</SelectItem>
+                        {products
+                          .filter((p) => p.id === row.productId || !chosen.has(p.id))
+                          .map((p) => (
+                            <SelectItem key={p.id} value={p.id}>
+                              {p.name}
+                              {p.model ? ` — ${p.model}` : ''}
+                            </SelectItem>
+                          ))}
+                      </SelectContent>
+                    </Select>
+                  )}
                 </div>
                 <div className="space-y-1.5">
                   {index === 0 && <Label htmlFor={`need-qty-${row.key}`}>Cantidad</Label>}
@@ -325,7 +532,7 @@ export default function CompareSuppliersPage() {
                     type="number"
                     min={1}
                     step={1}
-                    aria-label={`Cantidad del producto ${index + 1}`}
+                    aria-label={`Cantidad, fila ${index + 1}`}
                     value={row.quantity}
                     onChange={(e) => patch(row.key, { quantity: e.target.value })}
                   />
@@ -334,7 +541,7 @@ export default function CompareSuppliersPage() {
                   type="button"
                   variant="ghost"
                   size="icon-sm"
-                  aria-label={`Quitar producto ${index + 1}`}
+                  aria-label={`Quitar fila ${index + 1}`}
                   disabled={rows.length === 1}
                   onClick={() => setRows((prev) => prev.filter((r) => r.key !== row.key))}
                 >
@@ -344,9 +551,14 @@ export default function CompareSuppliersPage() {
             ))}
           </div>
           <div>
-            <Button type="button" variant="ghost" size="sm" onClick={() => setRows((prev) => [...prev, newRow()])}>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => setRows((prev) => [...prev, newRow(prev[prev.length - 1]?.mode ?? 'search')])}
+            >
               <Plus size={14} />
-              Agregar producto
+              Agregar otro
             </Button>
           </div>
         </Card>
@@ -363,21 +575,20 @@ export default function CompareSuppliersPage() {
           ) : (
             <ul className="max-h-56 space-y-2 overflow-y-auto">
               {suppliers.map((supplier) => {
-                const hint =
-                  productIds.length === 0
+                const hint = !hasInput
+                  ? null
+                  : quoting.has(supplier.id)
                     ? null
-                    : quoting.has(supplier.id)
-                      ? null
-                      : suggested.has(supplier.id)
-                        ? 'ítem parecido sin vincular'
-                        : 'no lo tiene';
+                    : related.has(supplier.id)
+                      ? 'tiene ítems parecidos'
+                      : 'no lo tiene';
                 return (
                   <li key={supplier.id}>
                     <Label className="flex cursor-pointer items-center gap-2 font-normal">
                       <Checkbox
                         checked={isShown(supplier.id)}
                         onCheckedChange={(checked) =>
-                          setPicked((prev) => ({ ...prev, [supplier.id]: checked === true }))
+                          setShownByHand((prev) => ({ ...prev, [supplier.id]: checked === true }))
                         }
                       />
                       <span className="min-w-0 truncate">{supplier.name}</span>
@@ -409,27 +620,34 @@ export default function CompareSuppliersPage() {
         </p>
       )}
 
-      {productIds.length === 0 ? (
+      {!hasInput ? (
         <div className="py-14 text-center text-sm text-muted-foreground">
-          Elegí al menos un producto y su cantidad para ver qué proveedores lo ofrecen.
+          Escribí lo que buscás, o elegí uno de tus productos, para ver qué proveedores lo ofrecen.
         </div>
-      ) : loadingOffers ? (
+      ) : loading ? (
         <div className="py-14 text-center text-sm text-muted-foreground">Buscando ofertas...</div>
-      ) : isError ? (
+      ) : failed ? (
         <div className="py-14 text-center">
           <p className="text-sm text-destructive">No se pudieron cargar las ofertas.</p>
-          <Button variant="outline" size="sm" className="mt-3" onClick={() => void refetch()}>
+          <Button
+            variant="outline"
+            size="sm"
+            className="mt-3"
+            onClick={() => {
+              void offersQuery.refetch();
+              void queryClient.invalidateQueries({ queryKey: ['catalog-search'] });
+            }}
+          >
             Reintentar
           </Button>
         </div>
-      ) : quotes.length === 0 ? (
+      ) : quotes.length === 0 || tableRows.length === 0 ? (
         <div className="py-14 text-center">
           <p className="text-sm text-muted-foreground">
-            Ningún proveedor tiene {productIds.length === 1 ? 'este producto' : 'estos productos'}{' '}
-            vinculado en su catálogo.
+            Ningún catálogo tiene algo que coincida con lo que buscás.
           </p>
           <p className="mt-1 text-xs text-muted-foreground">
-            Marcá un proveedor para ver su columna, o vinculá los ítems de su lista desde{' '}
+            Probá con otras palabras o con el código de barras. Las listas se cargan desde{' '}
             <Link href="/dashboard/procurement/suppliers" className="font-medium text-primary underline underline-offset-2">
               Proveedores
             </Link>
@@ -447,7 +665,7 @@ export default function CompareSuppliersPage() {
                       Concepto
                     </th>
                     {quotes.map((quote) => (
-                      <th key={quote.supplier.id} className="min-w-56 px-4 py-3">
+                      <th key={quote.supplier.id} className="min-w-60 px-4 py-3">
                         <Link
                           href={`/dashboard/procurement/suppliers/${quote.supplier.id}`}
                           className="text-sm font-semibold text-foreground hover:underline"
@@ -472,37 +690,56 @@ export default function CompareSuppliersPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border align-top">
-                  {needs.map((need) => (
-                    <tr key={need.productId}>
-                      <th scope="row" className="px-4 py-3 text-left font-normal">
-                        <p className="font-medium text-foreground">{productName(need.productId)}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {plain(need.quantity)} {need.quantity === 1 ? 'unidad' : 'unidades'}
-                        </p>
-                      </th>
-                      {quotes.map((quote) => {
-                        const line = quote.lines.find((l) => l.productId === need.productId);
-                        return (
-                          <td key={quote.supplier.id} className="px-4 py-3">
-                            {line ? (
-                              <QuotedLine line={line} />
-                            ) : (
-                              <MissingLine
-                                supplierId={quote.supplier.id}
-                                productName={productName(need.productId)}
-                                suggestions={suggestionsFor(quote.supplier.id, need.productId)}
-                                canLink={canLink}
-                                linkingId={
-                                  linkMutation.isPending ? linkMutation.variables.item.id : null
-                                }
-                                onLink={(suggestion) => linkMutation.mutate(suggestion)}
-                              />
-                            )}
-                          </td>
-                        );
-                      })}
-                    </tr>
-                  ))}
+                  {tableRows.map((row) => {
+                    const id = rowId(row);
+                    const quantity = Number(row.quantity);
+                    return (
+                      <tr key={row.key}>
+                        <th scope="row" className="px-4 py-3 text-left font-normal">
+                          <p className="font-medium text-foreground">
+                            {row.mode === 'product' ? productName(row.productId) : `“${row.query.trim()}”`}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {plain(quantity)} {quantity === 1 ? 'unidad' : 'unidades'}
+                            {row.mode === 'search' && ' · sin producto creado'}
+                          </p>
+                        </th>
+                        {quotes.map((quote) => {
+                          const supplierId = quote.supplier.id;
+                          const line = quote.lines.find((l) => l.productId === id);
+                          return (
+                            <td key={supplierId} className="px-4 py-3">
+                              {row.mode === 'search' ? (
+                                <SearchCell
+                                  results={(resultsOf.get(row.key) ?? []).filter(
+                                    (item) => item.supplierId === supplierId,
+                                  )}
+                                  pickedId={pickedItem(row, supplierId)?.id ?? null}
+                                  line={line}
+                                  onPick={(itemId) =>
+                                    patch(row.key, { picks: { ...row.picks, [supplierId]: itemId } })
+                                  }
+                                />
+                              ) : line ? (
+                                <QuotedLine line={line} />
+                              ) : (
+                                <MissingLine
+                                  supplierId={supplierId}
+                                  productName={productName(row.productId)}
+                                  suggestions={suggestionsFor(supplierId, row.productId)}
+                                  canLink={canLink}
+                                  linkingId={
+                                    linkMutation.isPending ? linkMutation.variables.item.id : null
+                                  }
+                                  onLink={(suggestion) => linkMutation.mutate(suggestion)}
+                                />
+                              )}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    );
+                  })}
                   {SUMMARY_ROWS.map((row) => (
                     <tr key={row.label} className={cn(row.strong && 'bg-muted/20')}>
                       <th
@@ -554,6 +791,23 @@ export default function CompareSuppliersPage() {
                       ))}
                     </tr>
                   )}
+                  <RequirePermission permission="procurement:create">
+                    <tr>
+                      <th scope="row" className="px-4 py-3 text-left font-normal text-muted-foreground">
+                        Comprar
+                      </th>
+                      {quotes.map((quote) => (
+                        <td key={quote.supplier.id} className="px-4 py-3">
+                          {quote.lines.length > 0 && (
+                            <Button size="sm" onClick={() => setOrderingFrom(quote.supplier.id)}>
+                              <ShoppingCart size={14} />
+                              Crear orden
+                            </Button>
+                          )}
+                        </td>
+                      ))}
+                    </tr>
+                  </RequirePermission>
                 </tbody>
               </table>
             </div>
@@ -561,11 +815,20 @@ export default function CompareSuppliersPage() {
 
           <p className="mt-3 text-xs text-muted-foreground">
             {quotingCount < 2
-              ? 'Para comparar hacen falta al menos dos proveedores con el producto vinculado en su catálogo. '
+              ? 'Para comparar hacen falta al menos dos proveedores con un ítem elegido. '
               : '“Menor total” compara solo el precio final entre los proveedores que cotizan todo y llegan a su pedido mínimo. '}
             Pago, entrega y disponibilidad quedan a tu criterio.
           </p>
         </>
+      )}
+
+      {orderingQuote && (
+        <CompareOrderDialog
+          key={orderingQuote.supplier.id}
+          quote={orderingQuote}
+          quotes={quotes}
+          onClose={() => setOrderingFrom(null)}
+        />
       )}
     </div>
   );

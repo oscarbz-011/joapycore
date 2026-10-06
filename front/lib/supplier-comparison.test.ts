@@ -24,6 +24,7 @@ function offer(overrides: Partial<CatalogOffer> = {}): CatalogOffer {
     supplierId: 'sup-a',
     supplierSku: 'A-1',
     description: 'Abridor',
+    barcode: null,
     price: 50_000,
     supplierUnit: null,
     conversionFactor: null,
@@ -225,6 +226,78 @@ describe('compareSuppliers — suppliers chosen by hand', () => {
     const quotes = compareSuppliers([need(10)], [offer()], TODAY, [central]);
 
     expect(bestQuoteId(quotes)).toBe('sup-a');
+  });
+});
+
+describe('compareSuppliers — lists not linked to products yet', () => {
+  // Primer contacto con dos proveedores: sus listas están cargadas pero
+  // ningún ítem está vinculado a un producto.
+  const central = supplier({ id: 'sup-c', name: 'Importadora Central' });
+  const fromA = offer({ id: 'a-abridor', productId: null, product: null });
+  const fromC = offer({
+    id: 'c-abridor',
+    supplierId: 'sup-c',
+    supplier: central,
+    productId: null,
+    product: null,
+    price: 60_000,
+    description: 'SACACORCHOS ELECTRICO',
+  });
+  const row = { productId: 'row-1', quantity: 10, itemIds: ['a-abridor', 'c-abridor'] };
+
+  it('compares the chosen item of each supplier without any product', () => {
+    const quotes = compareSuppliers([row], [fromA, fromC], TODAY);
+
+    expect(quotes.map((q) => [q.supplier.name, q.total])).toEqual([
+      ['Importadora A', 500_000],
+      ['Importadora Central', 600_000],
+    ]);
+    expect(quotes[1].lines[0]).toMatchObject({
+      productId: 'row-1',
+      itemId: 'c-abridor',
+      linkedProductId: null,
+      description: 'SACACORCHOS ELECTRICO',
+    });
+    expect(bestQuoteId(quotes)).toBe('sup-a');
+  });
+
+  it('does not pull in other unlinked items of the same supplier', () => {
+    const other = offer({ id: 'a-otro', productId: null, product: null, price: 1 });
+    const quotes = compareSuppliers([row], [fromA, other, fromC], TODAY);
+
+    expect(quotes[0].lines.map((l) => l.itemId)).toEqual(['a-abridor']);
+  });
+
+  it('marks the row as missing for a supplier with no item chosen', () => {
+    const quotes = compareSuppliers(
+      [{ ...row, itemIds: ['a-abridor'] }],
+      [fromA, fromC],
+      TODAY,
+      [central],
+    );
+
+    expect(quotes[1].missingProductIds).toEqual(['row-1']);
+  });
+
+  it('ignores a search row with nothing chosen yet', () => {
+    expect(
+      compareSuppliers([{ ...row, itemIds: [] }], [fromA, fromC], TODAY),
+    ).toEqual([]);
+  });
+
+  it('mixes product rows and search rows in the same comparison', () => {
+    const linked = offer({ id: 'a-linked', productId: 'prod-9', price: 20_000 });
+    const quotes = compareSuppliers(
+      [row, { productId: 'prod-9', quantity: 1 }],
+      [fromA, linked],
+      TODAY,
+    );
+
+    expect(quotes[0].lines.map((l) => l.itemId)).toEqual([
+      'a-abridor',
+      'a-linked',
+    ]);
+    expect(quotes[0].total).toBe(520_000);
   });
 });
 

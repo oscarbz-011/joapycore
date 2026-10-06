@@ -107,7 +107,8 @@ export interface ProductFilters {
 }
 
 export interface CreateProductPayload {
-  categoryId: string;
+  // Sin categoría (o sin precios) el producto se crea en borrador.
+  categoryId?: string;
   brandId?: string;
   name: string;
   model?: string;
