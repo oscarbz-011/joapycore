@@ -3,6 +3,7 @@ import { apiClient, LONG_REQUEST_TIMEOUT_MS } from './client';
 export type PurchaseType = 'LOCAL' | 'IMPORT';
 export type PurchaseOrderStatus =
   | 'PENDING'
+  | 'SENT'
   | 'CONFIRMED'
   | 'PARTIALLY_RECEIVED'
   | 'RECEIVED'
@@ -79,6 +80,16 @@ export interface PurchaseOrderItem {
   };
 }
 
+/** Una entrada del historial de estados de la orden. */
+export interface PurchaseOrderStatusChange {
+  id: string;
+  fromStatus: PurchaseOrderStatus | null;
+  toStatus: PurchaseOrderStatus;
+  reason: string | null;
+  createdAt: string;
+  changedBy: { id: string; firstName: string; lastName: string } | null;
+}
+
 export interface PurchaseOrder {
   id: string;
   /** OC-AA-000001. */
@@ -93,6 +104,8 @@ export interface PurchaseOrder {
   notes: string | null;
   supplier: { id: string; name: string; email: string | null };
   items: PurchaseOrderItem[];
+  /** Solo viene al pedir una orden puntual, no en el listado. */
+  statusChanges?: PurchaseOrderStatusChange[];
 }
 
 export interface CreatePurchaseOrderItem {
@@ -179,6 +192,14 @@ export const procurementApi = {
 
   confirmOrder: (id: string): Promise<PurchaseOrder> =>
     apiClient.post(`/procurement/purchase-orders/${id}/confirm`).then((r) => r.data),
+
+  sendOrder: (id: string): Promise<PurchaseOrder> =>
+    apiClient.post(`/procurement/purchase-orders/${id}/send`).then((r) => r.data),
+
+  cancelOrder: (id: string, reason: string): Promise<PurchaseOrder> =>
+    apiClient
+      .post(`/procurement/purchase-orders/${id}/cancel`, { reason })
+      .then((r) => r.data),
 
   createReceipt: (id: string, dto: CreatePurchaseReceiptPayload): Promise<PurchaseReceipt> =>
     apiClient.post(`/procurement/purchase-orders/${id}/receipts`, dto).then((r) => r.data),
