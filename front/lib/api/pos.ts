@@ -61,6 +61,8 @@ export interface CreatePosSaleItem {
   description?: string;
   quantity: number;
   unitPrice: number;
+  // Depósito del que sale el ítem — obligatorio para ítems con producto.
+  warehouseId?: string;
   serialNumbers?: string[];
 }
 

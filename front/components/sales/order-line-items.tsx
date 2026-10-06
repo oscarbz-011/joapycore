@@ -3,10 +3,21 @@
 import { AlertTriangle, Trash2 } from "lucide-react";
 import { NumericInput } from "../numeric-input";
 import { SearchSelect } from "../../app/(dashboard)/dashboard/components/search-select";
-import { type ProductWithStock } from "../../lib/api/inventory";
+import { type ProductWithStock, type StockResult } from "../../lib/api/inventory";
+import {
+  resolveWarehouseId,
+  unassignedStock,
+  warehouseChoices,
+} from "../../lib/sale-warehouse";
 import { type CreditPlan } from "../../lib/api/settings";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 
@@ -32,6 +43,8 @@ export interface LineItem {
   quantity: number;
   unitPrice: number;
   serialInput: string;
+  // Depósito elegido a mano; vacío = el sugerido según el stock.
+  warehouseId?: string;
   // Presentes solo cuando la línea salió de un combo — comboGroupId agrupa
   // todas las líneas del mismo combo agregado (para mostrarlas juntas y
   // poder quitarlas de una vez), comboId es la trazabilidad hacia el combo,
@@ -45,17 +58,32 @@ export interface LineItem {
 export function LineItemRow({
   item,
   products,
+  stock,
   onChange,
   onRemove,
 }: {
   item: LineItem;
   products: ProductWithStock[];
+  // Stock por depósito (useSaleStock) para elegir de dónde sale el ítem.
+  stock?: StockResult;
   onChange: (updated: LineItem) => void;
   onRemove: () => void;
 }) {
   const subtotal = item.quantity * item.unitPrice;
-  const insufficientStock =
-    item.product !== null && item.quantity > Number(item.product.stock);
+  const choices = warehouseChoices(stock, item.productId);
+  const warehouseId = resolveWarehouseId(
+    item.warehouseId,
+    choices,
+    item.quantity,
+  );
+  const warehouse = choices.find((choice) => choice.id === warehouseId);
+  const unassigned = unassignedStock(stock, item.productId);
+  // Con el desglose por depósito, lo que importa es el stock del depósito
+  // elegido; sin él (todavía cargando) se compara contra el total.
+  const available = warehouse
+    ? warehouse.quantity
+    : Number(item.product?.stock ?? 0);
+  const insufficientStock = item.product !== null && item.quantity > available;
   return (
     <div
       className={cn(
@@ -75,6 +103,7 @@ export function LineItemRow({
                 product,
                 unitPrice: product ? Number(product.salePrice) : 0,
                 serialInput: "",
+                warehouseId: undefined,
               })
             }
             getKey={(p) => p.id}
@@ -122,11 +151,48 @@ export function LineItemRow({
           <Trash2 size={15} />
         </button>
       </div>
+      {item.product && choices.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          <Label className="text-xs text-muted-foreground">Sale de</Label>
+          <Select
+            value={warehouseId || "none"}
+            onValueChange={(value) =>
+              onChange({
+                ...item,
+                warehouseId: value && value !== "none" ? value : undefined,
+              })
+            }
+          >
+            <SelectTrigger size="sm" className="w-64">
+              <span className="min-w-0 flex-1 truncate text-left text-xs">
+                {warehouse
+                  ? `${warehouse.name} · ${warehouse.quantity} disp.`
+                  : "— Seleccionar depósito —"}
+              </span>
+            </SelectTrigger>
+            <SelectContent>
+              {choices.map((choice) => (
+                <SelectItem key={choice.id} value={choice.id}>
+                  {choice.name} · {choice.quantity} disp.
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
+      {item.product && stock && choices.length === 0 && (
+        <div className="flex items-center gap-1.5 text-xs font-medium text-destructive">
+          <AlertTriangle size={13} />
+          No hay depósitos activos. Creá uno en Ajustes para poder vender.
+        </div>
+      )}
       {insufficientStock && (
         <div className="flex items-center gap-1.5 text-xs font-medium text-destructive">
           <AlertTriangle size={13} />
-          Stock insuficiente: disponible {item.product?.stock ?? 0}, solicitado{" "}
-          {item.quantity}.
+          Stock insuficiente{warehouse ? ` en ${warehouse.name}` : ""}:
+          disponible {available}, solicitado {item.quantity}.
+          {unassigned > 0 &&
+            ` Hay ${unassigned} sin depósito asignado: asignalo desde Inventario → Movimientos.`}
         </div>
       )}
       {item.product?.isSerialized && (
