@@ -1068,31 +1068,35 @@ model StockMovement {
 // ─── Procurement ──────────────────────────────────────────────────────────────
 
 model Supplier {
-  id              String    @id @default(uuid())
-  tenantId        String    @map("tenant_id")
-  name            String
-  contactName     String?   @map("contact_name")
-  email           String?
-  phone           String?
-  address         String?
-  taxId           String?   @map("tax_id")
-  isImporter      Boolean   @default(false) @map("is_importer")
+  id                String    @id @default(uuid())
+  tenantId          String    @map("tenant_id")
+  name              String
+  contactName       String?   @map("contact_name")
+  email             String?
+  phone             String?
+  address           String?
+  taxId             String?   @map("tax_id")
+  isImporter        Boolean   @default(false) @map("is_importer")
   // Plazo de pago en días — 0 (default) es contado. Cada AccountsPayable
   // generada al recibir mercadería de este proveedor calcula su dueDate
   // como receivedAt + paymentTermDays.
-  paymentTermDays Int?      @default(0) @map("payment_term_days")
+  paymentTermDays   Int?      @default(0) @map("payment_term_days")
   // Condiciones comerciales, para comparar proveedores más allá del precio.
   // Todas opcionales: null = "no se sabe", no "cero".
-  shippingCost    Decimal?  @map("shipping_cost") @db.Decimal(12, 2)
-  leadTimeDays    Int?      @map("lead_time_days")
-  minOrderAmount  Decimal?  @map("min_order_amount") @db.Decimal(12, 2)
+  shippingCost      Decimal?  @map("shipping_cost") @db.Decimal(12, 2)
+  leadTimeDays      Int?      @map("lead_time_days")
+  minOrderAmount    Decimal?  @map("min_order_amount") @db.Decimal(12, 2)
   // Descuento sobre el total de la orden: [{ minAmount, percent }], ordenado
   // por minAmount (ver normalizeVolumeDiscounts).
-  volumeDiscounts Json      @default("[]") @map("volume_discounts")
-  isActive        Boolean   @default(true) @map("is_active")
-  deletedAt       DateTime? @map("deleted_at")
-  createdAt       DateTime  @default(now()) @map("created_at")
-  updatedAt       DateTime  @updatedAt @map("updated_at")
+  volumeDiscounts   Json      @default("[]") @map("volume_discounts")
+  // Descuento según la cantidad de unidades de la orden:
+  // [{ minQuantity, percent }], ordenado por minQuantity. Es otra forma de
+  // descuento por volumen; hay proveedores que usan una, otra o las dos.
+  quantityDiscounts Json      @default("[]") @map("quantity_discounts")
+  isActive          Boolean   @default(true) @map("is_active")
+  deletedAt         DateTime? @map("deleted_at")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
 
   tenant           Tenant                @relation(fields: [tenantId], references: [id])
   purchaseOrders   PurchaseOrder[]
