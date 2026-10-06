@@ -8,10 +8,20 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Plus, X, Trash2, AlertTriangle } from 'lucide-react';
+import { BookOpen, Plus, X, Trash2, AlertTriangle } from 'lucide-react';
+import { CatalogItemPicker } from '@/components/procurement/catalog-item-picker';
+import { localISODate } from '@/lib/date';
+import {
+  emptyLine,
+  lineFromCatalogItem,
+  orderLinesError,
+  orderLinesTotal,
+  toOrderItems,
+  withoutCatalogLines,
+  type OrderLine,
+} from '@/lib/purchase-order-lines';
 import {
   procurementApi,
-  type CreatePurchaseOrderItem,
   type PurchaseOrder,
   type PurchaseOrderStatus,
   type PurchaseType,
@@ -104,13 +114,6 @@ function TypeBadge({ type }: { type: PurchaseType }) {
 
 // ── Create order modal ─────────────────────────────────────────────────────────
 
-interface LineItem {
-  productId: string;
-  product: Product | null;
-  quantity: number;
-  unitCost: number;
-}
-
 function CreateOrderModal({
   open,
   onOpenChange,
@@ -133,21 +136,33 @@ function CreateOrderModal({
   const [customsDuty, setCustomsDuty] = useState('');
   const [customsRef, setCustomsRef] = useState('');
   const [notes, setNotes] = useState('');
-  const [items, setItems] = useState<LineItem[]>([{ productId: '', product: null, quantity: 1, unitCost: 0 }]);
+  const [items, setItems] = useState<OrderLine[]>([]);
+  const [pickingCatalog, setPickingCatalog] = useState(false);
   const [error, setError] = useState('');
+  const supplier = suppliers.find((s) => s.id === supplierId);
+
+  // Las líneas tomadas del catálogo son del proveedor elegido.
+  function changeSupplier(id: string) {
+    setSupplierId(id);
+    setItems((prev) => withoutCatalogLines(prev));
+  }
+
+  function patchLine(key: string, patch: Partial<OrderLine>) {
+    setItems((prev) => prev.map((it) => (it.key === key ? { ...it, ...patch } : it)));
+  }
 
   const isImport = purchaseType === 'IMPORT';
 
-  function handleProductChange(index: number, productId: string) {
+  function handleProductChange(key: string, productId: string) {
     const product = products.find((p) => p.id === productId) ?? null;
-    setItems((prev) =>
-      prev.map((it, i) =>
-        i === index ? { ...it, productId, product, unitCost: product ? Number(product.costPrice) : 0 } : it,
-      ),
-    );
+    patchLine(key, {
+      productId,
+      productName: product?.name ?? '',
+      unitCost: product ? Number(product.costPrice) : 0,
+    });
   }
 
-  const total = items.reduce((sum, i) => sum + Number(i.quantity) * Number(i.unitCost), 0);
+  const total = orderLinesTotal(items);
 
   const mutation = useMutation({
     mutationFn: () =>
@@ -160,11 +175,7 @@ function CreateOrderModal({
         customsDuty: customsDuty ? Number(customsDuty) : undefined,
         customsRef: customsRef.trim() || undefined,
         notes: notes.trim() || undefined,
-        items: items.map((it): CreatePurchaseOrderItem => ({
-          productId: it.productId,
-          quantity: Number(it.quantity),
-          unitCost: Number(it.unitCost),
-        })),
+        items: toOrderItems(items),
       }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['purchase-orders'] });
@@ -188,9 +199,9 @@ function CreateOrderModal({
         <form
           onSubmit={(e) => {
             e.preventDefault();
-            setError('');
-            if (items.length === 0) { setError('Agregá al menos un producto'); return; }
-            mutation.mutate();
+            const problem = !supplierId ? 'Elegí el proveedor' : orderLinesError(items);
+            setError(problem ?? '');
+            if (!problem) mutation.mutate();
           }}
           className="px-6 py-5 space-y-5"
         >
@@ -198,9 +209,9 @@ function CreateOrderModal({
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1">
               <Label>Proveedor *</Label>
-              <Select value={supplierId || 'none'} onValueChange={(v) => setSupplierId(v && v !== 'none' ? v : '')}>
+              <Select value={supplierId || 'none'} onValueChange={(v) => changeSupplier(v && v !== 'none' ? v : '')}>
                 <SelectTrigger className="w-full">
-                  <span className="flex-1 text-left text-sm truncate">{suppliers.find((s) => s.id === supplierId)?.name ?? '— Seleccionar —'}</span>
+                  <span className="flex-1 text-left text-sm truncate">{supplier?.name ?? '— Seleccionar —'}</span>
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">— Seleccionar —</SelectItem>
@@ -269,61 +280,96 @@ function CreateOrderModal({
                 Comparar precios por proveedor
               </Link>
             </div>
-            <div className="space-y-2">
-              {items.map((item, idx) => (
-                <div key={idx} className="rounded-xl border border-border p-3">
-                  <div className="flex gap-2 items-center">
-                    <div className="flex-1">
-                      <Select value={item.productId || 'none'} onValueChange={(v) => handleProductChange(idx, v && v !== 'none' ? v : '')}>
-                        <SelectTrigger className="w-full">
-                          <span className="flex-1 text-left text-sm truncate">{products.find((p) => p.id === item.productId)?.name ?? '— Seleccionar producto —'}</span>
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="none">— Seleccionar producto —</SelectItem>
-                          {products.map((p) => (
-                            <SelectItem key={p.id} value={p.id}>{p.name}{p.model ? ` (${p.model})` : ''}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+            {items.length === 0 ? (
+              <p className="rounded-xl border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">
+                {supplierId
+                  ? 'Agregá ítems del catálogo del proveedor o productos sueltos.'
+                  : 'Elegí el proveedor para ver su catálogo.'}
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {items.map((item) => (
+                  <div key={item.key} className="rounded-xl border border-border p-3">
+                    <div className="flex gap-2 items-center">
+                      <div className="min-w-0 flex-1">
+                        {item.catalogItemId ? (
+                          <>
+                            <p className="truncate text-sm font-medium text-foreground">{item.productName}</p>
+                            <p className="truncate text-xs text-muted-foreground">
+                              Cód. proveedor <span className="font-mono">{item.supplierSku}</span>
+                            </p>
+                          </>
+                        ) : (
+                          <Select value={item.productId || 'none'} onValueChange={(v) => handleProductChange(item.key, v && v !== 'none' ? v : '')}>
+                            <SelectTrigger className="w-full" aria-label="Producto">
+                              <span className="flex-1 text-left text-sm truncate">{item.productName || '— Seleccionar producto —'}</span>
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="none">— Seleccionar producto —</SelectItem>
+                              {products.map((p) => (
+                                <SelectItem key={p.id} value={p.id}>{p.name}{p.model ? ` (${p.model})` : ''}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        )}
+                      </div>
+                      <div className="w-20">
+                        <input
+                          type="number" min={1} placeholder="Cant." aria-label="Cantidad" className={NUM_CLS}
+                          value={item.quantity || ''}
+                          onChange={(e) => patchLine(item.key, { quantity: parseInt(e.target.value) || 0 })}
+                        />
+                      </div>
+                      <div className="w-32">
+                        <input
+                          type="number" min={0} placeholder="Costo unit." aria-label="Costo unitario" className={NUM_CLS}
+                          value={item.unitCost || ''}
+                          onChange={(e) => patchLine(item.key, { unitCost: parseFloat(e.target.value) || 0, priceNote: null })}
+                        />
+                      </div>
+                      <div className="w-28 text-right text-sm font-medium text-muted-foreground tabular-nums">
+                        {formatPrice(item.quantity * item.unitCost)}
+                      </div>
+                      <button
+                        type="button"
+                        aria-label="Quitar línea"
+                        onClick={() => setItems((prev) => prev.filter((it) => it.key !== item.key))}
+                        className="text-muted-foreground/60 hover:text-destructive"
+                      >
+                        <Trash2 size={15} />
+                      </button>
                     </div>
-                    <div className="w-20">
-                      <input
-                        type="number" min={1} placeholder="Cant." className={NUM_CLS}
-                        value={item.quantity || ''}
-                        onChange={(e) => setItems((prev) => prev.map((it, i) => i === idx ? { ...it, quantity: parseInt(e.target.value) || 1 } : it))}
-                        required
-                      />
-                    </div>
-                    <div className="w-32">
-                      <input
-                        type="number" min={0} placeholder="Costo unit." className={NUM_CLS}
-                        value={item.unitCost || ''}
-                        onChange={(e) => setItems((prev) => prev.map((it, i) => i === idx ? { ...it, unitCost: parseFloat(e.target.value) || 0 } : it))}
-                        required
-                      />
-                    </div>
-                    <div className="w-28 text-right text-sm font-medium text-muted-foreground tabular-nums">
-                      {formatPrice(Number(item.quantity) * Number(item.unitCost))}
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setItems((prev) => prev.filter((_, i) => i !== idx))}
-                      className="text-muted-foreground/60 hover:text-destructive"
-                    >
-                      <Trash2 size={15} />
-                    </button>
+                    {item.priceNote && (
+                      <p className="mt-2 flex items-center gap-1.5 text-xs text-warn">
+                        <AlertTriangle size={12} aria-hidden />
+                        {item.priceNote}. Revisá el costo antes de crear la orden.
+                      </p>
+                    )}
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
+            )}
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={!supplierId}
+                onClick={() => setPickingCatalog(true)}
+              >
+                <BookOpen size={14} />
+                Agregar del catálogo
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => setItems((prev) => [...prev, emptyLine()])}
+              >
+                <Plus size={14} />
+                Agregar producto suelto
+              </Button>
             </div>
-            <button
-              type="button"
-              onClick={() => setItems((prev) => [...prev, { productId: '', product: null, quantity: 1, unitCost: 0 }])}
-              className="mt-2 flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
-            >
-              <Plus size={14} />
-              Agregar producto
-            </button>
           </div>
 
           {items.length > 0 && (
@@ -358,6 +404,22 @@ function CreateOrderModal({
             </Button>
           </div>
         </form>
+
+        {pickingCatalog && supplier && (
+          <CatalogItemPicker
+            supplierId={supplier.id}
+            supplierName={supplier.name}
+            orderedProductIds={new Set(items.flatMap((it) => it.productId || []))}
+            onPick={(catalogItem) => {
+              const line = lineFromCatalogItem(catalogItem, localISODate(new Date()));
+              if (!line) return;
+              setItems((prev) =>
+                prev.some((it) => it.productId === line.productId) ? prev : [...prev, line],
+              );
+            }}
+            onClose={() => setPickingCatalog(false)}
+          />
+        )}
       </DialogContent>
     </Dialog>
   );
@@ -601,7 +663,14 @@ function OrderDetailPanel({
             <>
               <SheetHeader className="border-b border-border px-5 py-4 shrink-0">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <SheetTitle>{order.supplier.name}</SheetTitle>
+                  <SheetTitle>
+                    {order.orderNumber && (
+                      <span className="mr-2 font-mono text-sm font-medium text-muted-foreground">
+                        {order.orderNumber}
+                      </span>
+                    )}
+                    {order.supplier.name}
+                  </SheetTitle>
                   <StatusBadge status={order.status} />
                   <TypeBadge type={order.purchaseType} />
                 </div>
@@ -652,6 +721,11 @@ function OrderDetailPanel({
                           <div className="flex items-start justify-between gap-2">
                             <div className="flex-1 min-w-0">
                               <p className="text-sm text-foreground truncate">{item.product.name}</p>
+                              {item.supplierSku && (
+                                <p className="text-xs text-muted-foreground/60">
+                                  Cód. proveedor <span className="font-mono">{item.supplierSku}</span>
+                                </p>
+                              )}
                               {item.product.model && <p className="text-xs text-muted-foreground/60">{item.product.model}</p>}
                             </div>
                             <div className="text-right shrink-0">
@@ -896,6 +970,9 @@ export default function ProcurementPage() {
                         )}
                       >
                         <div className="font-medium text-foreground">{order.supplier.name}</div>
+                        {order.orderNumber && (
+                          <div className="font-mono text-xs text-muted-foreground">{order.orderNumber}</div>
+                        )}
                         {order.supplier.email && <div className="text-xs text-muted-foreground/60">{order.supplier.email}</div>}
                       </td>
                       <td className="px-4 py-3"><TypeBadge type={order.purchaseType} /></td>

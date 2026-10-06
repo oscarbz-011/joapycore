@@ -66,6 +66,9 @@ export interface PurchaseOrderItem {
   quantity: number;
   unitCost: number;
   receivedQty: number;
+  // Código y descripción del proveedor, si la línea salió de su catálogo.
+  supplierSku: string | null;
+  supplierDescription: string | null;
   product: {
     id: string;
     name: string;
@@ -78,6 +81,8 @@ export interface PurchaseOrderItem {
 
 export interface PurchaseOrder {
   id: string;
+  /** OC-AA-000001. */
+  orderNumber: string | null;
   status: PurchaseOrderStatus;
   purchaseType: PurchaseType;
   orderDate: string;
@@ -94,6 +99,8 @@ export interface CreatePurchaseOrderItem {
   productId: string;
   quantity: number;
   unitCost: number;
+  /** Ítem del catálogo del proveedor del que sale la línea. */
+  catalogItemId?: string;
 }
 
 export interface CreatePurchaseOrderPayload {
