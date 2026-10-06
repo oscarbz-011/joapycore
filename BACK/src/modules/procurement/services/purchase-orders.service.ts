@@ -6,7 +6,11 @@ import {
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { ProductStatus } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
-import { PurchaseOrdersRepository } from '../repositories/purchase-orders.repository';
+import type { PrismaClientOrTx } from '../../../prisma/types';
+import {
+  PurchaseOrdersRepository,
+  orderSequence,
+} from '../repositories/purchase-orders.repository';
 import { CreatePurchaseOrderDto } from '../dto/create-purchase-order.dto';
 import type { AuditLogEvent } from '../../../audit/audit-log.event';
 
@@ -16,6 +20,8 @@ const PRODUCT_STATUS_LABEL: Record<ProductStatus, string> = {
   INACTIVE: 'descontinuado',
   BLOCKED: 'bloqueado',
 };
+
+const MAX_NUMBER_ATTEMPTS = 3;
 
 @Injectable()
 export class PurchaseOrdersService {
@@ -69,46 +75,105 @@ export class PurchaseOrdersService {
       );
     }
 
-    return this.prisma.$transaction(async (tx) => {
-      const order = await this.purchaseOrdersRepository.create(
-        tenantId,
-        {
-          supplierId: dto.supplierId,
-          purchaseType: dto.purchaseType,
-          status: 'PENDING',
-          orderDate: new Date(dto.orderDate),
-          expectedDate: dto.expectedDate
-            ? new Date(dto.expectedDate)
-            : undefined,
-          exchangeRate: dto.exchangeRate,
-          customsDuty: dto.customsDuty,
-          customsRef: dto.customsRef,
-          notes: dto.notes,
-        },
-        tx,
-      );
+    // Las líneas que salen del catálogo tienen que ser de este proveedor y
+    // estar vinculadas al producto que se pide: el código y la descripción del
+    // proveedor que van a la orden salen de ahí, no de lo que mande el cliente.
+    const catalogIds = [
+      ...new Set(dto.items.flatMap((i) => i.catalogItemId ?? [])),
+    ];
+    const catalogItems = catalogIds.length
+      ? await this.purchaseOrdersRepository.findCatalogItems(
+          tenantId,
+          dto.supplierId,
+          catalogIds,
+        )
+      : [];
+    const catalogById = new Map(catalogItems.map((item) => [item.id, item]));
+    for (const item of dto.items) {
+      if (!item.catalogItemId) continue;
+      const catalogItem = catalogById.get(item.catalogItemId);
+      if (!catalogItem) {
+        throw new UnprocessableEntityException(
+          'Un ítem de la orden no pertenece al catálogo de este proveedor',
+        );
+      }
+      if (catalogItem.productId !== item.productId) {
+        throw new UnprocessableEntityException(
+          `El ítem ${catalogItem.supplierSku} del catálogo no está vinculado a ese producto`,
+        );
+      }
+    }
 
-      for (const item of dto.items) {
-        await this.purchaseOrdersRepository.createItem(
+    const createOrder = () =>
+      this.prisma.$transaction(async (tx) => {
+        const order = await this.purchaseOrdersRepository.create(
+          tenantId,
           {
-            purchaseOrderId: order.id,
-            productId: item.productId,
-            quantity: item.quantity,
-            unitCost: item.unitCost,
+            orderNumber: await this.nextOrderNumber(tenantId, tx),
+            supplierId: dto.supplierId,
+            purchaseType: dto.purchaseType,
+            status: 'PENDING',
+            orderDate: new Date(dto.orderDate),
+            expectedDate: dto.expectedDate
+              ? new Date(dto.expectedDate)
+              : undefined,
+            exchangeRate: dto.exchangeRate,
+            customsDuty: dto.customsDuty,
+            customsRef: dto.customsRef,
+            notes: dto.notes,
           },
           tx,
         );
-      }
 
-      this.eventEmitter.emit('audit.log', {
-        tenantId,
-        userId,
-        module: 'procurement',
-        action: 'purchase.order.created',
-        resourceId: order.id,
-      } satisfies AuditLogEvent);
-      return order;
-    });
+        for (const item of dto.items) {
+          const catalogItem = item.catalogItemId
+            ? catalogById.get(item.catalogItemId)
+            : undefined;
+          await this.purchaseOrdersRepository.createItem(
+            {
+              purchaseOrderId: order.id,
+              productId: item.productId,
+              quantity: item.quantity,
+              unitCost: item.unitCost,
+              catalogItemId: catalogItem?.id ?? null,
+              supplierSku: catalogItem?.supplierSku ?? null,
+              supplierDescription: catalogItem?.description ?? null,
+            },
+            tx,
+          );
+        }
+
+        this.eventEmitter.emit('audit.log', {
+          tenantId,
+          userId,
+          module: 'procurement',
+          action: 'purchase.order.created',
+          resourceId: order.id,
+        } satisfies AuditLogEvent);
+        return order;
+      });
+
+    // Dos altas simultáneas pueden leer el mismo último número: el índice
+    // único (empresa, número) rechaza la segunda, que reintenta con el
+    // siguiente.
+    for (let attempt = 1; ; attempt++) {
+      try {
+        return await createOrder();
+      } catch (error) {
+        const duplicated = (error as { code?: string }).code === 'P2002';
+        if (!duplicated || attempt >= MAX_NUMBER_ATTEMPTS) throw error;
+      }
+    }
+  }
+
+  private async nextOrderNumber(tenantId: string, tx: PrismaClientOrTx) {
+    const last = await this.purchaseOrdersRepository.findLastOrderNumber(
+      tenantId,
+      tx,
+    );
+    const year = String(new Date().getFullYear()).slice(-2);
+    const next = orderSequence(last?.orderNumber ?? null) + 1;
+    return `OC-${year}-${String(next).padStart(6, '0')}`;
   }
 
   async confirm(tenantId: string, id: string, userId?: string) {

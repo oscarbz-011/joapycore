@@ -27,6 +27,14 @@ export class PurchaseOrderItemDto {
   @IsNumber({ maxDecimalPlaces: 2 })
   @IsPositive()
   unitCost: number;
+
+  @ApiPropertyOptional({
+    description:
+      'Ítem del catálogo del proveedor del que sale la línea. Tiene que estar vinculado a productId',
+  })
+  @IsOptional()
+  @IsUUID()
+  catalogItemId?: string;
 }
 
 export class CreatePurchaseOrderDto {

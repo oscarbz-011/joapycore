@@ -32,6 +32,8 @@ describe('PurchaseOrdersService', () => {
     findItem: jest.Mock;
     updateItemReceivedQty: jest.Mock;
     findProductStatuses: jest.Mock;
+    findLastOrderNumber: jest.Mock;
+    findCatalogItems: jest.Mock;
   };
   let eventEmitter: { emit: jest.Mock };
   let prisma: { $transaction: jest.Mock };
@@ -55,6 +57,8 @@ describe('PurchaseOrdersService', () => {
           isPurchasable: true,
         },
       ]),
+      findLastOrderNumber: jest.fn().mockResolvedValue(null),
+      findCatalogItems: jest.fn().mockResolvedValue([]),
     };
     eventEmitter = { emit: jest.fn() };
 
@@ -185,6 +189,181 @@ describe('PurchaseOrdersService', () => {
   });
 
   // ── confirm ────────────────────────────────────────────────────────────────
+
+  describe('order number', () => {
+    const dto = {
+      supplierId: 'sup-1',
+      purchaseType: 'LOCAL' as const,
+      orderDate: '2026-10-06',
+      items: [{ productId: 'prod-1', quantity: 2, unitCost: 100 }],
+    };
+    const year = String(new Date().getFullYear()).slice(-2);
+
+    it('numbers the first order of the tenant', async () => {
+      await service.create('tenant-1', 'user-1', dto);
+
+      expect(purchaseOrdersRepository.findLastOrderNumber).toHaveBeenCalledWith(
+        'tenant-1',
+        expect.anything(),
+      );
+      expect(purchaseOrdersRepository.create).toHaveBeenCalledWith(
+        'tenant-1',
+        expect.objectContaining({ orderNumber: `OC-${year}-000001` }),
+        expect.anything(),
+      );
+    });
+
+    it('continues the sequence of the tenant', async () => {
+      purchaseOrdersRepository.findLastOrderNumber.mockResolvedValue({
+        orderNumber: 'OC-25-000041',
+      });
+
+      await service.create('tenant-1', 'user-1', dto);
+
+      expect(purchaseOrdersRepository.create).toHaveBeenCalledWith(
+        'tenant-1',
+        expect.objectContaining({ orderNumber: `OC-${year}-000042` }),
+        expect.anything(),
+      );
+    });
+  });
+
+  describe('order number collisions', () => {
+    const dto = {
+      supplierId: 'sup-1',
+      purchaseType: 'LOCAL' as const,
+      orderDate: '2026-10-06',
+      items: [{ productId: 'prod-1', quantity: 2, unitCost: 100 }],
+    };
+    const duplicated = Object.assign(new Error('unique'), { code: 'P2002' });
+
+    it('tries again with the next number when another order took it', async () => {
+      purchaseOrdersRepository.create
+        .mockRejectedValueOnce(duplicated)
+        .mockResolvedValueOnce(makeOrder());
+      purchaseOrdersRepository.findLastOrderNumber
+        .mockResolvedValueOnce({ orderNumber: 'OC-26-000007' })
+        .mockResolvedValueOnce({ orderNumber: 'OC-26-000008' });
+
+      await service.create('tenant-1', 'user-1', dto);
+
+      expect(purchaseOrdersRepository.create).toHaveBeenCalledTimes(2);
+      expect(purchaseOrdersRepository.create).toHaveBeenLastCalledWith(
+        'tenant-1',
+        expect.objectContaining({
+          orderNumber: expect.stringMatching(/^OC-\d{2}-000009$/),
+        }),
+        expect.anything(),
+      );
+    });
+
+    it('gives up after a few attempts instead of looping', async () => {
+      purchaseOrdersRepository.create.mockRejectedValue(duplicated);
+
+      await expect(service.create('tenant-1', 'user-1', dto)).rejects.toBe(
+        duplicated,
+      );
+      expect(purchaseOrdersRepository.create).toHaveBeenCalledTimes(3);
+    });
+
+    it('does not retry other failures', async () => {
+      const failure = new Error('database down');
+      purchaseOrdersRepository.create.mockRejectedValue(failure);
+
+      await expect(service.create('tenant-1', 'user-1', dto)).rejects.toBe(
+        failure,
+      );
+      expect(purchaseOrdersRepository.create).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('items taken from the supplier catalog', () => {
+    const dto = {
+      supplierId: 'sup-1',
+      purchaseType: 'LOCAL' as const,
+      orderDate: '2026-10-06',
+      items: [
+        {
+          productId: 'prod-1',
+          quantity: 2,
+          unitCost: 100,
+          catalogItemId: 'cat-1',
+        },
+      ],
+    };
+
+    it('keeps the supplier code and description on the order line', async () => {
+      purchaseOrdersRepository.findCatalogItems.mockResolvedValue([
+        {
+          id: 'cat-1',
+          productId: 'prod-1',
+          supplierSku: '332726',
+          description: 'ABRIDOR DE VINHO',
+        },
+      ]);
+
+      await service.create('tenant-1', 'user-1', dto);
+
+      expect(purchaseOrdersRepository.findCatalogItems).toHaveBeenCalledWith(
+        'tenant-1',
+        'sup-1',
+        ['cat-1'],
+      );
+      expect(purchaseOrdersRepository.createItem).toHaveBeenCalledWith(
+        expect.objectContaining({
+          productId: 'prod-1',
+          catalogItemId: 'cat-1',
+          supplierSku: '332726',
+          supplierDescription: 'ABRIDOR DE VINHO',
+        }),
+        expect.anything(),
+      );
+    });
+
+    // El repositorio filtra por tenant y proveedor: un ítem de otro proveedor
+    // o de otra empresa no vuelve, y la orden no se crea.
+    it('rejects a catalog item of another supplier or tenant', async () => {
+      purchaseOrdersRepository.findCatalogItems.mockResolvedValue([]);
+
+      await expect(
+        service.create('tenant-1', 'user-1', dto),
+      ).rejects.toBeInstanceOf(UnprocessableEntityException);
+      expect(purchaseOrdersRepository.create).not.toHaveBeenCalled();
+    });
+
+    it('rejects a catalog item linked to a different product', async () => {
+      purchaseOrdersRepository.findCatalogItems.mockResolvedValue([
+        {
+          id: 'cat-1',
+          productId: 'other-product',
+          supplierSku: '332726',
+          description: 'ABRIDOR DE VINHO',
+        },
+      ]);
+
+      await expect(
+        service.create('tenant-1', 'user-1', dto),
+      ).rejects.toBeInstanceOf(UnprocessableEntityException);
+      expect(purchaseOrdersRepository.create).not.toHaveBeenCalled();
+    });
+
+    it('leaves a loose product without supplier code', async () => {
+      await service.create('tenant-1', 'user-1', {
+        ...dto,
+        items: [{ productId: 'prod-1', quantity: 1, unitCost: 100 }],
+      });
+
+      expect(purchaseOrdersRepository.findCatalogItems).not.toHaveBeenCalled();
+      expect(purchaseOrdersRepository.createItem).toHaveBeenCalledWith(
+        expect.objectContaining({
+          catalogItemId: null,
+          supplierSku: null,
+          supplierDescription: null,
+        }),
+        expect.anything(),
+      );
+    });
+  });
 
   describe('confirm', () => {
     it('throws UnprocessableEntityException when order is not PENDING', async () => {
