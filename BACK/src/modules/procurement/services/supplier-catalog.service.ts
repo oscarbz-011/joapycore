@@ -10,6 +10,7 @@ import {
 } from '../repositories/supplier-catalog.repository';
 import { CatalogParserService, type RowError } from './catalog-parser.service';
 import {
+  CatalogValidityDto,
   UpdateCatalogItemDto,
   MapCatalogItemDto,
 } from '../dto/update-catalog-item.dto';
@@ -20,6 +21,17 @@ export interface ImportResult {
   /** Filas rechazadas, con el número de fila del archivo. */
   errors: RowError[];
   totalRows: number;
+}
+
+const toDay = (value: string | null | undefined): Date | null =>
+  value ? new Date(`${value}T00:00:00.000Z`) : null;
+
+function assertValidRange(from: Date | null, to: Date | null) {
+  if (from && to && to < from) {
+    throw new UnprocessableEntityException(
+      'La vigencia no puede terminar antes de empezar',
+    );
+  }
 }
 
 @Injectable()
@@ -44,8 +56,15 @@ export class SupplierCatalogService {
     supplierId: string,
     file: { buffer: Buffer; originalname: string },
     userId?: string,
+    validity: CatalogValidityDto = {},
   ): Promise<ImportResult> {
     await this.getSupplierOrFail(tenantId, supplierId);
+
+    // La vigencia es de la lista entera. Una lista nueva pisa la anterior
+    // también cuando no trae fechas: sus precios ya no son los de antes.
+    const validFrom = toDay(validity.validFrom);
+    const validTo = toDay(validity.validTo);
+    assertValidRange(validFrom, validTo);
 
     const { rows, errors } = await this.parser.parse(
       file.buffer,
@@ -66,7 +85,11 @@ export class SupplierCatalogService {
     // orden de cientos, no de millones, y así una fila que falle en la base no
     // tumba la importación entera.
     for (const row of rows) {
-      await this.repository.upsert(tenantId, supplierId, row);
+      await this.repository.upsert(tenantId, supplierId, {
+        ...row,
+        validFrom,
+        validTo,
+      });
     }
 
     this.eventEmitter.emit('audit.log', {
@@ -75,7 +98,12 @@ export class SupplierCatalogService {
       module: 'procurement',
       action: 'supplier.catalog.imported',
       resourceId: supplierId,
-      after: { imported: rows.length, rejected: errors.length },
+      after: {
+        imported: rows.length,
+        rejected: errors.length,
+        validFrom: validity.validFrom ?? null,
+        validTo: validity.validTo ?? null,
+      },
     } satisfies AuditLogEvent);
 
     return {
@@ -86,8 +114,21 @@ export class SupplierCatalogService {
   }
 
   async update(tenantId: string, id: string, dto: UpdateCatalogItemDto) {
-    await this.getItemOrFail(tenantId, id);
-    await this.repository.update(tenantId, id, dto);
+    const item = await this.getItemOrFail(tenantId, id);
+    const { validFrom, validTo, ...fields } = dto;
+
+    // undefined = no se toca; null = se borra. El rango se valida contra lo
+    // que va a quedar guardado, no solo contra lo que trae este cambio.
+    const validity = {
+      ...(validFrom !== undefined && { validFrom: toDay(validFrom) }),
+      ...(validTo !== undefined && { validTo: toDay(validTo) }),
+    };
+    assertValidRange(
+      validFrom !== undefined ? toDay(validFrom) : (item.validFrom ?? null),
+      validTo !== undefined ? toDay(validTo) : (item.validTo ?? null),
+    );
+
+    await this.repository.update(tenantId, id, { ...fields, ...validity });
     return this.repository.findById(tenantId, id);
   }
 

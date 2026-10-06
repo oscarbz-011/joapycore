@@ -1,6 +1,9 @@
 /// <reference types="jest" />
 
-import { NotFoundException } from '@nestjs/common';
+import {
+  NotFoundException,
+  UnprocessableEntityException,
+} from '@nestjs/common';
 import { SupplierCatalogService } from './supplier-catalog.service';
 
 describe('SupplierCatalogService', () => {
@@ -110,6 +113,81 @@ describe('SupplierCatalogService', () => {
         'audit.log',
         expect.objectContaining({ action: 'supplier.catalog.imported' }),
       );
+    });
+  });
+
+  describe('price validity', () => {
+    it('stamps every imported row with the validity of the list', async () => {
+      await service.importFile('tenant-1', 'sup-1', file, 'user-1', {
+        validFrom: '2026-10-01',
+        validTo: '2026-10-31',
+      });
+
+      expect(repository.upsert).toHaveBeenCalledWith(
+        'tenant-1',
+        'sup-1',
+        expect.objectContaining({
+          supplierSku: 'A-1',
+          validFrom: new Date('2026-10-01T00:00:00.000Z'),
+          validTo: new Date('2026-10-31T00:00:00.000Z'),
+        }),
+      );
+    });
+
+    // Una lista nueva trae precios nuevos: conservar la vigencia de la lista
+    // anterior los dejaría marcados como vencidos (o vigentes) por error.
+    it('clears the previous validity when the new list has none', async () => {
+      await service.importFile('tenant-1', 'sup-1', file);
+
+      expect(repository.upsert).toHaveBeenCalledWith(
+        'tenant-1',
+        'sup-1',
+        expect.objectContaining({ validFrom: null, validTo: null }),
+      );
+    });
+
+    it('rejects a list that ends before it starts, without importing', async () => {
+      await expect(
+        service.importFile('tenant-1', 'sup-1', file, 'user-1', {
+          validFrom: '2026-10-31',
+          validTo: '2026-10-01',
+        }),
+      ).rejects.toBeInstanceOf(UnprocessableEntityException);
+      expect(repository.upsert).not.toHaveBeenCalled();
+    });
+
+    it('updates and clears the validity of one item', async () => {
+      await service.update('tenant-1', 'item-1', {
+        validFrom: null,
+        validTo: '2026-12-31',
+      });
+
+      expect(repository.update).toHaveBeenCalledWith('tenant-1', 'item-1', {
+        validFrom: null,
+        validTo: new Date('2026-12-31T00:00:00.000Z'),
+      });
+    });
+
+    it('checks an edited end date against the start date already stored', async () => {
+      repository.findById.mockResolvedValue({
+        id: 'item-1',
+        productId: null,
+        validFrom: new Date('2026-10-10T00:00:00.000Z'),
+        validTo: null,
+      });
+
+      await expect(
+        service.update('tenant-1', 'item-1', { validTo: '2026-10-01' }),
+      ).rejects.toBeInstanceOf(UnprocessableEntityException);
+      expect(repository.update).not.toHaveBeenCalled();
+    });
+
+    it('leaves the validity alone when an edit does not mention it', async () => {
+      await service.update('tenant-1', 'item-1', { price: 500 });
+
+      expect(repository.update).toHaveBeenCalledWith('tenant-1', 'item-1', {
+        price: 500,
+      });
     });
   });
 

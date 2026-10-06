@@ -28,6 +28,7 @@ import type { JwtPayload } from '../../../common/types/jwt-payload.interface';
 import { SupplierCatalogService } from '../services/supplier-catalog.service';
 import { FilterCatalogDto } from '../dto/filter-catalog.dto';
 import {
+  CatalogValidityDto,
   UpdateCatalogItemDto,
   MapCatalogItemDto,
 } from '../dto/update-catalog-item.dto';
@@ -72,12 +73,19 @@ export class SupplierCatalogController {
     @CurrentUser() user: JwtPayload,
     @Param('supplierId') supplierId: string,
     @UploadedFile() file: Express.Multer.File,
+    @Body() validity: CatalogValidityDto,
   ) {
     if (!file) throw new BadRequestException('No se recibió ningún archivo');
     if (!ALLOWED_EXT.test(file.originalname)) {
       throw new BadRequestException('El archivo tiene que ser .xlsx o .csv');
     }
-    return this.service.importFile(tenantId, supplierId, file, user.sub);
+    return this.service.importFile(
+      tenantId,
+      supplierId,
+      file,
+      user.sub,
+      validity,
+    );
   }
 
   @Patch('catalog/:id')

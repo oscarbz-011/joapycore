@@ -5,10 +5,34 @@ import {
   IsPositive,
   IsString,
   IsUUID,
+  Matches,
   Min,
 } from 'class-validator';
 
-export class UpdateCatalogItemDto {
+// La vigencia es un día de calendario, no un instante: se manda como
+// YYYY-MM-DD y se guarda como medianoche UTC de ese día.
+const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
+const ISO_DAY_MESSAGE = 'La fecha tiene que tener el formato AAAA-MM-DD';
+
+export class CatalogValidityDto {
+  @ApiPropertyOptional({
+    description: 'Primer día en que rige el precio (AAAA-MM-DD)',
+    nullable: true,
+  })
+  @IsOptional()
+  @Matches(ISO_DAY, { message: ISO_DAY_MESSAGE })
+  validFrom?: string | null;
+
+  @ApiPropertyOptional({
+    description: 'Último día en que rige el precio (AAAA-MM-DD)',
+    nullable: true,
+  })
+  @IsOptional()
+  @Matches(ISO_DAY, { message: ISO_DAY_MESSAGE })
+  validTo?: string | null;
+}
+
+export class UpdateCatalogItemDto extends CatalogValidityDto {
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()

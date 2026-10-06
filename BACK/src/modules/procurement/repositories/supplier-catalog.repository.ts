@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { PrismaClientOrTx } from '../../../prisma/types';
+import { startOfBusinessDay } from '../../../common/utils/business-date.util';
 
 export interface CatalogFilters {
   search?: string;
@@ -24,7 +25,9 @@ export class SupplierCatalogRepository {
     supplierId: string,
     filters: CatalogFilters = {},
   ) {
-    const now = new Date();
+    // La vigencia son días de calendario: un precio válido hasta el día D
+    // rige todo ese día en la zona del negocio.
+    const today = startOfBusinessDay();
     return this.prisma.supplierCatalogItem.findMany({
       where: {
         tenantId,
@@ -36,8 +39,8 @@ export class SupplierCatalogRepository {
         // listas de precios no traen fechas.
         ...(filters.onlyValid && {
           AND: [
-            { OR: [{ validFrom: null }, { validFrom: { lte: now } }] },
-            { OR: [{ validTo: null }, { validTo: { gte: now } }] },
+            { OR: [{ validFrom: null }, { validFrom: { lte: today } }] },
+            { OR: [{ validTo: null }, { validTo: { gte: today } }] },
           ],
         }),
         ...(filters.search && {
