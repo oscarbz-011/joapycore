@@ -112,3 +112,41 @@ describe('InvoicesRepository issuance claim', () => {
     });
   });
 });
+
+describe('InvoicesRepository listings', () => {
+  it('lists only sale invoices of the tenant in the general listing', async () => {
+    const findMany = jest.fn().mockResolvedValue([]);
+    const repository = new InvoicesRepository({
+      invoice: { findMany },
+    } as never);
+
+    await repository.findAll('tenant-1');
+
+    expect(findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { tenantId: 'tenant-1', invoiceType: 'SALE' },
+      }),
+    );
+  });
+
+  it('lists the interest invoices of the tenant with the customer of their receipt', async () => {
+    const findMany = jest.fn().mockResolvedValue([]);
+    const repository = new InvoicesRepository({
+      invoice: { findMany },
+    } as never);
+
+    await repository.findInterestInvoices('tenant-1');
+
+    const query = findMany.mock.calls[0][0];
+    expect(query.where).toEqual({
+      tenantId: 'tenant-1',
+      invoiceType: 'INTEREST',
+    });
+    expect(query.select.paymentReceipt.select).toEqual(
+      expect.objectContaining({
+        receiptNumber: true,
+        customer: expect.any(Object),
+      }),
+    );
+  });
+});

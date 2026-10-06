@@ -27,6 +27,10 @@ export class InvoicesService {
     return this.invoicesRepository.findAll(tenantId);
   }
 
+  findInterestInvoices(tenantId: string) {
+    return this.invoicesRepository.findInterestInvoices(tenantId);
+  }
+
   async findOne(tenantId: string, id: string) {
     const invoice = await this.invoicesRepository.findById(tenantId, id);
     if (!invoice) throw new NotFoundException('Invoice not found');

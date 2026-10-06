@@ -23,6 +23,14 @@ export class InvoicesController {
     return this.invoicesService.findAll(tenantId);
   }
 
+  // Antes de 'invoices/:id' para que "interest" no se tome como un id.
+  @Get('invoices/interest')
+  @Permissions('billing:read')
+  @ApiOperation({ summary: 'Listar facturas de intereses moratorios' })
+  findInterestInvoices(@CurrentTenant() tenantId: string) {
+    return this.invoicesService.findInterestInvoices(tenantId);
+  }
+
   @Get('invoices/:id')
   @Permissions('billing:read')
   @ApiOperation({ summary: 'Obtener factura por ID' })

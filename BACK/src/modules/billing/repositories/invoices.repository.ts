@@ -72,6 +72,39 @@ export class InvoicesRepository {
     });
   }
 
+  // Facturas de intereses moratorios: no tienen pedido de venta, el cliente
+  // sale del recibo de cobro que las originó.
+  findInterestInvoices(tenantId: string) {
+    return this.prisma.invoice.findMany({
+      where: { tenantId, invoiceType: 'INTEREST' },
+      select: {
+        id: true,
+        status: true,
+        issuedAt: true,
+        createdAt: true,
+        total: true,
+        invoiceNumber: true,
+        invoicePrefix: true,
+        pdfFileId: true,
+        paymentReceipt: {
+          select: {
+            id: true,
+            receiptNumber: true,
+            customer: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                email: true,
+              },
+            },
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
   findById(tenantId: string, id: string) {
     return this.prisma.invoice.findFirst({
       where: { id, tenantId },
