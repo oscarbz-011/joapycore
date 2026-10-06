@@ -11,6 +11,9 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { BookOpen, FileText, Mail, Plus, X, Trash2, AlertTriangle } from 'lucide-react';
 import { openPdf } from '@/lib/open-pdf';
 import { CatalogItemPicker } from '@/components/procurement/catalog-item-picker';
+import { SortableHeader } from '@/components/sortable-header';
+import type { SortValue } from '@/lib/table-sort';
+import { useTableSort } from '@/lib/use-table-sort';
 import {
   PURCHASE_ORDER_STATUSES,
   PURCHASE_ORDER_STATUS_LABEL,
@@ -78,6 +81,22 @@ function deliveryAccentFor(order: PurchaseOrder): 'destructive' | 'warn' | null 
   if (!stillOwed || !order.expectedDate) return null;
   return deliveryDaysOverdue(order) > 0 ? 'destructive' : 'warn';
 }
+
+// Una columna por dato; fuera del componente para no reordenar en cada render.
+type OrderSortKey =
+  | 'number' | 'supplier' | 'email' | 'type' | 'date' | 'expected' | 'status' | 'items' | 'total';
+
+const ORDER_SORT: Record<OrderSortKey, (order: PurchaseOrder) => SortValue> = {
+  number: (order) => order.orderNumber,
+  supplier: (order) => order.supplier.name,
+  email: (order) => order.supplier.email,
+  type: (order) => order.purchaseType,
+  date: (order) => new Date(order.orderDate),
+  expected: (order) => (order.expectedDate ? new Date(order.expectedDate) : null),
+  status: (order) => PURCHASE_ORDER_STATUS_LABEL[order.status],
+  items: (order) => order.items.length,
+  total: (order) => orderTotal(order),
+};
 
 const NUM_CLS = 'h-9 w-full min-w-0 rounded-3xl border border-transparent bg-input/50 px-3 text-sm outline-none transition-[color,box-shadow,background-color] focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30';
 const TEXTAREA_CLS = 'w-full min-w-0 rounded-2xl border border-transparent bg-input/50 px-3 py-2 text-sm outline-none resize-none transition-[color,box-shadow,background-color] focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30';
@@ -1100,6 +1119,7 @@ export default function ProcurementPage() {
   });
 
   const filtered = statusFilter ? orders.filter((o) => o.status === statusFilter) : orders;
+  const { sorted, sort, toggle } = useTableSort(filtered, ORDER_SORT);
 
   function openPanel(order: PurchaseOrder) {
     setPanelOrder(order);
@@ -1165,17 +1185,19 @@ export default function ProcurementPage() {
             <table className="w-full text-sm">
               <thead className="border-b border-border bg-muted/30 text-xs font-bold uppercase tracking-wider text-muted-foreground">
                 <tr>
-                  <th className="px-4 py-3 text-left">Proveedor</th>
-                  <th className="px-4 py-3 text-left">Tipo</th>
-                  <th className="px-4 py-3 text-left">Fecha</th>
-                  <th className="px-4 py-3 text-left">Entrega est.</th>
-                  <th className="px-4 py-3 text-left">Estado</th>
-                  <th className="px-4 py-3 text-center">Ítems</th>
-                  <th className="px-4 py-3 text-right">Total est.</th>
+                  <SortableHeader label="N° de orden" sortKey="number" sort={sort} onSort={toggle} className="whitespace-nowrap" />
+                  <SortableHeader label="Proveedor" sortKey="supplier" sort={sort} onSort={toggle} />
+                  <SortableHeader label="Email" sortKey="email" sort={sort} onSort={toggle} />
+                  <SortableHeader label="Tipo" sortKey="type" sort={sort} onSort={toggle} />
+                  <SortableHeader label="Fecha" sortKey="date" sort={sort} onSort={toggle} />
+                  <SortableHeader label="Entrega est." sortKey="expected" sort={sort} onSort={toggle} className="whitespace-nowrap" />
+                  <SortableHeader label="Estado" sortKey="status" sort={sort} onSort={toggle} />
+                  <SortableHeader label="Ítems" sortKey="items" sort={sort} onSort={toggle} align="center" />
+                  <SortableHeader label="Total est." sortKey="total" sort={sort} onSort={toggle} align="right" className="whitespace-nowrap" />
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {filtered.map((order) => {
+                {sorted.map((order) => {
                   const deliveryOverdueDays = deliveryDaysOverdue(order);
                   const accent = deliveryAccentFor(order);
                   return (
@@ -1186,17 +1208,15 @@ export default function ProcurementPage() {
                     >
                       <td
                         className={cn(
-                          'px-4 py-3',
+                          'px-4 py-3 font-mono text-[13px] whitespace-nowrap text-muted-foreground',
                           accent === 'destructive' && 'border-l-[3px] border-l-destructive',
                           accent === 'warn' && 'border-l-[3px] border-l-warn',
                         )}
                       >
-                        <div className="font-medium text-foreground">{order.supplier.name}</div>
-                        {order.orderNumber && (
-                          <div className="font-mono text-xs text-muted-foreground">{order.orderNumber}</div>
-                        )}
-                        {order.supplier.email && <div className="text-xs text-muted-foreground/60">{order.supplier.email}</div>}
+                        {order.orderNumber ?? '—'}
                       </td>
+                      <td className="px-4 py-3 font-medium text-foreground">{order.supplier.name}</td>
+                      <td className="px-4 py-3 text-muted-foreground">{order.supplier.email ?? '—'}</td>
                       <td className="px-4 py-3"><TypeBadge type={order.purchaseType} /></td>
                       <td className="px-4 py-3 text-muted-foreground">{formatDatePY(order.orderDate, 'local')}</td>
                       <td

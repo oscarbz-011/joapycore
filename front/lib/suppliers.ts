@@ -153,15 +153,26 @@ export function filterSuppliers(
   );
 }
 
-export type SupplierSortKey = 'name' | 'contact' | 'taxId' | 'term' | 'status';
+export type SupplierSortKey =
+  | 'name'
+  | 'contact'
+  | 'email'
+  | 'phone'
+  | 'taxId'
+  | 'term'
+  | 'type'
+  | 'status';
 
 export const SUPPLIER_SORT: Record<
   SupplierSortKey,
   (supplier: Supplier) => SortValue
 > = {
   name: (supplier) => supplier.name,
-  contact: (supplier) => supplier.contactName ?? supplier.email,
+  contact: (supplier) => supplier.contactName,
+  email: (supplier) => supplier.email,
+  phone: (supplier) => supplier.phone,
   taxId: (supplier) => supplier.taxId,
   term: (supplier) => supplier.paymentTermDays ?? 0,
+  type: (supplier) => supplier.isImporter,
   status: (supplier) => supplier.isActive,
 };
