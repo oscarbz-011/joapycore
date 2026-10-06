@@ -169,7 +169,7 @@ export function usePendingNotifications(permissions: string[], activeModules: st
       type: 'purchase-order' as const,
       title: 'Entrega de compra vencida',
       description: `${po.supplier.name} · ${formatPrice(po.items.reduce((s, i) => s + i.quantity * i.unitCost, 0))}`,
-      href: `/dashboard/procurement?po=${po.id}`,
+      href: `/dashboard/procurement/orders/${po.id}`,
     })),
     ...pendingDeliveries.map((d) => ({
       id: `delivery-${d.id}`,
