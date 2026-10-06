@@ -35,8 +35,9 @@ describe('createSerialQueue', () => {
 
     await Promise.all(
       [1, 2, 3].map((n) =>
-        run(async () => {
+        run(() => {
           order.push(n);
+          return Promise.resolve();
         }),
       ),
     );
