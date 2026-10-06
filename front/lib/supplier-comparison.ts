@@ -222,17 +222,19 @@ export function bestQuoteId(quotes: readonly SupplierQuote[]): string | null {
 
 /** Cómo queda un precio frente a los de los otros proveedores. */
 export interface PriceGap {
-  /** `cheapest`: el más barato. `dearer`: más caro que el más barato. */
-  kind: 'cheapest' | 'dearer' | 'same';
-  /** Diferencia en porcentaje, redondeada a un decimal. */
+  /** `cheaper`: más barato que el más caro. `highest`: es el más caro. */
+  kind: 'cheaper' | 'highest' | 'same';
+  /** Cuánto más barato que el más caro, en porcentaje con un decimal. */
   percent: number;
 }
 
 const oneDecimal = (n: number) => Math.round(n * 10) / 10;
 
 /**
- * Diferencia porcentual de cada precio. El más barato se mide contra el que le
- * sigue ("15% más barato"); el resto, contra el más barato ("18% más caro").
+ * Diferencia porcentual de cada precio, siempre contra la misma referencia:
+ * el más caro. Así todos los porcentajes se leen igual ("10% más barato") y
+ * no hay dos números distintos para la misma diferencia, como pasaría
+ * midiendo uno hacia arriba y otro hacia abajo.
  * null donde no hay precio o no hay con qué comparar.
  */
 export function priceGaps(
@@ -241,25 +243,25 @@ export function priceGaps(
   const known = prices.filter((price): price is number => price !== null && price > 0);
   if (known.length < 2) return prices.map(() => null);
 
-  const lowest = Math.min(...known);
-  const next = Math.min(...known.filter((price) => price > lowest));
-  const tied = known.filter((price) => price === lowest).length > 1;
+  const highest = Math.max(...known);
+  const allEqual = known.every((price) => price === highest);
 
   return prices.map((price) => {
     if (price === null || price <= 0) return null;
-    if (price > lowest) {
-      return { kind: 'dearer', percent: oneDecimal(((price - lowest) / lowest) * 100) };
-    }
-    // Todos al mismo precio, o empate en el más barato.
-    if (tied || !Number.isFinite(next)) return { kind: 'same', percent: 0 };
-    return { kind: 'cheapest', percent: oneDecimal(((next - lowest) / next) * 100) };
+    if (allEqual) return { kind: 'same', percent: 0 };
+    if (price === highest) return { kind: 'highest', percent: 0 };
+    return {
+      kind: 'cheaper',
+      percent: oneDecimal(((highest - price) / highest) * 100),
+    };
   });
 }
 
 export function priceGapLabel(gap: PriceGap): string {
+  if (gap.kind === 'same') return 'Mismo precio';
+  if (gap.kind === 'highest') return 'El más caro';
   const percent = new Intl.NumberFormat('es-PY', { maximumFractionDigits: 1 }).format(
     gap.percent,
   );
-  if (gap.kind === 'same') return 'Mismo precio';
-  return gap.kind === 'cheapest' ? `${percent}% más barato` : `${percent}% más caro`;
+  return `${percent}% más barato`;
 }

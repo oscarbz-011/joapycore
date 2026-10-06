@@ -354,27 +354,28 @@ describe('bestQuoteId', () => {
 });
 
 describe('priceGaps', () => {
-  it('says how much cheaper the best price is than the next one', () => {
+  // Una sola referencia (el más caro): la misma diferencia no puede leerse
+  // como 10% de un lado y 11,1% del otro.
+  it('measures every price against the most expensive one', () => {
     expect(priceGaps([54_000, 60_000])).toEqual([
-      { kind: 'cheapest', percent: 10 },
-      { kind: 'dearer', percent: 11.1 },
+      { kind: 'cheaper', percent: 10 },
+      { kind: 'highest', percent: 0 },
     ]);
   });
 
-  // El más barato se mide contra el segundo; los demás, contra el más barato.
-  it('measures every other price against the cheapest', () => {
+  it('ranks several suppliers on the same scale', () => {
     expect(priceGaps([100, 120, 150])).toEqual([
-      { kind: 'cheapest', percent: 16.7 },
-      { kind: 'dearer', percent: 20 },
-      { kind: 'dearer', percent: 50 },
+      { kind: 'cheaper', percent: 33.3 },
+      { kind: 'cheaper', percent: 20 },
+      { kind: 'highest', percent: 0 },
     ]);
   });
 
   it('skips suppliers without a price', () => {
     expect(priceGaps([100, null, 150])).toEqual([
-      { kind: 'cheapest', percent: 33.3 },
+      { kind: 'cheaper', percent: 33.3 },
       null,
-      { kind: 'dearer', percent: 50 },
+      { kind: 'highest', percent: 0 },
     ]);
   });
 
@@ -390,17 +391,18 @@ describe('priceGaps', () => {
     ]);
   });
 
-  it('does not crown a winner when the two cheapest are tied', () => {
+  it('gives tied prices the same figure', () => {
     expect(priceGaps([100, 100, 150])).toEqual([
-      { kind: 'same', percent: 0 },
-      { kind: 'same', percent: 0 },
-      { kind: 'dearer', percent: 50 },
+      { kind: 'cheaper', percent: 33.3 },
+      { kind: 'cheaper', percent: 33.3 },
+      { kind: 'highest', percent: 0 },
     ]);
   });
 
   it('puts the difference into words', () => {
-    expect(priceGapLabel({ kind: 'cheapest', percent: 15 })).toBe('15% más barato');
-    expect(priceGapLabel({ kind: 'dearer', percent: 11.1 })).toBe('11,1% más caro');
+    expect(priceGapLabel({ kind: 'cheaper', percent: 15 })).toBe('15% más barato');
+    expect(priceGapLabel({ kind: 'cheaper', percent: 33.3 })).toBe('33,3% más barato');
+    expect(priceGapLabel({ kind: 'highest', percent: 0 })).toBe('El más caro');
     expect(priceGapLabel({ kind: 'same', percent: 0 })).toBe('Mismo precio');
   });
 });

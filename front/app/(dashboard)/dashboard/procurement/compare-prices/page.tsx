@@ -101,12 +101,12 @@ const UNKNOWN = <span className="text-muted-foreground">Sin dato</span>;
 const NOTHING = <span className="text-muted-foreground">—</span>;
 
 const GAP_CLASS = {
-  cheapest: 'text-emerald-600 dark:text-emerald-400',
-  dearer: 'text-destructive',
+  cheaper: 'text-emerald-600 dark:text-emerald-400',
+  highest: 'text-destructive',
   same: 'text-muted-foreground',
 } as const;
 
-/** "15% más barato" / "11% más caro", frente a los otros proveedores. */
+/** "10% más barato" frente al proveedor más caro, o "El más caro". */
 function Gap({ gap }: { gap: PriceGap | null | undefined }) {
   if (!gap) return null;
   return <p className={cn('text-xs font-medium', GAP_CLASS[gap.kind])}>{priceGapLabel(gap)}</p>;
@@ -849,7 +849,7 @@ export default function CompareSuppliersPage() {
           <p className="mt-3 text-xs text-muted-foreground">
             {quotingCount < 2
               ? 'Para comparar hacen falta al menos dos proveedores con un ítem elegido. '
-              : '“Menor total” compara solo el precio final entre los proveedores que cotizan todo y llegan a su pedido mínimo. '}
+              : '“Menor total” compara solo el precio final entre los proveedores que cotizan todo y llegan a su pedido mínimo. Los porcentajes se miden contra el proveedor más caro. '}
             Pago, entrega y disponibilidad quedan a tu criterio.
           </p>
         </>
