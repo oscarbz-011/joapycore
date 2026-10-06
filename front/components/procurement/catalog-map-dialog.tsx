@@ -20,9 +20,12 @@ import { Label } from '@/components/ui/label';
 import { apiErrorMessage } from '@/lib/api/api-error';
 import { inventoryApi, type Product } from '@/lib/api/inventory';
 import { procurementApi, type SupplierCatalogItem } from '@/lib/api/procurement';
+import { settingsApi } from '@/lib/api/settings';
 import {
   catalogProductError,
   catalogProductFormFrom,
+  markupLabel,
+  suggestedSalePrice,
   toCatalogProductPayload,
   type CatalogProductForm,
 } from '@/lib/catalog-product';
@@ -165,6 +168,17 @@ function NewProduct({
   // crear de nuevo duplicaría el producto.
   const [createdId, setCreatedId] = useState<string | null>(null);
 
+  const { data: pricing } = useQuery({
+    queryKey: ['pricing-config'],
+    queryFn: settingsApi.getPricing,
+  });
+  // El precio de venta sigue al sugerido (costo + margen de la empresa) hasta
+  // que el usuario escribe el suyo, igual que en el alta de productos.
+  const [saleEdited, setSaleEdited] = useState(false);
+  const suggested = suggestedSalePrice(form.costPrice, pricing);
+  const salePrice = saleEdited ? form.salePrice : suggested;
+  const product = { ...form, salePrice };
+
   const { data: categories = [], isLoading: loadingCategories } = useQuery({
     queryKey: CATEGORIES_KEY,
     queryFn: inventoryApi.listCategories,
@@ -182,8 +196,8 @@ function NewProduct({
     mutationFn: async () => {
       let productId = createdId;
       if (!productId) {
-        const product = await inventoryApi.createProduct(toCatalogProductPayload(form));
-        productId = product.id;
+        const created = await inventoryApi.createProduct(toCatalogProductPayload(product));
+        productId = created.id;
         setCreatedId(productId);
         void queryClient.invalidateQueries({ queryKey: ['products'] });
         void queryClient.invalidateQueries({ queryKey: ['products-active-for-mapping'] });
@@ -202,7 +216,7 @@ function NewProduct({
       className="space-y-4"
       onSubmit={(e) => {
         e.preventDefault();
-        const problem = createdId ? null : catalogProductError(form);
+        const problem = createdId ? null : catalogProductError(product);
         setError(problem ?? '');
         if (!problem) mutation.mutate();
       }}
@@ -264,10 +278,35 @@ function NewProduct({
             id="catalog-product-sale"
             className={NUM_CLS}
             decimals={2}
-            value={form.salePrice}
-            onChange={(value) => set('salePrice', value)}
+            value={salePrice}
+            onChange={(value) => {
+              setSaleEdited(true);
+              set('salePrice', value);
+            }}
+            aria-describedby="catalog-product-sale-help"
           />
         </div>
+        {pricing && suggested > 0 && (
+          <p
+            id="catalog-product-sale-help"
+            className="-mt-2 text-xs text-muted-foreground sm:col-span-2"
+          >
+            Sugerido: Gs. {new Intl.NumberFormat('es-PY').format(suggested)} (costo + margen
+            de {markupLabel(pricing)}).
+            {saleEdited && salePrice !== suggested && (
+              <>
+                {' '}
+                <button
+                  type="button"
+                  onClick={() => setSaleEdited(false)}
+                  className="font-medium text-primary underline underline-offset-2"
+                >
+                  Usar el sugerido
+                </button>
+              </>
+            )}
+          </p>
+        )}
 
         <div className="space-y-1.5">
           <Label htmlFor="catalog-product-unit">Unidad de medida</Label>

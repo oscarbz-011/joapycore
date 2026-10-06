@@ -4,6 +4,8 @@ import {
   catalogProductError,
   catalogProductFormFrom,
   catalogUnitCost,
+  markupLabel,
+  suggestedSalePrice,
   toCatalogProductPayload,
 } from './catalog-product';
 
@@ -114,5 +116,29 @@ describe('toCatalogProductPayload', () => {
     });
 
     expect(payload).not.toHaveProperty('brandId');
+  });
+});
+
+describe('suggestedSalePrice', () => {
+  const percentage = { markupMethod: 'PERCENTAGE', defaultMarkup: 30 } as never;
+  const fixed = { markupMethod: 'FIXED', defaultMarkup: 15_000 } as never;
+
+  it('applies the company margin to the cost', () => {
+    expect(suggestedSalePrice(54_000, percentage)).toBe(70_200);
+    expect(suggestedSalePrice(54_000, fixed)).toBe(69_000);
+  });
+
+  it('rounds to whole guaraníes', () => {
+    expect(suggestedSalePrice(33.33, percentage)).toBe(43);
+  });
+
+  it('suggests nothing without a cost or a pricing configuration', () => {
+    expect(suggestedSalePrice(0, percentage)).toBe(0);
+    expect(suggestedSalePrice(54_000, undefined)).toBe(0);
+  });
+
+  it('labels the margin it used', () => {
+    expect(markupLabel(percentage)).toBe('30%');
+    expect(markupLabel(fixed)).toBe('Gs. 15.000');
   });
 });
