@@ -128,12 +128,26 @@ export class PurchaseReceiptsService {
       const allReceived = updatedItems.every(
         (i) => i.receivedQty >= i.quantity,
       );
+      const nextStatus = allReceived ? 'RECEIVED' : 'PARTIALLY_RECEIVED';
       await this.purchaseOrdersRepository.updateStatus(
         tenantId,
         orderId,
-        allReceived ? 'RECEIVED' : 'PARTIALLY_RECEIVED',
+        nextStatus,
         tx,
       );
+      // Una segunda recepción parcial no cambia el estado: no suma al historial.
+      if (nextStatus !== order.status) {
+        await this.purchaseOrdersRepository.recordStatusChange(
+          {
+            tenantId,
+            purchaseOrderId: orderId,
+            fromStatus: order.status,
+            toStatus: nextStatus,
+            changedById: userId,
+          },
+          tx,
+        );
+      }
 
       return created;
     });

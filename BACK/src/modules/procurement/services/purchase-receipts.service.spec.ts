@@ -37,6 +37,7 @@ describe('PurchaseReceiptsService', () => {
     updateItemReceivedQty: jest.Mock;
     findItems: jest.Mock;
     updateStatus: jest.Mock;
+    recordStatusChange: jest.Mock;
   };
   let purchaseReceiptsRepository: {
     nextReceiptNumber: jest.Mock;
@@ -53,6 +54,7 @@ describe('PurchaseReceiptsService', () => {
       findById: jest.fn(),
       updateItemReceivedQty: jest.fn(),
       updateStatus: jest.fn(),
+      recordStatusChange: jest.fn(),
       // Implementación real: consulta el tx que recibe (mockeado abajo).
       findItems: jest.fn((orderId: string, client: any) =>
         new PurchaseOrdersRepository({} as any).findItems(orderId, client),
@@ -170,6 +172,54 @@ describe('PurchaseReceiptsService', () => {
       'PARTIALLY_RECEIVED',
       tx,
     );
+  });
+
+  it('adds the status change to the order history', async () => {
+    purchaseOrdersRepository.findById.mockResolvedValue(
+      makeOrder({
+        status: 'CONFIRMED',
+        items: [makeOrderItem({ quantity: 10, receivedQty: 0 })],
+      }),
+    );
+    tx.purchaseOrderItem.findMany.mockResolvedValue([
+      makeOrderItem({ quantity: 10, receivedQty: 4 }),
+    ]);
+
+    await service.create(
+      'tenant-1',
+      'po-1',
+      { items: [{ purchaseOrderItemId: 'item-1', quantity: 4 }] },
+      'user-1',
+    );
+
+    expect(purchaseOrdersRepository.recordStatusChange).toHaveBeenCalledWith(
+      {
+        tenantId: 'tenant-1',
+        purchaseOrderId: 'po-1',
+        fromStatus: 'CONFIRMED',
+        toStatus: 'PARTIALLY_RECEIVED',
+        changedById: 'user-1',
+      },
+      tx,
+    );
+  });
+
+  it('does not repeat the history entry for a second partial receipt', async () => {
+    purchaseOrdersRepository.findById.mockResolvedValue(
+      makeOrder({
+        status: 'PARTIALLY_RECEIVED',
+        items: [makeOrderItem({ quantity: 10, receivedQty: 4 })],
+      }),
+    );
+    tx.purchaseOrderItem.findMany.mockResolvedValue([
+      makeOrderItem({ quantity: 10, receivedQty: 6 }),
+    ]);
+
+    await service.create('tenant-1', 'po-1', {
+      items: [{ purchaseOrderItemId: 'item-1', quantity: 2 }],
+    });
+
+    expect(purchaseOrdersRepository.recordStatusChange).not.toHaveBeenCalled();
   });
 
   it('transitions the order to RECEIVED once every item is fully received', async () => {

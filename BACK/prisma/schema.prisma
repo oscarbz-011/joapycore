@@ -85,7 +85,8 @@ enum PurchaseType {
 }
 
 enum PurchaseOrderStatus {
-  PENDING
+  PENDING // Borrador: todavía no salió hacia el proveedor
+  SENT // Enviada al proveedor, a la espera de su confirmación
   CONFIRMED
   PARTIALLY_RECEIVED
   RECEIVED
@@ -430,70 +431,71 @@ model Tenant {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  logoFile               FileRecord?             @relation("TenantLogo", fields: [logoFileId], references: [id])
-  users                  User[]
-  roles                  Role[]
-  tenantModules          TenantModule[]
-  creditNotes            CreditNote[]
-  branches               Branch[]
-  warehouses             Warehouse[]
-  loans                  Loan[]
-  installments           Installment[]
-  categories             Category[]
-  brands                 Brand[]
-  products               Product[]
-  productSuppliers       ProductSupplier[]
-  productUnits           ProductUnit[]
-  productBatches         ProductBatch[]
-  productComponents      ProductComponent[]
-  productionOrders       ProductionOrder[]
-  supplierCatalogItems   SupplierCatalogItem[]
-  stockMovements         StockMovement[]
-  posTerminals           PosTerminal[]
-  posSessions            PosSession[]
-  customers              Customer[]
-  suppliers              Supplier[]
-  purchaseOrders         PurchaseOrder[]
-  purchaseReceipts       PurchaseReceipt[]
-  saleOrders             SaleOrder[]
-  invoices               Invoice[]
-  accountsReceivable     AccountsReceivable[]
-  paymentRecords         PaymentRecord[]
-  accountsPayable        AccountsPayable[]
-  supplierPayments       SupplierPayment[]
-  areas                  Area[]
-  positions              Position[]
-  employees              Employee[]
-  payrollConfig          PayrollConfig?
-  payrollRecords         PayrollRecord[]
-  auditLogs              AuditLog[]
-  alertConfigs           AlertConfig[]
-  fileRecords            FileRecord[]
-  documents              Document[]
-  documentCategories     DocumentCategory[]
-  creditConfig           CreditConfig?
-  pricingConfig          PricingConfig?
-  salesConfig            SalesConfig?
-  saleCombos             SaleCombo[]
-  saleTargets            SaleTarget[]
-  downPayments           DownPayment[]
-  salePayments           SalePayment[]
-  deliveryNotes          DeliveryNote[]
-  deliveryTrackingEvents DeliveryTrackingEvent[]
-  collectionRoutes       CollectionRoute[]
-  collectionVisits       CollectionVisit[]
-  paymentAgreements      PaymentAgreement[]
-  collectionNotes        CollectionNote[]
-  sifenConfig            SifenConfig?
-  guarantors             Guarantor[]
-  creditBureauConfig     CreditBureauConfig?
-  creditBureauChecks     CreditBureauCheck[]
-  paymentReceipts        PaymentReceipt[]
-  interestComponents     InterestComponent[]
-  delinquencyReports     DelinquencyReport[]
-  integrations           TenantIntegration[]
-  appEmailMessages       AppEmailMessage[]
-  appEmailInboxMessages  AppEmailInboxMessage[]
+  logoFile                   FileRecord?                 @relation("TenantLogo", fields: [logoFileId], references: [id])
+  users                      User[]
+  roles                      Role[]
+  tenantModules              TenantModule[]
+  creditNotes                CreditNote[]
+  branches                   Branch[]
+  warehouses                 Warehouse[]
+  loans                      Loan[]
+  installments               Installment[]
+  categories                 Category[]
+  brands                     Brand[]
+  products                   Product[]
+  productSuppliers           ProductSupplier[]
+  productUnits               ProductUnit[]
+  productBatches             ProductBatch[]
+  productComponents          ProductComponent[]
+  productionOrders           ProductionOrder[]
+  supplierCatalogItems       SupplierCatalogItem[]
+  stockMovements             StockMovement[]
+  posTerminals               PosTerminal[]
+  posSessions                PosSession[]
+  customers                  Customer[]
+  suppliers                  Supplier[]
+  purchaseOrders             PurchaseOrder[]
+  purchaseReceipts           PurchaseReceipt[]
+  purchaseOrderStatusChanges PurchaseOrderStatusChange[]
+  saleOrders                 SaleOrder[]
+  invoices                   Invoice[]
+  accountsReceivable         AccountsReceivable[]
+  paymentRecords             PaymentRecord[]
+  accountsPayable            AccountsPayable[]
+  supplierPayments           SupplierPayment[]
+  areas                      Area[]
+  positions                  Position[]
+  employees                  Employee[]
+  payrollConfig              PayrollConfig?
+  payrollRecords             PayrollRecord[]
+  auditLogs                  AuditLog[]
+  alertConfigs               AlertConfig[]
+  fileRecords                FileRecord[]
+  documents                  Document[]
+  documentCategories         DocumentCategory[]
+  creditConfig               CreditConfig?
+  pricingConfig              PricingConfig?
+  salesConfig                SalesConfig?
+  saleCombos                 SaleCombo[]
+  saleTargets                SaleTarget[]
+  downPayments               DownPayment[]
+  salePayments               SalePayment[]
+  deliveryNotes              DeliveryNote[]
+  deliveryTrackingEvents     DeliveryTrackingEvent[]
+  collectionRoutes           CollectionRoute[]
+  collectionVisits           CollectionVisit[]
+  paymentAgreements          PaymentAgreement[]
+  collectionNotes            CollectionNote[]
+  sifenConfig                SifenConfig?
+  guarantors                 Guarantor[]
+  creditBureauConfig         CreditBureauConfig?
+  creditBureauChecks         CreditBureauCheck[]
+  paymentReceipts            PaymentReceipt[]
+  interestComponents         InterestComponent[]
+  delinquencyReports         DelinquencyReport[]
+  integrations               TenantIntegration[]
+  appEmailMessages           AppEmailMessage[]
+  appEmailInboxMessages      AppEmailInboxMessage[]
 
   @@map("tenants")
 }
@@ -626,34 +628,35 @@ model User {
   updatedAt             DateTime   @updatedAt @map("updated_at")
   deletedAt             DateTime?  @map("deleted_at")
 
-  tenant                         Tenant                  @relation(fields: [tenantId], references: [id])
-  branch                         Branch?                 @relation(fields: [branchId], references: [id])
+  tenant                         Tenant                      @relation(fields: [tenantId], references: [id])
+  branch                         Branch?                     @relation(fields: [branchId], references: [id])
   userRoles                      UserRole[]
   userPermissions                UserPermission[]
   refreshTokens                  RefreshToken[]
   employee                       Employee?
   auditLogs                      AuditLog[]
-  createdSaleOrders              SaleOrder[]             @relation("SaleCreator")
-  selledSaleOrders               SaleOrder[]             @relation("SaleSeller")
-  approvedSaleOrders             SaleOrder[]             @relation("CreditApprover")
-  rejectedSaleOrders             SaleOrder[]             @relation("CreditRejecter")
-  registeredDownPayments         DownPayment[]           @relation("DownPaymentRegistrar")
-  collectedSalePayments          SalePayment[]           @relation("SalePaymentCollector")
+  createdSaleOrders              SaleOrder[]                 @relation("SaleCreator")
+  selledSaleOrders               SaleOrder[]                 @relation("SaleSeller")
+  approvedSaleOrders             SaleOrder[]                 @relation("CreditApprover")
+  rejectedSaleOrders             SaleOrder[]                 @relation("CreditRejecter")
+  registeredDownPayments         DownPayment[]               @relation("DownPaymentRegistrar")
+  collectedSalePayments          SalePayment[]               @relation("SalePaymentCollector")
   saleTargets                    SaleTarget[]
-  collectionRoutesAsCollector    CollectionRoute[]       @relation("RouteCollector")
-  closedCollectionRoutes         CollectionRoute[]       @relation("RouteClosedBy")
-  createdCollectionRoutes        CollectionRoute[]       @relation("RouteCreatedBy")
-  approvedAgreements             PaymentAgreement[]      @relation("AgreementApprovedBy")
-  createdAgreements              PaymentAgreement[]      @relation("AgreementCreatedBy")
-  createdCollectionNotes         CollectionNote[]        @relation("NoteCreatedBy")
-  posSessionsAsCashier           PosSession[]            @relation("SessionCashier")
+  collectionRoutesAsCollector    CollectionRoute[]           @relation("RouteCollector")
+  closedCollectionRoutes         CollectionRoute[]           @relation("RouteClosedBy")
+  createdCollectionRoutes        CollectionRoute[]           @relation("RouteCreatedBy")
+  approvedAgreements             PaymentAgreement[]          @relation("AgreementApprovedBy")
+  createdAgreements              PaymentAgreement[]          @relation("AgreementCreatedBy")
+  createdCollectionNotes         CollectionNote[]            @relation("NoteCreatedBy")
+  posSessionsAsCashier           PosSession[]                @relation("SessionCashier")
   collectedPaymentReceipts       PaymentReceipt[]
   createdPurchaseReceipts        PurchaseReceipt[]
+  purchaseOrderStatusChanges     PurchaseOrderStatusChange[]
   createdProductionOrders        ProductionOrder[]
   recordedDeliveryTrackingEvents DeliveryTrackingEvent[]
   createdSupplierPayments        SupplierPayment[]
-  reviewedDelinquencyReports     DelinquencyReport[]     @relation("DelinquencyReportReviewedBy")
-  sentAppEmailMessages           AppEmailMessage[]       @relation("AppEmailSender")
+  reviewedDelinquencyReports     DelinquencyReport[]         @relation("DelinquencyReportReviewedBy")
+  sentAppEmailMessages           AppEmailMessage[]           @relation("AppEmailSender")
 
   @@index([tenantId])
   @@map("users")
@@ -1092,16 +1095,39 @@ model PurchaseOrder {
   createdAt    DateTime            @default(now()) @map("created_at")
   updatedAt    DateTime            @updatedAt @map("updated_at")
 
-  tenant   Tenant              @relation(fields: [tenantId], references: [id])
-  supplier Supplier            @relation(fields: [supplierId], references: [id])
-  branch   Branch?             @relation(fields: [branchId], references: [id])
-  items    PurchaseOrderItem[]
-  receipts PurchaseReceipt[]
+  tenant        Tenant                      @relation(fields: [tenantId], references: [id])
+  supplier      Supplier                    @relation(fields: [supplierId], references: [id])
+  branch        Branch?                     @relation(fields: [branchId], references: [id])
+  items         PurchaseOrderItem[]
+  receipts      PurchaseReceipt[]
+  statusChanges PurchaseOrderStatusChange[]
 
   @@unique([tenantId, orderNumber])
   @@index([tenantId, status])
   @@index([supplierId])
   @@map("purchase_orders")
+}
+
+// Historial de estados de la orden: quién la movió, cuándo y por qué. Es la
+// trazabilidad de la orden; el estado actual sigue viviendo en PurchaseOrder.
+model PurchaseOrderStatusChange {
+  id              String               @id @default(uuid())
+  tenantId        String               @map("tenant_id")
+  purchaseOrderId String               @map("purchase_order_id")
+  // null en la primera entrada (alta de la orden).
+  fromStatus      PurchaseOrderStatus? @map("from_status")
+  toStatus        PurchaseOrderStatus  @map("to_status")
+  // Obligatorio al cancelar.
+  reason          String?
+  changedById     String?              @map("changed_by_id")
+  createdAt       DateTime             @default(now()) @map("created_at")
+
+  tenant        Tenant        @relation(fields: [tenantId], references: [id])
+  purchaseOrder PurchaseOrder @relation(fields: [purchaseOrderId], references: [id])
+  changedBy     User?         @relation(fields: [changedById], references: [id])
+
+  @@index([tenantId, purchaseOrderId])
+  @@map("purchase_order_status_changes")
 }
 
 model PurchaseOrderItem {
