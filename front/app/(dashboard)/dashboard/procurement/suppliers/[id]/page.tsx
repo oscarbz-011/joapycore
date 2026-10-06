@@ -14,12 +14,12 @@ import {
   Trash2, TriangleAlert, Unlink, Upload, X,
 } from 'lucide-react';
 import { NumericInput } from '../../../../../../components/numeric-input';
-import { inventoryApi, type Product } from '../../../../../../lib/api/inventory';
 import {
   procurementApi,
   type CatalogImportResult,
   type SupplierCatalogItem,
 } from '../../../../../../lib/api/procurement';
+import { CatalogMapDialog } from '@/components/procurement/catalog-map-dialog';
 import { SupplierDialog } from '@/components/procurement/supplier-dialog';
 import { SupplierSummary } from '@/components/procurement/supplier-summary';
 import { Badge } from '@/components/ui/badge';
@@ -42,114 +42,6 @@ function fmtGs(n: number) {
 }
 
 type MapFilter = 'all' | 'unmapped';
-
-// ── Vincular a un producto interno ─────────────────────────────────────────────
-
-// Un buscador y no un Select: el catálogo interno puede tener cientos de fichas
-// y el ítem del proveedor ya trae la descripción para arrancar la búsqueda.
-function MapDialog({
-  item,
-  onClose,
-}: {
-  item: SupplierCatalogItem;
-  onClose: () => void;
-}) {
-  const queryClient = useQueryClient();
-  const [search, setSearch] = useState('');
-  const [error, setError] = useState('');
-
-  const { data: products = [], isLoading } = useQuery({
-    queryKey: ['products-active-for-mapping'],
-    queryFn: () => inventoryApi.listProducts({ status: 'ACTIVE' }),
-  });
-
-  const mutation = useMutation({
-    mutationFn: (productId: string) => procurementApi.mapCatalogItem(item.id, productId),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['supplier-catalog'] });
-      onClose();
-    },
-    onError: (err) => setError(apiErrorMessage(err, 'No se pudo vincular el producto')),
-  });
-
-  const q = search.trim().toLowerCase();
-  const matches = (q
-    ? products.filter((p: Product) =>
-        `${p.name} ${p.model ?? ''} ${p.brand?.name ?? ''}`.toLowerCase().includes(q))
-    : products
-  ).slice(0, 60);
-
-  return (
-    <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
-      <DialogContent showCloseButton={false} className="flex flex-col gap-0 sm:max-w-lg p-0 overflow-hidden">
-        <DialogHeader className="flex-row items-center justify-between border-b border-border px-5 py-4">
-          <DialogTitle>Vincular a un producto</DialogTitle>
-          <Button variant="ghost" size="icon-sm" onClick={onClose}>
-            <X size={16} />
-          </Button>
-        </DialogHeader>
-
-        <div className="px-5 py-4 space-y-3">
-          <div className="rounded-xl border border-border bg-muted/20 px-3 py-2">
-            <p className="font-mono text-xs text-muted-foreground/60">{item.supplierSku}</p>
-            <p className="text-sm text-foreground">{item.description}</p>
-          </div>
-
-          <div className="relative">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground/50" />
-            <Input
-              className="pl-8"
-              autoFocus
-              placeholder="Buscar producto por nombre, modelo o marca..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-          </div>
-
-          {error && (
-            <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
-              {error}
-            </div>
-          )}
-
-          <div className="max-h-72 overflow-y-auto rounded-xl border border-border">
-            {isLoading ? (
-              <p className="px-3 py-8 text-center text-sm text-muted-foreground/60">Cargando productos...</p>
-            ) : matches.length === 0 ? (
-              <p className="px-3 py-8 text-center text-sm text-muted-foreground/60">
-                No hay productos activos que coincidan.
-              </p>
-            ) : (
-              <ul className="divide-y divide-border">
-                {matches.map((p) => (
-                  <li key={p.id}>
-                    <button
-                      type="button"
-                      disabled={mutation.isPending}
-                      onClick={() => mutation.mutate(p.id)}
-                      className="w-full px-3 py-2.5 text-left hover:bg-muted/30 transition-colors disabled:opacity-50"
-                    >
-                      <p className="text-sm font-medium text-foreground truncate">{p.name}</p>
-                      <p className="text-xs text-muted-foreground/60 truncate">
-                        {[p.model, p.brand?.name, p.unit].filter(Boolean).join(' · ')}
-                      </p>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-
-          {!isLoading && products.length > matches.length && (
-            <p className="text-xs text-muted-foreground/60">
-              Mostrando {matches.length} de {products.length} productos. Afiná la búsqueda para ver el resto.
-            </p>
-          )}
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
-}
 
 // ── Editar un ítem del catálogo ────────────────────────────────────────────────
 
@@ -731,7 +623,7 @@ export default function SupplierDetailPage() {
         </>
       )}
 
-      {mapTarget && <MapDialog item={mapTarget} onClose={() => setMapTarget(null)} />}
+      {mapTarget && <CatalogMapDialog item={mapTarget} onClose={() => setMapTarget(null)} />}
       {editTarget && <EditItemDialog item={editTarget} onClose={() => setEditTarget(null)} />}
       {deleteTarget && <DeleteItemDialog item={deleteTarget} onClose={() => setDeleteTarget(null)} />}
     </div>

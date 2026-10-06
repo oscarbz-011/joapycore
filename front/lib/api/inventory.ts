@@ -75,6 +75,8 @@ export interface Product {
   kind: ProductKind;
   isPurchasable: boolean;
   salesChannels: OrderChannel[];
+  // Canales que se habilitan solos al recibir la primera mercadería.
+  salesChannelsOnReceipt: OrderChannel[];
   deletedAt: string | null;
   category: { id: string; name: string } | null;
   brand: { id: string; name: string } | null;
@@ -106,7 +108,7 @@ export interface ProductFilters {
 
 export interface CreateProductPayload {
   categoryId: string;
-  brandId: string;
+  brandId?: string;
   name: string;
   model?: string;
   description?: string;
@@ -122,6 +124,8 @@ export interface CreateProductPayload {
   kind?: ProductKind;
   isPurchasable?: boolean;
   salesChannels?: OrderChannel[];
+  // Deja los canales de venta en espera hasta la primera recepción.
+  sellOnFirstReceipt?: boolean;
 }
 
 export type UpdateProductPayload =
