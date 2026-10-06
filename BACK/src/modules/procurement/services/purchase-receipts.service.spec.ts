@@ -149,6 +149,24 @@ describe('PurchaseReceiptsService', () => {
     ).rejects.toBeInstanceOf(UnprocessableEntityException);
   });
 
+  // La mercadería de un producto en borrador entraría al stock sin precio de
+  // venta ni categoría: se completa la ficha antes de recibir.
+  it('does not receive goods of a product whose record is incomplete', async () => {
+    const item = makeOrderItem({ quantity: 10, receivedQty: 0 });
+    purchaseOrdersRepository.findById.mockResolvedValue(
+      makeOrder({
+        items: [{ ...item, product: { ...item.product, status: 'DRAFT' } }],
+      }),
+    );
+
+    await expect(
+      service.create('tenant-1', 'po-1', {
+        items: [{ purchaseOrderItemId: 'item-1', quantity: 4 }],
+      }),
+    ).rejects.toThrow(/Completá la ficha/);
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
   it('creates a partial receipt and leaves the order PARTIALLY_RECEIVED', async () => {
     purchaseOrdersRepository.findById.mockResolvedValue(
       makeOrder({ items: [makeOrderItem({ quantity: 10, receivedQty: 0 })] }),

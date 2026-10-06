@@ -4,6 +4,7 @@ import {
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
+import { ProductStatus } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { PurchaseOrdersRepository } from '../repositories/purchase-orders.repository';
 import { PurchaseReceiptsRepository } from '../repositories/purchase-receipts.repository';
@@ -51,6 +52,22 @@ export class PurchaseReceiptsService {
 
     const seen = new Set<string>();
     const itemsById = new Map(order.items.map((i) => [i.id, i]));
+
+    // La orden admite productos en borrador, pero la mercadería no entra al
+    // stock de una ficha incompleta (sin categoría o sin precio de venta).
+    const drafts = [
+      ...new Set(
+        dto.items
+          .map((line) => itemsById.get(line.purchaseOrderItemId)?.product)
+          .filter((product) => product?.status === ProductStatus.DRAFT)
+          .map((product) => product!.name),
+      ),
+    ];
+    if (drafts.length) {
+      throw new UnprocessableEntityException(
+        `Completá la ficha de ${drafts.join(', ')} antes de recibir la mercadería: le falta categoría o precio de venta`,
+      );
+    }
     for (const line of dto.items) {
       if (seen.has(line.purchaseOrderItemId)) {
         throw new UnprocessableEntityException(
