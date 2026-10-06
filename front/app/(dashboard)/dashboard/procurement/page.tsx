@@ -287,7 +287,7 @@ function CreateOrderModal({
                 target="_blank"
                 className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2"
               >
-                Comparar precios por proveedor
+                Comparar proveedores
               </Link>
             </div>
             {items.length === 0 ? (
