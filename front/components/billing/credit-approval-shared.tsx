@@ -3,14 +3,14 @@
 import { apiErrorMessage } from '@/lib/api/api-error';
 
 import { useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ChevronDown, ChevronUp, AlertTriangle, ShieldAlert, X } from 'lucide-react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { ShieldAlert, X } from 'lucide-react';
 import {
   salesApi,
   type SaleOrder,
   type SaleOrderItem,
   type CreditAdjustmentSuggestion,
-  type CreditRating,
+  type IncomeCapacity,
 } from '../../lib/api/sales';
 import { creditBureauApi } from '../../lib/api/credit-bureau';
 import { formatDatePY } from '../../lib/date';
@@ -64,20 +64,6 @@ export function orderTotal(order: SaleOrder) {
 }
 
 export const TEXTAREA_CLS = 'w-full min-w-0 rounded-2xl border border-transparent bg-input/50 px-3 py-2 text-sm outline-none resize-none transition-[color,box-shadow,background-color] focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30';
-
-export const RATING_STYLES: Record<CreditRating, string> = {
-  SIN_HISTORIAL: 'bg-muted/40 text-muted-foreground',
-  BUENO: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400',
-  REGULAR: 'bg-amber-500/15 text-amber-600 dark:text-amber-400',
-  RIESGO: 'bg-destructive/15 text-destructive',
-};
-
-export const RATING_LABELS: Record<CreditRating, string> = {
-  SIN_HISTORIAL: 'Sin historial',
-  BUENO: 'Bueno',
-  REGULAR: 'Regular',
-  RIESGO: 'Riesgo',
-};
 
 export const ADJUSTMENT_OPTIONS: { value: CreditAdjustmentSuggestion; label: string }[] = [
   { value: 'LOWER_VALUE_PRODUCT', label: 'Ofrecer un producto de menor valor' },
@@ -327,136 +313,43 @@ export function BureauCheckForm({ order }: { order: SaleOrder }) {
   );
 }
 
-// ── Credit history panel ────────────────────────────────────────────────────────
-// collapsible=false lo usa la vista de detalle a página completa, donde hay
-// espacio de sobra y no tiene sentido esconder la información por defecto.
+// ── Capacidad de pago por sueldo ────────────────────────────────────────────────
 
-export function CreditHistorySection({ order, collapsible = true }: { order: SaleOrder; collapsible?: boolean }) {
-  const [open, setOpen] = useState(true);
-  const isOpen = collapsible ? open : true;
-
-  const { data: evaluation, isLoading } = useQuery({
-    queryKey: ['credit-evaluation', order.id],
-    queryFn: () => salesApi.getCreditEvaluation(order.id),
-  });
-
+export function IncomeCapacityBlock({ capacity }: { capacity: IncomeCapacity }) {
+  if (!capacity.applicable) return null;
+  const row = 'flex justify-between gap-3';
   return (
-    <div className="rounded-xl border border-border mb-4">
-      {collapsible ? (
-        <button
-          type="button"
-          onClick={() => setOpen((o) => !o)}
-          className="flex w-full items-center justify-between px-3 py-2 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
-        >
-          <span className="flex items-center gap-2">
-            Historial crediticio
-            {evaluation && !isLoading && (
-              <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${RATING_STYLES[evaluation.history.rating]}`}>
-                {RATING_LABELS[evaluation.history.rating]}
-              </span>
-            )}
-          </span>
-          {open ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-        </button>
-      ) : (
-        <div className="flex items-center gap-2 px-4 py-3">
-          <span className="text-sm font-medium text-foreground">Historial crediticio</span>
-          {evaluation && !isLoading && (
-            <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${RATING_STYLES[evaluation.history.rating]}`}>
-              {RATING_LABELS[evaluation.history.rating]}
-            </span>
-          )}
-        </div>
+    <div className={`rounded-xl p-3 text-xs ${capacity.exceeds ? 'bg-destructive/10' : 'bg-muted/30'}`}>
+      <p className="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+        Capacidad de pago
+      </p>
+      <div className={row}>
+        <span className="text-muted-foreground">
+          Ingreso declarado{capacity.guarantorIncome > 0 ? ' (cliente + garante)' : ''}
+        </span>
+        <span className="tabular-nums text-foreground">{formatPrice(capacity.monthlyIncome!)}</span>
+      </div>
+      {capacity.guarantorIncome > 0 && (
+        <p className="text-muted-foreground/70">
+          · Cliente {formatPrice(capacity.customerIncome ?? 0)} + Garante {formatPrice(capacity.guarantorIncome)}
+        </p>
       )}
-
-      {isOpen && (
-        <div className={collapsible ? 'border-t border-border px-3 py-3 space-y-3' : 'border-t border-border px-4 py-4 space-y-4'}>
-          {isLoading || !evaluation ? (
-            <div className="h-16 animate-pulse rounded-lg bg-muted/30" />
-          ) : (
-            <>
-              {evaluation.history.overdueCount > 0 && (
-                <p className="flex items-center gap-1.5 text-xs text-destructive">
-                  <AlertTriangle size={12} />
-                  {evaluation.history.overdueCount} cuota(s) vencida(s) por {formatPrice(evaluation.history.overdueAmount)}
-                </p>
-              )}
-
-              {evaluation.history.activeLoans.length > 0 && (
-                <div className="space-y-2">
-                  <p className="text-[11px] font-medium text-muted-foreground/70 uppercase tracking-wide">Otros créditos activos</p>
-                  {evaluation.history.activeLoans.map((loan) => (
-                    <div key={loan.loanId} className="text-xs border-b border-border/50 last:border-0 pb-1.5 last:pb-0">
-                      <div className="flex items-center justify-between">
-                        <span className="text-foreground font-medium truncate flex-1">{loan.productNames.join(', ')}</span>
-                        <span className="text-muted-foreground ml-2 shrink-0 tabular-nums">{formatPrice(loan.totalAmount)}</span>
-                      </div>
-                      <div className="flex items-center justify-between text-muted-foreground mt-0.5">
-                        <span>{loan.installmentsPaid}/{loan.totalInstallments} cuotas · {formatPrice(loan.monthlyInstallment)}/mes · {formatPrice(loan.outstandingBalance)} pend.</span>
-                      </div>
-                      <div className="text-muted-foreground/70 mt-0.5">Compra: {formatDateShortLocal(loan.startDate)}</div>
-                      <div className="text-muted-foreground/70 mt-0.5">
-                        1ª cuota: {loan.firstDueDate ? formatDateShort(loan.firstDueDate) : '—'} → última: {loan.finalDueDate ? formatDateShort(loan.finalDueDate) : '—'}
-                      </div>
-                      {loan.nextDueDate && (
-                        <div className="text-muted-foreground/70 mt-0.5">Próx. vence: {formatDateShort(loan.nextDueDate)}</div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {evaluation.capacity.applicable && (
-                <div className={`rounded-lg p-2.5 text-xs ${evaluation.capacity.exceeds ? 'bg-destructive/10' : 'bg-muted/30'}`}>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">
-                      Ingreso declarado{evaluation.capacity.guarantorIncome > 0 ? ' (cliente + garante)' : ''}
-                    </span>
-                    <span className="tabular-nums text-foreground">{formatPrice(evaluation.capacity.monthlyIncome!)}</span>
-                  </div>
-                  {evaluation.capacity.guarantorIncome > 0 && (
-                    <div className="flex justify-between text-muted-foreground/70">
-                      <span>· Cliente {formatPrice(evaluation.capacity.customerIncome ?? 0)} + Garante {formatPrice(evaluation.capacity.guarantorIncome)}</span>
-                    </div>
-                  )}
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Máximo permitido ({evaluation.capacity.maxIncomePercentage}%)</span>
-                    <span className="tabular-nums text-foreground">{formatPrice(evaluation.capacity.maxAllowed!)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Compromiso actual</span>
-                    <span className="tabular-nums text-foreground">{formatPrice(evaluation.capacity.currentCommitment)}</span>
-                  </div>
-                  <div className="flex justify-between font-medium">
-                    <span className={evaluation.capacity.exceeds ? 'text-destructive' : 'text-foreground'}>Esta solicitud</span>
-                    <span className={`tabular-nums ${evaluation.capacity.exceeds ? 'text-destructive' : 'text-foreground'}`}>
-                      {formatPrice(evaluation.capacity.proposedMonthlyPayment)}
-                    </span>
-                  </div>
-                  {evaluation.capacity.exceeds && (
-                    <p className="mt-1 text-destructive">Supera la capacidad de pago disponible ({formatPrice(evaluation.capacity.available!)}).</p>
-                  )}
-                </div>
-              )}
-
-              {evaluation.bureau.latestResult === 'FLAGGED' && (
-                <p className="flex items-center gap-1.5 text-xs text-destructive">
-                  <ShieldAlert size={12} />
-                  Cliente reportado en el buró de crédito
-                </p>
-              )}
-
-              {evaluation.bureau.required && <BureauCheckForm order={order} />}
-
-              {evaluation.history.rating === 'SIN_HISTORIAL' &&
-                evaluation.history.overdueCount === 0 &&
-                !evaluation.capacity.applicable &&
-                !evaluation.bureau.required && (
-                  <p className="text-xs text-muted-foreground/60">Sin historial crediticio previo ni datos de sueldo para evaluar capacidad.</p>
-                )}
-            </>
-          )}
-        </div>
+      <div className={row}>
+        <span className="text-muted-foreground">Máximo permitido ({capacity.maxIncomePercentage}%)</span>
+        <span className="tabular-nums text-foreground">{formatPrice(capacity.maxAllowed!)}</span>
+      </div>
+      <div className={row}>
+        <span className="text-muted-foreground">Compromiso actual</span>
+        <span className="tabular-nums text-foreground">{formatPrice(capacity.currentCommitment)}</span>
+      </div>
+      <div className={`${row} mt-1 border-t border-border/60 pt-1 text-sm font-semibold ${capacity.exceeds ? 'text-destructive' : 'text-foreground'}`}>
+        <span>Esta solicitud</span>
+        <span className="tabular-nums">{formatPrice(capacity.proposedMonthlyPayment)}</span>
+      </div>
+      {capacity.exceeds && (
+        <p className="mt-1 text-destructive">
+          Supera la capacidad de pago disponible ({formatPrice(capacity.available!)}).
+        </p>
       )}
     </div>
   );

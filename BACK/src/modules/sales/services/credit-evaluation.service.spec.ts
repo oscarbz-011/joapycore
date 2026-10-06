@@ -11,6 +11,7 @@ function makeLoan(overrides = {}) {
     installments: [],
     saleOrder: {
       items: [{ product: { name: 'Heladera' }, description: null }],
+      invoice: { id: 'inv-1', invoiceNumber: '001-001-0000123' },
     },
     ...overrides,
   };
@@ -54,188 +55,328 @@ describe('CreditEvaluationService', () => {
   // ── getCustomerCreditHistory ─────────────────────────────────────────────
 
   describe('getCustomerCreditHistory', () => {
-    it('rates SIN_HISTORIAL when the customer never had a loan', async () => {
+    const today = new Date('2026-10-01T12:00:00Z');
+    const history = () =>
+      service.getCustomerCreditHistory('tenant-1', 'cust-1', today);
+    const paid = (dueDate: string, paidAt: string, overrides = {}) =>
+      makeInstallment({
+        status: 'PAID',
+        paidAmount: 100_000,
+        dueDate: new Date(dueDate),
+        paidAt: new Date(paidAt),
+        ...overrides,
+      });
+
+    it('has no score when the customer never had a loan', async () => {
       prisma.loan.findMany.mockResolvedValue([]);
 
-      const result = await service.getCustomerCreditHistory(
-        'tenant-1',
-        'cust-1',
-      );
+      const result = await history();
 
-      expect(result.rating).toBe('SIN_HISTORIAL');
+      expect(result.score).toBeNull();
+      expect(result.averageDelayDays).toBeNull();
       expect(result.activeLoans).toEqual([]);
+      expect(result.finishedLoans).toEqual([]);
     });
 
-    it('rates BUENO when there is history and no installment was ever late', async () => {
+    it('has no score while no installment is due or paid yet', async () => {
       prisma.loan.findMany.mockResolvedValue([
         makeLoan({
-          installments: [
-            makeInstallment({ status: 'PAID', paidAmount: 100_000 }),
-          ],
+          installments: [makeInstallment({ dueDate: new Date('2026-11-05') })],
         }),
       ]);
 
-      const result = await service.getCustomerCreditHistory(
-        'tenant-1',
-        'cust-1',
-      );
+      const result = await history();
 
-      expect(result.rating).toBe('BUENO');
+      expect(result.score).toBeNull();
+      expect(result.activeLoans).toHaveLength(1);
+    });
+
+    it('rates 1 when every installment was paid on time', async () => {
+      prisma.loan.findMany.mockResolvedValue([
+        makeLoan({ installments: [paid('2026-09-05', '2026-09-03')] }),
+      ]);
+
+      const result = await history();
+
+      expect(result.score).toBe(1);
+      expect(result.averageDelayDays).toBe(0);
       expect(result.overdueCount).toBe(0);
     });
 
-    it('rates REGULAR when nothing is overdue now but some installment was paid late in the past', async () => {
+    it('rates by the average delay over every evaluable installment of every loan', async () => {
       prisma.loan.findMany.mockResolvedValue([
         makeLoan({
+          id: 'loan-a',
           installments: [
-            makeInstallment({
-              status: 'PAID',
-              paidAmount: 100_000,
-              dueDate: new Date('2026-09-01'),
-              paidAt: new Date('2026-09-05'),
-            }),
+            paid('2026-08-05', '2026-08-05', { number: 1 }),
+            paid('2026-09-05', '2026-09-25', { number: 2 }),
+            makeInstallment({ number: 3, dueDate: new Date('2026-10-05') }),
           ],
+        }),
+        makeLoan({
+          id: 'loan-b',
+          status: 'PAID',
+          installments: [paid('2026-05-05', '2026-05-15')],
         }),
       ]);
 
-      const result = await service.getCustomerCreditHistory(
-        'tenant-1',
-        'cust-1',
-      );
+      const result = await history();
 
-      expect(result.rating).toBe('REGULAR');
+      // (0 + 20 + 10) / 3 = 10 días → nivel 3 con los rangos por defecto.
+      expect(result.averageDelayDays).toBe(10);
+      expect(result.score).toBe(3);
+      expect(result.activeLoans[0]).toMatchObject({
+        loanId: 'loan-a',
+        averageDelayDays: 10,
+        maxDelayDays: 20,
+        lateInstallments: 1,
+      });
+      expect(result.finishedLoans[0]).toMatchObject({
+        loanId: 'loan-b',
+        averageDelayDays: 10,
+      });
     });
 
-    it('rates RIESGO when there is at least one currently overdue installment', async () => {
+    it('counts an unpaid overdue installment up to today', async () => {
       prisma.loan.findMany.mockResolvedValue([
         makeLoan({
           installments: [
             makeInstallment({
               status: 'OVERDUE',
-              amount: 100_000,
-              paidAmount: 0,
+              dueDate: new Date('2026-09-21'),
+              paidAmount: 40_000,
             }),
           ],
         }),
       ]);
 
-      const result = await service.getCustomerCreditHistory(
-        'tenant-1',
-        'cust-1',
-      );
+      const result = await history();
 
-      expect(result.rating).toBe('RIESGO');
+      expect(result.averageDelayDays).toBe(10);
       expect(result.overdueCount).toBe(1);
-      expect(result.overdueAmount).toBe(100_000);
+      expect(result.overdueAmount).toBe(60_000);
     });
 
-    it('computes outstanding balance from totalAmount minus paid installments, not the original amount', async () => {
+    it('uses the delay ranges configured by the tenant', async () => {
+      prisma.creditConfig.findUnique.mockResolvedValue({
+        ratingDelayThresholds: [2, 4, 6, 8],
+        uncollectibleAfterDays: null,
+      });
+      prisma.loan.findMany.mockResolvedValue([
+        makeLoan({ installments: [paid('2026-09-05', '2026-09-12')] }),
+      ]);
+
+      await expect(history()).resolves.toMatchObject({
+        averageDelayDays: 7,
+        score: 4,
+      });
+      expect(prisma.creditConfig.findUnique).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { tenantId: 'tenant-1' } }),
+      );
+    });
+
+    it('rates 6 when the customer is manually marked as uncollectible, even without loans', async () => {
+      prisma.loan.findMany.mockResolvedValue([]);
+      prisma.customer.findFirst.mockResolvedValue({
+        uncollectibleAt: new Date('2026-09-30'),
+        uncollectibleReason: 'En gestión judicial',
+      });
+
+      const result = await history();
+
+      expect(result.score).toBe(6);
+      expect(result.uncollectible).toEqual({
+        manual: {
+          markedAt: new Date('2026-09-30'),
+          reason: 'En gestión judicial',
+        },
+        automatic: false,
+      });
+      expect(prisma.customer.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'cust-1', tenantId: 'tenant-1' },
+        }),
+      );
+    });
+
+    it('rates 6 automatically while an unpaid installment exceeds the configured days', async () => {
+      prisma.creditConfig.findUnique.mockResolvedValue({
+        ratingDelayThresholds: [0, 5, 15, 30],
+        uncollectibleAfterDays: 90,
+      });
       prisma.loan.findMany.mockResolvedValue([
         makeLoan({
-          totalAmount: 900_000,
-          totalInstallments: 9,
           installments: [
-            makeInstallment({ status: 'PAID', paidAmount: 800_000 }),
             makeInstallment({
-              status: 'PENDING',
-              amount: 100_000,
-              paidAmount: 0,
+              status: 'OVERDUE',
+              dueDate: new Date('2026-06-01'),
             }),
           ],
         }),
       ]);
 
-      const result = await service.getCustomerCreditHistory(
-        'tenant-1',
-        'cust-1',
-      );
+      const result = await history();
 
-      expect(result.activeLoans[0].outstandingBalance).toBe(100_000);
+      expect(result.score).toBe(6);
+      expect(result.uncollectible).toEqual({ manual: null, automatic: true });
     });
 
-    it('reports installments paid, total installments, start date and final due date', async () => {
+    it('leaves level 6 once the long overdue installment is paid', async () => {
+      prisma.creditConfig.findUnique.mockResolvedValue({
+        ratingDelayThresholds: [0, 5, 15, 30],
+        uncollectibleAfterDays: 90,
+      });
+      prisma.loan.findMany.mockResolvedValue([
+        makeLoan({ installments: [paid('2026-06-01', '2026-09-30')] }),
+      ]);
+
+      const result = await history();
+
+      expect(result.uncollectible.automatic).toBe(false);
+      expect(result.score).toBe(5);
+    });
+
+    it('never rates 6 automatically when the tenant did not configure the days', async () => {
+      prisma.loan.findMany.mockResolvedValue([
+        makeLoan({
+          installments: [
+            makeInstallment({
+              status: 'OVERDUE',
+              dueDate: new Date('2025-01-01'),
+            }),
+          ],
+        }),
+      ]);
+
+      await expect(history()).resolves.toMatchObject({ score: 5 });
+    });
+
+    it('separates active from finished loans and ignores cancelled ones', async () => {
+      prisma.loan.findMany.mockResolvedValue([
+        makeLoan({ id: 'active' }),
+        makeLoan({
+          id: 'finished',
+          status: 'PAID',
+          installments: [paid('2026-09-05', '2026-09-05')],
+        }),
+        makeLoan({
+          id: 'cancelled',
+          status: 'CANCELLED',
+          installments: [
+            makeInstallment({
+              status: 'OVERDUE',
+              dueDate: new Date('2026-01-01'),
+            }),
+          ],
+        }),
+      ]);
+
+      const result = await history();
+
+      expect(result.activeLoans.map((loan) => loan.loanId)).toEqual(['active']);
+      expect(result.finishedLoans.map((loan) => loan.loanId)).toEqual([
+        'finished',
+      ]);
+      expect(result.overdueCount).toBe(0);
+      expect(result.score).toBe(1);
+    });
+
+    it('ties each loan to its invoice and details every installment', async () => {
+      prisma.loan.findMany.mockResolvedValue([
+        makeLoan({
+          totalAmount: 200_000,
+          totalInstallments: 2,
+          installments: [
+            paid('2026-08-05', '2026-08-08', { number: 1 }),
+            makeInstallment({
+              number: 2,
+              status: 'PARTIAL',
+              paidAmount: 30_000,
+              dueDate: new Date('2026-11-05'),
+            }),
+          ],
+        }),
+      ]);
+
+      const [loan] = (await history()).activeLoans;
+
+      expect(loan).toMatchObject({
+        invoiceId: 'inv-1',
+        invoiceNumber: '001-001-0000123',
+        productNames: ['Heladera'],
+        totalAmount: 200_000,
+        paidAmount: 130_000,
+        outstandingBalance: 70_000,
+      });
+      expect(loan.installments).toEqual([
+        {
+          number: 1,
+          dueDate: new Date('2026-08-05'),
+          amount: 100_000,
+          paidAmount: 100_000,
+          balance: 0,
+          paidAt: new Date('2026-08-08'),
+          status: 'PAID',
+          delayDays: 3,
+        },
+        {
+          number: 2,
+          dueDate: new Date('2026-11-05'),
+          amount: 100_000,
+          paidAmount: 30_000,
+          balance: 70_000,
+          paidAt: null,
+          status: 'PARTIAL',
+          delayDays: null,
+        },
+      ]);
+    });
+
+    it('has no invoice when the sale was not invoiced yet', async () => {
+      prisma.loan.findMany.mockResolvedValue([
+        makeLoan({
+          saleOrder: {
+            items: [{ product: null, description: 'Servicio' }],
+            invoice: null,
+          },
+        }),
+      ]);
+
+      const [loan] = (await history()).activeLoans;
+
+      expect(loan).toMatchObject({
+        invoiceId: null,
+        invoiceNumber: null,
+        productNames: ['Servicio'],
+      });
+    });
+
+    it('reports installments paid, total installments, start date and due date range', async () => {
       prisma.loan.findMany.mockResolvedValue([
         makeLoan({
           totalAmount: 600_000,
           totalInstallments: 6,
           createdAt: new Date('2026-01-16'),
           installments: [
-            makeInstallment({
-              number: 1,
-              status: 'PAID',
-              paidAmount: 100_000,
-              dueDate: new Date('2026-02-16'),
-            }),
-            makeInstallment({
-              number: 2,
-              status: 'PAID',
-              paidAmount: 100_000,
-              dueDate: new Date('2026-03-16'),
-            }),
-            makeInstallment({
-              number: 3,
-              status: 'PENDING',
-              paidAmount: 0,
-              dueDate: new Date('2026-04-16'),
-            }),
-            makeInstallment({
-              number: 4,
-              status: 'PENDING',
-              paidAmount: 0,
-              dueDate: new Date('2026-05-16'),
-            }),
-            makeInstallment({
-              number: 5,
-              status: 'PENDING',
-              paidAmount: 0,
-              dueDate: new Date('2026-06-16'),
-            }),
-            makeInstallment({
-              number: 6,
-              status: 'PENDING',
-              paidAmount: 0,
-              dueDate: new Date('2026-07-16'),
-            }),
+            paid('2026-02-16', '2026-02-16', { number: 1 }),
+            paid('2026-03-16', '2026-03-16', { number: 2 }),
+            makeInstallment({ number: 3, dueDate: new Date('2026-11-16') }),
+            makeInstallment({ number: 4, dueDate: new Date('2026-12-16') }),
+            makeInstallment({ number: 5, dueDate: new Date('2027-01-16') }),
+            makeInstallment({ number: 6, dueDate: new Date('2027-02-16') }),
           ],
         }),
       ]);
 
-      const result = await service.getCustomerCreditHistory(
-        'tenant-1',
-        'cust-1',
-      );
-      const loan = result.activeLoans[0];
+      const [loan] = (await history()).activeLoans;
 
-      expect(loan.totalAmount).toBe(600_000);
       expect(loan.installmentsPaid).toBe(2);
       expect(loan.totalInstallments).toBe(6);
+      expect(loan.monthlyInstallment).toBe(100_000);
       expect(loan.startDate).toEqual(new Date('2026-01-16'));
       expect(loan.firstDueDate).toEqual(new Date('2026-02-16'));
-      expect(loan.finalDueDate).toEqual(new Date('2026-07-16'));
-      expect(loan.nextDueDate).toEqual(new Date('2026-04-16'));
-    });
-
-    it('excludes non-ACTIVE loans from activeLoans but still uses them for the rating', async () => {
-      prisma.loan.findMany.mockResolvedValue([
-        makeLoan({
-          status: 'PAID',
-          installments: [
-            makeInstallment({
-              status: 'PAID',
-              dueDate: new Date('2026-09-01'),
-              paidAt: new Date('2026-09-05'),
-            }),
-          ],
-        }),
-      ]);
-
-      const result = await service.getCustomerCreditHistory(
-        'tenant-1',
-        'cust-1',
-      );
-
-      expect(result.activeLoans).toEqual([]);
-      expect(result.rating).toBe('REGULAR');
+      expect(loan.finalDueDate).toEqual(new Date('2027-02-16'));
+      expect(loan.nextDueDate).toEqual(new Date('2026-11-16'));
     });
   });
 

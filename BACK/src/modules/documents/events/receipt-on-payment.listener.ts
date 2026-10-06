@@ -57,6 +57,17 @@ export class ReceiptOnPaymentListener {
 
   @OnEvent('payment.receipt.created')
   async handle(event: PaymentReceiptCreatedEvent) {
+    await this.generateSafely(event);
+  }
+
+  // Reintento manual cuando el PDF falló al cobrar. Va en un método aparte:
+  // EventEmitter2 toma un array de eventos como la ruta de uno solo.
+  @OnEvent('payment.receipt.pdf.requested')
+  async handleRetry(event: PaymentReceiptCreatedEvent) {
+    await this.generateSafely(event);
+  }
+
+  private async generateSafely(event: PaymentReceiptCreatedEvent) {
     try {
       await this.generate(event);
     } catch (error) {
@@ -71,7 +82,7 @@ export class ReceiptOnPaymentListener {
       event.tenantId,
       event.receiptId,
     );
-    if (!receipt) return;
+    if (!receipt || receipt.pdfFileId) return;
 
     const customerName = `${receipt.customer.firstName} ${receipt.customer.lastName}`;
     const customerDoc = receipt.customer.documentNumber

@@ -1,5 +1,8 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
+  ArrayMaxSize,
+  ArrayMinSize,
+  IsArray,
   IsBoolean,
   IsInt,
   IsNumber,
@@ -57,4 +60,27 @@ export class UpsertCreditConfigDto {
   @IsInt()
   @Min(1)
   delinquencyThresholdDays?: number | null;
+
+  @ApiPropertyOptional({
+    description:
+      'Calificación del cliente: límite superior de días de atraso promedio de los niveles 1 a 4, en orden creciente. Por encima del último es nivel 5.',
+    example: [0, 5, 15, 30],
+  })
+  @IsOptional()
+  @IsArray()
+  @ArrayMinSize(4)
+  @ArrayMaxSize(4)
+  @IsInt({ each: true })
+  @Min(0, { each: true })
+  ratingDelayThresholds?: number[];
+
+  @ApiPropertyOptional({
+    description:
+      'Días de atraso de una cuota impaga a partir de los cuales el cliente pasa a nivel 6 (incobrable/judicial). Vacío = solo por marca manual.',
+    example: 180,
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  uncollectibleAfterDays?: number | null;
 }

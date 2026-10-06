@@ -79,6 +79,19 @@ export class StockMovementsRepository {
     return new Map(sums.map((s) => [s.productId, s._sum.quantity ?? 0]));
   }
 
+  /** Saldo de movimientos sin depósito asignado (puede ser negativo). */
+  async sumUnlocated(
+    tenantId: string,
+    productId: string,
+    client: PrismaClientOrTx = this.prisma,
+  ): Promise<number> {
+    const result = await client.stockMovement.aggregate({
+      where: { tenantId, productId, warehouseId: null },
+      _sum: { quantity: true },
+    });
+    return result._sum.quantity ?? 0;
+  }
+
   async sumByProductsAndWarehouse(
     tenantId: string,
     demands: StockDemand[],

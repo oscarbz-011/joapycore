@@ -1,5 +1,7 @@
 'use client';
 
+import { resolveWarehouseId, warehouseChoices } from '@/lib/sale-warehouse';
+import { useSaleStock } from '@/lib/use-sale-stock';
 import { usePermission } from '@/lib/permissions';
 
 import { RequirePermission } from '@/components/require-permission';
@@ -327,12 +329,16 @@ function SaleScreen({ session }: { session: PosSession }) {
     setCart((c) => c.filter((l) => l.key !== key));
   }
 
+  const stock = useSaleStock();
+
   const saleMutation = useMutation({
     mutationFn: () => {
       const items: CreatePosSaleItem[] = cart.map((l) => ({
         productId: l.productId,
         quantity: l.quantity,
         unitPrice: l.unitPrice,
+        warehouseId:
+          resolveWarehouseId(undefined, warehouseChoices(stock, l.productId), l.quantity) || undefined,
         ...(l.isSerialized ? { serialNumbers: l.serialNumbers } : {}),
       }));
       const paymentsPayload: CreatePosSalePayment[] = payments

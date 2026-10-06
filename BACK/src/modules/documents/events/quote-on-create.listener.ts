@@ -51,6 +51,17 @@ export class QuoteOnCreateListener {
 
   @OnEvent('sale.order.quoted')
   async handle(event: SaleOrderQuotedEvent) {
+    await this.generateSafely(event);
+  }
+
+  // Reintento manual cuando el PDF falló al crear el presupuesto. En un
+  // método aparte: EventEmitter2 toma un array de eventos como la ruta de uno.
+  @OnEvent('sale.order.quote_pdf.requested')
+  async handleRetry(event: SaleOrderQuotedEvent) {
+    await this.generateSafely(event);
+  }
+
+  private async generateSafely(event: SaleOrderQuotedEvent) {
     try {
       await this.generate(event);
     } catch (error) {
@@ -65,7 +76,7 @@ export class QuoteOnCreateListener {
       event.tenantId,
       event.saleOrderId,
     );
-    if (!order) return;
+    if (!order || order.quotePdfFileId) return;
 
     const customerName = [
       order.customer.firstName,

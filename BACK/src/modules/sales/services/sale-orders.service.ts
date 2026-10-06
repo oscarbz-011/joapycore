@@ -135,6 +135,20 @@ export class SaleOrdersService implements SalesGateway {
       );
     }
 
+    // Calificación 6 (incobrable/judicial), por marca manual o por superar
+    // los días de atraso configurados: no admite un crédito nuevo. Va antes
+    // del chequeo de mora porque ese cliente casi siempre tiene cuotas
+    // vencidas, y el motivo que importa mostrar es este.
+    const history = await this.creditEvaluationService.getCustomerCreditHistory(
+      tenantId,
+      order.customerId,
+    );
+    if (history.score === 6) {
+      throw new UnprocessableEntityException(
+        'El cliente está calificado como incobrable/judicial (nivel 6). No se puede aprobar un crédito nuevo.',
+      );
+    }
+
     // Check for overdue installments (morosidad)
     const overdueCount = await this.creditSources.countOverdueInstallments(
       tenantId,
@@ -367,6 +381,54 @@ export class SaleOrdersService implements SalesGateway {
     return { proposedMonthlyPayment, history, capacity, bureau };
   }
 
+  // La solicitud deja de ser "nueva" en la bandeja la primera vez que un
+  // analista abre su evaluación. Idempotente: las siguientes no cambian nada.
+  async markCreditViewed(tenantId: string, id: string, userId?: string) {
+    const result = await this.saleOrdersRepository.transition(
+      tenantId,
+      id,
+      { status: 'PENDING_CREDIT_APPROVAL', creditViewedAt: null },
+      { creditViewedAt: new Date(), creditViewedById: userId ?? null },
+    );
+    return { marked: result.count > 0 };
+  }
+
+  /**
+   * Regenera el PDF de un presupuesto que quedó sin generar. La generación al
+   * crear es best-effort (no bloquea la creación), así que sin esto un PDF
+   * fallido obligaba a crear el presupuesto de nuevo.
+   */
+  async retryQuotePdf(tenantId: string, id: string, userId?: string) {
+    const order = await this.findOne(tenantId, id);
+    if (order.orderType !== 'QUOTE') {
+      throw new UnprocessableEntityException(
+        'Solo los presupuestos tienen PDF de presupuesto',
+      );
+    }
+    if (order.quotePdfFileId) return order;
+
+    await this.eventEmitter.emitAsync('sale.order.quote_pdf.requested', {
+      tenantId,
+      saleOrderId: id,
+      issuedById: userId,
+    });
+
+    const updated = await this.findOne(tenantId, id);
+    if (!updated.quotePdfFileId) {
+      throw new UnprocessableEntityException(
+        'No se pudo generar el PDF. Volvé a intentar en unos segundos.',
+      );
+    }
+    this.eventEmitter.emit('audit.log', {
+      tenantId,
+      userId,
+      module: 'sales',
+      action: 'sale.quote.pdf.regenerated',
+      resourceId: id,
+    } satisfies AuditLogEvent);
+    return updated;
+  }
+
   async requestAdjustment(
     tenantId: string,
     id: string,
@@ -591,7 +653,12 @@ export class SaleOrdersService implements SalesGateway {
       tenantId,
       id,
       { status: 'CREDIT_NEEDS_ADJUSTMENT' },
-      { status: 'PENDING_CREDIT_APPROVAL' },
+      // Vuelve a la bandeja como solicitud nueva: hay que revisarla de nuevo.
+      {
+        status: 'PENDING_CREDIT_APPROVAL',
+        creditViewedAt: null,
+        creditViewedById: null,
+      },
     );
     if (result.count === 0) {
       throw new UnprocessableEntityException(

@@ -85,6 +85,18 @@ export class CustomersRepository {
     return this.prisma.customer.update({ where: { id }, data: dto });
   }
 
+  // updateMany para que el tenant forme parte del filtro de la escritura.
+  setUncollectible(
+    tenantId: string,
+    id: string,
+    mark: { uncollectibleAt: Date | null; uncollectibleReason: string | null },
+  ) {
+    return this.prisma.customer.updateMany({
+      where: { id, tenantId, deletedAt: null },
+      data: mark,
+    });
+  }
+
   softDelete(tenantId: string, id: string) {
     return this.prisma.customer.update({
       where: { id },
