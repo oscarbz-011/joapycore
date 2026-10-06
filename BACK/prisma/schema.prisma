@@ -929,6 +929,10 @@ model SupplierCatalogItem {
   // de la importación (upsert por proveedor + código).
   supplierSku           String                @map("supplier_sku")
   description           String
+  // Código de barras o del fabricante, cuando el proveedor lo informa. Es el
+  // mismo en la lista de cualquier proveedor, así que empareja ítems entre
+  // catálogos mejor que la descripción. Opcional: muchas listas no lo traen.
+  barcode               String?
   price                 Decimal?              @db.Decimal(12, 2)
   // Unidad en la que vende el proveedor y cuántas unidades internas equivale
   // (ej. vende "caja x12" y el factor 12 lo lleva a unidades).
@@ -957,6 +961,7 @@ model SupplierCatalogItem {
 
   @@unique([supplierId, supplierSku])
   @@index([tenantId, supplierId])
+  @@index([tenantId, barcode])
   @@map("supplier_catalog_items")
 }
 

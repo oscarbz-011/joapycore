@@ -28,6 +28,7 @@ import type { JwtPayload } from '../../../common/types/jwt-payload.interface';
 import { SupplierCatalogService } from '../services/supplier-catalog.service';
 import { FilterCatalogDto } from '../dto/filter-catalog.dto';
 import { CatalogOffersDto } from '../dto/catalog-offers.dto';
+import { CatalogSearchDto } from '../dto/catalog-search.dto';
 import {
   CatalogValidityDto,
   UpdateCatalogItemDto,
@@ -57,6 +58,16 @@ export class SupplierCatalogController {
     @Query() query: CatalogOffersDto,
   ) {
     return this.service.findOffers(tenantId, query.productIds);
+  }
+
+  @Get('catalog/search')
+  @Permissions('procurement:read')
+  @ApiOperation({
+    summary:
+      'Buscar en los catálogos de varios proveedores, haya o no producto vinculado',
+  })
+  search(@CurrentTenant() tenantId: string, @Query() query: CatalogSearchDto) {
+    return this.service.search(tenantId, query.supplierIds, query.query);
   }
 
   @Get('catalog/link-suggestions')

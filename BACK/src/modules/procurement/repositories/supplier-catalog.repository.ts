@@ -111,6 +111,57 @@ export class SupplierCatalogRepository {
     });
   }
 
+  // Candidatos de una búsqueda libre en los catálogos de ciertos proveedores,
+  // vinculados o no. Filtro amplio; el orden lo decide rankCatalogSearch.
+  findSearchCandidates(
+    tenantId: string,
+    supplierIds: string[],
+    query: string,
+    words: string[],
+  ) {
+    return this.prisma.supplierCatalogItem.findMany({
+      where: {
+        tenantId,
+        supplierId: { in: supplierIds },
+        supplier: { tenantId, isActive: true, deletedAt: null },
+        OR: [
+          { barcode: { equals: query, mode: 'insensitive' } },
+          { supplierSku: { equals: query, mode: 'insensitive' } },
+          ...words.map((word) => ({
+            description: { contains: word, mode: 'insensitive' as const },
+          })),
+        ],
+      },
+      include: ITEM_INCLUDE,
+      take: UNLINKED_SCAN_LIMIT,
+    });
+  }
+
+  // Códigos de barras de los ítems ya vinculados a esos productos: el mismo
+  // código en la lista de otro proveedor es el mismo producto.
+  findLinkedBarcodes(tenantId: string, productIds: string[]) {
+    return this.prisma.supplierCatalogItem.findMany({
+      where: {
+        tenantId,
+        productId: { in: productIds },
+        barcode: { not: null },
+      },
+      select: { productId: true, barcode: true },
+    });
+  }
+
+  findUnlinkedByBarcodes(tenantId: string, barcodes: string[]) {
+    return this.prisma.supplierCatalogItem.findMany({
+      where: {
+        tenantId,
+        productId: null,
+        barcode: { in: barcodes },
+        supplier: { tenantId, isActive: true, deletedAt: null },
+      },
+      include: { supplier: { select: { id: true, name: true } } },
+    });
+  }
+
   findById(tenantId: string, id: string) {
     return this.prisma.supplierCatalogItem.findFirst({
       where: { tenantId, id },
@@ -147,6 +198,7 @@ export class SupplierCatalogRepository {
       price?: number | null;
       supplierUnit?: string | null;
       conversionFactor?: number | null;
+      barcode?: string | null;
       validFrom?: Date | null;
       validTo?: Date | null;
     },

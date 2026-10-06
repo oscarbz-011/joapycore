@@ -8,6 +8,8 @@ export interface ParsedCatalogRow {
   price: number | null;
   supplierUnit: string | null;
   conversionFactor: number | null;
+  /** Solo presente si el archivo trae la columna; null = celda vacía. */
+  barcode?: string | null;
 }
 
 export interface RowError {
@@ -24,7 +26,7 @@ export interface ParseResult {
 // Encabezados aceptados por columna, en minúscula y sin acentos. Se aceptan
 // varios alias porque cada proveedor rotula distinto y obligar a un formato
 // exacto haría que la importación falle por el nombre de una columna.
-const HEADER_ALIASES: Record<keyof ParsedCatalogRow, string[]> = {
+const HEADER_ALIASES: Record<keyof Required<ParsedCatalogRow>, string[]> = {
   supplierSku: [
     'codigo',
     'codigo proveedor',
@@ -41,6 +43,21 @@ const HEADER_ALIASES: Record<keyof ParsedCatalogRow, string[]> = {
     'factor conversion',
     'equivalencia',
     'cantidad por unidad',
+  ],
+  barcode: [
+    'codigo de barras',
+    'codigo barras',
+    'cod. barras',
+    'cod barras',
+    'barras',
+    'ean',
+    'gtin',
+    'upc',
+    'barcode',
+    'codigo fabricante',
+    'codigo del fabricante',
+    'cod. fabricante',
+    'part number',
   ],
 };
 
@@ -217,6 +234,11 @@ export class CatalogParserService {
         price,
         supplierUnit: cellText(row, columns.supplierUnit) || null,
         conversionFactor: factor && factor > 0 ? factor : null,
+        // Sin la columna no se informa nada, para que reimportar una lista
+        // sin códigos no borre los que ya estaban cargados.
+        ...(columns.barcode && {
+          barcode: cellText(row, columns.barcode) || null,
+        }),
       });
     }
 

@@ -85,6 +85,43 @@ describe('CatalogParserService', () => {
     expect(rows[0].price).toBe(expected);
   });
 
+  // No todos los proveedores lo mandan: la columna es opcional.
+  it('reads the barcode when the list brings one', async () => {
+    const buf = await xlsxBuffer([
+      ['Codigo', 'Descripcion', 'Precio', 'Codigo de barras'],
+      ['A-1', 'Abridor de vino', 54000, 7891234567890],
+      ['A-2', 'Sin código', 1000, ''],
+    ]);
+
+    const { rows } = await service.parse(buf, 'lista.xlsx');
+
+    expect(rows.map((r) => r.barcode)).toEqual(['7891234567890', null]);
+  });
+
+  it.each(['EAN', 'Código Fabricante', 'GTIN', 'Cod. Barras'])(
+    'accepts "%s" as the barcode column',
+    async (header) => {
+      const buf = await xlsxBuffer([
+        ['Codigo', 'Descripcion', header],
+        ['A-1', 'Abridor de vino', 'ABC-123'],
+      ]);
+
+      const { rows } = await service.parse(buf, 'lista.xlsx');
+
+      expect(rows[0].barcode).toBe('ABC-123');
+    },
+  );
+
+  // Sin la columna no se informa nada: reimportar una lista sin códigos no
+  // debe borrar los que ya estaban cargados.
+  it('says nothing about barcodes when the list has no such column', async () => {
+    const buf = await xlsxBuffer([HEADERS, ['A-1', 'Abridor', 100, 'un', 1]]);
+
+    const { rows } = await service.parse(buf, 'lista.xlsx');
+
+    expect(rows[0]).not.toHaveProperty('barcode');
+  });
+
   it('distinguishes "sin precio" from "precio cero"', async () => {
     const buf = await xlsxBuffer([
       HEADERS,

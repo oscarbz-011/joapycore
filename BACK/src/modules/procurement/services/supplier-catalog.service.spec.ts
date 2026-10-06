@@ -13,6 +13,9 @@ describe('SupplierCatalogService', () => {
     findOffers: jest.Mock;
     findProductsForMatching: jest.Mock;
     findUnlinkedMatching: jest.Mock;
+    findSearchCandidates: jest.Mock;
+    findLinkedBarcodes: jest.Mock;
+    findUnlinkedByBarcodes: jest.Mock;
     findById: jest.Mock;
     update: jest.Mock;
     delete: jest.Mock;
@@ -31,6 +34,9 @@ describe('SupplierCatalogService', () => {
       findOffers: jest.fn().mockResolvedValue([]),
       findProductsForMatching: jest.fn().mockResolvedValue([]),
       findUnlinkedMatching: jest.fn().mockResolvedValue([]),
+      findSearchCandidates: jest.fn().mockResolvedValue([]),
+      findLinkedBarcodes: jest.fn().mockResolvedValue([]),
+      findUnlinkedByBarcodes: jest.fn().mockResolvedValue([]),
       findById: jest.fn().mockResolvedValue({ id: 'item-1', productId: null }),
       update: jest.fn(),
       delete: jest.fn(),
@@ -315,6 +321,100 @@ describe('SupplierCatalogService', () => {
 
       expect(suggestions).toEqual([]);
       expect(repository.findUnlinkedMatching).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('search', () => {
+    it('searches the chosen suppliers of the tenant and ranks what it finds', async () => {
+      repository.findSearchCandidates.mockResolvedValue([
+        {
+          id: 'item-b',
+          supplierId: 'sup-b',
+          supplierSku: 'B-1',
+          barcode: null,
+          description: 'ABRIDOR DE VINO SMARTFY',
+        },
+        {
+          id: 'item-x',
+          supplierId: 'sup-b',
+          supplierSku: 'B-2',
+          barcode: null,
+          description: 'VINO TINTO',
+        },
+      ]);
+
+      const results = await service.search(
+        'tenant-1',
+        ['sup-a', 'sup-b'],
+        'abridor vino smartfy',
+      );
+
+      expect(repository.findSearchCandidates).toHaveBeenCalledWith(
+        'tenant-1',
+        ['sup-a', 'sup-b'],
+        'abridor vino smartfy',
+        ['abridor', 'vino', 'smartfy'],
+      );
+      expect(results.map((r) => r.id)).toEqual(['item-b']);
+      expect(results[0].score).toBe(1);
+    });
+  });
+
+  describe('link suggestions by barcode', () => {
+    const product = { id: 'prod-1', name: 'Abridor de vino', model: null };
+
+    // Mismo código de barras = mismo producto, aunque el otro proveedor lo
+    // describa con otras palabras.
+    it('proposes an unlinked item that shares the barcode of a linked one', async () => {
+      repository.findProductsForMatching.mockResolvedValue([product]);
+      repository.findLinkedBarcodes.mockResolvedValue([
+        { productId: 'prod-1', barcode: '7891234567890' },
+      ]);
+      repository.findUnlinkedByBarcodes.mockResolvedValue([
+        {
+          id: 'item-c',
+          supplierId: 'sup-c',
+          barcode: '7891234567890',
+          description: 'SACACORCHOS ELECT. 10W',
+        },
+      ]);
+
+      const suggestions = await service.findLinkSuggestions('tenant-1', [
+        'prod-1',
+      ]);
+
+      expect(repository.findUnlinkedByBarcodes).toHaveBeenCalledWith(
+        'tenant-1',
+        ['7891234567890'],
+      );
+      expect(suggestions).toEqual([
+        {
+          productId: 'prod-1',
+          score: 1,
+          item: expect.objectContaining({ id: 'item-c' }),
+        },
+      ]);
+    });
+
+    it('does not list the same item twice when the text also matches', async () => {
+      const item = {
+        id: 'item-c',
+        supplierId: 'sup-c',
+        barcode: '7891234567890',
+        description: 'ABRIDOR DE VINO',
+      };
+      repository.findProductsForMatching.mockResolvedValue([product]);
+      repository.findLinkedBarcodes.mockResolvedValue([
+        { productId: 'prod-1', barcode: '7891234567890' },
+      ]);
+      repository.findUnlinkedByBarcodes.mockResolvedValue([item]);
+      repository.findUnlinkedMatching.mockResolvedValue([item]);
+
+      const suggestions = await service.findLinkSuggestions('tenant-1', [
+        'prod-1',
+      ]);
+
+      expect(suggestions).toHaveLength(1);
     });
   });
 
