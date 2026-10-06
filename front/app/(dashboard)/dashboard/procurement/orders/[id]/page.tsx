@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, FileText, Mail, PackageCheck } from 'lucide-react';
+import { OrderAdvanceCard } from '@/components/procurement/order-advance-card';
 import {
   ReceiveModal,
   StatusBadge,
@@ -20,8 +21,9 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { cancelAdvanceBlock } from '@/lib/advance';
 import { apiErrorMessage } from '@/lib/api/api-error';
-import { procurementApi } from '@/lib/api/procurement';
+import { procurementApi, type PurchaseOrder } from '@/lib/api/procurement';
 import { formatDatePY } from '@/lib/date';
 import { openPdf } from '@/lib/open-pdf';
 import {
@@ -156,7 +158,10 @@ export default function PurchaseOrderDetailPage() {
   const pdfMutation = useMutation({
     mutationFn: () => procurementApi.orderPdf(id),
     onSuccess: (updated) => {
-      queryClient.setQueryData(['purchase-order', id], updated);
+      // Esta respuesta no trae el saldo del anticipo: se actualiza solo el PDF.
+      queryClient.setQueryData<PurchaseOrder>(['purchase-order', id], (current) =>
+        current ? { ...current, pdfFileId: updated.pdfFileId } : updated,
+      );
       if (updated.pdfFileId) void openPdf(updated.pdfFileId);
     },
     onError: (err) =>
@@ -233,6 +238,7 @@ export default function PurchaseOrderDetailPage() {
   const accent = deliveryAccentFor(order);
   const tracksReceipt = order.status !== 'PENDING' && order.status !== 'SENT';
   const history = order.statusChanges ?? [];
+  const cancelBlock = cancelAdvanceBlock(order.advance);
   const hasImportData =
     order.purchaseType === 'IMPORT' &&
     (order.exchangeRate || order.customsDuty || order.customsRef);
@@ -501,7 +507,12 @@ export default function PurchaseOrderDetailPage() {
                   <p className="mb-2 text-xs text-muted-foreground">
                     {ACTION_COPY[pendingAction].question}
                   </p>
-                  {pendingAction === 'cancel' && (
+                  {pendingAction === 'cancel' && cancelBlock && (
+                    <p role="alert" className="mb-2 text-xs text-warn">
+                      {cancelBlock}
+                    </p>
+                  )}
+                  {pendingAction === 'cancel' && !cancelBlock && (
                     <textarea
                       className={cn(TEXTAREA_CLS, 'mb-2')}
                       rows={3}
@@ -523,7 +534,9 @@ export default function PurchaseOrderDetailPage() {
                       className="flex-1"
                       variant={pendingAction === 'cancel' ? 'destructive' : 'default'}
                       onClick={runAction}
-                      disabled={statusMutation.isPending}
+                      disabled={
+                        statusMutation.isPending || (pendingAction === 'cancel' && !!cancelBlock)
+                      }
                     >
                       {statusMutation.isPending
                         ? ACTION_COPY[pendingAction].busy
@@ -636,6 +649,8 @@ export default function PurchaseOrderDetailPage() {
               )}
             </RequirePermission>
           </Card>
+
+          <OrderAdvanceCard order={order} onChanged={refresh} />
 
           <Card className="gap-3 p-5">
             <SectionTitle>Historial</SectionTitle>

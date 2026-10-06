@@ -17,6 +17,8 @@ export interface AccountsPayable {
   id: string;
   amount: number;
   paidAmount: number;
+  /** Parte de lo pagado que vino del anticipo de la orden. */
+  advanceApplied: number;
   status: APStatus;
   dueDate: string | null;
   createdAt: string;

@@ -15,6 +15,7 @@ function supplier(overrides: Partial<OfferSupplier> = {}): OfferSupplier {
     name: 'Importadora A',
     email: null,
     paymentTermDays: 0,
+    advancePercent: null,
     shippingCost: null,
     leadTimeDays: null,
     minOrderAmount: null,

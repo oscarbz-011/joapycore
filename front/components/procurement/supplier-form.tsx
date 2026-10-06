@@ -222,6 +222,24 @@ export function SupplierForm({ supplier }: { supplier?: Supplier }) {
               </p>
             </div>
             <div className="space-y-1.5">
+              <Label htmlFor="supplier-advance">Anticipo requerido (%)</Label>
+              <Input
+                id="supplier-advance"
+                type="number"
+                min={0}
+                max={100}
+                step="any"
+                value={form.advancePercent}
+                onChange={(e) => set('advancePercent', e.target.value)}
+                placeholder="No pide"
+                aria-describedby="supplier-advance-help"
+              />
+              <p id="supplier-advance-help" className="text-xs text-muted-foreground">
+                Parte de la orden que pide cobrar antes de despachar. 100 = pago total por
+                adelantado. Se puede ajustar en cada orden.
+              </p>
+            </div>
+            <div className="space-y-1.5">
               <Label htmlFor="supplier-shipping">Costo de envío (Gs.)</Label>
               <Input
                 id="supplier-shipping"

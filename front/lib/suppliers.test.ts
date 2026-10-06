@@ -23,6 +23,7 @@ function supplier(overrides: Partial<Supplier> = {}): Supplier {
     isImporter: false,
     isActive: true,
     paymentTermDays: 0,
+    advancePercent: null,
     shippingCost: null,
     leadTimeDays: null,
     minOrderAmount: null,
@@ -85,12 +86,38 @@ describe('supplier form', () => {
       taxId: '',
       isImporter: false,
       paymentTermDays: '0',
+      advancePercent: '',
       shippingCost: '',
       leadTimeDays: '',
       minOrderAmount: '',
       volumeDiscounts: [],
       quantityDiscounts: [],
     });
+  });
+
+  // Un proveedor nuevo puede pedir parte o todo antes de despachar.
+  it('carries the advance the supplier asks for', () => {
+    const form = supplierFormFrom(supplier({ advancePercent: 30 }));
+    expect(form.advancePercent).toBe('30');
+    expect(toSupplierPayload(form).advancePercent).toBe(30);
+  });
+
+  it('clears the advance when the field is left blank or zero', () => {
+    expect(toSupplierPayload(emptySupplierForm()).advancePercent).toBeNull();
+    expect(
+      toSupplierPayload({ ...emptySupplierForm(), advancePercent: '0' })
+        .advancePercent,
+    ).toBeNull();
+    expect(supplierFormFrom(supplier({ advancePercent: 0 })).advancePercent).toBe('');
+  });
+
+  it('keeps the advance between 0% and 100%', () => {
+    expect(
+      supplierTermsError({ ...emptySupplierForm(), advancePercent: '100' }),
+    ).toBeNull();
+    expect(
+      supplierTermsError({ ...emptySupplierForm(), advancePercent: '101' }),
+    ).toMatch(/100%/);
   });
 
   it('loads an existing supplier, turning missing values into blanks', () => {

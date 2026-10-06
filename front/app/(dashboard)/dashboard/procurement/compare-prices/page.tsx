@@ -41,6 +41,7 @@ import {
   type QuoteLine,
   type SupplierQuote,
 } from '@/lib/supplier-comparison';
+import { advancePercentLabel } from '@/lib/advance';
 import { leadTimeLabel, paymentTermLabel } from '@/lib/suppliers';
 import { cn } from '@/lib/utils';
 
@@ -308,6 +309,10 @@ const SUMMARY_ROWS: { label: string; strong?: boolean; cell: (q: SupplierQuote) 
 /** Condiciones del proveedor: valen aunque todavía no cotice nada. */
 const TERMS_ROWS: { label: string; cell: (q: SupplierQuote) => ReactNode }[] = [
   { label: 'Condición de pago', cell: (q) => paymentTermLabel(q.supplier.paymentTermDays) },
+  {
+    label: 'Anticipo para despachar',
+    cell: (q) => advancePercentLabel(q.supplier.advancePercent ?? null),
+  },
   {
     label: 'Plazo de entrega',
     cell: (q) => (q.supplier.leadTimeDays === null ? UNKNOWN : leadTimeLabel(q.supplier.leadTimeDays)),

@@ -3,6 +3,7 @@ import {
   Boxes,
   CalendarClock,
   FileText,
+  HandCoins,
   Mail,
   MapPin,
   PackageCheck,
@@ -14,6 +15,7 @@ import {
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
+import { advancePercentLabel } from '@/lib/advance';
 import type { Supplier } from '@/lib/api/procurement';
 import {
   quantityDiscountsSummary,
@@ -112,6 +114,9 @@ export function SupplierSummary({
         </Field>
         <Field icon={CalendarClock} label="Plazo de pago">
           {paymentTermLabel(supplier.paymentTermDays)}
+        </Field>
+        <Field icon={HandCoins} label="Anticipo para despachar">
+          {advancePercentLabel(supplier.advancePercent)}
         </Field>
       </dl>
 

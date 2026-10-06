@@ -18,6 +18,8 @@ export interface SupplierForm {
   taxId: string;
   isImporter: boolean;
   paymentTermDays: string;
+  /** Anticipo que pide para despachar, en %; vacío = no pide. */
+  advancePercent: string;
   // Condiciones comerciales: vacío = no se sabe.
   shippingCost: string;
   leadTimeDays: string;
@@ -38,6 +40,7 @@ export function emptySupplierForm(): SupplierForm {
     taxId: '',
     isImporter: false,
     paymentTermDays: '0',
+    advancePercent: '',
     shippingCost: '',
     leadTimeDays: '',
     minOrderAmount: '',
@@ -58,6 +61,7 @@ export function supplierFormFrom(supplier: Supplier): SupplierForm {
     taxId: supplier.taxId ?? '',
     isImporter: supplier.isImporter,
     paymentTermDays: String(supplier.paymentTermDays ?? 0),
+    advancePercent: supplier.advancePercent ? String(supplier.advancePercent) : '',
     shippingCost: text(supplier.shippingCost),
     leadTimeDays: text(supplier.leadTimeDays),
     minOrderAmount: text(supplier.minOrderAmount),
@@ -79,6 +83,10 @@ export function supplierTermsError(form: SupplierForm): string | null {
   const amounts = [form.shippingCost, form.leadTimeDays, form.minOrderAmount];
   if (amounts.some((value) => (numberOrNull(value) ?? 0) < 0)) {
     return 'El envío, el plazo de entrega y el pedido mínimo no pueden ser negativos';
+  }
+  const advance = numberOrNull(form.advancePercent) ?? 0;
+  if (advance < 0 || advance > 100) {
+    return 'El anticipo tiene que estar entre 0% y 100% de la orden';
   }
   const discounts =
     tierRowsError(form.volumeDiscounts) ??
@@ -114,6 +122,8 @@ export function toSupplierPayload(form: SupplierForm): CreateSupplierPayload {
     taxId: optional(form.taxId),
     isImporter: form.isImporter,
     paymentTermDays: Number.isFinite(days) && days > 0 ? days : 0,
+    // Vacío o 0 = no pide: se guarda null para que al editar se pueda quitar.
+    advancePercent: numberOrNull(form.advancePercent) || null,
     shippingCost: numberOrNull(form.shippingCost),
     leadTimeDays: wholeOrNull(form.leadTimeDays),
     minOrderAmount: numberOrNull(form.minOrderAmount),
