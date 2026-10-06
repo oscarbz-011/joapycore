@@ -190,6 +190,7 @@ export interface SaleOrderItem {
     usesLots: boolean;
     unit: string;
   } | null;
+  warehouseId?: string | null;
   productUnits: { id: string; serialNumber: string }[];
   batch: { id: string; batchNumber: string } | null;
   comboId: string | null;
@@ -242,6 +243,8 @@ export interface CreateSaleOrderItem {
   description?: string;
   quantity: number;
   unitPrice: number;
+  // Depósito del que sale el ítem — obligatorio para ítems con producto.
+  warehouseId?: string;
   serialNumbers?: string[];
   batchId?: string;
   comboId?: string;
@@ -404,6 +407,10 @@ export const salesApi = {
 
   resubmitOrder: (id: string): Promise<SaleOrder> =>
     apiClient.post(`/sales/orders/${id}/resubmit`).then((r) => r.data),
+
+  // Regenera el PDF de un presupuesto que quedó sin generar.
+  retryQuotePdf: (id: string): Promise<SaleOrder> =>
+    apiClient.post(`/sales/orders/${id}/quote-pdf/retry`).then((r) => r.data),
 
   convertQuote: (id: string): Promise<SaleOrder> =>
     apiClient.post(`/sales/orders/${id}/convert`).then((r) => r.data),

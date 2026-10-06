@@ -1,5 +1,7 @@
 'use client';
 
+import { resolveWarehouseId, warehouseChoices } from '@/lib/sale-warehouse';
+import { useSaleStock } from '@/lib/use-sale-stock';
 import { apiErrorMessage } from '@/lib/api/api-error';
 import { salesChannelProductFilters } from '@/lib/product-catalog';
 
@@ -176,6 +178,10 @@ export default function NewQuotePage() {
 
   const total = lines.reduce((sum, l) => sum + l.quantity * l.unitPrice, 0);
 
+  // Un presupuesto no mueve stock, pero el backend exige el depósito en todo
+  // ítem con producto: se manda el sugerido.
+  const stock = useSaleStock();
+
   const mutation = useMutation({
     mutationFn: () => {
       const dto: Parameters<typeof salesApi.createOrder>[0] = {
@@ -187,6 +193,10 @@ export default function NewQuotePage() {
           description: l.mode === 'FREE' ? l.description.trim() : undefined,
           quantity: Number(l.quantity),
           unitPrice: Number(l.unitPrice),
+          warehouseId:
+            l.mode === 'CATALOG'
+              ? resolveWarehouseId(undefined, warehouseChoices(stock, l.productId), Number(l.quantity)) || undefined
+              : undefined,
           specNotes: l.specNotes.trim() || undefined,
         })),
       };

@@ -136,6 +136,7 @@ export type UpdateProductPayload =
     kind?: ProductKind;
     isPurchasable?: boolean;
     salesChannels?: OrderChannel[];
+    stockMin?: number;
   };
 
 export type MovementReason =
@@ -201,7 +202,14 @@ export interface StockWarehouseQuantity {
 }
 
 export interface StockRow {
-  product: Pick<Product, 'id' | 'name' | 'model' | 'salesChannels'> & {
+  product: Pick<
+    Product,
+    'id' | 'name' | 'model' | 'salesChannels' | 'salePrice' | 'stockMin'
+  > & {
+    // Mínimo propio del producto o, si no tiene, el umbral de la alerta
+    // "Stock bajo" activa. 0 = sin punto de reposición.
+    reorderPoint: number;
+    reorderPointSource: 'PRODUCT' | 'ALERT' | null;
     category: { id: string; name: string } | null;
     brand: { id: string; name: string } | null;
   };
@@ -220,6 +228,17 @@ export interface StockFilters {
   categoryId?: string;
   brandId?: string;
   warehouseId?: string;
+  // Devuelve solo ese producto, aunque no esté habilitado para la venta.
+  productId?: string;
+}
+
+export interface AssignUnlocatedStockPayload {
+  productId: string;
+  warehouseId: string;
+  // Si se omite se asigna todo el saldo sin depósito.
+  quantity?: number;
+  serialNumbers?: string[];
+  notes?: string;
 }
 
 export interface ProductBatch {
@@ -274,13 +293,36 @@ export interface UpdateProductSupplierPayload {
   isPreferred?: boolean;
 }
 
+const DECIMAL_FIELDS = ['costPrice', 'salePrice', 'additionalMarkup'] as const;
+type DecimalField = (typeof DECIMAL_FIELDS)[number];
+
+/**
+ * El backend serializa los Decimal de Prisma como texto ("400000"). Se pasan
+ * a número al recibirlos: si no, un formulario que los reenvía sin tocarlos
+ * manda texto y el backend lo rechaza ("costPrice must be a positive number").
+ */
+export function normalizeProduct<
+  T extends Partial<Record<DecimalField, unknown>>,
+>(product: T): T {
+  const normalized: Record<string, unknown> = { ...product };
+  for (const field of DECIMAL_FIELDS) {
+    const value = product[field];
+    if (typeof value === 'string') normalized[field] = Number(value);
+  }
+  return normalized as T;
+}
+
 export const inventoryApi = {
   // Products
   listProducts: (filters?: ProductFilters): Promise<Product[]> =>
-    apiClient.get('/inventory/products', { params: filters }).then((r) => r.data),
+    apiClient
+      .get('/inventory/products', { params: filters })
+      .then((r) => r.data.map(normalizeProduct)),
 
   listProductsWithStock: (filters?: ProductFilters): Promise<ProductWithStock[]> =>
-    apiClient.get('/inventory/products/with-stock', { params: filters }).then((r) => r.data),
+    apiClient
+      .get('/inventory/products/with-stock', { params: filters })
+      .then((r) => r.data.map(normalizeProduct)),
 
   listMovements: (filters?: MovementFilters): Promise<StockMovement[]> =>
     apiClient.get('/inventory/movements', { params: filters }).then((r) => r.data),
@@ -291,14 +333,19 @@ export const inventoryApi = {
   getStock: (filters?: StockFilters): Promise<StockResult> =>
     apiClient.get('/inventory/stock', { params: filters }).then((r) => r.data),
 
+  assignUnlocatedStock: (dto: AssignUnlocatedStockPayload): Promise<StockMovement[]> =>
+    apiClient.post('/inventory/stock/unlocated/assign', dto).then((r) => r.data),
+
   getProduct: (id: string): Promise<ProductWithStock> =>
-    apiClient.get(`/inventory/products/${id}`).then((r) => r.data),
+    apiClient.get(`/inventory/products/${id}`).then((r) => normalizeProduct(r.data)),
 
   createProduct: (dto: CreateProductPayload): Promise<Product> =>
-    apiClient.post('/inventory/products', dto).then((r) => r.data),
+    apiClient.post('/inventory/products', dto).then((r) => normalizeProduct(r.data)),
 
   updateProduct: (id: string, dto: UpdateProductPayload): Promise<Product> =>
-    apiClient.patch(`/inventory/products/${id}`, dto).then((r) => r.data),
+    apiClient
+      .patch(`/inventory/products/${id}`, dto)
+      .then((r) => normalizeProduct(r.data)),
 
   deleteProduct: (id: string): Promise<void> =>
     apiClient.delete(`/inventory/products/${id}`).then((r) => r.data),

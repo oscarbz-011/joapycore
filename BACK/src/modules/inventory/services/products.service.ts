@@ -139,6 +139,7 @@ export class ProductsService {
       description: dto.description,
       isSerialized: dto.isSerialized,
       usesLots: dto.usesLots ?? false,
+      stockMin: dto.stockMin,
       unit: dto.unit ?? 'unidad',
       costPrice: dto.costPrice,
       salePrice: dto.salePrice,

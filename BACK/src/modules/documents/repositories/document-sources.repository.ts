@@ -46,6 +46,13 @@ export class DocumentSourcesRepository {
     });
   }
 
+  findInterestInvoiceByReceipt(tenantId: string, paymentReceiptId: string) {
+    return this.prisma.invoice.findFirst({
+      where: { tenantId, paymentReceiptId, invoiceType: 'INTEREST' },
+      select: { id: true, total: true, pdfFileId: true },
+    });
+  }
+
   async setInvoicePdf(
     tenantId: string,
     invoiceId: string,

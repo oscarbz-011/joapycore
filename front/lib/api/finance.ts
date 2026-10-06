@@ -168,4 +168,11 @@ export const financeApi = {
     apiClient
       .get(`/finance/loans/installments/${installmentId}/receipt`)
       .then((r) => r.data),
+
+  // Regenera los PDFs que hayan quedado sin generar en un cobro (recibo y
+  // factura de intereses).
+  retryReceiptPdf: (receiptId: string): Promise<PaymentReceipt> =>
+    apiClient
+      .post(`/finance/loans/receipts/${receiptId}/pdf/retry`)
+      .then((r) => r.data),
 };

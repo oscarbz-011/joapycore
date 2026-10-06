@@ -1,5 +1,7 @@
 "use client";
 
+import { resolveWarehouseId, warehouseChoices } from '@/lib/sale-warehouse';
+import { useSaleStock } from '@/lib/use-sale-stock';
 import { apiErrorMessage } from "@/lib/api/api-error";
 import { findStockIssues } from "@/lib/sales-stock";
 import { salesChannelProductFilters } from "@/lib/product-catalog";
@@ -71,6 +73,7 @@ export default function AdjustOrderPage() {
           quantity: i.quantity,
           unitPrice: i.unitPrice,
           serialInput: i.productUnits.map((u) => u.serialNumber).join("\n"),
+          warehouseId: i.warehouseId ?? undefined,
         })),
     );
     setInstallments(order.installments ?? activePlans[0]?.installments ?? 0);
@@ -78,6 +81,8 @@ export default function AdjustOrderPage() {
   }
 
   const total = items.reduce((sum, i) => sum + i.quantity * i.unitPrice, 0);
+
+  const stock = useSaleStock();
 
   const saveMutation = useMutation({
     mutationFn: () => {
@@ -87,6 +92,12 @@ export default function AdjustOrderPage() {
             productId: it.productId,
             quantity: Number(it.quantity),
             unitPrice: Number(it.unitPrice),
+            warehouseId:
+              resolveWarehouseId(
+                it.warehouseId,
+                warehouseChoices(stock, it.productId),
+                Number(it.quantity),
+              ) || undefined,
             serialNumbers: it.product?.isSerialized
               ? it.serialInput
                   .split("\n")
@@ -240,6 +251,7 @@ export default function AdjustOrderPage() {
               key={index}
               item={item}
               products={products}
+              stock={stock}
               onChange={(updated) => updateItem(index, updated)}
               onRemove={() => removeItem(index)}
             />

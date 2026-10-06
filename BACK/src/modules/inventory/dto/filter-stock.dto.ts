@@ -21,4 +21,12 @@ export class FilterStockDto {
   @IsOptional()
   @IsUUID()
   warehouseId?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Devuelve solo este producto, aunque no esté habilitado para la venta',
+  })
+  @IsOptional()
+  @IsUUID()
+  productId?: string;
 }

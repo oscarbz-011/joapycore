@@ -4,7 +4,7 @@ import { apiErrorMessage } from '@/lib/api/api-error';
 
 import { useParams, useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Download, ArrowRightCircle, Ban } from 'lucide-react';
+import { ArrowLeft, Download, ArrowRightCircle, Ban, FileText } from 'lucide-react';
 import { salesApi } from '../../../../../../lib/api/sales';
 import { useAuth } from '../../../../../../lib/auth-context';
 import { openPdf } from '../../../../../../lib/open-pdf';
@@ -33,10 +33,22 @@ export default function QuoteDetailPage() {
 
   const convertMutation = useMutation({
     mutationFn: () => salesApi.convertQuote(id),
-    onSuccess: (updated) => {
+    onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['sale-order', id] });
       void qc.invalidateQueries({ queryKey: ['sale-orders'] });
-      router.push(`/dashboard/sales/${updated.id}`);
+      // Los pedidos no tienen página de detalle propia (se abren en un panel
+      // de Órdenes de venta): el convertido aparece primero en esa lista.
+      router.push('/dashboard/sales');
+    },
+  });
+
+  // El PDF se genera al crear el presupuesto; si esa generación falló, se
+  // puede pedir de nuevo desde acá.
+  const pdfMutation = useMutation({
+    mutationFn: () => salesApi.retryQuotePdf(id),
+    onSuccess: (updated) => {
+      qc.setQueryData(['sale-order', id], updated);
+      if (updated.quotePdfFileId) void openPdf(updated.quotePdfFileId);
     },
   });
 
@@ -113,9 +125,9 @@ export default function QuoteDetailPage() {
         </div>
       </div>
 
-      {(convertMutation.isError || cancelMutation.isError) && (
-        <p className="mt-3 text-sm text-destructive">
-          {apiErrorMessage((convertMutation.error ?? cancelMutation.error), 'Ocurrió un error')}
+      {(convertMutation.isError || cancelMutation.isError || pdfMutation.isError) && (
+        <p role="alert" className="mt-3 text-sm text-destructive">
+          {apiErrorMessage((convertMutation.error ?? cancelMutation.error ?? pdfMutation.error), 'Ocurrió un error')}
         </p>
       )}
 
@@ -123,6 +135,16 @@ export default function QuoteDetailPage() {
         {quote.quotePdfFileId && (
           <Button variant="outline" className="gap-1.5" onClick={() => void openPdf(quote.quotePdfFileId!)}>
             <Download size={15} /> Descargar PDF
+          </Button>
+        )}
+        {!quote.quotePdfFileId && quote.orderType === 'QUOTE' && canManage && (
+          <Button
+            variant="outline"
+            className="gap-1.5"
+            disabled={pdfMutation.isPending}
+            onClick={() => pdfMutation.mutate()}
+          >
+            <FileText size={15} /> {pdfMutation.isPending ? 'Generando PDF...' : 'Generar PDF'}
           </Button>
         )}
         {isQuoted && canManage && (

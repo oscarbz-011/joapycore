@@ -71,6 +71,27 @@ export class ProductUnitsRepository {
     return result.count;
   }
 
+  /** Ubica unidades en stock que no tienen depósito (datos históricos). */
+  async locateUnassignedUnits(
+    tenantId: string,
+    productId: string,
+    warehouseId: string,
+    serialNumbers: string[] | undefined,
+    client: PrismaClientOrTx = this.prisma,
+  ): Promise<number> {
+    const result = await client.productUnit.updateMany({
+      where: {
+        tenantId,
+        productId,
+        status: 'IN_STOCK',
+        warehouseId: null,
+        ...(serialNumbers && { serialNumber: { in: serialNumbers } }),
+      },
+      data: { warehouseId },
+    });
+    return result.count;
+  }
+
   async markAdjustedOut(
     tenantId: string,
     productId: string,
