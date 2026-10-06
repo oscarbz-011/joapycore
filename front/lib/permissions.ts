@@ -93,6 +93,10 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
         key: "procurement:payables:register",
         label: "Registrar pagos a proveedores",
       },
+      {
+        key: "procurement:payables:approve",
+        label: "Aprobar facturas de proveedor con diferencias",
+      },
     ],
   },
   {
