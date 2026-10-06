@@ -141,11 +141,12 @@ export interface CreatePurchaseReceiptPayload {
 
 export interface CreateSupplierPayload {
   name: string;
-  contactName?: string;
-  email?: string;
-  phone?: string;
-  address?: string;
-  taxId?: string;
+  // null borra el dato al editar.
+  contactName?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  address?: string | null;
+  taxId?: string | null;
   isImporter?: boolean;
   paymentTermDays?: number;
 }
