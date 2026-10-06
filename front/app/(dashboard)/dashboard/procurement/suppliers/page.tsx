@@ -4,7 +4,6 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { FileSpreadsheet, Pencil, Plus, Search } from 'lucide-react';
-import { SupplierDialog } from '@/components/procurement/supplier-dialog';
 import { RequirePermission } from '@/components/require-permission';
 import { SortableHeader } from '@/components/sortable-header';
 import { Badge } from '@/components/ui/badge';
@@ -24,12 +23,9 @@ const EMPTY = <span className="text-muted-foreground">—</span>;
 
 // ── Página ────────────────────────────────────────────────────────────────────
 
-type DialogState = { mode: 'create' } | { mode: 'edit'; supplier: Supplier } | null;
-
 export default function SuppliersPage() {
   const router = useRouter();
   const [search, setSearch] = useState('');
-  const [dialog, setDialog] = useState<DialogState>(null);
   const canEdit = usePermission('suppliers:update');
 
   const {
@@ -58,7 +54,7 @@ export default function SuppliersPage() {
           </p>
         </div>
         <RequirePermission permission="suppliers:create">
-          <Button onClick={() => setDialog({ mode: 'create' })}>
+          <Button onClick={() => router.push('/dashboard/procurement/suppliers/new')}>
             <Plus size={16} />
             Nuevo proveedor
           </Button>
@@ -102,7 +98,7 @@ export default function SuppliersPage() {
         <div className="py-16 text-center">
           <p className="text-sm text-muted-foreground">Todavía no hay proveedores cargados.</p>
           <RequirePermission permission="suppliers:create">
-            <Button variant="outline" className="mt-4" onClick={() => setDialog({ mode: 'create' })}>
+            <Button variant="outline" className="mt-4" onClick={() => router.push('/dashboard/procurement/suppliers/new')}>
               <Plus size={15} />
               Crear el primero
             </Button>
@@ -181,7 +177,7 @@ export default function SuppliersPage() {
                           size="sm"
                           onClick={(e) => {
                             e.stopPropagation();
-                            setDialog({ mode: 'edit', supplier });
+                            router.push(`/dashboard/procurement/suppliers/${supplier.id}/edit`);
                           }}
                         >
                           <Pencil size={14} />
@@ -195,15 +191,6 @@ export default function SuppliersPage() {
             </table>
           </div>
         </Card>
-      )}
-
-      {dialog?.mode === 'create' && <SupplierDialog onClose={() => setDialog(null)} />}
-      {dialog?.mode === 'edit' && (
-        <SupplierDialog
-          key={dialog.supplier.id}
-          supplier={dialog.supplier}
-          onClose={() => setDialog(null)}
-        />
       )}
     </div>
   );

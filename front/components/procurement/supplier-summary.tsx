@@ -1,5 +1,6 @@
 import type { ElementType, ReactNode } from 'react';
 import {
+  Boxes,
   CalendarClock,
   FileText,
   Mail,
@@ -14,7 +15,10 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
 import type { Supplier } from '@/lib/api/procurement';
-import { volumeDiscountsSummary } from '@/lib/commercial-terms';
+import {
+  quantityDiscountsSummary,
+  volumeDiscountsSummary,
+} from '@/lib/commercial-terms';
 import { leadTimeLabel, paymentTermLabel, supplierInitials } from '@/lib/suppliers';
 
 const gs = (n: number) => 'Gs. ' + new Intl.NumberFormat('es-PY').format(n);
@@ -111,7 +115,7 @@ export function SupplierSummary({
         </Field>
       </dl>
 
-      <dl className="grid gap-x-6 gap-y-5 border-t border-border p-5 sm:grid-cols-2 lg:grid-cols-4">
+      <dl className="grid gap-x-6 gap-y-5 border-t border-border p-5 sm:grid-cols-2 lg:grid-cols-3">
         <Field icon={Truck} label="Costo de envío">
           {supplier.shippingCost === null
             ? EMPTY
@@ -129,8 +133,14 @@ export function SupplierSummary({
               ? 'Sin mínimo'
               : gs(supplier.minOrderAmount)}
         </Field>
-        <Field icon={Percent} label="Descuento por volumen">
+      </dl>
+
+      <dl className="grid gap-x-6 gap-y-5 border-t border-border p-5 sm:grid-cols-2">
+        <Field icon={Percent} label="Descuento por total de la orden">
           {volumeDiscountsSummary(supplier.volumeDiscounts)}
+        </Field>
+        <Field icon={Boxes} label="Descuento por cantidad de unidades">
+          {quantityDiscountsSummary(supplier.quantityDiscounts)}
         </Field>
       </dl>
     </Card>

@@ -24,6 +24,8 @@ export interface SupplierForm {
   minOrderAmount: string;
   /** Descuentos por total de la orden: desde (Gs.) → porcentaje. */
   volumeDiscounts: TierRow[];
+  /** Descuentos por unidades de la orden: desde (unidades) → porcentaje. */
+  quantityDiscounts: TierRow[];
 }
 
 export function emptySupplierForm(): SupplierForm {
@@ -40,6 +42,7 @@ export function emptySupplierForm(): SupplierForm {
     leadTimeDays: '',
     minOrderAmount: '',
     volumeDiscounts: [],
+    quantityDiscounts: [],
   };
 }
 
@@ -63,6 +66,11 @@ export function supplierFormFrom(supplier: Supplier): SupplierForm {
       'minAmount',
       'percent',
     ),
+    quantityDiscounts: tierRowsFrom(
+      supplier.quantityDiscounts,
+      'minQuantity',
+      'percent',
+    ),
   };
 }
 
@@ -72,10 +80,21 @@ export function supplierTermsError(form: SupplierForm): string | null {
   if (amounts.some((value) => (numberOrNull(value) ?? 0) < 0)) {
     return 'El envío, el plazo de entrega y el pedido mínimo no pueden ser negativos';
   }
-  const discounts = tierRowsError(form.volumeDiscounts);
+  const discounts =
+    tierRowsError(form.volumeDiscounts) ??
+    tierRowsError(form.quantityDiscounts);
   if (discounts) return discounts;
-  if (form.volumeDiscounts.some((row) => Number(row.value) > 100)) {
+  const all = [...form.volumeDiscounts, ...form.quantityDiscounts];
+  if (all.some((row) => Number(row.value) > 100)) {
     return 'Un descuento no puede superar el 100%';
+  }
+  // Las unidades se cuentan enteras: "desde 2,5 unidades" no existe.
+  if (
+    form.quantityDiscounts.some(
+      (row) => row.from.trim() && !Number.isInteger(Number(row.from)),
+    )
+  ) {
+    return 'La cantidad de un descuento tiene que ser un número entero';
   }
   return null;
 }
@@ -99,6 +118,11 @@ export function toSupplierPayload(form: SupplierForm): CreateSupplierPayload {
     leadTimeDays: wholeOrNull(form.leadTimeDays),
     minOrderAmount: numberOrNull(form.minOrderAmount),
     volumeDiscounts: tierRowsTo(form.volumeDiscounts, 'minAmount', 'percent'),
+    quantityDiscounts: tierRowsTo(
+      form.quantityDiscounts,
+      'minQuantity',
+      'percent',
+    ),
   };
 }
 

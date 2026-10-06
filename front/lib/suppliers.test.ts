@@ -27,6 +27,7 @@ function supplier(overrides: Partial<Supplier> = {}): Supplier {
     leadTimeDays: null,
     minOrderAmount: null,
     volumeDiscounts: [],
+    quantityDiscounts: [],
     ...overrides,
   };
 }
@@ -88,6 +89,7 @@ describe('supplier form', () => {
       leadTimeDays: '',
       minOrderAmount: '',
       volumeDiscounts: [],
+      quantityDiscounts: [],
     });
   });
 
@@ -210,5 +212,46 @@ describe('commercial terms of a supplier', () => {
     expect(leadTimeLabel(0)).toBe('Inmediata');
     expect(leadTimeLabel(1)).toBe('1 día');
     expect(leadTimeLabel(7)).toBe('7 días');
+  });
+});
+
+describe('discounts by quantity of a supplier', () => {
+  // "Menos de 5 un descuento, de 5 a 50 otro, más de 50 otro."
+  const tiers = [
+    { minQuantity: 1, percent: 2 },
+    { minQuantity: 5, percent: 5 },
+    { minQuantity: 51, percent: 10 },
+  ];
+
+  it('loads and sends them back unchanged', () => {
+    const payload = toSupplierPayload(
+      supplierFormFrom(supplier({ quantityDiscounts: tiers })),
+    );
+
+    expect(payload.quantityDiscounts).toEqual(tiers);
+  });
+
+  it('counts units in whole numbers', () => {
+    expect(
+      supplierTermsError({
+        ...emptySupplierForm(),
+        quantityDiscounts: [{ from: '2.5', value: '5' }],
+      }),
+    ).toContain('entero');
+  });
+
+  it('rejects a discount over 100% and a row filled halfway', () => {
+    expect(
+      supplierTermsError({
+        ...emptySupplierForm(),
+        quantityDiscounts: [{ from: '5', value: '150' }],
+      }),
+    ).toContain('100%');
+    expect(
+      supplierTermsError({
+        ...emptySupplierForm(),
+        quantityDiscounts: [{ from: '5', value: '' }],
+      }),
+    ).toContain('incompleto');
   });
 });
