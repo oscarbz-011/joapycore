@@ -53,6 +53,10 @@ export class SupplierCatalogService {
     return this.repository.findBySupplier(tenantId, supplierId, filters);
   }
 
+  findOffers(tenantId: string, productIds: string[]) {
+    return this.repository.findOffers(tenantId, productIds);
+  }
+
   async importFile(
     tenantId: string,
     supplierId: string,

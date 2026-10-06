@@ -55,6 +55,34 @@ export class SupplierCatalogRepository {
     });
   }
 
+  // Qué proveedores ofrecen estos productos, con sus condiciones comerciales:
+  // la materia prima del comparador. Solo proveedores activos.
+  findOffers(tenantId: string, productIds: string[]) {
+    return this.prisma.supplierCatalogItem.findMany({
+      where: {
+        tenantId,
+        productId: { in: productIds },
+        supplier: { tenantId, isActive: true, deletedAt: null },
+      },
+      include: {
+        ...ITEM_INCLUDE,
+        supplier: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            paymentTermDays: true,
+            shippingCost: true,
+            leadTimeDays: true,
+            minOrderAmount: true,
+            volumeDiscounts: true,
+          },
+        },
+      },
+      orderBy: [{ supplier: { name: 'asc' } }, { description: 'asc' }],
+    });
+  }
+
   findById(tenantId: string, id: string) {
     return this.prisma.supplierCatalogItem.findFirst({
       where: { tenantId, id },

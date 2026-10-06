@@ -10,6 +10,7 @@ describe('SupplierCatalogService', () => {
   let service: SupplierCatalogService;
   let repository: {
     findBySupplier: jest.Mock;
+    findOffers: jest.Mock;
     findById: jest.Mock;
     update: jest.Mock;
     delete: jest.Mock;
@@ -25,6 +26,7 @@ describe('SupplierCatalogService', () => {
   beforeEach(() => {
     repository = {
       findBySupplier: jest.fn().mockResolvedValue([]),
+      findOffers: jest.fn().mockResolvedValue([]),
       findById: jest.fn().mockResolvedValue({ id: 'item-1', productId: null }),
       update: jest.fn(),
       delete: jest.fn(),
@@ -246,6 +248,17 @@ describe('SupplierCatalogService', () => {
         }),
       ).rejects.toBeInstanceOf(UnprocessableEntityException);
       expect(repository.update).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('findOffers', () => {
+    it('asks for the offers of the tenant only', async () => {
+      await service.findOffers('tenant-1', ['prod-1', 'prod-2']);
+
+      expect(repository.findOffers).toHaveBeenCalledWith('tenant-1', [
+        'prod-1',
+        'prod-2',
+      ]);
     });
   });
 

@@ -27,6 +27,7 @@ import { RequiredModule } from '../../../common/decorators/required-module.decor
 import type { JwtPayload } from '../../../common/types/jwt-payload.interface';
 import { SupplierCatalogService } from '../services/supplier-catalog.service';
 import { FilterCatalogDto } from '../dto/filter-catalog.dto';
+import { CatalogOffersDto } from '../dto/catalog-offers.dto';
 import {
   CatalogValidityDto,
   UpdateCatalogItemDto,
@@ -44,6 +45,19 @@ const ALLOWED_EXT = /\.(xlsx|csv)$/i;
 @Controller('procurement')
 export class SupplierCatalogController {
   constructor(private readonly service: SupplierCatalogService) {}
+
+  @Get('catalog/offers')
+  @Permissions('procurement:read')
+  @ApiOperation({
+    summary:
+      'Ofertas de todos los proveedores para un conjunto de productos (comparador)',
+  })
+  findOffers(
+    @CurrentTenant() tenantId: string,
+    @Query() query: CatalogOffersDto,
+  ) {
+    return this.service.findOffers(tenantId, query.productIds);
+  }
 
   @Get('suppliers/:supplierId/catalog')
   @Permissions('procurement:read')
