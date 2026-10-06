@@ -3,6 +3,16 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { PrismaClientOrTx } from '../../../prisma/types';
 
+// Lo que la lista de cuentas necesita saber de la factura del proveedor.
+const INVOICE_SUMMARY = {
+  id: true,
+  invoiceNumber: true,
+  invoiceDate: true,
+  status: true,
+  total: true,
+  estimatedTotal: true,
+} as const;
+
 @Injectable()
 export class AccountsPayableRepository {
   constructor(private readonly prisma: PrismaService) {}
@@ -16,6 +26,7 @@ export class AccountsPayableRepository {
           include: { purchaseOrder: { select: { id: true } } },
         },
         supplierPayments: { orderBy: { createdAt: 'asc' } },
+        supplierInvoice: { select: INVOICE_SUMMARY },
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -34,6 +45,7 @@ export class AccountsPayableRepository {
           include: { purchaseOrder: { select: { id: true } } },
         },
         supplierPayments: { orderBy: { createdAt: 'asc' } },
+        supplierInvoice: { select: INVOICE_SUMMARY },
       },
     });
   }

@@ -71,6 +71,7 @@ export const PERMISSIONS = [
   'procurement:receive',
   'procurement:payables:read',
   'procurement:payables:register',
+  'procurement:payables:approve',
   // Sales
   'sales:read',
   'sales:create',
