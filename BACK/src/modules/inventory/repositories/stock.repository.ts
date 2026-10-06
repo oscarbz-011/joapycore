@@ -24,6 +24,8 @@ export interface StockRow {
     category: { id: string; name: string } | null;
     brand: { id: string; name: string } | null;
     salesChannels: OrderChannel[];
+    salePrice: number | null;
+    stockMin: number;
   };
   totalStock: number;
   stockByWarehouse: StockWarehouseQuantity[];
@@ -53,8 +55,11 @@ export class StockRepository {
         where: {
           tenantId,
           deletedAt: null,
-          status: 'ACTIVE',
-          salesChannels: { isEmpty: false },
+          // Pedir un producto puntual devuelve su ubicación aunque no sea
+          // vendible: una materia prima también puede tener stock sin depósito.
+          ...(filters.productId
+            ? { id: filters.productId }
+            : { status: 'ACTIVE', salesChannels: { isEmpty: false } }),
           ...(filters.categoryId && { categoryId: filters.categoryId }),
           ...(filters.brandId && { brandId: filters.brandId }),
           ...(filters.search && {
@@ -80,6 +85,8 @@ export class StockRepository {
           model: true,
           isSerialized: true,
           salesChannels: true,
+          salePrice: true,
+          stockMin: true,
           category: { select: { id: true, name: true } },
           brand: { select: { id: true, name: true } },
         },
@@ -155,7 +162,12 @@ export class StockRepository {
 
     return {
       warehouses: visibleWarehouses,
-      items: products.map(({ isSerialized: _isSerialized, ...product }) => {
+      items: products.map((source) => {
+        const { isSerialized: _isSerialized, salePrice, ...rest } = source;
+        const product = {
+          ...rest,
+          salePrice: salePrice === null ? null : Number(salePrice),
+        };
         const byWarehouse =
           quantities.get(product.id) ?? new Map<string | null, number>();
         return {

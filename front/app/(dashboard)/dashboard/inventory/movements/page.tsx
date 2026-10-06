@@ -7,7 +7,7 @@ import { apiErrorMessage } from '@/lib/api/api-error';
 import { useState } from 'react';
 import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Plus, X } from 'lucide-react';
+import { ArrowLeftRight, Plus, X } from 'lucide-react';
 import { NumericInput } from '../../../../../components/numeric-input';
 import {
   inventoryApi,
@@ -18,6 +18,7 @@ import {
   buildMovementPayload,
   type MovementForm,
 } from '../../../../../lib/inventory-movement';
+import { StockTransferDialog } from '@/components/inventory/stock-transfer-dialog';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
@@ -51,7 +52,8 @@ const REASON_LABELS: Record<MovementReason, string> = {
   PRODUCTION_OUT:  'Consumo en producción',
 };
 
-const MANUAL_REASONS: MovementReason[] = ['PURCHASE', 'CUSTOMER_RETURN', 'ADJUSTMENT', 'TRANSFER'];
+// El traslado entre depósitos tiene su propio diálogo (StockTransferDialog).
+const MANUAL_REASONS: MovementReason[] = ['PURCHASE', 'CUSTOMER_RETURN', 'ADJUSTMENT'];
 
 // ── New movement modal ─────────────────────────────────────────────────────────
 
@@ -220,86 +222,31 @@ function NewMovementModal({ onClose }: { onClose: () => void }) {
             </div>
           )}
 
-          {form.reason === 'TRANSFER' ? (
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <Label>Depósito origen *</Label>
-                <Select
-                  value={form.warehouseId || 'none'}
-                  onValueChange={(value) =>
-                    set('warehouseId', value === 'none' ? '' : (value ?? ''))
-                  }
-                >
-                  <SelectTrigger className="w-full">
-                    <span className="min-w-0 flex-1 truncate text-left text-sm">
-                      {activeWarehouses.find(
-                        (warehouse) => warehouse.id === form.warehouseId,
-                      )?.name ?? '— Seleccionar —'}
-                    </span>
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">— Seleccionar —</SelectItem>
-                    {activeWarehouses.map((warehouse) => (
-                      <SelectItem key={warehouse.id} value={warehouse.id}>
-                        {warehouse.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <Label>Depósito destino *</Label>
-                <Select
-                  value={form.toWarehouseId || 'none'}
-                  onValueChange={(value) =>
-                    set('toWarehouseId', value === 'none' ? '' : (value ?? ''))
-                  }
-                >
-                  <SelectTrigger className="w-full">
-                    <span className="min-w-0 flex-1 truncate text-left text-sm">
-                      {activeWarehouses.find(
-                        (warehouse) => warehouse.id === form.toWarehouseId,
-                      )?.name ?? '— Seleccionar —'}
-                    </span>
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">— Seleccionar —</SelectItem>
-                    {activeWarehouses.map((warehouse) => (
-                      <SelectItem key={warehouse.id} value={warehouse.id}>
-                        {warehouse.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-          ) : (
-            <div className="space-y-1.5">
-              <Label>Depósito *</Label>
-              <Select
-                value={form.warehouseId || 'none'}
-                onValueChange={(value) =>
-                  set('warehouseId', value === 'none' ? '' : (value ?? ''))
-                }
-              >
-                <SelectTrigger className="w-full">
-                  <span className="min-w-0 flex-1 truncate text-left text-sm">
-                    {activeWarehouses.find(
-                      (warehouse) => warehouse.id === form.warehouseId,
-                    )?.name ?? '— Seleccionar —'}
-                  </span>
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">— Seleccionar —</SelectItem>
-                  {activeWarehouses.map((warehouse) => (
-                    <SelectItem key={warehouse.id} value={warehouse.id}>
-                      {warehouse.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
+          <div className="space-y-1.5">
+            <Label>Depósito *</Label>
+            <Select
+              value={form.warehouseId || 'none'}
+              onValueChange={(value) =>
+                set('warehouseId', value === 'none' ? '' : (value ?? ''))
+              }
+            >
+              <SelectTrigger className="w-full">
+                <span className="min-w-0 flex-1 truncate text-left text-sm">
+                  {activeWarehouses.find(
+                    (warehouse) => warehouse.id === form.warehouseId,
+                  )?.name ?? '— Seleccionar —'}
+                </span>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">— Seleccionar —</SelectItem>
+                {activeWarehouses.map((warehouse) => (
+                  <SelectItem key={warehouse.id} value={warehouse.id}>
+                    {warehouse.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
 
           {activeWarehouses.length === 0 && (
             <p className="rounded-xl border border-warn/30 bg-warn-subtle px-3 py-2 text-xs text-warn">
@@ -342,10 +289,7 @@ function NewMovementModal({ onClose }: { onClose: () => void }) {
                 !form.warehouseId ||
                 (form.isSerialized
                   ? form.serialNumbers.every((serial) => !serial.trim())
-                  : form.quantity < 1) ||
-                (form.reason === 'TRANSFER' &&
-                  (!form.toWarehouseId ||
-                    form.toWarehouseId === form.warehouseId))
+                  : form.quantity < 1)
               }
             >
               {mutation.isPending ? 'Registrando...' : 'Registrar'}
@@ -361,6 +305,7 @@ function NewMovementModal({ onClose }: { onClose: () => void }) {
 
 export default function MovementsPage() {
   const [showNew, setShowNew] = useState(false);
+  const [showTransfer, setShowTransfer] = useState(false);
   const [reasonFilter, setReasonFilter] = useState<MovementReason | ''>('');
 
   const { data: movements = [], isLoading } = useQuery({
@@ -376,10 +321,16 @@ export default function MovementsPage() {
           <p className="mt-1 text-sm text-muted-foreground">Historial de movimientos de stock</p>
         </div>
         <RequirePermission permission="inventory:movements:create">
-          <Button onClick={() => setShowNew(true)}>
-            <Plus size={15} />
-            Nuevo movimiento
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => setShowTransfer(true)}>
+              <ArrowLeftRight size={15} />
+              Trasladar entre depósitos
+            </Button>
+            <Button onClick={() => setShowNew(true)}>
+              <Plus size={15} />
+              Nuevo movimiento
+            </Button>
+          </div>
         </RequirePermission>
       </div>
 
@@ -449,7 +400,7 @@ export default function MovementsPage() {
                       {fmtQty(m.quantity)}
                     </td>
                     <td className="px-4 py-3 text-xs text-muted-foreground">
-                      {m.warehouse?.name ?? '—'}
+                      {m.warehouse?.name ?? 'Sin depósito asignado'}
                     </td>
                     <td className="px-4 py-3 text-xs text-muted-foreground max-w-[200px] truncate">
                       {m.notes ?? '—'}
@@ -463,6 +414,9 @@ export default function MovementsPage() {
       )}
 
       {showNew && <NewMovementModal onClose={() => setShowNew(false)} />}
+      {showTransfer && (
+        <StockTransferDialog onClose={() => setShowTransfer(false)} />
+      )}
     </div>
   );
 }

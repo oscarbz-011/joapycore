@@ -16,7 +16,7 @@ const ALERT_META: Record<AlertType, {
 }> = {
   STOCK_LOW: {
     label: 'Stock bajo',
-    description: 'Notifica cuando el stock de un producto cae por debajo del umbral configurado.',
+    description: 'Marca para reposición, en Stock, a los productos que llegan a este umbral. Un producto con stock mínimo propio usa el suyo.',
     icon: Package,
     thresholdLabel: 'Unidades mínimas',
     thresholdUnit: 'unidades',
@@ -113,8 +113,12 @@ function AlertCard({ type, config }: { type: AlertType; config?: AlertConfig }) 
                   type="number"
                   min={1}
                   className={inputCls}
-                  defaultValue={config?.threshold ?? 5}
+                  defaultValue={config?.threshold ?? ''}
+                  placeholder="Ej: 5"
                   onBlur={(e) => setThreshold(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') setThreshold(e.currentTarget.value);
+                  }}
                 />
                 <span className="text-sm text-muted-foreground/60">{meta.thresholdUnit}</span>
               </div>

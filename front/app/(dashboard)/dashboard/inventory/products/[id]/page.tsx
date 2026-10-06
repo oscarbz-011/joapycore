@@ -22,6 +22,7 @@ import {
 } from '../../../../../../lib/api/inventory';
 import { procurementApi } from '../../../../../../lib/api/procurement';
 import { settingsApi } from '../../../../../../lib/api/settings';
+import { stockLevel } from '../../../../../../lib/inventory-stock';
 import { computeSuggestedPrice } from '../../../../../../lib/pricing';
 import { useActiveModules } from '../../../../../../lib/use-active-modules';
 import { RecipeTab } from './recipe-tab';
@@ -36,6 +37,12 @@ import { cn } from '@/lib/utils';
 
 const NUM_CLS = 'h-9 w-full min-w-0 rounded-3xl border border-transparent bg-input/50 px-3 text-sm outline-none transition-[color,box-shadow,background-color] focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30';
 const TEXTAREA_CLS = 'w-full min-w-0 rounded-2xl border border-transparent bg-input/50 px-3 py-2 text-sm outline-none resize-none transition-[color,box-shadow,background-color] focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30';
+
+const STOCK_LEVEL_CLS = {
+  out: 'text-destructive',
+  low: 'text-warn',
+  ok: 'text-foreground',
+} as const;
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -171,6 +178,8 @@ export default function ProductDetailPage() {
     }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['inventory-product', id] });
+      // Precio y stock mínimo también se muestran en la vista de Stock.
+      void queryClient.invalidateQueries({ queryKey: ['inventory-stock'] });
       setShowEdit(false);
     },
   });
@@ -285,6 +294,7 @@ export default function ProductDetailPage() {
                 description: product.description ?? undefined,
                 costPrice: product.costPrice ?? undefined,
                 salePrice: product.salePrice ?? undefined,
+                stockMin: product.stockMin,
                 isPurchasable: product.isPurchasable,
                 salesChannels: [...product.salesChannels],
               });
@@ -354,7 +364,7 @@ export default function ProductDetailPage() {
           {
             label: 'Stock',
             value: product.isSerialized ? `${product.stock} u.` : `${product.stock} ${product.unit}`,
-            cls: product.stock === 0 ? 'text-destructive' : product.stock <= 3 ? 'text-warn' : 'text-foreground',
+            cls: STOCK_LEVEL_CLS[stockLevel(product.stock, product.stockMin)],
           },
           { label: 'Precio costo', value: product.costPrice == null ? 'Pendiente' : fmtGs(product.costPrice), cls: product.costPrice == null ? 'text-warn' : 'text-foreground' },
           { label: 'Precio venta', value: product.salePrice == null ? 'Pendiente' : fmtGs(product.salePrice), cls: product.salePrice == null ? 'text-warn' : 'text-foreground' },
@@ -486,6 +496,20 @@ export default function ProductDetailPage() {
                   <span className="font-mono tabular-nums text-foreground">{fmtGs(suggestedFor(editForm.costPrice ?? 0))}</span>
                 </p>
               )}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <Label htmlFor="product-stock-min">Stock mínimo</Label>
+                  <NumericInput
+                    id="product-stock-min"
+                    value={editForm.stockMin ?? 0}
+                    onChange={(v) => setEditForm((f) => ({ ...f, stockMin: Math.max(0, Math.round(v)) }))}
+                    className={NUM_CLS}
+                  />
+                  <p className="text-[12px] text-muted-foreground">
+                    Al llegar a esta cantidad el producto se marca para reposición en Stock. Vacío = sin mínimo.
+                  </p>
+                </div>
+              </div>
               {editMutation.isError && (
                 <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
                   {/* El mensaje del backend dice qué campo rechazó; un
@@ -729,6 +753,7 @@ export default function ProductDetailPage() {
                 description: product.description ?? undefined,
                 costPrice: product.costPrice ?? undefined,
                 salePrice: product.salePrice ?? undefined,
+                stockMin: product.stockMin,
               });
               setShowEdit(true);
             }}

@@ -25,10 +25,12 @@ import { CategoriesService } from './services/categories.service';
 import { ProductsService } from './services/products.service';
 import { StockEntryService } from './services/stock-entry.service';
 import { StockService } from './services/stock.service';
+import { UnlocatedStockService } from './services/unlocated-stock.service';
 import { WarehousesModule } from '../warehouses/warehouses.module';
+import { AlertsModule } from '../alerts/alerts.module';
 
 @Module({
-  imports: [WarehousesModule],
+  imports: [WarehousesModule, AlertsModule],
   controllers: [
     BrandsController,
     CategoriesController,
@@ -44,6 +46,7 @@ import { WarehousesModule } from '../warehouses/warehouses.module';
     ProductsService,
     StockEntryService,
     StockService,
+    UnlocatedStockService,
     BrandsRepository,
     CategoriesRepository,
     ProductsRepository,
