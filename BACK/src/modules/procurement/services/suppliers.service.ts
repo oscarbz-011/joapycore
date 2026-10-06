@@ -1,6 +1,14 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { SuppliersRepository } from '../repositories/suppliers.repository';
-import { CreateSupplierDto } from '../dto/create-supplier.dto';
+import {
+  CreateSupplierDto,
+  UpdateSupplierDto,
+} from '../dto/create-supplier.dto';
+import { normalizeVolumeDiscounts } from '../commercial-terms.util';
+
+// Los tramos son objetos planos; Prisma pide que un JSON se declare como tal.
+const toJson = (value: object[]) => value as unknown as Prisma.InputJsonValue;
 
 @Injectable()
 export class SuppliersService {
@@ -17,12 +25,23 @@ export class SuppliersService {
   }
 
   create(tenantId: string, dto: CreateSupplierDto) {
-    return this.suppliersRepository.create(tenantId, dto);
+    const { volumeDiscounts, ...fields } = dto;
+    return this.suppliersRepository.create(tenantId, {
+      ...fields,
+      volumeDiscounts: toJson(normalizeVolumeDiscounts(volumeDiscounts)),
+    });
   }
 
-  async update(tenantId: string, id: string, dto: Partial<CreateSupplierDto>) {
+  async update(tenantId: string, id: string, dto: UpdateSupplierDto) {
     await this.findOne(tenantId, id);
-    await this.suppliersRepository.update(tenantId, id, dto);
+    const { volumeDiscounts, ...fields } = dto;
+    await this.suppliersRepository.update(tenantId, id, {
+      ...fields,
+      // undefined = no se tocan; un arreglo (aunque vacío) los reemplaza.
+      ...(volumeDiscounts !== undefined && {
+        volumeDiscounts: toJson(normalizeVolumeDiscounts(volumeDiscounts)),
+      }),
+    });
     return this.suppliersRepository.findById(tenantId, id);
   }
 

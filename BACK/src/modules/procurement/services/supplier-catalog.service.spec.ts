@@ -191,6 +191,64 @@ describe('SupplierCatalogService', () => {
     });
   });
 
+  describe('commercial terms of an item', () => {
+    beforeEach(() => {
+      jest.useFakeTimers().setSystemTime(new Date('2026-10-06T15:00:00.000Z'));
+    });
+    afterEach(() => jest.useRealTimers());
+
+    it('stamps when the availability was reported', async () => {
+      await service.update('tenant-1', 'item-1', { availability: 'ON_ORDER' });
+
+      expect(repository.update).toHaveBeenCalledWith('tenant-1', 'item-1', {
+        availability: 'ON_ORDER',
+        availabilityUpdatedAt: new Date('2026-10-06T15:00:00.000Z'),
+      });
+    });
+
+    it('clears the availability and its date together', async () => {
+      await service.update('tenant-1', 'item-1', { availability: null });
+
+      expect(repository.update).toHaveBeenCalledWith('tenant-1', 'item-1', {
+        availability: null,
+        availabilityUpdatedAt: null,
+      });
+    });
+
+    it('stores the quantity prices in order', async () => {
+      await service.update('tenant-1', 'item-1', {
+        minOrderQuantity: 6,
+        priceTiers: [
+          { minQuantity: 50, price: 40_000 },
+          { minQuantity: 10, price: 48_000 },
+        ],
+      });
+
+      expect(repository.update).toHaveBeenCalledWith('tenant-1', 'item-1', {
+        minOrderQuantity: 6,
+        priceTiers: [
+          { minQuantity: 10, price: 48_000 },
+          { minQuantity: 50, price: 40_000 },
+        ],
+      });
+    });
+
+    it('rejects a quantity price above the list price of the item', async () => {
+      repository.findById.mockResolvedValue({
+        id: 'item-1',
+        productId: null,
+        price: 54_000,
+      });
+
+      await expect(
+        service.update('tenant-1', 'item-1', {
+          priceTiers: [{ minQuantity: 10, price: 60_000 }],
+        }),
+      ).rejects.toBeInstanceOf(UnprocessableEntityException);
+      expect(repository.update).not.toHaveBeenCalled();
+    });
+  });
+
   describe('mapToProduct', () => {
     it('links the item to an internal product', async () => {
       await service.mapToProduct('tenant-1', 'item-1', { productId: 'prod-1' });
