@@ -198,7 +198,7 @@ function CreateOrderModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent showCloseButton={false} className="sm:max-w-2xl p-0 max-h-[90vh] overflow-y-auto">
+      <DialogContent showCloseButton={false} className="gap-0 sm:max-w-4xl p-0 max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between border-b border-border px-6 py-4 sticky top-0 bg-card z-10">
           <DialogTitle>Nueva orden de compra</DialogTitle>
           <Button variant="ghost" size="icon" onClick={() => onOpenChange(false)}>
