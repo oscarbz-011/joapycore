@@ -31,6 +31,8 @@ import {
   toCatalogProductPayload,
   type CatalogProductForm,
 } from '@/lib/catalog-product';
+import { priceValidity, validityLabel } from '@/lib/catalog-validity';
+import { localISODate } from '@/lib/date';
 import { cn } from '@/lib/utils';
 
 const NUM_CLS =
@@ -192,6 +194,8 @@ function NewProduct({
     onError: (err) => setError(apiErrorMessage(err, 'No se pudo completar la operación')),
   });
 
+  const today = localISODate(new Date());
+  const priceExpired = priceValidity(item, today).status === 'expired';
   const category = categories.find((c) => c.id === form.categoryId);
   const brand = brands.find((b) => b.id === form.brandId);
 
@@ -308,6 +312,13 @@ function NewProduct({
           ? 'El producto ya se creó, pero no quedó vinculado a este ítem. Reintentá el vínculo.'
           : 'El producto queda activo y vinculado a este ítem, listo para una orden de compra. Se habilita para la venta al recibir la primera mercadería.'}
       </p>
+
+      {priceExpired && !createdId && (
+        <p className="rounded-xl border border-warn/40 bg-warn-subtle px-3 py-2 text-xs text-warn">
+          El precio de lista de este ítem ya no rige ({validityLabel(item, today).toLowerCase()}).
+          Revisá el costo antes de crear el producto.
+        </p>
+      )}
 
       {error && <ErrorNote>{error}</ErrorNote>}
 

@@ -28,6 +28,12 @@ export interface SupplierCatalogItem {
   product: { id: string; name: string; unit: string } | null;
 }
 
+/** Vigencia de un precio en días de calendario (AAAA-MM-DD). */
+export interface CatalogValidity {
+  validFrom?: string;
+  validTo?: string;
+}
+
 export interface CatalogImportResult {
   imported: number;
   /** Filas rechazadas, con el número de fila tal como se ve en Excel. */
@@ -186,9 +192,15 @@ export const procurementApi = {
   // El apiClient fuerza 'application/json' por defecto, así que hay que pisarlo
   // acá: sin esto el multipart sale sin boundary, multer no encuentra el
   // archivo y el backend responde 400. Mismo patrón que files.ts / sifen.ts.
-  importCatalog: (supplierId: string, file: File): Promise<CatalogImportResult> => {
+  importCatalog: (
+    supplierId: string,
+    file: File,
+    validity: CatalogValidity = {},
+  ): Promise<CatalogImportResult> => {
     const body = new FormData();
     body.append('file', file);
+    if (validity.validFrom) body.append('validFrom', validity.validFrom);
+    if (validity.validTo) body.append('validTo', validity.validTo);
     return apiClient
       .post(`/procurement/suppliers/${supplierId}/catalog/import`, body, {
         headers: { 'Content-Type': 'multipart/form-data' },
@@ -199,7 +211,15 @@ export const procurementApi = {
 
   updateCatalogItem: (
     id: string,
-    dto: { description?: string; price?: number; supplierUnit?: string; conversionFactor?: number },
+    dto: {
+      description?: string;
+      price?: number;
+      supplierUnit?: string;
+      conversionFactor?: number;
+      // null borra la fecha.
+      validFrom?: string | null;
+      validTo?: string | null;
+    },
   ): Promise<SupplierCatalogItem> =>
     apiClient.patch(`/procurement/catalog/${id}`, dto).then((r) => r.data),
 

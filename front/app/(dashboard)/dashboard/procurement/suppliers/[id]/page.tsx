@@ -6,7 +6,7 @@ import { RequirePermission } from '@/components/require-permission';
 
 import { apiErrorMessage } from '@/lib/api/api-error';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -17,9 +17,12 @@ import { NumericInput } from '../../../../../../components/numeric-input';
 import {
   procurementApi,
   type CatalogImportResult,
+  type CatalogValidity,
   type SupplierCatalogItem,
 } from '../../../../../../lib/api/procurement';
+import { CatalogImportDialog } from '@/components/procurement/catalog-import-dialog';
 import { CatalogMapDialog } from '@/components/procurement/catalog-map-dialog';
+import { ValidityFields } from '@/components/procurement/validity-fields';
 import { SupplierDialog } from '@/components/procurement/supplier-dialog';
 import { SupplierSummary } from '@/components/procurement/supplier-summary';
 import { Badge } from '@/components/ui/badge';
@@ -31,6 +34,8 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
+import { priceValidity, validityLabel, validityRangeError } from '@/lib/catalog-validity';
+import { localISODate } from '@/lib/date';
 import { cn } from '@/lib/utils';
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -41,7 +46,21 @@ function fmtGs(n: number) {
   return 'Gs. ' + new Intl.NumberFormat('es-PY').format(Math.round(n));
 }
 
-type MapFilter = 'all' | 'unmapped';
+type MapFilter = 'all' | 'unmapped' | 'expired';
+
+const FILTER_LABEL: Record<MapFilter, string> = {
+  all: 'Todos los ítems',
+  unmapped: 'Solo sin mapear',
+  expired: 'Precio vencido',
+};
+
+const VALIDITY_CLASS = {
+  open: 'text-muted-foreground',
+  valid: 'text-foreground',
+  upcoming: 'text-muted-foreground',
+  expiring: 'font-medium text-warn',
+  expired: 'font-medium text-destructive',
+} as const;
 
 // ── Editar un ítem del catálogo ────────────────────────────────────────────────
 
@@ -57,19 +76,25 @@ function EditItemDialog({
   const [price, setPrice] = useState(item.price ?? 0);
   const [unit, setUnit] = useState(item.supplierUnit ?? '');
   const [factor, setFactor] = useState(item.conversionFactor ?? 0);
+  const initialFrom = item.validFrom?.slice(0, 10) ?? '';
+  const initialTo = item.validTo?.slice(0, 10) ?? '';
+  const [validFrom, setValidFrom] = useState(initialFrom);
+  const [validTo, setValidTo] = useState(initialTo);
   const [error, setError] = useState('');
+  const rangeError = validityRangeError(validFrom, validTo);
 
   const mutation = useMutation({
     mutationFn: () => {
       // Solo se mandan los campos realmente editados: la API no tiene forma de
       // limpiar un campo, así que enviar todo convertiría un precio nulo en 0.
-      const dto: {
-        description?: string; price?: number; supplierUnit?: string; conversionFactor?: number;
-      } = {};
+      const dto: Parameters<typeof procurementApi.updateCatalogItem>[1] = {};
       if (description.trim() !== item.description) dto.description = description.trim();
       if (price !== (item.price ?? 0)) dto.price = price;
       if (unit.trim() !== (item.supplierUnit ?? '')) dto.supplierUnit = unit.trim();
       if (factor !== (item.conversionFactor ?? 0)) dto.conversionFactor = factor;
+      // La vigencia sí se puede borrar: una fecha quitada viaja como null.
+      if (validFrom !== initialFrom) dto.validFrom = validFrom || null;
+      if (validTo !== initialTo) dto.validTo = validTo || null;
       return procurementApi.updateCatalogItem(item.id, dto);
     },
     onSuccess: () => {
@@ -90,7 +115,11 @@ function EditItemDialog({
         </DialogHeader>
 
         <form
-          onSubmit={(e) => { e.preventDefault(); setError(''); mutation.mutate(); }}
+          onSubmit={(e) => {
+            e.preventDefault();
+            setError(rangeError ?? '');
+            if (!rangeError) mutation.mutate();
+          }}
           className="px-5 py-4 space-y-3"
         >
           <div className="space-y-1.5">
@@ -121,6 +150,17 @@ function EditItemDialog({
           <p className="text-xs text-muted-foreground/60">
             El factor dice cuántas unidades internas entran en una unidad del proveedor
             (una caja de 12 = factor 12).
+          </p>
+
+          <ValidityFields
+            idPrefix="catalog-item"
+            from={validFrom}
+            to={validTo}
+            onFromChange={setValidFrom}
+            onToChange={setValidTo}
+          />
+          <p className="text-xs text-muted-foreground/60">
+            Hasta cuándo rige este precio. Sin fechas, no vence.
           </p>
 
           {error && (
@@ -331,7 +371,7 @@ export default function SupplierDetailPage() {
   const queryClient = useQueryClient();
   const supplierId = params.id;
 
-  const fileRef = useRef<HTMLInputElement>(null);
+  const [importing, setImporting] = useState(false);
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [mapFilter, setMapFilter] = useState<MapFilter>('all');
@@ -360,14 +400,25 @@ export default function SupplierDetailPage() {
     unmapped: mapFilter === 'unmapped' ? true : undefined,
   };
 
-  const { data: items = [], isLoading: loadingCatalog } = useQuery({
-    queryKey: ['supplier-catalog', supplierId, debouncedSearch, mapFilter],
+  // "Vencido" se filtra acá y no en la API: la lista ya viene completa y así
+  // el contador de vencidos y la tabla salen de los mismos datos.
+  const { data: loaded = [], isLoading: loadingCatalog } = useQuery({
+    queryKey: ['supplier-catalog', supplierId, debouncedSearch, mapFilter === 'unmapped'],
     queryFn: () => procurementApi.listCatalog(supplierId, filters),
   });
+  const today = localISODate(new Date());
+  const expiredCount = loaded.filter(
+    (i) => priceValidity(i, today).status === 'expired',
+  ).length;
+  const items =
+    mapFilter === 'expired'
+      ? loaded.filter((i) => priceValidity(i, today).status === 'expired')
+      : loaded;
 
   const importMutation = useMutation({
-    mutationFn: (file: File) => procurementApi.importCatalog(supplierId, file),
-    onSuccess: (result, file) => {
+    mutationFn: ({ file, validity }: { file: File; validity: CatalogValidity }) =>
+      procurementApi.importCatalog(supplierId, file, validity),
+    onSuccess: (result, { file }) => {
       setImportReport({ fileName: file.name, result });
       void queryClient.invalidateQueries({ queryKey: ['supplier-catalog'] });
     },
@@ -379,7 +430,7 @@ export default function SupplierDetailPage() {
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['supplier-catalog'] }),
   });
 
-  const hasFilters = debouncedSearch !== '' || mapFilter === 'unmapped';
+  const hasFilters = debouncedSearch !== '' || mapFilter !== 'all';
   const unmappedCount = items.filter((i) => i.productId === null).length;
   // El estado vacío ya trae su propio botón de importar; en el resto de los
   // casos el botón vive en el encabezado.
@@ -387,7 +438,7 @@ export default function SupplierDetailPage() {
 
   function pickFile() {
     setImportError('');
-    fileRef.current?.click();
+    setImporting(true);
   }
 
   if (loadingSupplier) {
@@ -407,17 +458,13 @@ export default function SupplierDetailPage() {
 
   return (
     <div>
-      <input
-        ref={fileRef}
-        type="file"
-        accept=".xlsx,.csv"
-        className="sr-only"
-        onChange={(e) => {
-          const f = e.target.files?.[0];
-          if (f) importMutation.mutate(f);
-          e.target.value = '';
-        }}
-      />
+      {importing && (
+        <CatalogImportDialog
+          hasItems={loaded.length > 0}
+          onImport={(file, validity) => importMutation.mutate({ file, validity })}
+          onClose={() => setImporting(false)}
+        />
+      )}
 
       <button
         onClick={() => router.push('/dashboard/procurement/suppliers')}
@@ -463,6 +510,14 @@ export default function SupplierDetailPage() {
             {mapFilter !== 'unmapped' && unmappedCount > 0 && (
               <> · <span className="text-warn font-medium">{unmappedCount} sin mapear</span></>
             )}
+            {mapFilter !== 'expired' && expiredCount > 0 && (
+              <>
+                {' · '}
+                <span className="font-medium text-destructive">
+                  {expiredCount} con precio vencido
+                </span>
+              </>
+            )}
           </p>
         )}
       </div>
@@ -507,12 +562,13 @@ export default function SupplierDetailPage() {
             >
               <SelectTrigger className="w-48 overflow-hidden">
                 <span className="min-w-0 flex-1 truncate text-left text-sm">
-                  {mapFilter === 'unmapped' ? 'Solo sin mapear' : 'Todos los ítems'}
+                  {FILTER_LABEL[mapFilter]}
                 </span>
               </SelectTrigger>
               <SelectContent className="w-auto min-w-[12rem]">
                 <SelectItem value="all">Todos los ítems</SelectItem>
                 <SelectItem value="unmapped">Solo sin mapear</SelectItem>
+                <SelectItem value="expired">Precio vencido</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -522,7 +578,9 @@ export default function SupplierDetailPage() {
               <p className="text-sm text-muted-foreground/60">
                 {mapFilter === 'unmapped' && !debouncedSearch
                   ? 'No quedan ítems sin mapear. El catálogo entero está listo para usarse en órdenes de compra.'
-                  : 'Ningún ítem coincide con la búsqueda.'}
+                  : mapFilter === 'expired' && !debouncedSearch
+                    ? 'Ningún precio está vencido.'
+                    : 'Ningún ítem coincide con la búsqueda.'}
               </p>
               <Button
                 variant="outline"
@@ -545,6 +603,7 @@ export default function SupplierDetailPage() {
                       <th className="px-3 py-3 text-left whitespace-nowrap">Código</th>
                       <th className="px-3 py-3 text-left">Descripción</th>
                       <th className="px-3 py-3 text-right whitespace-nowrap">Precio</th>
+                      <th className="px-3 py-3 text-left whitespace-nowrap">Vigencia</th>
                       <th className="px-3 py-3 text-left whitespace-nowrap">Unidad</th>
                       <th className="px-3 py-3 text-left">Producto interno</th>
                       <th className="px-3 py-3" />
@@ -563,6 +622,14 @@ export default function SupplierDetailPage() {
                             {item.price !== null
                               ? fmtGs(item.price)
                               : <span className="text-muted-foreground/50">Sin precio</span>}
+                          </td>
+                          <td
+                            className={cn(
+                              'px-3 py-2.5 text-xs whitespace-nowrap',
+                              VALIDITY_CLASS[priceValidity(item, today).status],
+                            )}
+                          >
+                            {validityLabel(item, today)}
                           </td>
                           <td className="px-3 py-2.5 text-xs text-muted-foreground whitespace-nowrap">
                             {item.supplierUnit ?? '—'}
