@@ -244,6 +244,42 @@ describe('ProductsService', () => {
       );
     });
 
+    it('holds the sales channels until the first receipt when asked to', async () => {
+      productsRepository.create.mockResolvedValue(makeProduct());
+
+      await service.create('tenant-1', {
+        ...baseDto,
+        sellOnFirstReceipt: true,
+      });
+
+      expect(productsRepository.create).toHaveBeenCalledWith(
+        'tenant-1',
+        expect.objectContaining({
+          status: 'ACTIVE',
+          salesChannels: [],
+          salesChannelsOnReceipt: ['NORMAL'],
+        }),
+      );
+    });
+
+    it('holds the channels that were explicitly requested', async () => {
+      productsRepository.create.mockResolvedValue(makeProduct());
+
+      await service.create('tenant-1', {
+        ...baseDto,
+        salesChannels: ['POS'],
+        sellOnFirstReceipt: true,
+      });
+
+      expect(productsRepository.create).toHaveBeenCalledWith(
+        'tenant-1',
+        expect.objectContaining({
+          salesChannels: [],
+          salesChannelsOnReceipt: ['POS'],
+        }),
+      );
+    });
+
     it('preserves explicitly supplied channels', async () => {
       productsRepository.create.mockResolvedValue(makeProduct());
 

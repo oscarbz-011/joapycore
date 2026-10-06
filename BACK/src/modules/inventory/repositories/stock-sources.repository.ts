@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import type { OrderChannel } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { PrismaClientOrTx } from '../../../prisma/types';
 
@@ -52,10 +53,35 @@ export class StockSourcesRepository {
       include: {
         items: {
           include: {
-            product: { select: { isSerialized: true, usesLots: true } },
+            product: {
+              select: {
+                isSerialized: true,
+                usesLots: true,
+                salesChannels: true,
+                salesChannelsOnReceipt: true,
+              },
+            },
           },
         },
       },
+    });
+  }
+
+  // El filtro por canales pendientes hace la operación idempotente: si otra
+  // recepción ya los abrió, esta no cambia nada.
+  openSalesChannels(
+    tenantId: string,
+    productId: string,
+    salesChannels: OrderChannel[],
+    client: PrismaClientOrTx = this.prisma,
+  ) {
+    return client.product.updateMany({
+      where: {
+        tenantId,
+        id: productId,
+        salesChannelsOnReceipt: { isEmpty: false },
+      },
+      data: { salesChannels, salesChannelsOnReceipt: [] },
     });
   }
 
