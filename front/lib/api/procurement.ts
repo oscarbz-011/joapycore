@@ -53,6 +53,14 @@ export interface OfferSupplier {
   volumeDiscounts: VolumeDiscount[];
 }
 
+/** Un ítem sin vincular que podría ser `productId`; lo confirma una persona. */
+export interface LinkSuggestion {
+  productId: string;
+  /** Parte de las palabras del producto que aparecen en el ítem (0 a 1). */
+  score: number;
+  item: SupplierCatalogItem & { supplier: { id: string; name: string } };
+}
+
 /** Un ítem de catálogo junto con su proveedor: una fila del comparador. */
 export interface CatalogOffer extends SupplierCatalogItem {
   supplier: OfferSupplier;
@@ -365,6 +373,19 @@ export const procurementApi = {
               percent: Number(tier.percent),
             })),
           },
+        })),
+      ),
+
+  /** Ítems sin vincular, de cualquier proveedor, que parecen ser esos productos. */
+  listLinkSuggestions: (productIds: string[]): Promise<LinkSuggestion[]> =>
+    apiClient
+      .get('/procurement/catalog/link-suggestions', {
+        params: { productIds: productIds.join(',') },
+      })
+      .then((r) =>
+        (r.data as LinkSuggestion[]).map((raw) => ({
+          ...raw,
+          item: { ...normalizeCatalogItem(raw.item), supplier: raw.item.supplier },
         })),
       ),
 

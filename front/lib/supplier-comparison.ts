@@ -154,6 +154,11 @@ export function compareSuppliers(
   needs: readonly Need[],
   offers: readonly CatalogOffer[],
   todayISO: string,
+  /**
+   * Proveedores que se quieren ver aunque no coticen nada: su columna dice
+   * qué les falta (típicamente, vincular su ítem al producto).
+   */
+  alsoShow: readonly OfferSupplier[] = [],
 ): SupplierQuote[] {
   const wanted = needs.filter((need) => need.productId && need.quantity > 0);
   if (wanted.length === 0) return [];
@@ -166,10 +171,17 @@ export function compareSuppliers(
     ]);
   }
 
-  return [...bySupplier.values()]
+  const quoted = [...bySupplier.values()]
     .map((items) => supplierQuote(items[0].supplier, wanted, items, todayISO))
-    .filter((quote) => quote.lines.length > 0)
-    .sort((a, b) => a.supplier.name.localeCompare(b.supplier.name, 'es'));
+    .filter((quote) => quote.lines.length > 0);
+  const quotedIds = new Set(quoted.map((quote) => quote.supplier.id));
+  const empty = alsoShow
+    .filter((supplier) => !quotedIds.has(supplier.id))
+    .map((supplier) => supplierQuote(supplier, wanted, [], todayISO));
+
+  return [...quoted, ...empty].sort((a, b) =>
+    a.supplier.name.localeCompare(b.supplier.name, 'es'),
+  );
 }
 
 /**

@@ -194,6 +194,40 @@ describe('compareSuppliers — the whole order', () => {
   });
 });
 
+describe('compareSuppliers — suppliers chosen by hand', () => {
+  const central = supplier({ id: 'sup-c', name: 'Importadora Central' });
+
+  // El otro proveedor tiene el producto en su lista pero sin vincular: se
+  // muestra igual, sin cotización, para poder resolverlo desde el comparador.
+  it('shows a chosen supplier that quotes nothing, with everything missing', () => {
+    const quotes = compareSuppliers([need(10)], [offer()], TODAY, [central]);
+
+    expect(quotes.map((q) => q.supplier.name)).toEqual([
+      'Importadora A',
+      'Importadora Central',
+    ]);
+    expect(quotes[1]).toMatchObject({
+      lines: [],
+      missingProductIds: ['prod-1'],
+      complete: false,
+      total: 0,
+    });
+  });
+
+  it('does not repeat a chosen supplier that already quotes', () => {
+    const quotes = compareSuppliers([need(10)], [offer()], TODAY, [supplier()]);
+
+    expect(quotes).toHaveLength(1);
+    expect(quotes[0].lines).toHaveLength(1);
+  });
+
+  it('never ranks an empty column as the best price', () => {
+    const quotes = compareSuppliers([need(10)], [offer()], TODAY, [central]);
+
+    expect(bestQuoteId(quotes)).toBe('sup-a');
+  });
+});
+
 describe('bestQuoteId', () => {
   const quoteOf = (id: string, price: number, extra: Partial<OfferSupplier> = {}) =>
     offer({
