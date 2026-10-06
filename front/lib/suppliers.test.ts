@@ -5,6 +5,7 @@ import {
   filterSuppliers,
   paymentTermLabel,
   supplierFormFrom,
+  supplierInitials,
   toSupplierPayload,
 } from './suppliers';
 
@@ -126,5 +127,21 @@ describe('supplier form', () => {
       toSupplierPayload({ ...emptySupplierForm(), paymentTermDays: '-5' })
         .paymentTermDays,
     ).toBe(0);
+  });
+});
+
+describe('supplierInitials', () => {
+  it('takes the first letter of the first two words', () => {
+    expect(supplierInitials('Importadora Central S.A.')).toBe('IC');
+    expect(supplierInitials('  importadora   b ')).toBe('IB');
+  });
+
+  it('uses two letters of a single-word name', () => {
+    expect(supplierInitials('Tokyo')).toBe('TO');
+  });
+
+  it('skips punctuation and survives an empty name', () => {
+    expect(supplierInitials('"La Casa" del Cable')).toBe('LC');
+    expect(supplierInitials('')).toBe('?');
   });
 });

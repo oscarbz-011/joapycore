@@ -63,6 +63,18 @@ export function paymentTermLabel(days: number | null): string {
   return `${days} ${days === 1 ? 'día' : 'días'}`;
 }
 
+/** Iniciales para el distintivo del proveedor (no hay logo cargado). */
+export function supplierInitials(name: string): string {
+  const words = name
+    .split(/\s+/)
+    .map((word) => word.replace(/[^\p{L}\p{N}]/gu, ''))
+    .filter(Boolean);
+  if (words.length === 0) return '?';
+  const initials =
+    words.length === 1 ? words[0].slice(0, 2) : words[0][0] + words[1][0];
+  return initials.toUpperCase();
+}
+
 const normalize = (text: string) =>
   text
     .normalize('NFD')
