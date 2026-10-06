@@ -11,6 +11,26 @@ describe('SupplierCatalogRepository', () => {
     repository = new SupplierCatalogRepository(prisma as never);
   });
 
+  describe('findUnlinkedMatching', () => {
+    it('looks only at unlinked items of active suppliers of the tenant', async () => {
+      await repository.findUnlinkedMatching('tenant-1', ['abridor', 'vinho']);
+
+      const [query] = prisma.supplierCatalogItem.findMany.mock.calls[0] as [
+        { where: Record<string, unknown>; take: number },
+      ];
+      expect(query.where).toMatchObject({
+        tenantId: 'tenant-1',
+        productId: null,
+        supplier: { tenantId: 'tenant-1', isActive: true, deletedAt: null },
+        OR: [
+          { description: { contains: 'abridor', mode: 'insensitive' } },
+          { description: { contains: 'vinho', mode: 'insensitive' } },
+        ],
+      });
+      expect(query.take).toBeGreaterThan(0);
+    });
+  });
+
   describe('findOffers', () => {
     // El comparador cruza proveedores: el filtro por empresa va en el ítem y
     // también en el proveedor, y un proveedor dado de baja no se ofrece.

@@ -59,6 +59,19 @@ export class SupplierCatalogController {
     return this.service.findOffers(tenantId, query.productIds);
   }
 
+  @Get('catalog/link-suggestions')
+  @Permissions('procurement:read')
+  @ApiOperation({
+    summary:
+      'Ítems sin vincular de cualquier proveedor que parecen ser estos productos',
+  })
+  findLinkSuggestions(
+    @CurrentTenant() tenantId: string,
+    @Query() query: CatalogOffersDto,
+  ) {
+    return this.service.findLinkSuggestions(tenantId, query.productIds);
+  }
+
   @Get('suppliers/:supplierId/catalog')
   @Permissions('procurement:read')
   @ApiOperation({ summary: 'Listar el catálogo de un proveedor' })

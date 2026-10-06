@@ -12,6 +12,9 @@ export interface CatalogFilters {
   onlyValid?: boolean;
 }
 
+// Tope del primer filtro de sugerencias de vínculo (ver findUnlinkedMatching).
+const UNLINKED_SCAN_LIMIT = 500;
+
 const ITEM_INCLUDE = {
   product: { select: { id: true, name: true, unit: true } },
 } as const;
@@ -80,6 +83,31 @@ export class SupplierCatalogRepository {
         },
       },
       orderBy: [{ supplier: { name: 'asc' } }, { description: 'asc' }],
+    });
+  }
+
+  findProductsForMatching(tenantId: string, productIds: string[]) {
+    return this.prisma.product.findMany({
+      where: { tenantId, id: { in: productIds }, deletedAt: null },
+      select: { id: true, name: true, model: true },
+    });
+  }
+
+  // Ítems todavía sin vincular de proveedores activos cuya descripción
+  // contiene alguna de las palabras buscadas. Es un primer filtro amplio: el
+  // orden y el corte los decide rankLinkSuggestions.
+  findUnlinkedMatching(tenantId: string, words: string[]) {
+    return this.prisma.supplierCatalogItem.findMany({
+      where: {
+        tenantId,
+        productId: null,
+        supplier: { tenantId, isActive: true, deletedAt: null },
+        OR: words.map((word) => ({
+          description: { contains: word, mode: 'insensitive' as const },
+        })),
+      },
+      include: { supplier: { select: { id: true, name: true } } },
+      take: UNLINKED_SCAN_LIMIT,
     });
   }
 
