@@ -5,6 +5,8 @@ import { useQuery } from '@tanstack/react-query';
 import { CheckCircle, Clock, CreditCard } from 'lucide-react';
 import { salesApi, type SaleOrder } from '../../../../../lib/api/sales';
 import { useAuth } from '../../../../../lib/auth-context';
+import { isNewRequest, sortPendingRequests } from '../../../../../lib/credit-inbox';
+import { Badge } from '@/components/ui/badge';
 import {
   formatPrice,
   formatDate,
@@ -27,13 +29,16 @@ function OrderCard({ order }: { order: SaleOrder }) {
     <button
       type="button"
       onClick={() => router.push(`/dashboard/billing/approvals/${order.id}`)}
-      className="text-left rounded-xl border border-border bg-card p-5 hover:border-ring/50 transition-colors"
+      className={`text-left rounded-xl border bg-card p-5 hover:border-ring/50 transition-colors ${isNewRequest(order) ? 'border-primary/50' : 'border-border'}`}
     >
       <div className="flex items-start justify-between gap-3 mb-4">
         <div className="min-w-0">
-          <p className="font-semibold text-foreground truncate">
-            {order.customer.firstName} {order.customer.lastName}
-          </p>
+          <div className="flex items-center gap-2">
+            <p className="font-semibold text-foreground truncate">
+              {order.customer.firstName} {order.customer.lastName}
+            </p>
+            {isNewRequest(order) && <Badge className="shrink-0">Nuevo</Badge>}
+          </div>
           {order.customer.email && <p className="text-xs text-muted-foreground/60 mt-0.5 truncate">{order.customer.email}</p>}
           {order.customer.documentNumber && (
             <p className="text-xs text-muted-foreground/60 truncate">
@@ -91,6 +96,9 @@ export default function ApprovalsPage() {
     enabled: canManage,
   });
 
+  const sorted = sortPendingRequests(orders);
+  const newCount = orders.filter(isNewRequest).length;
+
   if (!canManage) {
     return (
       <div className="py-24 text-center">
@@ -105,6 +113,11 @@ export default function ApprovalsPage() {
         <h1 className="text-2xl font-semibold text-foreground">Evaluación de crédito</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           Pedidos de venta a crédito pendientes de evaluación antes de confirmar.
+          {newCount > 0 && (
+            <span className="ml-1 font-medium text-foreground">
+              {newCount} sin revisar.
+            </span>
+          )}
         </p>
       </div>
 
@@ -118,7 +131,7 @@ export default function ApprovalsPage() {
         </div>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {orders.map((order) => (
+          {sorted.map((order) => (
             <OrderCard key={order.id} order={order} />
           ))}
         </div>

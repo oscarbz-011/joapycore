@@ -44,7 +44,48 @@ describe('CreditConfigService', () => {
         5,
         5,
         3,
+        undefined,
+        undefined,
       );
+    });
+
+    it('passes the rating ranges and the uncollectible days to the repository', async () => {
+      repo.upsertConfig.mockResolvedValue(makeConfig());
+      await service.setEnabled(
+        'tenant-1',
+        true,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        [0, 7, 20, 45],
+        180,
+      );
+      expect(repo.upsertConfig).toHaveBeenCalledWith(
+        'tenant-1',
+        true,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        [0, 7, 20, 45],
+        180,
+      );
+    });
+
+    it('rejects rating ranges that are not strictly increasing', () => {
+      expect(() =>
+        service.setEnabled(
+          'tenant-1',
+          true,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          [0, 10, 10, 30],
+        ),
+      ).toThrow('orden creciente');
+      expect(repo.upsertConfig).not.toHaveBeenCalled();
     });
   });
 

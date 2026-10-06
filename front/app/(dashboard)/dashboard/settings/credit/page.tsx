@@ -19,6 +19,7 @@ import {
   type InterestComponent,
   type InterestComponentFrequency,
 } from "../../../../../lib/api/settings";
+import { CreditRatingSettings } from "@/components/settings/credit-rating-settings";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -1095,6 +1096,8 @@ export default function CreditSettingsPage() {
               )}
             </div>
           )}
+
+          {enabled && config && <CreditRatingSettings config={config} />}
 
           {/* Interest/mora components — only visible when enabled */}
           {enabled && (

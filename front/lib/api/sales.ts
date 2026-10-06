@@ -19,7 +19,9 @@ export type SaleOrderStatus =
 
 export type ComboPriceMode = 'FIXED' | 'SUM_WITH_DISCOUNT';
 export type CreditAdjustmentSuggestion = 'LOWER_VALUE_PRODUCT' | 'MORE_INSTALLMENTS' | 'ADD_GUARANTOR';
-export type CreditRating = 'SIN_HISTORIAL' | 'BUENO' | 'REGULAR' | 'RIESGO';
+// 1 = paga al día … 5 = se atrasa mucho; 6 = incobrable/judicial.
+export type CreditScore = 1 | 2 | 3 | 4 | 5 | 6;
+export type InstallmentStatus = 'PENDING' | 'PARTIAL' | 'PAID' | 'OVERDUE';
 export type CreditBureauCheckResult = 'CLEAN' | 'FLAGGED';
 export type EconomicActivity = 'ASALARIADO' | 'FUNCIONARIO_PUBLICO' | 'PROFESIONAL_INDEPENDIENTE' | 'COMERCIANTE';
 
@@ -36,10 +38,27 @@ export interface Guarantor {
   createdAt: string;
 }
 
-export interface ActiveLoanSummary {
+export interface InstallmentDetail {
+  number: number;
+  dueDate: string;
+  amount: number;
+  paidAmount: number;
+  balance: number;
+  paidAt: string | null;
+  status: InstallmentStatus;
+  // null = todavía no venció y no está pagada: no se puede evaluar.
+  delayDays: number | null;
+}
+
+export interface LoanSummary {
   loanId: string;
+  status: 'ACTIVE' | 'PAID';
+  // Factura de la venta que originó el crédito (null si no se emitió).
+  invoiceId: string | null;
+  invoiceNumber: string | null;
   productNames: string[];
   totalAmount: number;
+  paidAmount: number;
   outstandingBalance: number;
   monthlyInstallment: number;
   installmentsPaid: number;
@@ -48,11 +67,22 @@ export interface ActiveLoanSummary {
   firstDueDate: string | null;
   finalDueDate: string | null;
   nextDueDate: string | null;
+  averageDelayDays: number | null;
+  maxDelayDays: number;
+  lateInstallments: number;
+  installments: InstallmentDetail[];
 }
 
 export interface CreditHistory {
-  rating: CreditRating;
-  activeLoans: ActiveLoanSummary[];
+  // null = sin historial evaluable (ninguna cuota vencida o pagada todavía).
+  score: CreditScore | null;
+  averageDelayDays: number | null;
+  uncollectible: {
+    manual: { markedAt: string; reason: string | null } | null;
+    automatic: boolean;
+  };
+  activeLoans: LoanSummary[];
+  finishedLoans: LoanSummary[];
   overdueCount: number;
   overdueAmount: number;
 }
@@ -176,6 +206,8 @@ export interface SaleOrder {
   installments: number | null;
   interestRate: number | null;
   orderDate: string;
+  // Primera vez que un analista abrió la evaluación de crédito; null = nueva.
+  creditViewedAt: string | null;
   notes: string | null;
   quoteNumber: string | null;
   quotePdfFileId: string | null;
@@ -350,6 +382,11 @@ export const salesApi = {
   listPendingApprovals: (): Promise<SaleOrder[]> =>
     apiClient.get('/sales/orders/pending-approvals').then((r) => r.data),
 
+  markCreditViewed: (id: string): Promise<{ marked: boolean }> =>
+    apiClient
+      .post(`/sales/orders/${id}/credit-evaluation/viewed`)
+      .then((r) => r.data),
+
   approveCredit: (id: string): Promise<SaleOrder> =>
     apiClient.post(`/sales/orders/${id}/approve`).then((r) => r.data),
 
@@ -396,6 +433,15 @@ export const salesApi = {
 
   deleteCustomer: (id: string): Promise<void> =>
     apiClient.delete(`/sales/customers/${id}`).then((r) => r.data),
+
+  // Calificación 6 manual: bloquea la aprobación de créditos nuevos.
+  markCustomerUncollectible: (id: string, reason: string): Promise<Customer> =>
+    apiClient
+      .post(`/sales/customers/${id}/uncollectible`, { reason })
+      .then((r) => r.data),
+
+  clearCustomerUncollectible: (id: string): Promise<Customer> =>
+    apiClient.delete(`/sales/customers/${id}/uncollectible`).then((r) => r.data),
 
   // Performance & targets
   getPerformance: (period: string): Promise<SalesPerformance> =>

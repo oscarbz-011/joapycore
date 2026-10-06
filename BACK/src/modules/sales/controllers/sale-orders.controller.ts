@@ -140,6 +140,20 @@ export class SaleOrdersController {
     return this.saleOrdersService.getCreditEvaluation(tenantId, id);
   }
 
+  @Post(':id/credit-evaluation/viewed')
+  @HttpCode(HttpStatus.OK)
+  @Permissions('sales:credit:evaluate')
+  @ApiOperation({
+    summary: 'Marcar la solicitud de crédito como revisada por un analista',
+  })
+  markCreditViewed(
+    @CurrentTenant() tenantId: string,
+    @CurrentUser() user: JwtPayload,
+    @Param('id') id: string,
+  ) {
+    return this.saleOrdersService.markCreditViewed(tenantId, id, user.sub);
+  }
+
   @Post(':id/request-adjustment')
   @HttpCode(HttpStatus.OK)
   @Permissions('sales:credit:evaluate')

@@ -1184,6 +1184,11 @@ model Customer {
   creditLimit     Decimal?      @map("credit_limit") @db.Decimal(12, 2)
   notes           String?
 
+  // Marca manual de incobrable/judicial (calificación 6). Quién la puso o la
+  // quitó queda en el log de auditoría.
+  uncollectibleAt     DateTime? @map("uncollectible_at")
+  uncollectibleReason String?   @map("uncollectible_reason")
+
   economicActivity EconomicActivity? @map("economic_activity")
   hasIpsInsurance  Boolean?          @map("has_ips_insurance")
 
@@ -1275,6 +1280,11 @@ model SaleOrder {
   // valor del pedido, sumar cuotas, o agregar un garante.
   adjustmentNote        String?                      @map("adjustment_note")
   suggestedAlternatives CreditAdjustmentSuggestion[] @map("suggested_alternatives")
+
+  // Primera vez que un analista abrió la evaluación de esta solicitud. null =
+  // "nueva" en la bandeja de Evaluación de crédito. Se limpia al reenviarla.
+  creditViewedAt   DateTime? @map("credit_viewed_at")
+  creditViewedById String?   @map("credit_viewed_by_id")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -2068,6 +2078,12 @@ model CreditConfig {
   // cliente entra a la lista de Morosos para gestionar su reporte a
   // Informconf. null = deshabilitado.
   delinquencyThresholdDays Int?     @map("delinquency_threshold_days")
+  // Calificación del cliente (1 = paga al día … 5): límite superior de días
+  // de atraso promedio de los niveles 1 a 4; por encima del último es nivel 5.
+  ratingDelayThresholds    Int[]    @default([0, 5, 15, 30]) @map("rating_delay_thresholds")
+  // Días de atraso de una cuota impaga a partir de los cuales el cliente pasa
+  // solo a nivel 6 (incobrable/judicial). null = solo por marca manual.
+  uncollectibleAfterDays   Int?     @map("uncollectible_after_days")
   createdAt                DateTime @default(now()) @map("created_at")
   updatedAt                DateTime @updatedAt @map("updated_at")
 

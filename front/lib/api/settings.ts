@@ -44,6 +44,12 @@ export interface CreditConfig {
   // Días de mora a partir de los cuales un cliente entra a la lista de
   // Morosos — null = deshabilitado.
   delinquencyThresholdDays: number | null;
+  // Calificación del cliente: límite superior de días de atraso promedio de
+  // los niveles 1 a 4 (por encima del último es nivel 5).
+  ratingDelayThresholds: number[];
+  // Días de atraso de una cuota impaga para pasar a nivel 6 — null = solo
+  // por marca manual.
+  uncollectibleAfterDays: number | null;
   plans: CreditPlan[];
   interestComponents: InterestComponent[];
 }
@@ -83,6 +89,19 @@ export const settingsApi = {
         dueDayOfMonth,
         moraGraceDays,
         delinquencyThresholdDays,
+      })
+      .then((r) => r.data),
+
+  updateCreditRating: (
+    isEnabled: boolean,
+    ratingDelayThresholds: number[],
+    uncollectibleAfterDays: number | null,
+  ): Promise<CreditConfig> =>
+    apiClient
+      .put('/tenants/me/credit', {
+        isEnabled,
+        ratingDelayThresholds,
+        uncollectibleAfterDays,
       })
       .then((r) => r.data),
 

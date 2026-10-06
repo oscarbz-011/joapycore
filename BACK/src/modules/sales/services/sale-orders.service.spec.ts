@@ -115,8 +115,11 @@ describe('SaleOrdersService', () => {
     };
     creditEvaluationService = {
       getCustomerCreditHistory: jest.fn().mockResolvedValue({
-        rating: 'SIN_HISTORIAL',
+        score: null,
+        averageDelayDays: null,
+        uncollectible: { manual: null, automatic: false },
         activeLoans: [],
+        finishedLoans: [],
         overdueCount: 0,
         overdueAmount: 0,
       }),
@@ -1064,6 +1067,37 @@ describe('SaleOrdersService', () => {
       ).rejects.toBeInstanceOf(UnprocessableEntityException);
     });
 
+    it('blocks approval for a customer rated 6 (uncollectible) without changing the order', async () => {
+      saleOrdersRepository.findById.mockResolvedValue(
+        makeOrder({ status: 'PENDING_CREDIT_APPROVAL' }),
+      );
+      creditEvaluationService.getCustomerCreditHistory.mockResolvedValue({
+        score: 6,
+      });
+
+      await expect(
+        service.approveCredit('tenant-1', 'order-1'),
+      ).rejects.toThrow('incobrable/judicial');
+      expect(
+        creditEvaluationService.getCustomerCreditHistory,
+      ).toHaveBeenCalledWith('tenant-1', 'cust-1');
+      expect(prisma.saleOrder.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('does not block approval for a customer rated 5', async () => {
+      prisma.saleOrder.updateMany.mockResolvedValue({ count: 1 });
+      saleOrdersRepository.findById.mockResolvedValue(
+        makeOrder({ status: 'PENDING_CREDIT_APPROVAL' }),
+      );
+      creditEvaluationService.getCustomerCreditHistory.mockResolvedValue({
+        score: 5,
+      });
+
+      await expect(
+        service.approveCredit('tenant-1', 'order-1'),
+      ).resolves.toBeDefined();
+    });
+
     it('approves a PENDING_CREDIT_APPROVAL order', async () => {
       prisma.saleOrder.updateMany.mockResolvedValue({ count: 1 });
       saleOrdersRepository.findById
@@ -1520,6 +1554,34 @@ describe('SaleOrdersService', () => {
 
   // ── resubmitForApproval ──────────────────────────────────────────────────
 
+  describe('markCreditViewed', () => {
+    it('marks a pending request as viewed only the first time, scoped to the tenant', async () => {
+      prisma.saleOrder.updateMany.mockResolvedValue({ count: 1 });
+
+      await expect(
+        service.markCreditViewed('tenant-1', 'order-1', 'user-1'),
+      ).resolves.toEqual({ marked: true });
+
+      expect(prisma.saleOrder.updateMany).toHaveBeenCalledWith({
+        where: {
+          id: 'order-1',
+          tenantId: 'tenant-1',
+          status: 'PENDING_CREDIT_APPROVAL',
+          creditViewedAt: null,
+        },
+        data: { creditViewedAt: expect.any(Date), creditViewedById: 'user-1' },
+      });
+    });
+
+    it('does nothing for a request already viewed, decided or of another tenant', async () => {
+      prisma.saleOrder.updateMany.mockResolvedValue({ count: 0 });
+
+      await expect(
+        service.markCreditViewed('tenant-2', 'order-1', 'user-1'),
+      ).resolves.toEqual({ marked: false });
+    });
+  });
+
   describe('retryQuotePdf', () => {
     beforeEach(() => {
       (eventEmitter as any).emitAsync = jest.fn().mockResolvedValue([]);
@@ -1597,7 +1659,12 @@ describe('SaleOrdersService', () => {
           tenantId: 'tenant-1',
           status: 'CREDIT_NEEDS_ADJUSTMENT',
         },
-        data: { status: 'PENDING_CREDIT_APPROVAL' },
+        // Reenviada = nueva otra vez en la bandeja del analista.
+        data: {
+          status: 'PENDING_CREDIT_APPROVAL',
+          creditViewedAt: null,
+          creditViewedById: null,
+        },
       });
     });
 
