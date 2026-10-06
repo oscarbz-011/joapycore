@@ -8,7 +8,8 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { BookOpen, Plus, X, Trash2, AlertTriangle } from 'lucide-react';
+import { BookOpen, FileText, Mail, Plus, X, Trash2, AlertTriangle } from 'lucide-react';
+import { openPdf } from '@/lib/open-pdf';
 import { CatalogItemPicker } from '@/components/procurement/catalog-item-picker';
 import {
   PURCHASE_ORDER_STATUSES,
@@ -16,6 +17,7 @@ import {
   cancelReasonError,
   historyEntryLabel,
   orderActions,
+  orderEmailError,
 } from '@/lib/purchase-order-status';
 import { localISODate } from '@/lib/date';
 import {
@@ -708,6 +710,38 @@ function OrderDetailPanel({
     },
   });
 
+  // ── Documento de la orden: PDF y envío por email ──
+  const [emailing, setEmailing] = useState(false);
+  const [emailTo, setEmailTo] = useState('');
+  const [documentNote, setDocumentNote] = useState<{ ok: boolean; text: string } | null>(null);
+
+  const pdfMutation = useMutation({
+    mutationFn: () => procurementApi.orderPdf(order!.id),
+    onSuccess: (updated) => {
+      queryClient.setQueryData(['purchase-order', updated.id], updated);
+      if (updated.pdfFileId) void openPdf(updated.pdfFileId);
+    },
+    onError: (err) =>
+      setDocumentNote({ ok: false, text: apiErrorMessage(err, 'No se pudo generar el PDF') }),
+  });
+
+  const emailMutation = useMutation({
+    mutationFn: () => procurementApi.emailOrder(order!.id, emailTo.trim()),
+    onSuccess: (result) => {
+      setEmailing(false);
+      setDocumentNote({ ok: true, text: `Orden enviada a ${result.to}` });
+      void queryClient.invalidateQueries({ queryKey: ['purchase-order', order?.id] });
+    },
+    onError: (err) =>
+      setDocumentNote({ ok: false, text: apiErrorMessage(err, 'No se pudo enviar el email') }),
+  });
+
+  function sendEmail() {
+    const problem = orderEmailError(emailTo);
+    setDocumentNote(problem ? { ok: false, text: problem } : null);
+    if (!problem) emailMutation.mutate();
+  }
+
   function runAction() {
     if (!pendingAction) return;
     const problem = pendingAction === 'cancel' ? cancelReasonError(cancelReason) : null;
@@ -878,6 +912,67 @@ function OrderDetailPanel({
 
               {/* Actions */}
               <div className="px-5 py-4 space-y-2 border-t border-border shrink-0">
+                {order.status !== 'CANCELLED' && (
+                  <>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        className="flex-1"
+                        onClick={() => { setDocumentNote(null); pdfMutation.mutate(); }}
+                        disabled={pdfMutation.isPending}
+                      >
+                        <FileText size={15} />
+                        {pdfMutation.isPending ? 'Generando...' : 'Ver PDF'}
+                      </Button>
+                      <RequirePermission permission="procurement:update">
+                        <Button
+                          variant="outline"
+                          className="flex-1"
+                          onClick={() => {
+                            setDocumentNote(null);
+                            setEmailTo(order.supplier.email ?? '');
+                            setEmailing((value) => !value);
+                          }}
+                        >
+                          <Mail size={15} />
+                          Enviar por email
+                        </Button>
+                      </RequirePermission>
+                    </div>
+                    {emailing && (
+                      <div className="rounded-xl border border-border bg-muted/20 px-4 py-3">
+                        <Label htmlFor="order-email-to" className="mb-1.5 text-xs">
+                          Enviar el PDF de la orden a
+                        </Label>
+                        <Input
+                          id="order-email-to"
+                          type="email"
+                          autoFocus
+                          placeholder="email del proveedor"
+                          value={emailTo}
+                          onChange={(e) => setEmailTo(e.target.value)}
+                          onKeyDown={(e) => { if (e.key === 'Enter') sendEmail(); }}
+                        />
+                        <div className="mt-2 flex gap-2">
+                          <Button size="sm" className="flex-1" onClick={sendEmail} disabled={emailMutation.isPending}>
+                            {emailMutation.isPending ? 'Enviando...' : 'Enviar'}
+                          </Button>
+                          <Button size="sm" variant="outline" className="flex-1" onClick={() => setEmailing(false)} disabled={emailMutation.isPending}>
+                            Volver
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                    {documentNote && (
+                      <p
+                        role={documentNote.ok ? 'status' : 'alert'}
+                        className={cn('text-xs', documentNote.ok ? 'text-muted-foreground' : 'text-destructive')}
+                      >
+                        {documentNote.text}
+                      </p>
+                    )}
+                  </>
+                )}
                 <RequirePermission permission="procurement:update">
                   {pendingAction === null ? (
                     <>
@@ -1136,7 +1231,10 @@ export default function ProcurementPage() {
         onSaved={() => setShowCreate(false)}
       />
 
+      {/* key: al abrir otra orden, el panel arranca limpio (sin el motivo o
+          el email a medio escribir de la anterior). */}
       <OrderDetailPanel
+        key={effectivePanelOrder?.id ?? 'none'}
         order={effectivePanelOrder}
         open={effectivePanelOpen}
         onOpenChange={closePanel}

@@ -94,6 +94,8 @@ export interface PurchaseOrder {
   id: string;
   /** OC-AA-000001. */
   orderNumber: string | null;
+  /** PDF de la orden; null hasta que se genera. */
+  pdfFileId: string | null;
   status: PurchaseOrderStatus;
   purchaseType: PurchaseType;
   orderDate: string;
@@ -192,6 +194,22 @@ export const procurementApi = {
 
   confirmOrder: (id: string): Promise<PurchaseOrder> =>
     apiClient.post(`/procurement/purchase-orders/${id}/confirm`).then((r) => r.data),
+
+  /** Devuelve la orden con su PDF, generándolo si todavía no existe. */
+  orderPdf: (id: string): Promise<PurchaseOrder> =>
+    apiClient
+      .post(`/procurement/purchase-orders/${id}/pdf`, undefined, {
+        timeout: LONG_REQUEST_TIMEOUT_MS,
+      })
+      .then((r) => r.data),
+
+  /** Sin `to`, va al email cargado en el proveedor. */
+  emailOrder: (id: string, to?: string): Promise<{ to: string; accepted: string[] }> =>
+    apiClient
+      .post(`/procurement/purchase-orders/${id}/email`, to ? { to } : {}, {
+        timeout: LONG_REQUEST_TIMEOUT_MS,
+      })
+      .then((r) => r.data),
 
   sendOrder: (id: string): Promise<PurchaseOrder> =>
     apiClient.post(`/procurement/purchase-orders/${id}/send`).then((r) => r.data),
