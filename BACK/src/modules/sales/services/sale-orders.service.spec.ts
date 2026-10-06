@@ -1520,6 +1520,69 @@ describe('SaleOrdersService', () => {
 
   // ── resubmitForApproval ──────────────────────────────────────────────────
 
+  describe('retryQuotePdf', () => {
+    beforeEach(() => {
+      (eventEmitter as any).emitAsync = jest.fn().mockResolvedValue([]);
+    });
+
+    it('asks for the PDF and returns the quote once it exists', async () => {
+      saleOrdersRepository.findById
+        .mockResolvedValueOnce(
+          makeOrder({ orderType: 'QUOTE', quotePdfFileId: null }),
+        )
+        .mockResolvedValueOnce(
+          makeOrder({ orderType: 'QUOTE', quotePdfFileId: 'file-1' }),
+        );
+
+      const result = await service.retryQuotePdf(
+        'tenant-1',
+        'order-1',
+        'user-1',
+      );
+
+      expect((eventEmitter as any).emitAsync).toHaveBeenCalledWith(
+        'sale.order.quote_pdf.requested',
+        { tenantId: 'tenant-1', saleOrderId: 'order-1', issuedById: 'user-1' },
+      );
+      expect(result.quotePdfFileId).toBe('file-1');
+    });
+
+    it('does nothing when the quote already has its PDF', async () => {
+      saleOrdersRepository.findById.mockResolvedValue(
+        makeOrder({ orderType: 'QUOTE', quotePdfFileId: 'file-1' }),
+      );
+
+      await service.retryQuotePdf('tenant-1', 'order-1');
+
+      expect((eventEmitter as any).emitAsync).not.toHaveBeenCalled();
+    });
+
+    it('reports a failure when the PDF is still missing', async () => {
+      saleOrdersRepository.findById.mockResolvedValue(
+        makeOrder({ orderType: 'QUOTE', quotePdfFileId: null }),
+      );
+
+      await expect(
+        service.retryQuotePdf('tenant-1', 'order-1'),
+      ).rejects.toBeInstanceOf(UnprocessableEntityException);
+    });
+
+    it('rejects orders that are not quotes and quotes of another tenant', async () => {
+      saleOrdersRepository.findById.mockResolvedValueOnce(
+        makeOrder({ orderType: 'STANDARD' }),
+      );
+      await expect(
+        service.retryQuotePdf('tenant-1', 'order-1'),
+      ).rejects.toBeInstanceOf(UnprocessableEntityException);
+
+      saleOrdersRepository.findById.mockResolvedValueOnce(null);
+      await expect(
+        service.retryQuotePdf('tenant-2', 'order-1'),
+      ).rejects.toBeInstanceOf(NotFoundException);
+      expect((eventEmitter as any).emitAsync).not.toHaveBeenCalled();
+    });
+  });
+
   describe('resubmitForApproval', () => {
     it('moves the order back to PENDING_CREDIT_APPROVAL', async () => {
       saleOrdersRepository.findById.mockResolvedValue(

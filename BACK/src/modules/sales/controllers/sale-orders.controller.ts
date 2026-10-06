@@ -224,6 +224,18 @@ export class SaleOrdersController {
     );
   }
 
+  @Post(':id/quote-pdf/retry')
+  @HttpCode(HttpStatus.OK)
+  @Permissions('sales:quotes:manage')
+  @ApiOperation({ summary: 'Regenerar el PDF faltante de un presupuesto' })
+  retryQuotePdf(
+    @CurrentTenant() tenantId: string,
+    @CurrentUser() user: JwtPayload,
+    @Param('id') id: string,
+  ) {
+    return this.saleOrdersService.retryQuotePdf(tenantId, id, user.sub);
+  }
+
   @Post(':id/convert')
   @HttpCode(HttpStatus.OK)
   @Permissions('sales:quotes:manage')
