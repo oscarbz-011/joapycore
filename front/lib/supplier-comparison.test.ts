@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import type { CatalogOffer, OfferSupplier } from './api/procurement';
-import { bestQuoteId, compareSuppliers } from './supplier-comparison';
+import {
+  bestQuoteId,
+  compareSuppliers,
+  priceGapLabel,
+  priceGaps,
+} from './supplier-comparison';
 
 const TODAY = '2026-10-06';
 
@@ -345,5 +350,57 @@ describe('bestQuoteId', () => {
         ),
       ),
     ).toBeNull();
+  });
+});
+
+describe('priceGaps', () => {
+  it('says how much cheaper the best price is than the next one', () => {
+    expect(priceGaps([54_000, 60_000])).toEqual([
+      { kind: 'cheapest', percent: 10 },
+      { kind: 'dearer', percent: 11.1 },
+    ]);
+  });
+
+  // El más barato se mide contra el segundo; los demás, contra el más barato.
+  it('measures every other price against the cheapest', () => {
+    expect(priceGaps([100, 120, 150])).toEqual([
+      { kind: 'cheapest', percent: 16.7 },
+      { kind: 'dearer', percent: 20 },
+      { kind: 'dearer', percent: 50 },
+    ]);
+  });
+
+  it('skips suppliers without a price', () => {
+    expect(priceGaps([100, null, 150])).toEqual([
+      { kind: 'cheapest', percent: 33.3 },
+      null,
+      { kind: 'dearer', percent: 50 },
+    ]);
+  });
+
+  it('has nothing to say with a single price', () => {
+    expect(priceGaps([100, null])).toEqual([null, null]);
+    expect(priceGaps([])).toEqual([]);
+  });
+
+  it('reports equal prices as equal', () => {
+    expect(priceGaps([100, 100])).toEqual([
+      { kind: 'same', percent: 0 },
+      { kind: 'same', percent: 0 },
+    ]);
+  });
+
+  it('does not crown a winner when the two cheapest are tied', () => {
+    expect(priceGaps([100, 100, 150])).toEqual([
+      { kind: 'same', percent: 0 },
+      { kind: 'same', percent: 0 },
+      { kind: 'dearer', percent: 50 },
+    ]);
+  });
+
+  it('puts the difference into words', () => {
+    expect(priceGapLabel({ kind: 'cheapest', percent: 15 })).toBe('15% más barato');
+    expect(priceGapLabel({ kind: 'dearer', percent: 11.1 })).toBe('11,1% más caro');
+    expect(priceGapLabel({ kind: 'same', percent: 0 })).toBe('Mismo precio');
   });
 });

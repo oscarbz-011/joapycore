@@ -219,3 +219,47 @@ export function bestQuoteId(quotes: readonly SupplierQuote[]): string | null {
   return able.reduce((best, quote) => (quote.total < best.total ? quote : best))
     .supplier.id;
 }
+
+/** Cómo queda un precio frente a los de los otros proveedores. */
+export interface PriceGap {
+  /** `cheapest`: el más barato. `dearer`: más caro que el más barato. */
+  kind: 'cheapest' | 'dearer' | 'same';
+  /** Diferencia en porcentaje, redondeada a un decimal. */
+  percent: number;
+}
+
+const oneDecimal = (n: number) => Math.round(n * 10) / 10;
+
+/**
+ * Diferencia porcentual de cada precio. El más barato se mide contra el que le
+ * sigue ("15% más barato"); el resto, contra el más barato ("18% más caro").
+ * null donde no hay precio o no hay con qué comparar.
+ */
+export function priceGaps(
+  prices: readonly (number | null)[],
+): (PriceGap | null)[] {
+  const known = prices.filter((price): price is number => price !== null && price > 0);
+  if (known.length < 2) return prices.map(() => null);
+
+  const lowest = Math.min(...known);
+  const next = Math.min(...known.filter((price) => price > lowest));
+  const tied = known.filter((price) => price === lowest).length > 1;
+
+  return prices.map((price) => {
+    if (price === null || price <= 0) return null;
+    if (price > lowest) {
+      return { kind: 'dearer', percent: oneDecimal(((price - lowest) / lowest) * 100) };
+    }
+    // Todos al mismo precio, o empate en el más barato.
+    if (tied || !Number.isFinite(next)) return { kind: 'same', percent: 0 };
+    return { kind: 'cheapest', percent: oneDecimal(((next - lowest) / next) * 100) };
+  });
+}
+
+export function priceGapLabel(gap: PriceGap): string {
+  const percent = new Intl.NumberFormat('es-PY', { maximumFractionDigits: 1 }).format(
+    gap.percent,
+  );
+  if (gap.kind === 'same') return 'Mismo precio';
+  return gap.kind === 'cheapest' ? `${percent}% más barato` : `${percent}% más caro`;
+}

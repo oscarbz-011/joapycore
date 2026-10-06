@@ -34,7 +34,10 @@ import { usePermission } from '@/lib/permissions';
 import {
   bestQuoteId,
   compareSuppliers,
+  priceGapLabel,
+  priceGaps,
   type Need,
+  type PriceGap,
   type QuoteLine,
   type SupplierQuote,
 } from '@/lib/supplier-comparison';
@@ -97,10 +100,23 @@ const AVAILABILITY_CLASS = {
 const UNKNOWN = <span className="text-muted-foreground">Sin dato</span>;
 const NOTHING = <span className="text-muted-foreground">—</span>;
 
-function QuotedLine({ line }: { line: QuoteLine }) {
+const GAP_CLASS = {
+  cheapest: 'text-emerald-600 dark:text-emerald-400',
+  dearer: 'text-destructive',
+  same: 'text-muted-foreground',
+} as const;
+
+/** "15% más barato" / "11% más caro", frente a los otros proveedores. */
+function Gap({ gap }: { gap: PriceGap | null | undefined }) {
+  if (!gap) return null;
+  return <p className={cn('text-xs font-medium', GAP_CLASS[gap.kind])}>{priceGapLabel(gap)}</p>;
+}
+
+function QuotedLine({ line, gap }: { line: QuoteLine; gap?: PriceGap | null }) {
   return (
     <div className="space-y-0.5">
       <p className="font-mono tabular-nums text-foreground">{gs(line.subtotal)}</p>
+      <Gap gap={gap} />
       <p className="text-xs text-muted-foreground">
         {plain(line.supplierQuantity)} {line.supplierUnit ?? 'u.'} × {gs(line.unitPrice)}
         {line.unitCost !== line.unitPrice && <> · {gs(line.unitCost)} por unidad</>}
@@ -196,11 +212,13 @@ function SearchCell({
   results,
   pickedId,
   line,
+  gap,
   onPick,
 }: {
   results: CatalogSearchResult[];
   pickedId: string | null;
   line: QuoteLine | undefined;
+  gap: PriceGap | null;
   onPick: (itemId: string) => void;
 }) {
   if (results.length === 0) {
@@ -224,7 +242,7 @@ function SearchCell({
       )}
       {picked &&
         (line ? (
-          <QuotedLine line={line} />
+          <QuotedLine line={line} gap={gap} />
         ) : (
           <p className="text-xs text-warn">Sin precio en su lista</p>
         ))}
@@ -429,6 +447,11 @@ export default function CompareSuppliersPage() {
   const quotingCount = quotes.filter((quote) => quote.lines.length > 0).length;
   const bestId = quotingCount > 1 ? bestQuoteId(quotes) : null;
   const orderingQuote = quotes.find((quote) => quote.supplier.id === orderingFrom);
+  // El total solo se compara entre quienes cotizan todo: el de un proveedor
+  // al que le falta un producto es más bajo porque compra menos.
+  const totalGaps = priceGaps(
+    quotes.map((quote) => (quote.complete && quote.lines.length > 0 ? quote.total : null)),
+  );
 
   const linkMutation = useMutation({
     mutationFn: (suggestion: LinkSuggestion) =>
@@ -693,6 +716,13 @@ export default function CompareSuppliersPage() {
                   {tableRows.map((row) => {
                     const id = rowId(row);
                     const quantity = Number(row.quantity);
+                    // Se compara el costo por unidad: un proveedor puede vender
+                    // por caja y otro suelto, y el subtotal no sería parejo.
+                    const gaps = priceGaps(
+                      quotes.map(
+                        (quote) => quote.lines.find((l) => l.productId === id)?.unitCost ?? null,
+                      ),
+                    );
                     return (
                       <tr key={row.key}>
                         <th scope="row" className="px-4 py-3 text-left font-normal">
@@ -704,9 +734,10 @@ export default function CompareSuppliersPage() {
                             {row.mode === 'search' && ' · sin producto creado'}
                           </p>
                         </th>
-                        {quotes.map((quote) => {
+                        {quotes.map((quote, column) => {
                           const supplierId = quote.supplier.id;
                           const line = quote.lines.find((l) => l.productId === id);
+                          const gap = gaps[column];
                           return (
                             <td key={supplierId} className="px-4 py-3">
                               {row.mode === 'search' ? (
@@ -716,12 +747,13 @@ export default function CompareSuppliersPage() {
                                   )}
                                   pickedId={pickedItem(row, supplierId)?.id ?? null}
                                   line={line}
+                                  gap={gap}
                                   onPick={(itemId) =>
                                     patch(row.key, { picks: { ...row.picks, [supplierId]: itemId } })
                                   }
                                 />
                               ) : line ? (
-                                <QuotedLine line={line} />
+                                <QuotedLine line={line} gap={gap} />
                               ) : (
                                 <MissingLine
                                   supplierId={supplierId}
@@ -751,9 +783,10 @@ export default function CompareSuppliersPage() {
                       >
                         {row.label}
                       </th>
-                      {quotes.map((quote) => (
+                      {quotes.map((quote, column) => (
                         <td key={quote.supplier.id} className="px-4 py-3 text-foreground">
                           {quote.lines.length === 0 ? NOTHING : row.cell(quote)}
+                          {row.strong && <Gap gap={totalGaps[column]} />}
                         </td>
                       ))}
                     </tr>
