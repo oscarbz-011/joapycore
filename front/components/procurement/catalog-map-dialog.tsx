@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link2, PackagePlus, Search } from 'lucide-react';
+import { LookupSelect } from '@/components/inventory/lookup-select';
 import { NumericInput } from '@/components/numeric-input';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -16,12 +17,6 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-} from '@/components/ui/select';
 import { apiErrorMessage } from '@/lib/api/api-error';
 import { inventoryApi, type Product } from '@/lib/api/inventory';
 import { procurementApi, type SupplierCatalogItem } from '@/lib/api/procurement';
@@ -44,6 +39,11 @@ const MODES = [
 ] as const;
 
 type Mode = (typeof MODES)[number]['value'];
+
+// Las mismas claves que usan Inventario y sus pantallas de categorías y
+// marcas: un alta hecha acá aparece allá sin recargar.
+const CATEGORIES_KEY = ['inventory-categories'] as const;
+const BRANDS_KEY = ['inventory-brands'] as const;
 
 function ErrorNote({ children }: { children: string }) {
   return (
@@ -166,11 +166,11 @@ function NewProduct({
   const [createdId, setCreatedId] = useState<string | null>(null);
 
   const { data: categories = [], isLoading: loadingCategories } = useQuery({
-    queryKey: ['categories'],
+    queryKey: CATEGORIES_KEY,
     queryFn: inventoryApi.listCategories,
   });
   const { data: brands = [] } = useQuery({
-    queryKey: ['brands'],
+    queryKey: BRANDS_KEY,
     queryFn: inventoryApi.listBrands,
   });
 
@@ -196,8 +196,6 @@ function NewProduct({
 
   const today = localISODate(new Date());
   const priceExpired = priceValidity(item, today).status === 'expired';
-  const category = categories.find((c) => c.id === form.categoryId);
-  const brand = brands.find((b) => b.id === form.brandId);
 
   return (
     <form
@@ -223,47 +221,31 @@ function NewProduct({
           />
         </div>
 
-        <div className="space-y-1.5">
-          <Label>Categoría *</Label>
-          <Select
-            value={form.categoryId || 'none'}
-            onValueChange={(value) => set('categoryId', value && value !== 'none' ? value : '')}
-          >
-            <SelectTrigger className="w-full" aria-label="Categoría">
-              <span className="min-w-0 flex-1 truncate text-left text-sm">
-                {category?.name ?? (loadingCategories ? 'Cargando...' : '— Seleccionar —')}
-              </span>
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="none">— Seleccionar —</SelectItem>
-              {categories.map((c) => (
-                <SelectItem key={c.id} value={c.id}>
-                  {c.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+        <div className="sm:col-span-2">
+          <LookupSelect
+            label="Categoría"
+            required
+            emptyLabel="— Seleccionar —"
+            items={categories}
+            loading={loadingCategories}
+            value={form.categoryId}
+            onChange={(id) => set('categoryId', id)}
+            create={inventoryApi.createCategory}
+            managePermission="inventory:categories:manage"
+            queryKey={CATEGORIES_KEY}
+          />
         </div>
-        <div className="space-y-1.5">
-          <Label>Marca</Label>
-          <Select
-            value={form.brandId || 'none'}
-            onValueChange={(value) => set('brandId', value && value !== 'none' ? value : '')}
-          >
-            <SelectTrigger className="w-full" aria-label="Marca">
-              <span className="min-w-0 flex-1 truncate text-left text-sm">
-                {brand?.name ?? 'Sin marca'}
-              </span>
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="none">Sin marca</SelectItem>
-              {brands.map((b) => (
-                <SelectItem key={b.id} value={b.id}>
-                  {b.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+        <div className="sm:col-span-2">
+          <LookupSelect
+            label="Marca"
+            emptyLabel="Sin marca"
+            items={brands}
+            value={form.brandId}
+            onChange={(id) => set('brandId', id)}
+            create={inventoryApi.createBrand}
+            managePermission="inventory:brands:manage"
+            queryKey={BRANDS_KEY}
+          />
         </div>
 
         <div className="space-y-1.5">
