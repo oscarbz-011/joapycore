@@ -106,6 +106,52 @@ describe('InterestInvoiceOnIssueListener', () => {
     expect(prisma.invoice.updateMany).not.toHaveBeenCalled();
   });
 
+  it('does not regenerate an invoice that already has its PDF', async () => {
+    prisma.invoice.findFirst.mockResolvedValue(
+      makeInvoice({ pdfFileId: 'file-old' }),
+    );
+
+    await listener.handle({
+      tenantId: TENANT,
+      invoiceId: INVOICE_ID,
+      paymentReceiptId: 'r-1',
+      total: 350_000,
+    });
+
+    expect(filesService.upload).not.toHaveBeenCalled();
+  });
+
+  it('regenerates the interest invoice of a receipt on a manual retry', async () => {
+    prisma.invoice.findFirst
+      .mockResolvedValueOnce({
+        id: INVOICE_ID,
+        total: 350_000,
+        pdfFileId: null,
+      })
+      .mockResolvedValueOnce(makeInvoice({ pdfFileId: null }));
+
+    await listener.handleRetry({ tenantId: TENANT, receiptId: 'r-1' });
+
+    expect(prisma.invoice.findFirst).toHaveBeenNthCalledWith(1, {
+      where: {
+        tenantId: TENANT,
+        paymentReceiptId: 'r-1',
+        invoiceType: 'INTEREST',
+      },
+      select: { id: true, total: true, pdfFileId: true },
+    });
+    expect(filesService.upload).toHaveBeenCalled();
+  });
+
+  it('skips the retry when the receipt has no interest invoice', async () => {
+    prisma.invoice.findFirst.mockResolvedValueOnce(null);
+
+    await listener.handleRetry({ tenantId: TENANT, receiptId: 'r-1' });
+
+    expect(prisma.invoice.findFirst).toHaveBeenCalledTimes(1);
+    expect(filesService.upload).not.toHaveBeenCalled();
+  });
+
   it('does nothing if the invoice has no paymentReceipt (defensive)', async () => {
     prisma.invoice.findFirst.mockResolvedValue(
       makeInvoice({ paymentReceipt: null }),

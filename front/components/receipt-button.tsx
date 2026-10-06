@@ -1,10 +1,16 @@
 'use client';
 
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Printer, Receipt } from 'lucide-react';
 import { financeApi } from '../lib/api/finance';
 import { openPdf } from '../lib/open-pdf';
+import {
+  documentPdfId,
+  isMissingReceipt,
+  openReceiptDocument,
+  type ReceiptDocument,
+} from '../lib/receipt-pdf';
 import { Button } from '@/components/ui/button';
 
 // Reimprime el recibo de dinero generado al cobrar una cuota — se busca por
@@ -12,42 +18,57 @@ import { Button } from '@/components/ui/button';
 // payByAmount, en ambos casos hay un único recibo que la cubre). Si el cobro
 // incluyó intereses/mora, se generó además una factura aparte solo por ese
 // monto (ver interest-invoice-on-receipt.listener.ts en el backend) — se
-// muestra un segundo botón para abrirla cuando corresponde.
+// muestra un segundo botón para abrirla cuando corresponde. Si un PDF quedó
+// sin generar al cobrar, abrirlo lo regenera primero.
 export function ReceiptButton({ installmentId }: { installmentId: string }) {
-  const { data: receipt } = useQuery({
-    queryKey: ['receipt-for-installment', installmentId],
+  const queryClient = useQueryClient();
+  const queryKey = ['receipt-for-installment', installmentId];
+  const { data: receipt, error: loadError } = useQuery({
+    queryKey,
     queryFn: () => financeApi.getReceiptForInstallment(installmentId),
     staleTime: 5 * 60 * 1000,
+    // 404 = cuota cobrada antes de que existieran los recibos: no reintentar.
+    retry: (failures, error) => !isMissingReceipt(error) && failures < 1,
   });
-  const [openingReceipt, setOpeningReceipt] = useState(false);
-  const [openingInvoice, setOpeningInvoice] = useState(false);
-  const [error, setError] = useState<'receipt' | 'invoice' | null>(null);
+  const [opening, setOpening] = useState<ReceiptDocument | null>(null);
+  const [error, setError] = useState<ReceiptDocument | null>(null);
 
-  async function openReceipt() {
-    if (!receipt?.pdfFileId) return setError('receipt');
-    setOpeningReceipt(true);
+  if (isMissingReceipt(loadError)) {
+    return (
+      <span
+        className="shrink-0 text-xs text-muted-foreground"
+        title="Esta cuota se cobró antes de que el sistema emitiera recibos"
+      >
+        Sin recibo
+      </span>
+    );
+  }
+
+  async function open(document: ReceiptDocument) {
+    if (!receipt) return setError(document);
+    setOpening(document);
     setError(null);
     try {
-      await openPdf(receipt.pdfFileId);
+      const updated = await openReceiptDocument(receipt, document, {
+        retry: financeApi.retryReceiptPdf,
+        open: openPdf,
+      });
+      if (updated !== receipt) queryClient.setQueryData(queryKey, updated);
     } catch {
-      setError('receipt');
+      setError(document);
     } finally {
-      setOpeningReceipt(false);
+      setOpening(null);
     }
   }
 
-  async function openInterestInvoice() {
-    if (!receipt?.interestInvoice?.pdfFileId) return setError('invoice');
-    setOpeningInvoice(true);
-    setError(null);
-    try {
-      await openPdf(receipt.interestInvoice.pdfFileId);
-    } catch {
-      setError('invoice');
-    } finally {
-      setOpeningInvoice(false);
+  const label = (document: ReceiptDocument, idle: string) => {
+    if (opening === document) {
+      return receipt && !documentPdfId(receipt, document)
+        ? 'Generando...'
+        : 'Abriendo...';
     }
-  }
+    return error === document ? 'Reintentar' : idle;
+  };
 
   return (
     <div className="flex items-center gap-1.5 shrink-0">
@@ -55,28 +76,32 @@ export function ReceiptButton({ installmentId }: { installmentId: string }) {
         variant="outline"
         size="sm"
         className="gap-1.5 shrink-0"
-        disabled={openingReceipt}
-        onClick={openReceipt}
-        title={error === 'receipt' ? 'No se pudo abrir el recibo' : 'Ver recibo'}
+        disabled={opening !== null || !receipt}
+        onClick={() => open('receipt')}
+        title={
+          error === 'receipt'
+            ? 'No se pudo generar o abrir el recibo. Volvé a intentar.'
+            : 'Ver recibo'
+        }
       >
         <Printer size={13} />
-        {openingReceipt ? 'Abriendo...' : error === 'receipt' ? 'Error' : 'Recibo'}
+        {label('receipt', 'Recibo')}
       </Button>
       {receipt?.interestInvoice && (
         <Button
           variant="outline"
           size="sm"
           className="gap-1.5 shrink-0"
-          disabled={openingInvoice}
-          onClick={openInterestInvoice}
+          disabled={opening !== null}
+          onClick={() => open('interestInvoice')}
           title={
-            error === 'invoice'
-              ? 'No se pudo abrir la factura de intereses'
+            error === 'interestInvoice'
+              ? 'No se pudo generar o abrir la factura de intereses. Volvé a intentar.'
               : 'Ver factura de intereses moratorios'
           }
         >
           <Receipt size={13} />
-          {openingInvoice ? 'Abriendo...' : error === 'invoice' ? 'Error' : 'Factura int.'}
+          {label('interestInvoice', 'Factura int.')}
         </Button>
       )}
     </div>
