@@ -261,3 +261,76 @@ export const DEFAULT_QUOTE_TEMPLATE = `<!DOCTYPE html>
   </div>
 </body>
 </html>`;
+
+export const DEFAULT_PURCHASE_ORDER_TEMPLATE = `<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<style>
+  ${SHARED_STYLES}
+  @page { size: A4; margin: 0; }
+  .parties { display: flex; gap: 12px; margin-bottom: 12px; }
+  .party { flex: 1; border: 1px solid #cbd5e1; padding: 8px 10px; font-size: 11px; line-height: 1.5; }
+  .party .label { margin-bottom: 3px; }
+  .party-name { font-size: 12.5px; font-weight: 700; }
+  .data-table td:nth-child(3), .data-table td:nth-child(4) { text-align: center; }
+  .data-table td:nth-child(5), .data-table td:nth-child(6),
+  .data-table th:nth-child(5), .data-table th:nth-child(6) { text-align: right; }
+  .data-table td:nth-child(1), .data-table td:nth-child(5), .data-table td:nth-child(6) { white-space: nowrap; }
+  .notes { margin-top: 14px; border: 1px solid #cbd5e1; padding: 8px 10px; font-size: 11px; white-space: pre-line; }
+  .signature { margin-top: 56px; width: 240px; border-top: 1px solid #1e293b; padding-top: 4px; font-size: 10.5px; text-align: center; }
+</style>
+</head>
+<body>
+  <div class="company-header">
+    <div class="company-block">
+      {{tenant.logo}}
+      <div>
+        <div class="company-name">{{tenant.razonSocial}}</div>
+        <div class="company-meta">{{tenant.direccion}} — {{tenant.ciudad}}</div>
+        <div class="company-meta">Tel: {{tenant.telefono}} · {{tenant.email}}</div>
+        <div class="company-meta">RUC: {{tenant.ruc}}</div>
+      </div>
+    </div>
+    <div class="doc-box">
+      <div class="doc-title">ORDEN DE COMPRA</div>
+      <div class="doc-number">NRO.: {{orden.numero}}</div>
+      <div class="doc-meta">
+        <div><strong>Fecha:</strong> {{orden.fecha}}</div>
+        <div><strong>Entrega estimada:</strong> {{orden.entregaEstimada}}</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="parties">
+    <div class="party">
+      <div class="label">Proveedor</div>
+      <div class="party-name">{{proveedor.nombre}}</div>
+      <div><strong>RUC:</strong> {{proveedor.ruc}}</div>
+      <div><strong>Dirección:</strong> {{proveedor.direccion}}</div>
+      <div><strong>Contacto:</strong> {{proveedor.contacto}} · {{proveedor.telefono}}</div>
+      <div><strong>Email:</strong> {{proveedor.email}}</div>
+    </div>
+    <div class="party">
+      <div class="label">Condiciones</div>
+      <div><strong>Condición de pago:</strong> {{orden.condicionPago}}</div>
+      <div><strong>Lugar de entrega:</strong> {{orden.lugarEntrega}}</div>
+    </div>
+  </div>
+
+  {{orden.items}}
+
+  <div style="margin-top:14px;display:flex;justify-content:flex-end;font-size:11px">
+    <div style="text-align:right">
+      <div class="label">Total (en letras)</div>
+      <div>GUARANIES: {{orden.totalEnLetras}}.-</div>
+      <div style="font-size:16px;font-weight:700;margin-top:4px">Gs. {{orden.total}}</div>
+    </div>
+  </div>
+
+  <div class="notes"><span class="label">Observaciones</span>
+{{orden.notas}}</div>
+
+  <div class="signature">Autorizado por {{tenant.razonSocial}}</div>
+</body>
+</html>`;

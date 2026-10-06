@@ -1082,6 +1082,9 @@ model PurchaseOrder {
   // Número visible de la orden (OC-AA-000001), correlativo por empresa. Es
   // con lo que el proveedor la identifica en el PDF.
   orderNumber  String?             @map("order_number")
+  // PDF de la orden. Se genera al enviarla o al pedirlo; la orden no se edita
+  // después de creada, así que no hace falta regenerarlo.
+  pdfFileId    String?             @map("pdf_file_id")
   supplierId   String              @map("supplier_id")
   branchId     String?             @map("branch_id")
   purchaseType PurchaseType        @default(LOCAL) @map("purchase_type")
@@ -2005,6 +2008,7 @@ enum TemplateKind {
   PAYMENT_RECEIPT // Recibo de dinero, generado automáticamente al cobrar una cuota
   QUOTE // Presupuesto, generado automáticamente al crear un pedido orderType=QUOTE
   INTEREST_INVOICE // Factura de intereses moratorios, generada automáticamente al cobrar una cuota con recargos
+  PURCHASE_ORDER // Orden de compra, el documento que se le envía al proveedor
 }
 
 model DocumentCategory {
