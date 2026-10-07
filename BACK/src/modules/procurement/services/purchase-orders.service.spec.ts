@@ -151,7 +151,6 @@ describe('PurchaseOrdersService', () => {
     const dto = {
       supplierId: 'sup-1',
       purchaseType: 'LOCAL' as const,
-      orderDate: '2026-10-07',
       items: [{ productId: 'prod-1', quantity: 5, unitCost: 2_000_000 }],
     };
     const createdWith = () =>
@@ -214,7 +213,6 @@ describe('PurchaseOrdersService', () => {
     const dto = {
       supplierId: 'sup-1',
       purchaseType: 'LOCAL' as const,
-      orderDate: '2026-06-21',
       items: [{ productId: 'prod-1', quantity: 5, unitCost: 2_000_000 }],
     };
 
@@ -298,7 +296,6 @@ describe('PurchaseOrdersService', () => {
     const dto = {
       supplierId: 'sup-1',
       purchaseType: 'LOCAL' as const,
-      orderDate: '2026-10-06',
       items: [{ productId: 'prod-1', quantity: 2, unitCost: 100 }],
     };
     const withStatus = (status: string) =>
@@ -329,11 +326,53 @@ describe('PurchaseOrdersService', () => {
     );
   });
 
+  // La fecha de la orden es el día en que se crea, en la zona del negocio.
+  describe('order date', () => {
+    const dto = {
+      supplierId: 'sup-1',
+      purchaseType: 'LOCAL' as const,
+      items: [{ productId: 'prod-1', quantity: 2, unitCost: 100 }],
+    };
+
+    beforeEach(() => {
+      // 21:30 del 7 de octubre en Paraguay (ya es 8 en UTC).
+      jest.useFakeTimers().setSystemTime(new Date('2026-10-08T00:30:00.000Z'));
+    });
+    afterEach(() => jest.useRealTimers());
+
+    it('is today, set by the system', async () => {
+      await service.create('tenant-1', 'user-1', dto);
+
+      expect(purchaseOrdersRepository.create).toHaveBeenCalledWith(
+        'tenant-1',
+        expect.objectContaining({
+          orderDate: new Date('2026-10-07T00:00:00.000Z'),
+        }),
+        expect.anything(),
+      );
+    });
+
+    it('does not accept a delivery before the order', async () => {
+      await expect(
+        service.create('tenant-1', 'user-1', {
+          ...dto,
+          expectedDate: '2026-10-06',
+        }),
+      ).rejects.toThrow(/anterior a la fecha de la orden/);
+      expect(purchaseOrdersRepository.create).not.toHaveBeenCalled();
+
+      await service.create('tenant-1', 'user-1', {
+        ...dto,
+        expectedDate: '2026-10-07',
+      });
+      expect(purchaseOrdersRepository.create).toHaveBeenCalledTimes(1);
+    });
+  });
+
   describe('order number', () => {
     const dto = {
       supplierId: 'sup-1',
       purchaseType: 'LOCAL' as const,
-      orderDate: '2026-10-06',
       items: [{ productId: 'prod-1', quantity: 2, unitCost: 100 }],
     };
     const year = String(new Date().getFullYear()).slice(-2);
@@ -371,7 +410,6 @@ describe('PurchaseOrdersService', () => {
     const dto = {
       supplierId: 'sup-1',
       purchaseType: 'LOCAL' as const,
-      orderDate: '2026-10-06',
       items: [{ productId: 'prod-1', quantity: 2, unitCost: 100 }],
     };
     const duplicated = Object.assign(new Error('unique'), { code: 'P2002' });
@@ -420,7 +458,6 @@ describe('PurchaseOrdersService', () => {
     const dto = {
       supplierId: 'sup-1',
       purchaseType: 'LOCAL' as const,
-      orderDate: '2026-10-06',
       items: [
         {
           productId: 'prod-1',
@@ -608,7 +645,6 @@ describe('PurchaseOrdersService', () => {
       await service.create('tenant-1', 'user-1', {
         supplierId: 'sup-1',
         purchaseType: 'LOCAL' as const,
-        orderDate: '2026-10-06',
         items: [{ productId: 'prod-1', quantity: 1, unitCost: 100 }],
       });
 

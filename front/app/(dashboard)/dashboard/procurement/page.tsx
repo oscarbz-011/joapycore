@@ -95,7 +95,6 @@ function CreateOrderModal({
   const queryClient = useQueryClient();
   const [supplierId, setSupplierId] = useState('');
   const [purchaseType, setPurchaseType] = useState<PurchaseType>('LOCAL');
-  const [orderDate, setOrderDate] = useState(todayISODate());
   const [expectedDate, setExpectedDate] = useState('');
   const [exchangeRate, setExchangeRate] = useState('');
   const [customsDuty, setCustomsDuty] = useState('');
@@ -140,7 +139,6 @@ function CreateOrderModal({
       procurementApi.createOrder({
         supplierId,
         purchaseType,
-        orderDate,
         expectedDate: expectedDate || undefined,
         exchangeRate: exchangeRate ? Number(exchangeRate) : undefined,
         customsDuty: customsDuty ? Number(customsDuty) : undefined,
@@ -210,12 +208,18 @@ function CreateOrderModal({
           {/* Fechas */}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1">
-              <Label>Fecha de orden *</Label>
-              <DatePicker value={orderDate} onChange={setOrderDate} />
+              <Label>Fecha de orden</Label>
+              {/* La pone el sistema: el día en que se crea la orden. */}
+              <p className="flex h-9 items-center rounded-3xl bg-muted/30 px-3 text-sm text-muted-foreground">
+                {formatDatePY(todayISODate(), 'utc')} · hoy
+              </p>
             </div>
             <div className="space-y-1">
               <Label>Fecha esperada de entrega</Label>
               <DatePicker value={expectedDate} onChange={setExpectedDate} />
+              <p className="text-xs text-muted-foreground">
+                Para el seguimiento interno: no figura en el PDF de la orden.
+              </p>
             </div>
           </div>
 

@@ -111,7 +111,6 @@ export function newProductPayload(
 
 export function orderPayload(
   supplierId: string,
-  orderDate: string,
   lines: readonly {
     itemId: string;
     productId: string;
@@ -134,5 +133,5 @@ export function orderPayload(
       });
     }
   }
-  return { supplierId, purchaseType: 'LOCAL', orderDate, items };
+  return { supplierId, purchaseType: 'LOCAL', items };
 }

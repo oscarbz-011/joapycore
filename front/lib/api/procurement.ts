@@ -235,7 +235,7 @@ export interface CreatePurchaseOrderItem {
 export interface CreatePurchaseOrderPayload {
   supplierId: string;
   purchaseType: PurchaseType;
-  orderDate: string;
+  // La fecha de la orden la pone el servidor: el día en que se crea.
   expectedDate?: string;
   exchangeRate?: number;
   customsDuty?: number;

@@ -4,7 +4,9 @@ import {
   historyEntryLabel,
   orderActions,
   orderEmailError,
+  changedDeliveryError,
   confirmDeliveryError,
+  deliveryPrompt,
   orderCalendarDay,
 } from './purchase-order-status';
 
@@ -133,5 +135,31 @@ describe('changing the expected delivery', () => {
   it('is not offered once received or cancelled', () => {
     expect(orderActions('RECEIVED').delivery).toBe(false);
     expect(orderActions('CANCELLED').delivery).toBe(false);
+  });
+});
+
+// Al confirmar la orden la fecha no se actualiza sola: se le pregunta a la
+// persona si es correcta.
+describe('asking about the delivery date when confirming', () => {
+  it('asks whether the date the order has is right', () => {
+    expect(deliveryPrompt('2026-10-10')).toEqual({
+      question: 'La entrega estimada es el 10/10/2026. ¿La fecha es correcta?',
+      keep: 'Sí, es correcta',
+      change: 'No, cambiar la fecha',
+    });
+  });
+
+  it('asks for one when the order has none', () => {
+    const prompt = deliveryPrompt('');
+    expect(prompt.question).toMatch(/no tiene fecha de entrega/);
+    expect(prompt.keep).toBe('No, confirmar sin fecha');
+    expect(prompt.change).toBe('Sí, cargar la fecha');
+  });
+
+  it('needs a date once the person chose to change it', () => {
+    const ORDER_DATE = '2026-10-06T00:00:00.000Z';
+    expect(changedDeliveryError('', ORDER_DATE)).toBe('Elegí la fecha de entrega');
+    expect(changedDeliveryError('2026-10-05', ORDER_DATE)).toMatch(/anterior/);
+    expect(changedDeliveryError('2026-10-12', ORDER_DATE)).toBeNull();
   });
 });

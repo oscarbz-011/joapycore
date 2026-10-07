@@ -87,3 +87,41 @@ export function confirmDeliveryError(
     ? 'La fecha de entrega no puede ser anterior a la fecha de la orden'
     : null;
 }
+
+/**
+ * Lo que se le pregunta a quien confirma la orden. La fecha de entrega no se
+ * cambia sola: la persona dice si la que hay es correcta o carga otra.
+ */
+export interface DeliveryPrompt {
+  question: string;
+  /** Confirmar dejando la fecha como está. */
+  keep: string;
+  /** Pasar a cargar una fecha. */
+  change: string;
+}
+
+export function deliveryPrompt(expectedDay: string): DeliveryPrompt {
+  if (!expectedDay) {
+    return {
+      question:
+        'Esta orden no tiene fecha de entrega estimada. ¿El proveedor te dio una?',
+      keep: 'No, confirmar sin fecha',
+      change: 'Sí, cargar la fecha',
+    };
+  }
+  const [year, month, day] = expectedDay.split('-');
+  return {
+    question: `La entrega estimada es el ${day}/${month}/${year}. ¿La fecha es correcta?`,
+    keep: 'Sí, es correcta',
+    change: 'No, cambiar la fecha',
+  };
+}
+
+/** Problema al confirmar con una fecha nueva, o null si está bien. */
+export function changedDeliveryError(
+  expectedDate: string,
+  orderDate: string,
+): string | null {
+  if (!expectedDate) return 'Elegí la fecha de entrega';
+  return confirmDeliveryError(expectedDate, orderDate);
+}

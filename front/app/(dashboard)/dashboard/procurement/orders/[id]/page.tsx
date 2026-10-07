@@ -29,7 +29,9 @@ import { formatDatePY } from '@/lib/date';
 import { openPdf } from '@/lib/open-pdf';
 import {
   cancelReasonError,
+  changedDeliveryError,
   confirmDeliveryError,
+  deliveryPrompt,
   historyEntryLabel,
   orderCalendarDay,
   orderActions,
@@ -114,6 +116,8 @@ export default function PurchaseOrderDetailPage() {
   const [cancelReason, setCancelReason] = useState('');
   // Entrega que confirma el proveedor al confirmar la orden (control interno).
   const [confirmDate, setConfirmDate] = useState('');
+  // Al confirmar, la fecha solo cambia si la persona dice que no es correcta.
+  const [changingDate, setChangingDate] = useState(false);
   const [actionError, setActionError] = useState('');
   const [emailing, setEmailing] = useState(false);
   const [emailTo, setEmailTo] = useState('');
@@ -145,6 +149,7 @@ export default function PurchaseOrderDetailPage() {
     setPendingAction(null);
     setCancelReason('');
     setActionError('');
+    setChangingDate(false);
   }
 
   const statusMutation = useMutation({
@@ -152,7 +157,7 @@ export default function PurchaseOrderDetailPage() {
       action === 'send'
         ? procurementApi.sendOrder(id)
         : action === 'confirm'
-          ? procurementApi.confirmOrder(id, confirmDate || undefined)
+          ? procurementApi.confirmOrder(id, changingDate ? confirmDate : undefined)
           : action === 'delivery'
             ? procurementApi.setExpectedDate(id, confirmDate || null)
             : procurementApi.cancelOrder(id, cancelReason.trim()),
@@ -196,9 +201,13 @@ export default function PurchaseOrderDetailPage() {
     const problem =
       pendingAction === 'cancel'
         ? cancelReasonError(cancelReason)
-        : (pendingAction === 'confirm' || pendingAction === 'delivery') && order
-          ? confirmDeliveryError(confirmDate, order.orderDate)
-          : null;
+        : pendingAction === 'confirm' && order
+          ? changingDate
+            ? changedDeliveryError(confirmDate, order.orderDate)
+            : null
+          : pendingAction === 'delivery' && order
+            ? confirmDeliveryError(confirmDate, order.orderDate)
+            : null;
     setActionError(problem ?? '');
     if (!problem) statusMutation.mutate(pendingAction);
   }
@@ -257,6 +266,7 @@ export default function PurchaseOrderDetailPage() {
   const tracksReceipt = order.status !== 'PENDING' && order.status !== 'SENT';
   const history = order.statusChanges ?? [];
   const cancelBlock = cancelAdvanceBlock(order.advance);
+  const prompt = deliveryPrompt(orderCalendarDay(order.expectedDate));
   const hasImportData =
     order.purchaseType === 'IMPORT' &&
     (order.exchangeRate || order.customsDuty || order.customsRef);
@@ -541,11 +551,17 @@ export default function PurchaseOrderDetailPage() {
                   <p className="mb-2 text-xs text-muted-foreground">
                     {ACTION_COPY[pendingAction].question}
                   </p>
-                  {(pendingAction === 'confirm' || pendingAction === 'delivery') && (
+                  {pendingAction === 'confirm' && !changingDate && (
+                    <p className="mb-2 text-sm font-medium text-foreground">
+                      {prompt.question}
+                    </p>
+                  )}
+                  {((pendingAction === 'confirm' && changingDate) ||
+                    pendingAction === 'delivery') && (
                     <div className="mb-2 space-y-1.5">
                       <Label className="text-xs">
                         {pendingAction === 'confirm'
-                          ? 'Fecha de entrega que confirmó (opcional)'
+                          ? 'Fecha de entrega que confirmó el proveedor'
                           : 'Nueva fecha de entrega (vacía = a convenir)'}
                       </Label>
                       <DatePicker value={confirmDate} onChange={setConfirmDate} />
@@ -575,7 +591,7 @@ export default function PurchaseOrderDetailPage() {
                       {actionError}
                     </p>
                   )}
-                  <div className="flex gap-2">
+                  <div className="flex flex-wrap gap-2">
                     <Button
                       size="sm"
                       className="flex-1"
@@ -587,8 +603,26 @@ export default function PurchaseOrderDetailPage() {
                     >
                       {statusMutation.isPending
                         ? ACTION_COPY[pendingAction].busy
-                        : ACTION_COPY[pendingAction].yes}
+                        : pendingAction === 'confirm'
+                          ? changingDate
+                            ? 'Confirmar con esta fecha'
+                            : prompt.keep
+                          : ACTION_COPY[pendingAction].yes}
                     </Button>
+                    {pendingAction === 'confirm' && !changingDate && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="flex-1"
+                        onClick={() => {
+                          setActionError('');
+                          setChangingDate(true);
+                        }}
+                        disabled={statusMutation.isPending}
+                      >
+                        {prompt.change}
+                      </Button>
+                    )}
                     <Button
                       size="sm"
                       variant="outline"

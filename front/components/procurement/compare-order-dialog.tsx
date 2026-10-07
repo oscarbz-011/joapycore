@@ -29,7 +29,6 @@ import {
   staysDraft,
   type NewProductForm,
 } from '@/lib/compare-order';
-import { todayISODate } from '@/lib/date';
 import type { SupplierQuote } from '@/lib/supplier-comparison';
 
 const NUM_CLS =
@@ -113,7 +112,6 @@ export function CompareOrderDialog({
       return procurementApi.createOrder(
         orderPayload(
           quote.supplier.id,
-          todayISODate(),
           plan.lines.map((line) => ({
             itemId: line.itemId,
             productId: line.productId ?? productOf[line.itemId],

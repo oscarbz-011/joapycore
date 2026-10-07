@@ -14,6 +14,7 @@ import {
 } from '../repositories/purchase-orders.repository';
 import { CreatePurchaseOrderDto } from '../dto/create-purchase-order.dto';
 import type { AuditLogEvent } from '../../../audit/audit-log.event';
+import { startOfBusinessDay } from '../../../common/utils/business-date.util';
 import { advanceBalance, requiredAdvance } from '../advance.util';
 
 const PRODUCT_STATUS_LABEL: Record<ProductStatus, string> = {
@@ -176,6 +177,13 @@ export class PurchaseOrdersService {
       );
     }
 
+    const orderDate = startOfBusinessDay();
+    if (dto.expectedDate && new Date(dto.expectedDate) < orderDate) {
+      throw new UnprocessableEntityException(
+        'La fecha de entrega no puede ser anterior a la fecha de la orden',
+      );
+    }
+
     const createOrder = () =>
       this.prisma.$transaction(async (tx) => {
         const order = await this.purchaseOrdersRepository.create(
@@ -185,7 +193,8 @@ export class PurchaseOrdersService {
             supplierId: dto.supplierId,
             purchaseType: dto.purchaseType,
             status: 'PENDING',
-            orderDate: new Date(dto.orderDate),
+            // La fecha de la orden es el día en que se crea: no se elige.
+            orderDate,
             expectedDate: dto.expectedDate
               ? new Date(dto.expectedDate)
               : undefined,

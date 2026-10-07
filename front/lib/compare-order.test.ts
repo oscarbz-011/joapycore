@@ -169,13 +169,12 @@ describe('new product from the comparison', () => {
 describe('orderPayload', () => {
   it('builds the purchase order with each line tied to its catalog item', () => {
     expect(
-      orderPayload('sup-a', '2026-10-06', [
+      orderPayload('sup-a', [
         { itemId: 'a-1', productId: 'prod-1', quantity: 36, unitCost: 10_000 },
       ]),
     ).toEqual({
       supplierId: 'sup-a',
       purchaseType: 'LOCAL',
-      orderDate: '2026-10-06',
       items: [
         {
           productId: 'prod-1',
@@ -188,7 +187,7 @@ describe('orderPayload', () => {
   });
 
   it('joins two lines that ended up on the same product', () => {
-    const payload = orderPayload('sup-a', '2026-10-06', [
+    const payload = orderPayload('sup-a', [
       { itemId: 'a-1', productId: 'prod-1', quantity: 10, unitCost: 10_000 },
       { itemId: 'a-2', productId: 'prod-1', quantity: 5, unitCost: 10_000 },
     ]);
