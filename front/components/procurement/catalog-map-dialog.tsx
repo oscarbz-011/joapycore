@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link2, PackagePlus, Search } from 'lucide-react';
+import { LookupSelect } from '@/components/inventory/lookup-select';
 import { NumericInput } from '@/components/numeric-input';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -16,21 +17,20 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-} from '@/components/ui/select';
 import { apiErrorMessage } from '@/lib/api/api-error';
 import { inventoryApi, type Product } from '@/lib/api/inventory';
 import { procurementApi, type SupplierCatalogItem } from '@/lib/api/procurement';
+import { settingsApi } from '@/lib/api/settings';
 import {
   catalogProductError,
   catalogProductFormFrom,
+  markupLabel,
+  suggestedSalePrice,
   toCatalogProductPayload,
   type CatalogProductForm,
 } from '@/lib/catalog-product';
+import { priceValidity, validityLabel } from '@/lib/catalog-validity';
+import { localISODate } from '@/lib/date';
 import { cn } from '@/lib/utils';
 
 const NUM_CLS =
@@ -42,6 +42,11 @@ const MODES = [
 ] as const;
 
 type Mode = (typeof MODES)[number]['value'];
+
+// Las mismas claves que usan Inventario y sus pantallas de categorías y
+// marcas: un alta hecha acá aparece allá sin recargar.
+const CATEGORIES_KEY = ['inventory-categories'] as const;
+const BRANDS_KEY = ['inventory-brands'] as const;
 
 function ErrorNote({ children }: { children: string }) {
   return (
@@ -163,12 +168,23 @@ function NewProduct({
   // crear de nuevo duplicaría el producto.
   const [createdId, setCreatedId] = useState<string | null>(null);
 
+  const { data: pricing } = useQuery({
+    queryKey: ['pricing-config'],
+    queryFn: settingsApi.getPricing,
+  });
+  // El precio de venta sigue al sugerido (costo + margen de la empresa) hasta
+  // que el usuario escribe el suyo, igual que en el alta de productos.
+  const [saleEdited, setSaleEdited] = useState(false);
+  const suggested = suggestedSalePrice(form.costPrice, pricing);
+  const salePrice = saleEdited ? form.salePrice : suggested;
+  const product = { ...form, salePrice };
+
   const { data: categories = [], isLoading: loadingCategories } = useQuery({
-    queryKey: ['categories'],
+    queryKey: CATEGORIES_KEY,
     queryFn: inventoryApi.listCategories,
   });
   const { data: brands = [] } = useQuery({
-    queryKey: ['brands'],
+    queryKey: BRANDS_KEY,
     queryFn: inventoryApi.listBrands,
   });
 
@@ -180,8 +196,8 @@ function NewProduct({
     mutationFn: async () => {
       let productId = createdId;
       if (!productId) {
-        const product = await inventoryApi.createProduct(toCatalogProductPayload(form));
-        productId = product.id;
+        const created = await inventoryApi.createProduct(toCatalogProductPayload(product));
+        productId = created.id;
         setCreatedId(productId);
         void queryClient.invalidateQueries({ queryKey: ['products'] });
         void queryClient.invalidateQueries({ queryKey: ['products-active-for-mapping'] });
@@ -192,15 +208,15 @@ function NewProduct({
     onError: (err) => setError(apiErrorMessage(err, 'No se pudo completar la operación')),
   });
 
-  const category = categories.find((c) => c.id === form.categoryId);
-  const brand = brands.find((b) => b.id === form.brandId);
+  const today = localISODate(new Date());
+  const priceExpired = priceValidity(item, today).status === 'expired';
 
   return (
     <form
       className="space-y-4"
       onSubmit={(e) => {
         e.preventDefault();
-        const problem = createdId ? null : catalogProductError(form);
+        const problem = createdId ? null : catalogProductError(product);
         setError(problem ?? '');
         if (!problem) mutation.mutate();
       }}
@@ -219,47 +235,31 @@ function NewProduct({
           />
         </div>
 
-        <div className="space-y-1.5">
-          <Label>Categoría *</Label>
-          <Select
-            value={form.categoryId || 'none'}
-            onValueChange={(value) => set('categoryId', value && value !== 'none' ? value : '')}
-          >
-            <SelectTrigger className="w-full" aria-label="Categoría">
-              <span className="min-w-0 flex-1 truncate text-left text-sm">
-                {category?.name ?? (loadingCategories ? 'Cargando...' : '— Seleccionar —')}
-              </span>
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="none">— Seleccionar —</SelectItem>
-              {categories.map((c) => (
-                <SelectItem key={c.id} value={c.id}>
-                  {c.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+        <div className="sm:col-span-2">
+          <LookupSelect
+            label="Categoría"
+            required
+            emptyLabel="— Seleccionar —"
+            items={categories}
+            loading={loadingCategories}
+            value={form.categoryId}
+            onChange={(id) => set('categoryId', id)}
+            create={inventoryApi.createCategory}
+            managePermission="inventory:categories:manage"
+            queryKey={CATEGORIES_KEY}
+          />
         </div>
-        <div className="space-y-1.5">
-          <Label>Marca</Label>
-          <Select
-            value={form.brandId || 'none'}
-            onValueChange={(value) => set('brandId', value && value !== 'none' ? value : '')}
-          >
-            <SelectTrigger className="w-full" aria-label="Marca">
-              <span className="min-w-0 flex-1 truncate text-left text-sm">
-                {brand?.name ?? 'Sin marca'}
-              </span>
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="none">Sin marca</SelectItem>
-              {brands.map((b) => (
-                <SelectItem key={b.id} value={b.id}>
-                  {b.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+        <div className="sm:col-span-2">
+          <LookupSelect
+            label="Marca"
+            emptyLabel="Sin marca"
+            items={brands}
+            value={form.brandId}
+            onChange={(id) => set('brandId', id)}
+            create={inventoryApi.createBrand}
+            managePermission="inventory:brands:manage"
+            queryKey={BRANDS_KEY}
+          />
         </div>
 
         <div className="space-y-1.5">
@@ -278,10 +278,35 @@ function NewProduct({
             id="catalog-product-sale"
             className={NUM_CLS}
             decimals={2}
-            value={form.salePrice}
-            onChange={(value) => set('salePrice', value)}
+            value={salePrice}
+            onChange={(value) => {
+              setSaleEdited(true);
+              set('salePrice', value);
+            }}
+            aria-describedby="catalog-product-sale-help"
           />
         </div>
+        {pricing && suggested > 0 && (
+          <p
+            id="catalog-product-sale-help"
+            className="-mt-2 text-xs text-muted-foreground sm:col-span-2"
+          >
+            Sugerido: Gs. {new Intl.NumberFormat('es-PY').format(suggested)} (costo + margen
+            de {markupLabel(pricing)}).
+            {saleEdited && salePrice !== suggested && (
+              <>
+                {' '}
+                <button
+                  type="button"
+                  onClick={() => setSaleEdited(false)}
+                  className="font-medium text-primary underline underline-offset-2"
+                >
+                  Usar el sugerido
+                </button>
+              </>
+            )}
+          </p>
+        )}
 
         <div className="space-y-1.5">
           <Label htmlFor="catalog-product-unit">Unidad de medida</Label>
@@ -308,6 +333,13 @@ function NewProduct({
           ? 'El producto ya se creó, pero no quedó vinculado a este ítem. Reintentá el vínculo.'
           : 'El producto queda activo y vinculado a este ítem, listo para una orden de compra. Se habilita para la venta al recibir la primera mercadería.'}
       </p>
+
+      {priceExpired && !createdId && (
+        <p className="rounded-xl border border-warn/40 bg-warn-subtle px-3 py-2 text-xs text-warn">
+          El precio de lista de este ítem ya no rige ({validityLabel(item, today).toLowerCase()}).
+          Revisá el costo antes de crear el producto.
+        </p>
+      )}
 
       {error && <ErrorNote>{error}</ErrorNote>}
 

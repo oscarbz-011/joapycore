@@ -1,5 +1,7 @@
 import type { CreateProductPayload } from './api/inventory';
 import type { SupplierCatalogItem } from './api/procurement';
+import type { PricingConfig } from './api/settings';
+import { computeSuggestedPrice } from './pricing';
 
 /** Datos que se piden para crear un producto desde un ítem del catálogo. */
 export interface CatalogProductForm {
@@ -37,6 +39,23 @@ export function catalogProductFormFrom(
     salePrice: 0,
     isSerialized: false,
   };
+}
+
+/**
+ * Precio de venta sugerido para ese costo con el margen global de la empresa,
+ * el mismo cálculo del alta de productos de Inventario. 0 = sin sugerencia.
+ */
+export function suggestedSalePrice(
+  costPrice: number,
+  pricing: PricingConfig | null | undefined,
+): number {
+  return Math.round(computeSuggestedPrice(costPrice, pricing, 0, null));
+}
+
+/** Margen global tal como se muestra junto al precio sugerido. */
+export function markupLabel(pricing: PricingConfig): string {
+  const amount = new Intl.NumberFormat('es-PY').format(pricing.defaultMarkup);
+  return pricing.markupMethod === 'PERCENTAGE' ? `${amount}%` : `Gs. ${amount}`;
 }
 
 /** Qué falta para poder crear el producto activo, o null si está completo. */
