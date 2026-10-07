@@ -1807,6 +1807,8 @@ model SupplierInvoice {
   estimatedTotal Decimal               @map("estimated_total") @db.Decimal(12, 2)
   status         SupplierInvoiceStatus
   notes          String?
+  // Factura escaneada o en PDF, tal como la mandó el proveedor.
+  fileId         String?               @map("file_id")
   // Por qué se aprobó la diferencia, o qué se reclama al rechazarla.
   reviewNote     String?               @map("review_note")
   reviewedById   String?               @map("reviewed_by_id")

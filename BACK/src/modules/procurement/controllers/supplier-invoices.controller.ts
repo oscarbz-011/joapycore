@@ -15,6 +15,7 @@ import { RequiredModule } from '../../../common/decorators/required-module.decor
 import type { JwtPayload } from '../../../common/types/jwt-payload.interface';
 import {
   ApproveSupplierInvoiceDto,
+  AttachSupplierInvoiceFileDto,
   CreateSupplierInvoiceDto,
   RejectSupplierInvoiceDto,
 } from '../dto/create-supplier-invoice.dto';
@@ -58,6 +59,18 @@ export class SupplierInvoicesController {
     @Body() dto: CreateSupplierInvoiceDto,
   ) {
     return this.invoicesService.create(tenantId, dto, user.sub);
+  }
+
+  @Post(':id/file')
+  @Permissions('procurement:payables:register')
+  @ApiOperation({ summary: 'Adjuntar o reemplazar el archivo de la factura' })
+  attachFile(
+    @CurrentTenant() tenantId: string,
+    @CurrentUser() user: JwtPayload,
+    @Param('id') id: string,
+    @Body() dto: AttachSupplierInvoiceFileDto,
+  ) {
+    return this.invoicesService.attachFile(tenantId, id, dto.fileId, user.sub);
   }
 
   @Post(':id/approve')

@@ -63,6 +63,21 @@ export class CreateSupplierInvoiceDto {
   @IsDateString()
   invoiceDate: string;
 
+  @ApiProperty({
+    description:
+      'Total que figura al pie de la factura. Tiene que coincidir con las líneas más el flete menos el descuento',
+  })
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  total: number;
+
+  @ApiPropertyOptional({
+    description: 'Archivo de la factura (PDF o imagen), ya subido a /files',
+  })
+  @IsOptional()
+  @IsUUID()
+  fileId?: string;
+
   @ApiPropertyOptional({ description: 'Envío cobrado en la factura' })
   @IsOptional()
   @IsNumber({ maxDecimalPlaces: 2 })
@@ -88,6 +103,12 @@ export class CreateSupplierInvoiceDto {
   @ValidateNested({ each: true })
   @Type(() => SupplierInvoiceLineDto)
   lines: SupplierInvoiceLineDto[];
+}
+
+export class AttachSupplierInvoiceFileDto {
+  @ApiProperty({ description: 'Archivo ya subido a /files' })
+  @IsUUID()
+  fileId: string;
 }
 
 export class ApproveSupplierInvoiceDto {

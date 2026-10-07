@@ -42,14 +42,37 @@ function makeInvoice(overrides = {}) {
   };
 }
 
-const dto = (overrides = {}) => ({
-  supplierId: 'sup-1',
-  payableIds: ['ap-1'],
-  invoiceNumber: ' 001-001-0000123 ',
-  invoiceDate: '2026-10-07',
-  lines: [{ purchaseReceiptItemId: 'ri-1', quantity: 10, unitCost: 100_000 }],
-  ...overrides,
-});
+interface DtoOverrides {
+  lines?: {
+    purchaseReceiptItemId: string;
+    quantity: number;
+    unitCost: number;
+  }[];
+  shippingAmount?: number;
+  discountAmount?: number;
+  total?: number;
+  fileId?: string;
+}
+
+// El total que figura en la factura cierra con sus líneas, salvo que el test
+// diga otra cosa.
+const dto = (overrides: DtoOverrides = {}) => {
+  const lines = overrides.lines ?? [
+    { purchaseReceiptItemId: 'ri-1', quantity: 10, unitCost: 100_000 },
+  ];
+  return {
+    supplierId: 'sup-1',
+    payableIds: ['ap-1'],
+    invoiceNumber: ' 001-001-0000123 ',
+    invoiceDate: '2026-10-07',
+    total:
+      lines.reduce((sum, line) => sum + line.quantity * line.unitCost, 0) +
+      (overrides.shippingAmount ?? 0) -
+      (overrides.discountAmount ?? 0),
+    ...overrides,
+    lines,
+  };
+};
 
 describe('SupplierInvoicesService', () => {
   let service: SupplierInvoicesService;
@@ -60,11 +83,13 @@ describe('SupplierInvoicesService', () => {
     create: jest.Mock;
     linkPayables: jest.Mock;
     unlinkPayables: jest.Mock;
+    setFile: jest.Mock;
     transition: jest.Mock;
     lockPayables: jest.Mock;
     updatePayable: jest.Mock;
   };
   let eventEmitter: { emit: jest.Mock };
+  let files: { getById: jest.Mock };
   const tx = { tx: true };
 
   beforeEach(() => {
@@ -75,6 +100,7 @@ describe('SupplierInvoicesService', () => {
       create: jest.fn().mockResolvedValue({ id: 'inv-1' }),
       linkPayables: jest.fn().mockResolvedValue(1),
       unlinkPayables: jest.fn(),
+      setFile: jest.fn(),
       transition: jest.fn().mockResolvedValue(1),
       lockPayables: jest.fn().mockResolvedValue([
         {
@@ -88,10 +114,14 @@ describe('SupplierInvoicesService', () => {
       updatePayable: jest.fn(),
     };
     eventEmitter = { emit: jest.fn() };
+    files = {
+      getById: jest.fn().mockResolvedValue({ mimeType: 'application/pdf' }),
+    };
     service = new SupplierInvoicesService(
       { $transaction: jest.fn((cb) => cb(tx)) } as never,
       invoices as never,
       eventEmitter as never,
+      files as never,
     );
   });
 
@@ -238,6 +268,40 @@ describe('SupplierInvoicesService', () => {
       ).rejects.toThrow(/descuento/);
     });
 
+    // El usuario lee el total del pie de la factura: si no sale de las
+    // líneas, hay algo mal cargado y no se guarda.
+    it('refuses a total that its lines, shipping and discount do not add up to', async () => {
+      await expect(
+        service.create('tenant-1', dto({ total: 2_000_000 }), 'user-1'),
+      ).rejects.toThrow(/no coincide/);
+      await expect(
+        service.create(
+          'tenant-1',
+          dto({ shippingAmount: 50_000, total: 1_000_000 }),
+          'user-1',
+        ),
+      ).rejects.toThrow(/no coincide/);
+      expect(invoices.create).not.toHaveBeenCalled();
+    });
+
+    it('keeps the file of the invoice when one comes with it', async () => {
+      await service.create('tenant-1', dto({ fileId: 'file-1' }), 'user-1');
+
+      expect(files.getById).toHaveBeenCalledWith('tenant-1', 'file-1');
+      expect(invoices.create.mock.calls[0][0]).toMatchObject({
+        fileId: 'file-1',
+      });
+    });
+
+    it('refuses a file that is neither a PDF nor a picture', async () => {
+      files.getById.mockResolvedValue({ mimeType: 'application/zip' });
+
+      await expect(
+        service.create('tenant-1', dto({ fileId: 'file-1' }), 'user-1'),
+      ).rejects.toThrow(/PDF/);
+      expect(invoices.create).not.toHaveBeenCalled();
+    });
+
     it('does not load the same invoice number twice for a supplier', async () => {
       invoices.findActiveByNumber.mockResolvedValue({ id: 'inv-0' });
 
@@ -368,6 +432,29 @@ describe('SupplierInvoicesService', () => {
         service.approve('tenant-2', 'inv-1', undefined, 'user-9'),
       ).rejects.toBeInstanceOf(NotFoundException);
       expect(invoices.transition).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('attachFile', () => {
+    it('attaches the file to an invoice already loaded', async () => {
+      await service.attachFile('tenant-1', 'inv-1', 'file-1', 'user-1');
+
+      expect(files.getById).toHaveBeenCalledWith('tenant-1', 'file-1');
+      expect(invoices.setFile).toHaveBeenCalledWith(
+        'tenant-1',
+        'inv-1',
+        'file-1',
+      );
+    });
+
+    // FilesService no devuelve archivos de otro tenant: corta ahí.
+    it('does not attach a file the tenant does not own', async () => {
+      files.getById.mockRejectedValue(new NotFoundException());
+
+      await expect(
+        service.attachFile('tenant-1', 'inv-1', 'file-x', 'user-1'),
+      ).rejects.toBeInstanceOf(NotFoundException);
+      expect(invoices.setFile).not.toHaveBeenCalled();
     });
   });
 

@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import type { AuditLogEvent } from '../../../audit/audit-log.event';
+import { FilesService } from '../../../files/files.service';
 import { PrismaService } from '../../../prisma/prisma.service';
 import type { PrismaClientOrTx } from '../../../prisma/types';
 import { CreateSupplierInvoiceDto } from '../dto/create-supplier-invoice.dto';
@@ -17,6 +18,7 @@ import {
   requiresApproval,
 } from '../supplier-invoice.util';
 
+const INVOICE_FILE_TYPES = ['application/pdf', 'image/jpeg', 'image/png'];
 const gs = (n: number) => `Gs. ${Math.round(n).toLocaleString('es-PY')}`;
 
 /**
@@ -31,7 +33,34 @@ export class SupplierInvoicesService {
     private readonly prisma: PrismaService,
     private readonly invoices: SupplierInvoicesRepository,
     private readonly eventEmitter: EventEmitter2,
+    private readonly filesService: FilesService,
   ) {}
+
+  // El archivo tiene que ser del tenant y ser una factura legible: PDF o foto.
+  private async assertInvoiceFile(tenantId: string, fileId: string) {
+    const file = await this.filesService.getById(tenantId, fileId);
+    if (!INVOICE_FILE_TYPES.includes(file.mimeType)) {
+      throw new UnprocessableEntityException(
+        'La factura se adjunta en PDF o como imagen (JPG o PNG)',
+      );
+    }
+  }
+
+  /** Adjunta (o reemplaza) el archivo de una factura ya cargada. */
+  async attachFile(
+    tenantId: string,
+    id: string,
+    fileId: string,
+    userId?: string,
+  ) {
+    await this.findOne(tenantId, id);
+    await this.assertInvoiceFile(tenantId, fileId);
+    await this.invoices.setFile(tenantId, id, fileId);
+    this.audit(tenantId, userId, id, 'supplier.invoice.file.attached', {
+      fileId,
+    });
+    return this.findOne(tenantId, id);
+  }
 
   /** Recepciones del proveedor que todavía no tienen factura. */
   invoiceable(tenantId: string, supplierId: string) {
@@ -101,6 +130,14 @@ export class SupplierInvoicesService {
         'El descuento no puede superar lo facturado',
       );
     }
+    // Control: el total que se leyó de la factura tiene que salir de sus
+    // líneas. Si no cierra, hay un dato mal cargado (o falta el flete).
+    if (Math.abs(dto.total - comparison.total) > 0.01) {
+      throw new UnprocessableEntityException(
+        `El total de la factura (${gs(dto.total)}) no coincide con sus líneas, flete y descuento (${gs(comparison.total)}). Revisá las cantidades y los precios.`,
+      );
+    }
+    if (dto.fileId) await this.assertInvoiceFile(tenantId, dto.fileId);
 
     if (
       await this.invoices.findActiveByNumber(
@@ -134,6 +171,7 @@ export class SupplierInvoicesService {
           estimatedTotal: comparison.estimated,
           status: needsApproval ? 'PENDING_APPROVAL' : 'MATCHED',
           notes: dto.notes?.trim() || null,
+          fileId: dto.fileId ?? null,
           createdById: userId,
           // Se guarda también lo recibido: la comparación tiene que poder
           // rehacerse tal como se vio al cargar la factura.

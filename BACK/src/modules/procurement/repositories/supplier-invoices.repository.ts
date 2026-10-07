@@ -106,6 +106,13 @@ export class SupplierInvoicesRepository {
     });
   }
 
+  setFile(tenantId: string, id: string, fileId: string) {
+    return this.prisma.supplierInvoice.updateMany({
+      where: { tenantId, id },
+      data: { fileId },
+    });
+  }
+
   create(
     data: Prisma.SupplierInvoiceUncheckedCreateInput,
     client: PrismaClientOrTx = this.prisma,
