@@ -11,6 +11,7 @@ import { CancelPurchaseOrderDto } from '../dto/cancel-purchase-order.dto';
 import { ConfirmPurchaseOrderDto } from '../dto/confirm-purchase-order.dto';
 import { EmailPurchaseOrderDto } from '../dto/email-purchase-order.dto';
 import { RegisterSupplierPaymentDto } from '../dto/register-supplier-payment.dto';
+import { SetExpectedDateDto } from '../dto/set-expected-date.dto';
 import { SetOrderAdvanceDto } from '../dto/set-order-advance.dto';
 import { PurchaseOrderAdvancesService } from '../services/purchase-order-advances.service';
 import { PurchaseOrderDocumentService } from '../services/purchase-order-document.service';
@@ -136,6 +137,25 @@ export class PurchaseOrdersController {
       tenantId,
       id,
       dto.reason,
+      user.sub,
+    );
+  }
+
+  @Post(':id/expected-date')
+  @Permissions('procurement:update')
+  @ApiOperation({
+    summary: 'Cambiar la entrega estimada de la orden (control interno)',
+  })
+  setExpectedDate(
+    @CurrentTenant() tenantId: string,
+    @CurrentUser() user: JwtPayload,
+    @Param('id') id: string,
+    @Body() dto: SetExpectedDateDto,
+  ) {
+    return this.purchaseOrdersService.setExpectedDate(
+      tenantId,
+      id,
+      dto.expectedDate,
       user.sub,
     );
   }

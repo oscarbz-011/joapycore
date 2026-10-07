@@ -38,6 +38,7 @@ describe('PurchaseOrdersService', () => {
     findLastOrderNumber: jest.Mock;
     findCatalogItems: jest.Mock;
     transition: jest.Mock;
+    setExpectedDate: jest.Mock;
     recordStatusChange: jest.Mock;
     advanceApplied: jest.Mock;
     findSupplierAdvancePercent: jest.Mock;
@@ -67,6 +68,7 @@ describe('PurchaseOrdersService', () => {
       findLastOrderNumber: jest.fn().mockResolvedValue(null),
       findCatalogItems: jest.fn().mockResolvedValue([]),
       transition: jest.fn().mockResolvedValue({ count: 1 }),
+      setExpectedDate: jest.fn().mockResolvedValue({ count: 1 }),
       recordStatusChange: jest.fn(),
       advanceApplied: jest.fn().mockResolvedValue(0),
       findSupplierAdvancePercent: jest
@@ -499,6 +501,102 @@ describe('PurchaseOrdersService', () => {
         }),
         expect.anything(),
       );
+    });
+  });
+
+  // El proveedor reprograma una entrega ya confirmada.
+  describe('expected delivery date', () => {
+    const awaiting = (status: string) =>
+      makeOrder({
+        status,
+        orderDate: new Date('2026-10-06T00:00:00.000Z'),
+        expectedDate: new Date('2026-10-10T00:00:00.000Z'),
+      });
+
+    it.each(['PENDING', 'SENT', 'CONFIRMED', 'PARTIALLY_RECEIVED'])(
+      'can be changed while the order is %s',
+      async (status) => {
+        purchaseOrdersRepository.findById.mockResolvedValue(awaiting(status));
+
+        await service.setExpectedDate(
+          'tenant-1',
+          'po-1',
+          '2026-10-15',
+          'user-1',
+        );
+
+        expect(purchaseOrdersRepository.setExpectedDate).toHaveBeenCalledWith(
+          'tenant-1',
+          'po-1',
+          new Date('2026-10-15T00:00:00.000Z'),
+          ['PENDING', 'SENT', 'CONFIRMED', 'PARTIALLY_RECEIVED'],
+        );
+        expect(eventEmitter.emit).toHaveBeenCalledWith(
+          'audit.log',
+          expect.objectContaining({
+            action: 'purchase.order.expected_date.changed',
+            before: { expectedDate: new Date('2026-10-10T00:00:00.000Z') },
+            after: { expectedDate: new Date('2026-10-15T00:00:00.000Z') },
+          }),
+        );
+      },
+    );
+
+    it('can be cleared, leaving the delivery to be agreed', async () => {
+      purchaseOrdersRepository.findById.mockResolvedValue(
+        awaiting('CONFIRMED'),
+      );
+
+      await service.setExpectedDate('tenant-1', 'po-1', null, 'user-1');
+
+      expect(purchaseOrdersRepository.setExpectedDate).toHaveBeenCalledWith(
+        'tenant-1',
+        'po-1',
+        null,
+        expect.anything(),
+      );
+    });
+
+    it.each(['RECEIVED', 'CANCELLED'])(
+      'cannot be changed once the order is %s',
+      async (status) => {
+        purchaseOrdersRepository.findById.mockResolvedValue(awaiting(status));
+
+        await expect(
+          service.setExpectedDate('tenant-1', 'po-1', '2026-10-15', 'user-1'),
+        ).rejects.toBeInstanceOf(UnprocessableEntityException);
+        expect(purchaseOrdersRepository.setExpectedDate).not.toHaveBeenCalled();
+      },
+    );
+
+    it('cannot be before the order date', async () => {
+      purchaseOrdersRepository.findById.mockResolvedValue(
+        awaiting('CONFIRMED'),
+      );
+
+      await expect(
+        service.setExpectedDate('tenant-1', 'po-1', '2026-10-05', 'user-1'),
+      ).rejects.toThrow(/anterior a la fecha de la orden/);
+    });
+
+    it('reports a conflict when the order changed in the meantime', async () => {
+      purchaseOrdersRepository.findById.mockResolvedValue(
+        awaiting('CONFIRMED'),
+      );
+      purchaseOrdersRepository.setExpectedDate.mockResolvedValue({ count: 0 });
+
+      await expect(
+        service.setExpectedDate('tenant-1', 'po-1', '2026-10-15', 'user-1'),
+      ).rejects.toBeInstanceOf(ConflictException);
+    });
+
+    it('does not reveal an order of another tenant', async () => {
+      purchaseOrdersRepository.findById.mockResolvedValue(null);
+
+      await expect(
+        service.setExpectedDate('tenant-2', 'po-1', '2026-10-15', 'user-1'),
+      ).rejects.toBeInstanceOf(NotFoundException);
+      expect(purchaseOrdersRepository.setExpectedDate).not.toHaveBeenCalled();
     });
   });
 

@@ -40,6 +40,14 @@ const startOfUtcDay = (date: Date) =>
     Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()),
   );
 
+// Estados en los que la orden todavía espera mercadería.
+const AWAITING_DELIVERY: PurchaseOrderStatus[] = [
+  'PENDING',
+  'SENT',
+  'CONFIRMED',
+  'PARTIALLY_RECEIVED',
+];
+
 @Injectable()
 export class PurchaseOrdersService {
   constructor(
@@ -303,6 +311,49 @@ export class PurchaseOrdersService {
       purchaseOrderId: id,
     });
     return order;
+  }
+
+  // El proveedor puede reprogramar una entrega ya confirmada. Es un dato de
+  // control interno: no cambia el estado ni figura en el PDF de la orden.
+  async setExpectedDate(
+    tenantId: string,
+    id: string,
+    expectedDate: string | null,
+    userId?: string,
+  ) {
+    const order = await this.findOne(tenantId, id);
+    if (!AWAITING_DELIVERY.includes(order.status)) {
+      throw new UnprocessableEntityException(
+        `No se puede cambiar la entrega estimada: esta orden está ${STATUS_LABEL[order.status]}`,
+      );
+    }
+    const date = expectedDate ? new Date(expectedDate) : null;
+    if (date && date < startOfUtcDay(order.orderDate)) {
+      throw new UnprocessableEntityException(
+        'La fecha de entrega no puede ser anterior a la fecha de la orden',
+      );
+    }
+    const { count } = await this.purchaseOrdersRepository.setExpectedDate(
+      tenantId,
+      id,
+      date,
+      AWAITING_DELIVERY,
+    );
+    if (count === 0) {
+      throw new ConflictException(
+        'La orden cambió de estado mientras tanto. Volvé a cargarla.',
+      );
+    }
+    this.eventEmitter.emit('audit.log', {
+      tenantId,
+      userId,
+      module: 'procurement',
+      action: 'purchase.order.expected_date.changed',
+      resourceId: id,
+      before: { expectedDate: order.expectedDate },
+      after: { expectedDate: date },
+    } satisfies AuditLogEvent);
+    return this.findOne(tenantId, id);
   }
 
   // Con mercadería recibida ya hay stock y una cuenta por pagar que dependen

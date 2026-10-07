@@ -103,6 +103,20 @@ export class PurchaseOrdersRepository {
     return Number(result._sum.advanceApplied ?? 0);
   }
 
+  // Solo mientras la orden siga en uno de esos estados: una orden recibida o
+  // cancelada ya no espera ninguna entrega.
+  setExpectedDate(
+    tenantId: string,
+    id: string,
+    expectedDate: Date | null,
+    whileIn: PurchaseOrderStatus[],
+  ) {
+    return this.prisma.purchaseOrder.updateMany({
+      where: { tenantId, id, status: { in: whileIn } },
+      data: { expectedDate },
+    });
+  }
+
   setAdvanceAmount(tenantId: string, id: string, advanceAmount: number) {
     return this.prisma.purchaseOrder.updateMany({
       where: { tenantId, id },
