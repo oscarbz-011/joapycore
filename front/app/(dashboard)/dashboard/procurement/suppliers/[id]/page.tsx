@@ -20,6 +20,8 @@ import {
   type CatalogImportResult,
   type SupplierCatalogItem,
 } from '../../../../../../lib/api/procurement';
+import { SupplierDialog } from '@/components/procurement/supplier-dialog';
+import { SupplierSummary } from '@/components/procurement/supplier-summary';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -448,6 +450,8 @@ export default function SupplierDetailPage() {
   const [deleteTarget, setDeleteTarget] = useState<SupplierCatalogItem | null>(null);
   const canImport = usePermission('procurement:create');
   const canEditCatalog = usePermission('procurement:update');
+  const canEditSupplier = usePermission('suppliers:update');
+  const [editingSupplier, setEditingSupplier] = useState(false);
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(search.trim()), 300);
@@ -531,34 +535,33 @@ export default function SupplierDetailPage() {
         Volver a proveedores
       </button>
 
-      {/* Header */}
-      <div className="mb-6 flex items-start justify-between gap-4">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <h1 className="text-xl font-bold tracking-tight text-foreground">{supplier.name}</h1>
-            {supplier.isImporter && (
-              <Badge className="bg-violet-50 text-violet-700 dark:bg-violet-950 dark:text-violet-300">
-                Importador
-              </Badge>
-            )}
-            {!supplier.isActive && <Badge variant="secondary">Inactivo</Badge>}
-          </div>
-          <p className="mt-1 text-sm text-muted-foreground/70">
-            {[
-              supplier.contactName,
-              supplier.email,
-              supplier.phone,
-              supplier.taxId ? `RUC: ${supplier.taxId}` : null,
-            ].filter(Boolean).join(' · ') || 'Sin datos de contacto cargados'}
-          </p>
-        </div>
-        {canImport && !showEmptyState && (
-          <Button variant="outline" onClick={pickFile} disabled={importMutation.isPending}>
-            <Upload size={15} />
-            {importMutation.isPending ? 'Importando...' : 'Importar lista'}
-          </Button>
-        )}
+      <div className="mb-6">
+        <SupplierSummary
+          supplier={supplier}
+          actions={
+            <>
+              <Button variant="outline" onClick={() => setEditingSupplier(true)}>
+                <Pencil size={15} />
+                {canEditSupplier ? 'Editar datos' : 'Ver datos'}
+              </Button>
+              {canImport && !showEmptyState && (
+                <Button onClick={pickFile} disabled={importMutation.isPending}>
+                  <Upload size={15} />
+                  {importMutation.isPending ? 'Importando...' : 'Importar lista'}
+                </Button>
+              )}
+            </>
+          }
+        />
       </div>
+
+      {editingSupplier && (
+        <SupplierDialog
+          supplier={supplier}
+          onClose={() => setEditingSupplier(false)}
+          onDeleted={() => router.push('/dashboard/procurement/suppliers')}
+        />
+      )}
 
       <div className="mb-4 flex items-baseline justify-between gap-3">
         <h2 className="text-sm font-semibold text-foreground">Catálogo del proveedor</h2>

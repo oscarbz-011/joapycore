@@ -1,409 +1,217 @@
 'use client';
 
-import { usePermission } from '@/lib/permissions';
-
-import { RequirePermission } from '@/components/require-permission';
-
-import { apiErrorMessage } from '@/lib/api/api-error';
-
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { FileSpreadsheet, Plus, Search, X } from 'lucide-react';
-import { procurementApi, type CreateSupplierPayload, type Supplier } from '../../../../../lib/api/procurement';
+import { useQuery } from '@tanstack/react-query';
+import { FileSpreadsheet, Pencil, Plus, Search } from 'lucide-react';
+import { SupplierDialog } from '@/components/procurement/supplier-dialog';
+import { RequirePermission } from '@/components/require-permission';
+import { SortableHeader } from '@/components/sortable-header';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { cn } from '@/lib/utils';
+import { usePermission } from '@/lib/permissions';
+import {
+  SUPPLIER_SORT,
+  filterSuppliers,
+  paymentTermLabel,
+} from '@/lib/suppliers';
+import { useTableSort } from '@/lib/use-table-sort';
+import { procurementApi, type Supplier } from '../../../../../lib/api/procurement';
 
-// ── Sub-nav ────────────────────────────────────────────────────────────────────
+// ── Página ────────────────────────────────────────────────────────────────────
 
-// ── Supplier form ──────────────────────────────────────────────────────────────
-
-const EMPTY_FORM: CreateSupplierPayload = {
-  name: '',
-  contactName: '',
-  email: '',
-  phone: '',
-  address: '',
-  taxId: '',
-  isImporter: false,
-  paymentTermDays: 0,
-};
-
-function fromSupplier(s: Supplier): CreateSupplierPayload {
-  return {
-    name: s.name,
-    contactName: s.contactName ?? '',
-    email: s.email ?? '',
-    phone: s.phone ?? '',
-    address: s.address ?? '',
-    taxId: s.taxId ?? '',
-    isImporter: s.isImporter,
-    paymentTermDays: s.paymentTermDays ?? 0,
-  };
-}
-
-function SupplierForm({
-  initial,
-  onClose,
-}: {
-  initial?: Supplier;
-  onClose: () => void;
-}) {
-  const router = useRouter();
-  const queryClient = useQueryClient();
-  const [form, setForm] = useState<CreateSupplierPayload>(
-    initial ? fromSupplier(initial) : EMPTY_FORM,
-  );
-  const [error, setError] = useState('');
-  const [confirmDelete, setConfirmDelete] = useState(false);
-
-  function set<K extends keyof CreateSupplierPayload>(k: K, v: CreateSupplierPayload[K]) {
-    setForm((f) => ({ ...f, [k]: v }));
-  }
-
-  const canCreate = usePermission('suppliers:create');
-  const canEdit = usePermission('suppliers:update');
-  const canSave = initial ? canEdit : canCreate;
-
-  const saveMutation = useMutation({
-    mutationFn: () => {
-      const payload: CreateSupplierPayload = {
-        name: form.name.trim(),
-        contactName: (form.contactName as string)?.trim() || undefined,
-        email: (form.email as string)?.trim() || undefined,
-        phone: (form.phone as string)?.trim() || undefined,
-        address: (form.address as string)?.trim() || undefined,
-        taxId: (form.taxId as string)?.trim() || undefined,
-        isImporter: form.isImporter,
-        paymentTermDays: form.paymentTermDays ?? 0,
-      };
-      return initial
-        ? procurementApi.updateSupplier(initial.id, payload)
-        : procurementApi.createSupplier(payload);
-    },
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['suppliers'] });
-      onClose();
-    },
-    onError: (err: Error) => {
-      setError(apiErrorMessage(err, 'Error al guardar'));
-    },
-  });
-
-  const deleteMutation = useMutation({
-    mutationFn: () => procurementApi.deleteSupplier(initial!.id),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['suppliers'] });
-      onClose();
-    },
-  });
-
-  return (
-    <div className="flex h-full flex-col">
-      <div className="flex items-center justify-between border-b border-border px-5 py-4">
-        <h2 className="text-sm font-semibold text-foreground">
-          {initial ? initial.name : 'Nuevo proveedor'}
-        </h2>
-        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onClose}>
-          <X size={18} />
-        </Button>
-      </div>
-
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          setError('');
-          saveMutation.mutate();
-        }}
-        className="flex-1 overflow-y-auto px-5 py-4 space-y-3"
-      >
-        <div className="space-y-1.5">
-          <Label>Nombre / Razón social *</Label>
-          <Input
-            value={form.name}
-            onChange={(e) => set('name', e.target.value)}
-            required
-            placeholder="Importadora ABC S.A."
-          />
-        </div>
-
-        <div className="space-y-1.5">
-          <Label>Contacto</Label>
-          <Input
-            value={form.contactName as string}
-            onChange={(e) => set('contactName', e.target.value)}
-            placeholder="Juan Pérez"
-          />
-        </div>
-
-        <div className="grid grid-cols-2 gap-3">
-          <div className="space-y-1.5">
-            <Label>Email</Label>
-            <Input
-              type="email"
-              value={form.email as string}
-              onChange={(e) => set('email', e.target.value)}
-              placeholder="ventas@proveedor.com"
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label>Teléfono</Label>
-            <Input
-              value={form.phone as string}
-              onChange={(e) => set('phone', e.target.value)}
-              placeholder="021 000 000"
-            />
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-3">
-          <div className="space-y-1.5">
-            <Label>RUC</Label>
-            <Input
-              value={form.taxId as string}
-              onChange={(e) => set('taxId', e.target.value)}
-              placeholder="80012345-6"
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label>Dirección</Label>
-            <Input
-              value={form.address as string}
-              onChange={(e) => set('address', e.target.value)}
-              placeholder="Asunción"
-            />
-          </div>
-        </div>
-
-        <div className="space-y-1.5">
-          <Label>Plazo de pago (días)</Label>
-          <Input
-            type="number"
-            min={0}
-            value={form.paymentTermDays ?? 0}
-            onChange={(e) => set('paymentTermDays', Number(e.target.value) || 0)}
-            placeholder="0"
-          />
-          <p className="text-xs text-muted-foreground/60">
-            0 = contado. Determina el vencimiento de las cuentas por pagar generadas al recibir mercadería de este proveedor.
-          </p>
-        </div>
-
-        <label className="flex items-center gap-2.5 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={form.isImporter as boolean}
-            onChange={(e) => set('isImporter', e.target.checked)}
-            className="h-4 w-4 rounded border-border accent-primary"
-          />
-          <span className="text-sm font-medium text-muted-foreground">Es importador</span>
-        </label>
-
-        {error && (
-          <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-            {error}
-          </div>
-        )}
-
-        {canSave && (
-        <div className="flex gap-2 pt-2 border-t border-border">
-          <Button type="submit" className="flex-1" disabled={saveMutation.isPending}>
-            {saveMutation.isPending ? 'Guardando...' : initial ? 'Guardar cambios' : 'Crear proveedor'}
-          </Button>
-        </div>
-        )}
-
-        {initial && (
-          <Button
-            type="button"
-            variant="outline"
-            className="w-full"
-            onClick={() => router.push(`/dashboard/procurement/suppliers/${initial.id}`)}
-          >
-            <FileSpreadsheet size={15} />
-            Catálogo de precios
-          </Button>
-        )}
-
-        {initial && canEdit && (
-          <div>
-            {!confirmDelete ? (
-              <Button
-                type="button"
-                variant="outline"
-                className="w-full border-destructive/30 text-destructive hover:bg-destructive/10"
-                onClick={() => setConfirmDelete(true)}
-              >
-                Eliminar proveedor
-              </Button>
-            ) : (
-              <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3">
-                <p className="text-xs text-destructive mb-2">¿Confirmar eliminación?</p>
-                <div className="flex gap-2">
-                  <Button
-                    type="button"
-                    variant="destructive"
-                    size="sm"
-                    className="flex-1"
-                    onClick={() => deleteMutation.mutate()}
-                    disabled={deleteMutation.isPending}
-                  >
-                    {deleteMutation.isPending ? 'Eliminando...' : 'Sí, eliminar'}
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="flex-1"
-                    onClick={() => setConfirmDelete(false)}
-                  >
-                    Cancelar
-                  </Button>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-      </form>
-    </div>
-  );
-}
-
-// ── Main page ──────────────────────────────────────────────────────────────────
+type DialogState = { mode: 'create' } | { mode: 'edit'; supplier: Supplier } | null;
 
 export default function SuppliersPage() {
   const router = useRouter();
   const [search, setSearch] = useState('');
-  const [showCreate, setShowCreate] = useState(false);
-  const [selectedSupplier, setSelectedSupplier] = useState<Supplier | null>(null);
+  const [dialog, setDialog] = useState<DialogState>(null);
+  const canEdit = usePermission('suppliers:update');
 
-  const { data: suppliers = [], isLoading } = useQuery({
+  const {
+    data: suppliers = [],
+    isLoading,
+    isError,
+    refetch,
+  } = useQuery({
     queryKey: ['suppliers'],
     queryFn: procurementApi.listSuppliers,
   });
 
-  const filtered = suppliers.filter((s) => {
-    const text = `${s.name} ${s.email ?? ''} ${s.taxId ?? ''} ${s.contactName ?? ''}`.toLowerCase();
-    return !search || text.includes(search.toLowerCase());
-  });
+  const filtered = filterSuppliers(suppliers, search);
+  const { sorted, sort, toggle } = useTableSort(filtered, SUPPLIER_SORT);
 
-  const panelOpen = showCreate || selectedSupplier !== null;
+  const openCatalog = (supplier: Supplier) =>
+    router.push(`/dashboard/procurement/suppliers/${supplier.id}`);
 
   return (
     <div>
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold text-foreground">Proveedores</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Proveedores registrados y sus condiciones de pago</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Proveedores registrados, sus condiciones de pago y su catálogo de precios
+          </p>
         </div>
         <RequirePermission permission="suppliers:create">
-          <Button onClick={() => { setSelectedSupplier(null); setShowCreate(true); }}>
+          <Button onClick={() => setDialog({ mode: 'create' })}>
             <Plus size={16} />
             Nuevo proveedor
           </Button>
         </RequirePermission>
       </div>
 
-      <div className="flex gap-6">
-        {/* List */}
-        <div className={cn('flex-1 min-w-0', panelOpen ? 'hidden sm:block' : '')}>
-          <div className="relative mb-4">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground/50" />
-            <Input
-              className="pl-8"
-              placeholder="Buscar por nombre, email o RUC..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-          </div>
-
-          {isLoading ? (
-            <div className="py-16 text-center text-sm text-muted-foreground/60">Cargando proveedores...</div>
-          ) : filtered.length === 0 ? (
-            <div className="py-16 text-center">
-              <p className="text-sm text-muted-foreground/60">No se encontraron proveedores.</p>
-              <RequirePermission permission="suppliers:create">
-                <button
-                  onClick={() => setShowCreate(true)}
-                  className="mt-3 text-sm font-medium text-foreground underline underline-offset-2"
-                >
-                  Crear el primero
-                </button>
-              </RequirePermission>
-            </div>
-          ) : (
-            <div className="overflow-hidden rounded-xl border border-border bg-card">
-              <ul className="divide-y divide-border">
-                {filtered.map((supplier) => (
-                  <li
-                    key={supplier.id}
-                    onClick={() => { setShowCreate(false); setSelectedSupplier(supplier); }}
-                    className={cn(
-                      'flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-muted/20 transition-colors',
-                      selectedSupplier?.id === supplier.id ? 'bg-muted/20' : '',
-                    )}
-                  >
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <p className="font-medium text-foreground truncate">{supplier.name}</p>
-                        {supplier.isImporter && (
-                          <span className="inline-flex shrink-0 rounded-full bg-violet-50 px-1.5 py-0.5 text-xs font-medium text-violet-700 dark:bg-violet-950 dark:text-violet-300">
-                            Importador
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-xs text-muted-foreground/60 truncate">
-                        {[
-                          supplier.contactName,
-                          supplier.email,
-                          supplier.taxId ? `RUC: ${supplier.taxId}` : null,
-                        ]
-                          .filter(Boolean)
-                          .join(' · ')}
-                      </p>
-                    </div>
-                    {!supplier.isActive && (
-                      <Badge variant="outline" className="ml-3 shrink-0 bg-muted/30 text-muted-foreground border-border">
-                        Inactivo
-                      </Badge>
-                    )}
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="ml-3 shrink-0"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        router.push(`/dashboard/procurement/suppliers/${supplier.id}`);
-                      }}
-                    >
-                      <FileSpreadsheet size={14} />
-                      Catálogo
-                    </Button>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
+      <div className="mb-4 flex flex-wrap items-center gap-3">
+        <div className="relative min-w-0 flex-1 sm:max-w-md">
+          <Search
+            size={14}
+            aria-hidden
+            className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground/50"
+          />
+          <Input
+            className="pl-8"
+            aria-label="Buscar proveedor"
+            placeholder="Buscar por nombre, contacto, email o RUC..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
         </div>
-
-        {/* Side panel */}
-        {panelOpen && (
-          <div className="w-80 shrink-0 rounded-xl border border-border bg-card overflow-hidden">
-            {showCreate ? (
-              <SupplierForm onClose={() => setShowCreate(false)} />
-            ) : selectedSupplier ? (
-              <SupplierForm
-                key={selectedSupplier.id}
-                initial={selectedSupplier}
-                onClose={() => setSelectedSupplier(null)}
-              />
-            ) : null}
-          </div>
+        {!isLoading && !isError && (
+          <p className="text-sm text-muted-foreground">
+            {filtered.length} {filtered.length === 1 ? 'proveedor' : 'proveedores'}
+          </p>
         )}
       </div>
+
+      {isLoading ? (
+        <div className="py-16 text-center text-sm text-muted-foreground/60">
+          Cargando proveedores...
+        </div>
+      ) : isError ? (
+        <div className="py-16 text-center">
+          <p className="text-sm text-destructive">No se pudieron cargar los proveedores.</p>
+          <Button variant="outline" size="sm" className="mt-3" onClick={() => void refetch()}>
+            Reintentar
+          </Button>
+        </div>
+      ) : suppliers.length === 0 ? (
+        <div className="py-16 text-center">
+          <p className="text-sm text-muted-foreground">Todavía no hay proveedores cargados.</p>
+          <RequirePermission permission="suppliers:create">
+            <Button variant="outline" className="mt-4" onClick={() => setDialog({ mode: 'create' })}>
+              <Plus size={15} />
+              Crear el primero
+            </Button>
+          </RequirePermission>
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="py-16 text-center">
+          <p className="text-sm text-muted-foreground">
+            Ningún proveedor coincide con &ldquo;{search.trim()}&rdquo;.
+          </p>
+          <Button variant="outline" size="sm" className="mt-3" onClick={() => setSearch('')}>
+            Limpiar búsqueda
+          </Button>
+        </div>
+      ) : (
+        <Card className="overflow-hidden p-0">
+          <div className="overflow-x-auto">
+            <table className="w-full text-[13.5px]">
+              <thead>
+                <tr className="border-b border-border bg-muted/30 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                  <SortableHeader label="Proveedor" sortKey="name" sort={sort} onSort={toggle} />
+                  <SortableHeader label="Contacto" sortKey="contact" sort={sort} onSort={toggle} />
+                  <SortableHeader label="RUC" sortKey="taxId" sort={sort} onSort={toggle} />
+                  <SortableHeader label="Plazo de pago" sortKey="term" sort={sort} onSort={toggle} />
+                  <SortableHeader label="Estado" sortKey="status" sort={sort} onSort={toggle} />
+                  <th className="px-4 py-3 text-right">
+                    <span className="sr-only">Acciones</span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {sorted.map((supplier) => (
+                  <tr
+                    key={supplier.id}
+                    onClick={() => openCatalog(supplier)}
+                    className="cursor-pointer transition-colors hover:bg-muted/20"
+                  >
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium text-foreground">{supplier.name}</span>
+                        {supplier.isImporter && <Badge variant="secondary">Importador</Badge>}
+                      </div>
+                      {supplier.address && (
+                        <p className="mt-0.5 text-xs text-muted-foreground">{supplier.address}</p>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      {supplier.contactName || supplier.email || supplier.phone ? (
+                        <>
+                          <p className="text-foreground">{supplier.contactName ?? '—'}</p>
+                          <p className="mt-0.5 text-xs text-muted-foreground">
+                            {[supplier.email, supplier.phone].filter(Boolean).join(' · ')}
+                          </p>
+                        </>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 tabular-nums text-foreground">
+                      {supplier.taxId ?? <span className="text-muted-foreground">—</span>}
+                    </td>
+                    <td className="px-4 py-3 text-foreground">
+                      {paymentTermLabel(supplier.paymentTermDays)}
+                    </td>
+                    <td className="px-4 py-3">
+                      <Badge variant={supplier.isActive ? 'secondary' : 'outline'}>
+                        {supplier.isActive ? 'Activo' : 'Inactivo'}
+                      </Badge>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center justify-end gap-1">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openCatalog(supplier);
+                          }}
+                        >
+                          <FileSpreadsheet size={14} />
+                          Catálogo
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setDialog({ mode: 'edit', supplier });
+                          }}
+                        >
+                          <Pencil size={14} />
+                          {canEdit ? 'Editar' : 'Ver datos'}
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
+
+      {dialog?.mode === 'create' && <SupplierDialog onClose={() => setDialog(null)} />}
+      {dialog?.mode === 'edit' && (
+        <SupplierDialog
+          key={dialog.supplier.id}
+          supplier={dialog.supplier}
+          onClose={() => setDialog(null)}
+        />
+      )}
     </div>
   );
 }
