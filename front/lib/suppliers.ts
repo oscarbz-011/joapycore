@@ -1,4 +1,11 @@
 import type { CreateSupplierPayload, Supplier } from './api/procurement';
+import {
+  numberOrNull,
+  tierRowsError,
+  tierRowsFrom,
+  tierRowsTo,
+  type TierRow,
+} from './commercial-terms';
 import type { SortValue } from './table-sort';
 
 /** Valores del formulario de proveedor; el plazo se edita como texto. */
@@ -11,6 +18,12 @@ export interface SupplierForm {
   taxId: string;
   isImporter: boolean;
   paymentTermDays: string;
+  // Condiciones comerciales: vacío = no se sabe.
+  shippingCost: string;
+  leadTimeDays: string;
+  minOrderAmount: string;
+  /** Descuentos por total de la orden: desde (Gs.) → porcentaje. */
+  volumeDiscounts: TierRow[];
 }
 
 export function emptySupplierForm(): SupplierForm {
@@ -23,8 +36,14 @@ export function emptySupplierForm(): SupplierForm {
     taxId: '',
     isImporter: false,
     paymentTermDays: '0',
+    shippingCost: '',
+    leadTimeDays: '',
+    minOrderAmount: '',
+    volumeDiscounts: [],
   };
 }
+
+const text = (value: number | null) => (value === null ? '' : String(value));
 
 export function supplierFormFrom(supplier: Supplier): SupplierForm {
   return {
@@ -36,7 +55,29 @@ export function supplierFormFrom(supplier: Supplier): SupplierForm {
     taxId: supplier.taxId ?? '',
     isImporter: supplier.isImporter,
     paymentTermDays: String(supplier.paymentTermDays ?? 0),
+    shippingCost: text(supplier.shippingCost),
+    leadTimeDays: text(supplier.leadTimeDays),
+    minOrderAmount: text(supplier.minOrderAmount),
+    volumeDiscounts: tierRowsFrom(
+      supplier.volumeDiscounts,
+      'minAmount',
+      'percent',
+    ),
   };
+}
+
+/** Problema en las condiciones comerciales, o null si están bien. */
+export function supplierTermsError(form: SupplierForm): string | null {
+  const amounts = [form.shippingCost, form.leadTimeDays, form.minOrderAmount];
+  if (amounts.some((value) => (numberOrNull(value) ?? 0) < 0)) {
+    return 'El envío, el plazo de entrega y el pedido mínimo no pueden ser negativos';
+  }
+  const discounts = tierRowsError(form.volumeDiscounts);
+  if (discounts) return discounts;
+  if (form.volumeDiscounts.some((row) => Number(row.value) > 100)) {
+    return 'Un descuento no puede superar el 100%';
+  }
+  return null;
 }
 
 const optional = (value: string) => value.trim() || null;
@@ -54,7 +95,23 @@ export function toSupplierPayload(form: SupplierForm): CreateSupplierPayload {
     taxId: optional(form.taxId),
     isImporter: form.isImporter,
     paymentTermDays: Number.isFinite(days) && days > 0 ? days : 0,
+    shippingCost: numberOrNull(form.shippingCost),
+    leadTimeDays: wholeOrNull(form.leadTimeDays),
+    minOrderAmount: numberOrNull(form.minOrderAmount),
+    volumeDiscounts: tierRowsTo(form.volumeDiscounts, 'minAmount', 'percent'),
   };
+}
+
+function wholeOrNull(value: string): number | null {
+  const n = numberOrNull(value);
+  return n === null ? null : Math.trunc(n);
+}
+
+/** "7 días", o "Sin dato" si el proveedor no lo informó. */
+export function leadTimeLabel(days: number | null): string {
+  if (days === null) return 'Sin dato';
+  if (days === 0) return 'Inmediata';
+  return `${days} ${days === 1 ? 'día' : 'días'}`;
 }
 
 /** 0 (o sin dato) es contado: la cuenta por pagar vence el día de la recepción. */

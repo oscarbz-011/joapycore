@@ -22,6 +22,7 @@ import {
 } from '../../../../../../lib/api/procurement';
 import { CatalogImportDialog } from '@/components/procurement/catalog-import-dialog';
 import { CatalogMapDialog } from '@/components/procurement/catalog-map-dialog';
+import { TierRows } from '@/components/procurement/tier-rows';
 import { ValidityFields } from '@/components/procurement/validity-fields';
 import { SupplierDialog } from '@/components/procurement/supplier-dialog';
 import { SupplierSummary } from '@/components/procurement/supplier-summary';
@@ -35,6 +36,15 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
 import { priceValidity, validityLabel, validityRangeError } from '@/lib/catalog-validity';
+import {
+  AVAILABILITY_LABEL,
+  tierRowsError,
+  tierRowsFrom,
+  tierRowsTo,
+  type SupplierAvailability,
+  type TierRow,
+} from '@/lib/commercial-terms';
+import { formatDatePY } from '@/lib/date';
 import { localISODate } from '@/lib/date';
 import { cn } from '@/lib/utils';
 
@@ -80,8 +90,19 @@ function EditItemDialog({
   const initialTo = item.validTo?.slice(0, 10) ?? '';
   const [validFrom, setValidFrom] = useState(initialFrom);
   const [validTo, setValidTo] = useState(initialTo);
+  const [minQuantity, setMinQuantity] = useState(
+    item.minOrderQuantity === null ? '' : String(item.minOrderQuantity),
+  );
+  const [availability, setAvailability] = useState<SupplierAvailability | ''>(
+    item.availability ?? '',
+  );
+  const [tiers, setTiers] = useState<TierRow[]>(() =>
+    tierRowsFrom(item.priceTiers, 'minQuantity', 'price'),
+  );
+  const [tiersTouched, setTiersTouched] = useState(false);
   const [error, setError] = useState('');
   const rangeError = validityRangeError(validFrom, validTo);
+  const tiersError = tierRowsError(tiers);
 
   const mutation = useMutation({
     mutationFn: () => {
@@ -95,6 +116,14 @@ function EditItemDialog({
       // La vigencia sí se puede borrar: una fecha quitada viaja como null.
       if (validFrom !== initialFrom) dto.validFrom = validFrom || null;
       if (validTo !== initialTo) dto.validTo = validTo || null;
+      const minValue = minQuantity.trim() ? Math.trunc(Number(minQuantity)) : null;
+      if (minValue !== item.minOrderQuantity) dto.minOrderQuantity = minValue;
+      // Informar la disponibilidad sella la fecha, aunque el valor se repita:
+      // por eso se manda solo cuando el usuario la tocó.
+      if ((availability || null) !== item.availability) {
+        dto.availability = availability || null;
+      }
+      if (tiersTouched) dto.priceTiers = tierRowsTo(tiers, 'minQuantity', 'price');
       return procurementApi.updateCatalogItem(item.id, dto);
     },
     onSuccess: () => {
@@ -106,7 +135,7 @@ function EditItemDialog({
 
   return (
     <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
-      <DialogContent showCloseButton={false} className="flex flex-col gap-0 sm:max-w-md p-0 overflow-hidden">
+      <DialogContent showCloseButton={false} className="flex max-h-[90vh] flex-col gap-0 sm:max-w-md p-0 overflow-y-auto">
         <DialogHeader className="flex-row items-center justify-between border-b border-border px-5 py-4">
           <DialogTitle>Editar ítem</DialogTitle>
           <Button variant="ghost" size="icon-sm" onClick={onClose}>
@@ -117,8 +146,13 @@ function EditItemDialog({
         <form
           onSubmit={(e) => {
             e.preventDefault();
-            setError(rangeError ?? '');
-            if (!rangeError) mutation.mutate();
+            const minProblem =
+              minQuantity.trim() && !(Number(minQuantity) >= 1)
+                ? 'La cantidad mínima tiene que ser 1 o más'
+                : null;
+            const problem = rangeError ?? minProblem ?? tiersError;
+            setError(problem ?? '');
+            if (!problem) mutation.mutate();
           }}
           className="px-5 py-4 space-y-3"
         >
@@ -162,6 +196,61 @@ function EditItemDialog({
           <p className="text-xs text-muted-foreground/60">
             Hasta cuándo rige este precio. Sin fechas, no vence.
           </p>
+
+          <div className="grid grid-cols-2 gap-3 border-t border-border pt-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="catalog-item-min">Cantidad mínima</Label>
+              <Input
+                id="catalog-item-min"
+                type="number"
+                min={1}
+                step={1}
+                value={minQuantity}
+                onChange={(e) => setMinQuantity(e.target.value)}
+                placeholder="Sin mínimo"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Disponibilidad</Label>
+              <Select
+                value={availability || 'none'}
+                onValueChange={(v) =>
+                  setAvailability(v && v !== 'none' ? (v as SupplierAvailability) : '')
+                }
+              >
+                <SelectTrigger className="w-full" aria-label="Disponibilidad">
+                  <span className="min-w-0 flex-1 truncate text-left text-sm">
+                    {availability ? AVAILABILITY_LABEL[availability] : 'Sin dato'}
+                  </span>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Sin dato</SelectItem>
+                  {(Object.keys(AVAILABILITY_LABEL) as SupplierAvailability[]).map((value) => (
+                    <SelectItem key={value} value={value}>
+                      {AVAILABILITY_LABEL[value]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          {item.availabilityUpdatedAt && (
+            <p className="text-xs text-muted-foreground/60">
+              Disponibilidad informada el {formatDatePY(item.availabilityUpdatedAt, 'local')}.
+            </p>
+          )}
+
+          <div className="space-y-1.5">
+            <p className="text-sm font-medium text-foreground">Precio por cantidad</p>
+            <TierRows
+              rows={tiers}
+              onChange={(rows) => { setTiers(rows); setTiersTouched(true); }}
+              fromLabel="Desde (cantidad)"
+              valueLabel="Precio (Gs.)"
+              addLabel="Agregar precio por cantidad"
+              emptyText="Sin precios por cantidad: rige el precio de lista para cualquier cantidad."
+            />
+          </div>
 
           {error && (
             <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">

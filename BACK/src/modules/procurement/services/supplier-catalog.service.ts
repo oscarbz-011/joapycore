@@ -4,6 +4,8 @@ import {
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
+import { Prisma } from '@prisma/client';
+import { normalizePriceTiers } from '../commercial-terms.util';
 import {
   SupplierCatalogRepository,
   type CatalogFilters,
@@ -115,7 +117,7 @@ export class SupplierCatalogService {
 
   async update(tenantId: string, id: string, dto: UpdateCatalogItemDto) {
     const item = await this.getItemOrFail(tenantId, id);
-    const { validFrom, validTo, ...fields } = dto;
+    const { validFrom, validTo, priceTiers, availability, ...fields } = dto;
 
     // undefined = no se toca; null = se borra. El rango se valida contra lo
     // que va a quedar guardado, no solo contra lo que trae este cambio.
@@ -128,7 +130,22 @@ export class SupplierCatalogService {
       validTo !== undefined ? toDay(validTo) : (item.validTo ?? null),
     );
 
-    await this.repository.update(tenantId, id, { ...fields, ...validity });
+    await this.repository.update(tenantId, id, {
+      ...fields,
+      ...validity,
+      // La fecha dice qué tan viejo es el dato: se sella cada vez que alguien
+      // informa la disponibilidad, aunque repita el mismo valor.
+      ...(availability !== undefined && {
+        availability,
+        availabilityUpdatedAt: availability ? new Date() : null,
+      }),
+      ...(priceTiers !== undefined && {
+        priceTiers: normalizePriceTiers(
+          priceTiers,
+          dto.price ?? (item.price == null ? null : Number(item.price)),
+        ) as unknown as Prisma.InputJsonValue,
+      }),
+    });
     return this.repository.findById(tenantId, id);
   }
 

@@ -1,4 +1,10 @@
 import { apiClient, LONG_REQUEST_TIMEOUT_MS } from './client';
+import {
+  numberOrNull,
+  type PriceTier,
+  type SupplierAvailability,
+  type VolumeDiscount,
+} from '../commercial-terms';
 
 export type PurchaseType = 'LOCAL' | 'IMPORT';
 export type PurchaseOrderStatus =
@@ -25,8 +31,28 @@ export interface SupplierCatalogItem {
   conversionFactor: number | null;
   validFrom: string | null;
   validTo: string | null;
+  /** Cantidad mínima que vende el proveedor, en su unidad. */
+  minOrderQuantity: number | null;
+  /** Dato cargado a mano; `availabilityUpdatedAt` dice de cuándo es. */
+  availability: SupplierAvailability | null;
+  availabilityUpdatedAt: string | null;
+  priceTiers: PriceTier[];
   productId: string | null;
   product: { id: string; name: string; unit: string } | null;
+}
+
+// La API manda los decimales como texto: se pasan a número una sola vez, acá,
+// para que los cálculos (costo unitario, comparador) no dependan de coerción.
+function normalizeCatalogItem(raw: SupplierCatalogItem): SupplierCatalogItem {
+  return {
+    ...raw,
+    price: numberOrNull(raw.price),
+    conversionFactor: numberOrNull(raw.conversionFactor),
+    priceTiers: (raw.priceTiers ?? []).map((tier) => ({
+      minQuantity: Number(tier.minQuantity),
+      price: Number(tier.price),
+    })),
+  };
 }
 
 /** Vigencia de un precio en días de calendario (AAAA-MM-DD). */
@@ -59,6 +85,23 @@ export interface Supplier {
   isImporter: boolean;
   isActive: boolean;
   paymentTermDays: number | null;
+  // Condiciones comerciales. null = no se sabe (distinto de cero).
+  shippingCost: number | null;
+  leadTimeDays: number | null;
+  minOrderAmount: number | null;
+  volumeDiscounts: VolumeDiscount[];
+}
+
+function normalizeSupplier(raw: Supplier): Supplier {
+  return {
+    ...raw,
+    shippingCost: numberOrNull(raw.shippingCost),
+    minOrderAmount: numberOrNull(raw.minOrderAmount),
+    volumeDiscounts: (raw.volumeDiscounts ?? []).map((tier) => ({
+      minAmount: Number(tier.minAmount),
+      percent: Number(tier.percent),
+    })),
+  };
 }
 
 export interface PurchaseOrderItem {
@@ -177,6 +220,10 @@ export interface CreateSupplierPayload {
   taxId?: string | null;
   isImporter?: boolean;
   paymentTermDays?: number;
+  shippingCost?: number | null;
+  leadTimeDays?: number | null;
+  minOrderAmount?: number | null;
+  volumeDiscounts?: VolumeDiscount[];
 }
 
 export type UpdateSupplierPayload = Partial<CreateSupplierPayload>;
@@ -233,7 +280,7 @@ export const procurementApi = {
   listCatalog: (supplierId: string, filters: CatalogFilters = {}): Promise<SupplierCatalogItem[]> =>
     apiClient
       .get(`/procurement/suppliers/${supplierId}/catalog`, { params: filters })
-      .then((r) => r.data),
+      .then((r) => (r.data as SupplierCatalogItem[]).map(normalizeCatalogItem)),
 
   // El apiClient fuerza 'application/json' por defecto, así que hay que pisarlo
   // acá: sin esto el multipart sale sin boundary, multer no encuentra el
@@ -265,28 +312,43 @@ export const procurementApi = {
       // null borra la fecha.
       validFrom?: string | null;
       validTo?: string | null;
+      minOrderQuantity?: number | null;
+      availability?: SupplierAvailability | null;
+      priceTiers?: PriceTier[];
     },
   ): Promise<SupplierCatalogItem> =>
-    apiClient.patch(`/procurement/catalog/${id}`, dto).then((r) => r.data),
+    apiClient
+      .patch(`/procurement/catalog/${id}`, dto)
+      .then((r) => normalizeCatalogItem(r.data)),
 
   /** productId null desvincula el ítem sin borrarlo. */
   mapCatalogItem: (id: string, productId: string | null): Promise<SupplierCatalogItem> =>
-    apiClient.patch(`/procurement/catalog/${id}/product`, { productId }).then((r) => r.data),
+    apiClient
+      .patch(`/procurement/catalog/${id}/product`, { productId })
+      .then((r) => normalizeCatalogItem(r.data)),
 
   removeCatalogItem: (id: string): Promise<void> =>
     apiClient.delete(`/procurement/catalog/${id}`).then(() => undefined),
 
   listSuppliers: (): Promise<Supplier[]> =>
-    apiClient.get('/procurement/suppliers').then((r) => r.data),
+    apiClient
+      .get('/procurement/suppliers')
+      .then((r) => (r.data as Supplier[]).map(normalizeSupplier)),
 
   getSupplier: (id: string): Promise<Supplier> =>
-    apiClient.get(`/procurement/suppliers/${id}`).then((r) => r.data),
+    apiClient
+      .get(`/procurement/suppliers/${id}`)
+      .then((r) => normalizeSupplier(r.data)),
 
   createSupplier: (dto: CreateSupplierPayload): Promise<Supplier> =>
-    apiClient.post('/procurement/suppliers', dto).then((r) => r.data),
+    apiClient
+      .post('/procurement/suppliers', dto)
+      .then((r) => normalizeSupplier(r.data)),
 
   updateSupplier: (id: string, dto: UpdateSupplierPayload): Promise<Supplier> =>
-    apiClient.patch(`/procurement/suppliers/${id}`, dto).then((r) => r.data),
+    apiClient
+      .patch(`/procurement/suppliers/${id}`, dto)
+      .then((r) => normalizeSupplier(r.data)),
 
   deleteSupplier: (id: string): Promise<void> =>
     apiClient.delete(`/procurement/suppliers/${id}`).then((r) => r.data),

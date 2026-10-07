@@ -3,7 +3,9 @@ import type { Supplier } from './api/procurement';
 import {
   emptySupplierForm,
   filterSuppliers,
+  leadTimeLabel,
   paymentTermLabel,
+  supplierTermsError,
   supplierFormFrom,
   supplierInitials,
   toSupplierPayload,
@@ -21,6 +23,10 @@ function supplier(overrides: Partial<Supplier> = {}): Supplier {
     isImporter: false,
     isActive: true,
     paymentTermDays: 0,
+    shippingCost: null,
+    leadTimeDays: null,
+    minOrderAmount: null,
+    volumeDiscounts: [],
     ...overrides,
   };
 }
@@ -78,6 +84,10 @@ describe('supplier form', () => {
       taxId: '',
       isImporter: false,
       paymentTermDays: '0',
+      shippingCost: '',
+      leadTimeDays: '',
+      minOrderAmount: '',
+      volumeDiscounts: [],
     });
   });
 
@@ -143,5 +153,62 @@ describe('supplierInitials', () => {
   it('skips punctuation and survives an empty name', () => {
     expect(supplierInitials('"La Casa" del Cable')).toBe('LC');
     expect(supplierInitials('')).toBe('?');
+  });
+});
+
+describe('commercial terms of a supplier', () => {
+  const withTerms = supplier({
+    shippingCost: 80_000,
+    leadTimeDays: 7,
+    minOrderAmount: 500_000,
+    volumeDiscounts: [{ minAmount: 1_000_000, percent: 2 }],
+  });
+
+  it('loads and sends them back unchanged', () => {
+    const payload = toSupplierPayload(supplierFormFrom(withTerms));
+
+    expect(payload).toMatchObject({
+      shippingCost: 80_000,
+      leadTimeDays: 7,
+      minOrderAmount: 500_000,
+      volumeDiscounts: [{ minAmount: 1_000_000, percent: 2 }],
+    });
+  });
+
+  // Vacío es "no se sabe": mandar 0 diría que el envío es gratis.
+  it('sends blanks as unknown, not as zero', () => {
+    const payload = toSupplierPayload(emptySupplierForm());
+
+    expect(payload.shippingCost).toBeNull();
+    expect(payload.leadTimeDays).toBeNull();
+    expect(payload.minOrderAmount).toBeNull();
+    expect(payload.volumeDiscounts).toEqual([]);
+  });
+
+  it('keeps an explicit zero', () => {
+    expect(
+      toSupplierPayload({ ...emptySupplierForm(), shippingCost: '0' })
+        .shippingCost,
+    ).toBe(0);
+  });
+
+  it('rejects negative amounts and discounts over 100%', () => {
+    expect(
+      supplierTermsError({ ...emptySupplierForm(), shippingCost: '-1' }),
+    ).toContain('negativos');
+    expect(
+      supplierTermsError({
+        ...emptySupplierForm(),
+        volumeDiscounts: [{ from: '1000000', value: '120' }],
+      }),
+    ).toContain('100%');
+    expect(supplierTermsError(supplierFormFrom(withTerms))).toBeNull();
+  });
+
+  it('labels the delivery time', () => {
+    expect(leadTimeLabel(null)).toBe('Sin dato');
+    expect(leadTimeLabel(0)).toBe('Inmediata');
+    expect(leadTimeLabel(1)).toBe('1 día');
+    expect(leadTimeLabel(7)).toBe('7 días');
   });
 });

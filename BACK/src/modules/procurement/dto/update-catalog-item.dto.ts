@@ -1,5 +1,11 @@
-import { ApiPropertyOptional } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { SupplierAvailability } from '@prisma/client';
+import { Type } from 'class-transformer';
 import {
+  ArrayMaxSize,
+  IsArray,
+  IsEnum,
+  IsInt,
   IsNumber,
   IsOptional,
   IsPositive,
@@ -7,7 +13,20 @@ import {
   IsUUID,
   Matches,
   Min,
+  ValidateNested,
 } from 'class-validator';
+
+export class PriceTierDto {
+  @ApiProperty({ description: 'Cantidad desde la que rige el precio' })
+  @IsInt()
+  @Min(2)
+  minQuantity: number;
+
+  @ApiProperty({ description: 'Precio por unidad del proveedor' })
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @IsPositive()
+  price: number;
+}
 
 // La vigencia es un día de calendario, no un instante: se manda como
 // YYYY-MM-DD y se guarda como medianoche UTC de ese día.
@@ -56,6 +75,35 @@ export class UpdateCatalogItemDto extends CatalogValidityDto {
   @IsNumber({ maxDecimalPlaces: 4 })
   @IsPositive()
   conversionFactor?: number;
+
+  @ApiPropertyOptional({
+    description: 'Cantidad mínima que vende el proveedor; null la borra',
+    nullable: true,
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  minOrderQuantity?: number | null;
+
+  @ApiPropertyOptional({
+    enum: SupplierAvailability,
+    description: 'Disponibilidad informada por el proveedor; null la borra',
+    nullable: true,
+  })
+  @IsOptional()
+  @IsEnum(SupplierAvailability)
+  availability?: SupplierAvailability | null;
+
+  @ApiPropertyOptional({
+    type: [PriceTierDto],
+    description: 'Precios por cantidad; un arreglo vacío los quita',
+  })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(20)
+  @ValidateNested({ each: true })
+  @Type(() => PriceTierDto)
+  priceTiers?: PriceTierDto[];
 }
 
 export class MapCatalogItemDto {

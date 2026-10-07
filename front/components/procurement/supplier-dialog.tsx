@@ -18,9 +18,11 @@ import { Label } from '@/components/ui/label';
 import { apiErrorMessage } from '@/lib/api/api-error';
 import { procurementApi, type Supplier } from '@/lib/api/procurement';
 import { usePermission } from '@/lib/permissions';
+import { TierRows } from '@/components/procurement/tier-rows';
 import {
   emptySupplierForm,
   supplierFormFrom,
+  supplierTermsError,
   toSupplierPayload,
   type SupplierForm,
 } from '@/lib/suppliers';
@@ -85,7 +87,7 @@ export function SupplierDialog({
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-xl">
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-xl">
         <DialogHeader>
           <DialogTitle>{supplier ? 'Editar proveedor' : 'Nuevo proveedor'}</DialogTitle>
           <DialogDescription>
@@ -98,8 +100,9 @@ export function SupplierDialog({
         <form
           onSubmit={(e) => {
             e.preventDefault();
-            setError('');
-            saveMutation.mutate();
+            const problem = supplierTermsError(form);
+            setError(problem ?? '');
+            if (!problem) saveMutation.mutate();
           }}
           className="space-y-4"
         >
@@ -190,6 +193,65 @@ export function SupplierDialog({
               0 = contado. Con un plazo, las cuentas por pagar de este proveedor vencen esa
               cantidad de días después de recibir la mercadería.
             </p>
+          </fieldset>
+
+          <fieldset disabled={!canSave || busy} className="space-y-4 border-t border-border pt-4">
+            <div>
+              <p className="text-sm font-semibold text-foreground">Condiciones comerciales</p>
+              <p className="text-xs text-muted-foreground">
+                Opcionales. Se usan para comparar proveedores; lo que quede vacío figura como
+                &ldquo;sin dato&rdquo;.
+              </p>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="supplier-shipping">Costo de envío (Gs.)</Label>
+                <Input
+                  id="supplier-shipping"
+                  type="number"
+                  min={0}
+                  step="any"
+                  value={form.shippingCost}
+                  onChange={(e) => set('shippingCost', e.target.value)}
+                  placeholder="Por orden"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="supplier-lead-time">Plazo de entrega (días)</Label>
+                <Input
+                  id="supplier-lead-time"
+                  type="number"
+                  min={0}
+                  step={1}
+                  value={form.leadTimeDays}
+                  onChange={(e) => set('leadTimeDays', e.target.value)}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="supplier-min-order">Pedido mínimo (Gs.)</Label>
+                <Input
+                  id="supplier-min-order"
+                  type="number"
+                  min={0}
+                  step="any"
+                  value={form.minOrderAmount}
+                  onChange={(e) => set('minOrderAmount', e.target.value)}
+                />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <p className="text-sm font-medium text-foreground">
+                Descuento por el total de la orden
+              </p>
+              <TierRows
+                rows={form.volumeDiscounts}
+                onChange={(rows) => set('volumeDiscounts', rows)}
+                fromLabel="Desde (Gs.)"
+                valueLabel="Descuento (%)"
+                addLabel="Agregar descuento"
+                emptyText="Sin descuentos por volumen. Los precios por cantidad de cada producto se cargan en el catálogo."
+              />
+            </div>
           </fieldset>
 
           {error && (

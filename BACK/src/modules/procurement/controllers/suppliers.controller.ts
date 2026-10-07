@@ -12,7 +12,10 @@ import { CurrentTenant } from '../../../common/decorators/current-tenant.decorat
 import { Permissions } from '../../../common/decorators/permissions.decorator';
 import { RequiredModule } from '../../../common/decorators/required-module.decorator';
 import { SuppliersService } from '../services/suppliers.service';
-import { CreateSupplierDto } from '../dto/create-supplier.dto';
+import {
+  CreateSupplierDto,
+  UpdateSupplierDto,
+} from '../dto/create-supplier.dto';
 
 @ApiTags('Procurement')
 @ApiBearerAuth()
@@ -48,7 +51,7 @@ export class SuppliersController {
   update(
     @CurrentTenant() tenantId: string,
     @Param('id') id: string,
-    @Body() dto: Partial<CreateSupplierDto>,
+    @Body() dto: UpdateSupplierDto,
   ) {
     return this.suppliersService.update(tenantId, id, dto);
   }

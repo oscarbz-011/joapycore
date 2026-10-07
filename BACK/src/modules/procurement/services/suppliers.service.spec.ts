@@ -1,4 +1,7 @@
-import { NotFoundException } from '@nestjs/common';
+import {
+  NotFoundException,
+  UnprocessableEntityException,
+} from '@nestjs/common';
 import { SuppliersService } from './suppliers.service';
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
@@ -80,7 +83,39 @@ describe('SuppliersService', () => {
 
       await service.create('tenant-1', dto);
 
-      expect(suppliersRepository.create).toHaveBeenCalledWith('tenant-1', dto);
+      expect(suppliersRepository.create).toHaveBeenCalledWith('tenant-1', {
+        ...dto,
+        volumeDiscounts: [],
+      });
+    });
+
+    it('stores the commercial terms with the discounts in order', async () => {
+      suppliersRepository.create.mockResolvedValue(makeSupplier());
+
+      await service.create('tenant-1', {
+        name: 'Importadora ABC',
+        isImporter: false,
+        shippingCost: 80_000,
+        leadTimeDays: 7,
+        minOrderAmount: 500_000,
+        volumeDiscounts: [
+          { minAmount: 5_000_000, percent: 5 },
+          { minAmount: 1_000_000, percent: 2 },
+        ],
+      });
+
+      expect(suppliersRepository.create).toHaveBeenCalledWith(
+        'tenant-1',
+        expect.objectContaining({
+          shippingCost: 80_000,
+          leadTimeDays: 7,
+          minOrderAmount: 500_000,
+          volumeDiscounts: [
+            { minAmount: 1_000_000, percent: 2 },
+            { minAmount: 5_000_000, percent: 5 },
+          ],
+        }),
+      );
     });
   });
 
@@ -114,6 +149,44 @@ describe('SuppliersService', () => {
         expect.objectContaining({ name: 'Nuevo nombre' }),
       );
       expect(result?.name).toBe('Nuevo nombre');
+    });
+
+    it('leaves the discounts alone when an edit does not mention them', async () => {
+      suppliersRepository.findById.mockResolvedValue(makeSupplier());
+
+      await service.update('tenant-1', 'sup-1', { leadTimeDays: 3 });
+
+      expect(suppliersRepository.update).toHaveBeenCalledWith(
+        'tenant-1',
+        'sup-1',
+        { leadTimeDays: 3 },
+      );
+    });
+
+    it('removes the discounts when an edit sends none', async () => {
+      suppliersRepository.findById.mockResolvedValue(makeSupplier());
+
+      await service.update('tenant-1', 'sup-1', { volumeDiscounts: [] });
+
+      expect(suppliersRepository.update).toHaveBeenCalledWith(
+        'tenant-1',
+        'sup-1',
+        { volumeDiscounts: [] },
+      );
+    });
+
+    it('rejects inconsistent discounts before saving', async () => {
+      suppliersRepository.findById.mockResolvedValue(makeSupplier());
+
+      await expect(
+        service.update('tenant-1', 'sup-1', {
+          volumeDiscounts: [
+            { minAmount: 1_000_000, percent: 5 },
+            { minAmount: 5_000_000, percent: 2 },
+          ],
+        }),
+      ).rejects.toBeInstanceOf(UnprocessableEntityException);
+      expect(suppliersRepository.update).not.toHaveBeenCalled();
     });
   });
 

@@ -84,6 +84,12 @@ enum PurchaseType {
   IMPORT
 }
 
+enum SupplierAvailability {
+  AVAILABLE // En stock
+  ON_ORDER // A pedido: lo trae, pero no lo tiene
+  OUT_OF_STOCK // Sin stock
+}
+
 enum PurchaseOrderStatus {
   PENDING // Borrador: todavía no salió hacia el proveedor
   SENT // Enviada al proveedor, a la espera de su confirmación
@@ -916,25 +922,34 @@ model ProductionOrderItem {
 // importar la lista de precios sin tener que crear productos primero.
 // Ver plan-modulo-compras.md, Fase 1.
 model SupplierCatalogItem {
-  id               String    @id @default(uuid())
-  tenantId         String    @map("tenant_id")
-  supplierId       String    @map("supplier_id")
+  id                    String                @id @default(uuid())
+  tenantId              String                @map("tenant_id")
+  supplierId            String                @map("supplier_id")
   // Código con el que el proveedor identifica el ítem — es la clave natural
   // de la importación (upsert por proveedor + código).
-  supplierSku      String    @map("supplier_sku")
-  description      String
-  price            Decimal?  @db.Decimal(12, 2)
+  supplierSku           String                @map("supplier_sku")
+  description           String
+  price                 Decimal?              @db.Decimal(12, 2)
   // Unidad en la que vende el proveedor y cuántas unidades internas equivale
   // (ej. vende "caja x12" y el factor 12 lo lleva a unidades).
-  supplierUnit     String?   @map("supplier_unit")
-  conversionFactor Decimal?  @map("conversion_factor") @db.Decimal(12, 4)
-  validFrom        DateTime? @map("valid_from")
-  validTo          DateTime? @map("valid_to")
+  supplierUnit          String?               @map("supplier_unit")
+  conversionFactor      Decimal?              @map("conversion_factor") @db.Decimal(12, 4)
+  validFrom             DateTime?             @map("valid_from")
+  validTo               DateTime?             @map("valid_to")
+  // Cantidad mínima que el proveedor vende de este ítem, en su unidad.
+  minOrderQuantity      Int?                  @map("min_order_quantity")
+  // No hay integración con el stock del proveedor: es un dato que se carga
+  // a mano, con la fecha en que se actualizó para saber qué tan viejo es.
+  availability          SupplierAvailability?
+  availabilityUpdatedAt DateTime?             @map("availability_updated_at")
+  // Precio por cantidad: [{ minQuantity, price }], en la unidad del
+  // proveedor, ordenado por minQuantity (ver normalizePriceTiers).
+  priceTiers            Json                  @default("[]") @map("price_tiers")
   // Nullable a propósito: el ítem vive suelto hasta que alguien lo vincula a
   // un producto interno (o hasta que la orden de compra lo fuerza).
-  productId        String?   @map("product_id")
-  createdAt        DateTime  @default(now()) @map("created_at")
-  updatedAt        DateTime  @updatedAt @map("updated_at")
+  productId             String?               @map("product_id")
+  createdAt             DateTime              @default(now()) @map("created_at")
+  updatedAt             DateTime              @updatedAt @map("updated_at")
 
   tenant   Tenant   @relation(fields: [tenantId], references: [id])
   supplier Supplier @relation(fields: [supplierId], references: [id])
@@ -1061,6 +1076,14 @@ model Supplier {
   // generada al recibir mercadería de este proveedor calcula su dueDate
   // como receivedAt + paymentTermDays.
   paymentTermDays Int?      @default(0) @map("payment_term_days")
+  // Condiciones comerciales, para comparar proveedores más allá del precio.
+  // Todas opcionales: null = "no se sabe", no "cero".
+  shippingCost    Decimal?  @map("shipping_cost") @db.Decimal(12, 2)
+  leadTimeDays    Int?      @map("lead_time_days")
+  minOrderAmount  Decimal?  @map("min_order_amount") @db.Decimal(12, 2)
+  // Descuento sobre el total de la orden: [{ minAmount, percent }], ordenado
+  // por minAmount (ver normalizeVolumeDiscounts).
+  volumeDiscounts Json      @default("[]") @map("volume_discounts")
   isActive        Boolean   @default(true) @map("is_active")
   deletedAt       DateTime? @map("deleted_at")
   createdAt       DateTime  @default(now()) @map("created_at")
