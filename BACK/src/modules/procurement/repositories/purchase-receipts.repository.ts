@@ -46,6 +46,7 @@ export class PurchaseReceiptsRepository {
         items: { select: { quantity: true, unitCost: true } },
         purchaseOrder: {
           select: {
+            id: true,
             supplierId: true,
             supplier: { select: { paymentTermDays: true } },
           },

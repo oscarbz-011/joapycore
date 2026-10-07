@@ -272,6 +272,12 @@ enum ARStatus {
   CANCELLED
 }
 
+enum SupplierPaymentKind {
+  PAYMENT // Pago de una cuenta por pagar (mercadería ya recibida)
+  ADVANCE // Anticipo de una orden de compra, antes de recibir
+  ADVANCE_REFUND // Devolución de un anticipo por parte del proveedor
+}
+
 enum APStatus {
   PENDING
   PARTIAL
@@ -1081,6 +1087,9 @@ model Supplier {
   // generada al recibir mercadería de este proveedor calcula su dueDate
   // como receivedAt + paymentTermDays.
   paymentTermDays   Int?      @default(0) @map("payment_term_days")
+  // Anticipo que el proveedor suele pedir para despachar, en % del total
+  // de la orden. null/0 = no pide. Es el valor por defecto de cada orden.
+  advancePercent    Decimal?  @map("advance_percent") @db.Decimal(5, 2)
   // Condiciones comerciales, para comparar proveedores más allá del precio.
   // Todas opcionales: null = "no se sabe", no "cero".
   shippingCost      Decimal?  @map("shipping_cost") @db.Decimal(12, 2)
@@ -1109,33 +1118,37 @@ model Supplier {
 }
 
 model PurchaseOrder {
-  id           String              @id @default(uuid())
-  tenantId     String              @map("tenant_id")
+  id            String              @id @default(uuid())
+  tenantId      String              @map("tenant_id")
   // Número visible de la orden (OC-AA-000001), correlativo por empresa. Es
   // con lo que el proveedor la identifica en el PDF.
-  orderNumber  String?             @map("order_number")
+  orderNumber   String?             @map("order_number")
   // PDF de la orden. Se genera al enviarla o al pedirlo; la orden no se edita
   // después de creada, así que no hace falta regenerarlo.
-  pdfFileId    String?             @map("pdf_file_id")
-  supplierId   String              @map("supplier_id")
-  branchId     String?             @map("branch_id")
-  purchaseType PurchaseType        @default(LOCAL) @map("purchase_type")
-  status       PurchaseOrderStatus @default(PENDING)
-  orderDate    DateTime            @map("order_date")
-  expectedDate DateTime?           @map("expected_date")
-  exchangeRate Decimal?            @map("exchange_rate") @db.Decimal(10, 4)
-  customsDuty  Decimal?            @map("customs_duty") @db.Decimal(5, 2)
-  customsRef   String?             @map("customs_ref")
-  notes        String?
-  createdAt    DateTime            @default(now()) @map("created_at")
-  updatedAt    DateTime            @updatedAt @map("updated_at")
+  pdfFileId     String?             @map("pdf_file_id")
+  // Anticipo que pide esta orden antes de despachar (0 = ninguno). Nace del
+  // porcentaje del proveedor y se puede ajustar por orden.
+  advanceAmount Decimal             @default(0) @map("advance_amount") @db.Decimal(12, 2)
+  supplierId    String              @map("supplier_id")
+  branchId      String?             @map("branch_id")
+  purchaseType  PurchaseType        @default(LOCAL) @map("purchase_type")
+  status        PurchaseOrderStatus @default(PENDING)
+  orderDate     DateTime            @map("order_date")
+  expectedDate  DateTime?           @map("expected_date")
+  exchangeRate  Decimal?            @map("exchange_rate") @db.Decimal(10, 4)
+  customsDuty   Decimal?            @map("customs_duty") @db.Decimal(5, 2)
+  customsRef    String?             @map("customs_ref")
+  notes         String?
+  createdAt     DateTime            @default(now()) @map("created_at")
+  updatedAt     DateTime            @updatedAt @map("updated_at")
 
-  tenant        Tenant                      @relation(fields: [tenantId], references: [id])
-  supplier      Supplier                    @relation(fields: [supplierId], references: [id])
-  branch        Branch?                     @relation(fields: [branchId], references: [id])
-  items         PurchaseOrderItem[]
-  receipts      PurchaseReceipt[]
-  statusChanges PurchaseOrderStatusChange[]
+  tenant          Tenant                      @relation(fields: [tenantId], references: [id])
+  supplier        Supplier                    @relation(fields: [supplierId], references: [id])
+  branch          Branch?                     @relation(fields: [branchId], references: [id])
+  items           PurchaseOrderItem[]
+  receipts        PurchaseReceipt[]
+  statusChanges   PurchaseOrderStatusChange[]
+  advancePayments SupplierPayment[]
 
   @@unique([tenantId, orderNumber])
   @@index([tenantId, status])
@@ -1737,6 +1750,9 @@ model AccountsPayable {
   supplierId        String    @map("supplier_id")
   amount            Decimal   @db.Decimal(12, 2)
   paidAmount        Decimal   @default(0) @map("paid_amount") @db.Decimal(12, 2)
+  // Parte de paidAmount que vino de un anticipo de la orden, no de un pago
+  // hecho sobre esta cuenta.
+  advanceApplied    Decimal   @default(0) @map("advance_applied") @db.Decimal(12, 2)
   status            APStatus  @default(PENDING)
   dueDate           DateTime? @map("due_date")
   createdAt         DateTime  @default(now()) @map("created_at")
@@ -1753,23 +1769,29 @@ model AccountsPayable {
 }
 
 model SupplierPayment {
-  id                String        @id @default(uuid())
-  tenantId          String        @map("tenant_id")
-  accountsPayableId String        @map("accounts_payable_id")
-  amount            Decimal       @db.Decimal(12, 2)
-  paymentMethod     PaymentMethod @map("payment_method")
-  paymentDate       DateTime      @map("payment_date")
+  id                String              @id @default(uuid())
+  tenantId          String              @map("tenant_id")
+  // Un pago es de una cuenta por pagar (PAYMENT) o de una orden de compra
+  // (ADVANCE / ADVANCE_REFUND): tiene una de las dos, nunca ambas.
+  accountsPayableId String?             @map("accounts_payable_id")
+  purchaseOrderId   String?             @map("purchase_order_id")
+  kind              SupplierPaymentKind @default(PAYMENT)
+  amount            Decimal             @db.Decimal(12, 2)
+  paymentMethod     PaymentMethod       @map("payment_method")
+  paymentDate       DateTime            @map("payment_date")
   reference         String?
   notes             String?
-  createdById       String?       @map("created_by_id")
-  createdAt         DateTime      @default(now()) @map("created_at")
+  createdById       String?             @map("created_by_id")
+  createdAt         DateTime            @default(now()) @map("created_at")
 
-  tenant          Tenant          @relation(fields: [tenantId], references: [id])
-  accountsPayable AccountsPayable @relation(fields: [accountsPayableId], references: [id])
-  createdBy       User?           @relation(fields: [createdById], references: [id])
+  tenant          Tenant           @relation(fields: [tenantId], references: [id])
+  accountsPayable AccountsPayable? @relation(fields: [accountsPayableId], references: [id])
+  purchaseOrder   PurchaseOrder?   @relation(fields: [purchaseOrderId], references: [id])
+  createdBy       User?            @relation(fields: [createdById], references: [id])
 
   @@index([tenantId])
   @@index([accountsPayableId])
+  @@index([purchaseOrderId])
   @@map("supplier_payments")
 }
 

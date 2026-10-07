@@ -14,6 +14,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
 import { apiErrorMessage } from '@/lib/api/api-error';
+import { receiveAdvanceWarning } from '@/lib/advance';
 import {
   procurementApi,
   type PurchaseOrder,
@@ -127,6 +128,7 @@ export function ReceiveModal({
     ),
   );
   const [error, setError] = useState('');
+  const advanceWarning = receiveAdvanceWarning(order.advance);
 
   const { data: warehouses = [] } = useQuery({
     queryKey: ['warehouses'],
@@ -178,6 +180,15 @@ export function ReceiveModal({
         </div>
 
         <div className="px-6 py-5 space-y-4">
+          {advanceWarning && (
+            <p
+              role="status"
+              className="rounded-lg border border-warn/30 bg-warn-subtle px-4 py-3 text-sm text-warn"
+            >
+              {advanceWarning}
+            </p>
+          )}
+
           <p className="text-sm text-muted-foreground">
             Ítems pendientes para <strong className="text-foreground">{order.supplier.name}</strong>:
           </p>

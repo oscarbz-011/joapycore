@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { EmailModule } from '../../email/email.module';
 import { FilesModule } from '../../files/files.module';
 import { PurchaseOrderDocumentService } from './services/purchase-order-document.service';
+import { PurchaseOrderAdvancesService } from './services/purchase-order-advances.service';
 import { PurchaseOrdersController } from './controllers/purchase-orders.controller';
 import { PurchaseReceiptsController } from './controllers/purchase-receipts.controller';
 import { SuppliersController } from './controllers/suppliers.controller';
@@ -40,6 +41,7 @@ import { ProcurementOnReceiptListener } from './events/procurement-on-receipt.li
     SuppliersService,
     PurchaseOrdersService,
     PurchaseOrderDocumentService,
+    PurchaseOrderAdvancesService,
     PurchaseReceiptsService,
     PayablesService,
     SuppliersRepository,

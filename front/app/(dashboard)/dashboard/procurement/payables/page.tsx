@@ -264,6 +264,12 @@ function APDetailPanel({
                   <span className="text-muted-foreground">Pagado</span>
                   <span className="font-medium text-emerald-600">{formatPrice(Number(ap.paidAmount))}</span>
                 </div>
+                {Number(ap.advanceApplied) > 0 && (
+                  <div className="flex justify-between text-xs">
+                    <span className="text-muted-foreground">Del anticipo de la orden</span>
+                    <span className="text-muted-foreground">{formatPrice(Number(ap.advanceApplied))}</span>
+                  </div>
+                )}
                 <div className="h-2 w-full rounded-full bg-muted/30">
                   <div className="h-2 rounded-full bg-emerald-500 transition-all" style={{ width: `${Math.min(pct, 100)}%` }} />
                 </div>

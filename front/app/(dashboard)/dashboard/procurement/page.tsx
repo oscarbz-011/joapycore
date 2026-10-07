@@ -3,6 +3,12 @@
 import { RequirePermission } from '@/components/require-permission';
 
 import { apiErrorMessage } from '@/lib/api/api-error';
+import {
+  advanceDraftError,
+  resolveAdvanceDraft,
+  supplierAdvanceDraft,
+  type AdvanceDraft,
+} from '@/lib/advance';
 
 import { useState } from 'react';
 import Link from 'next/link';
@@ -95,6 +101,7 @@ function CreateOrderModal({
   const [customsDuty, setCustomsDuty] = useState('');
   const [customsRef, setCustomsRef] = useState('');
   const [notes, setNotes] = useState('');
+  const [advanceDraft, setAdvanceDraft] = useState<AdvanceDraft>(supplierAdvanceDraft(null));
   const [items, setItems] = useState<OrderLine[]>([]);
   const [pickingCatalog, setPickingCatalog] = useState(false);
   const [error, setError] = useState('');
@@ -103,6 +110,10 @@ function CreateOrderModal({
   // Las líneas tomadas del catálogo son del proveedor elegido.
   function changeSupplier(id: string) {
     setSupplierId(id);
+    // El anticipo arranca en lo que pide habitualmente ese proveedor.
+    setAdvanceDraft(
+      supplierAdvanceDraft(suppliers.find((s) => s.id === id)?.advancePercent ?? null),
+    );
     setItems((prev) => withoutCatalogLines(prev));
   }
 
@@ -122,6 +133,7 @@ function CreateOrderModal({
   }
 
   const total = orderLinesTotal(items);
+  const advance = resolveAdvanceDraft(advanceDraft, total);
 
   const mutation = useMutation({
     mutationFn: () =>
@@ -134,6 +146,7 @@ function CreateOrderModal({
         customsDuty: customsDuty ? Number(customsDuty) : undefined,
         customsRef: customsRef.trim() || undefined,
         notes: notes.trim() || undefined,
+        advanceAmount: advance.amount,
         items: toOrderItems(items),
       }),
     onSuccess: () => {
@@ -158,7 +171,9 @@ function CreateOrderModal({
         <form
           onSubmit={(e) => {
             e.preventDefault();
-            const problem = !supplierId ? 'Elegí el proveedor' : orderLinesError(items);
+            const problem = !supplierId
+              ? 'Elegí el proveedor'
+              : (orderLinesError(items) ?? advanceDraftError(advanceDraft, total));
             setError(problem ?? '');
             if (!problem) mutation.mutate();
           }}
@@ -337,6 +352,57 @@ function CreateOrderModal({
               <span className="text-sm font-bold text-foreground">{formatPrice(total)}</span>
             </div>
           )}
+
+          {/* Anticipo: se carga como porcentaje o como monto, el otro se calcula */}
+          <fieldset className="rounded-xl border border-border px-4 py-3">
+            <legend className="px-1 text-sm font-medium text-foreground">
+              Anticipo para despachar
+            </legend>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <Label htmlFor="order-advance-percent">Porcentaje de la orden (%)</Label>
+                <Input
+                  id="order-advance-percent"
+                  type="number"
+                  min={0}
+                  max={100}
+                  step="any"
+                  placeholder="Sin anticipo"
+                  value={
+                    advanceDraft.mode === 'percent'
+                      ? advanceDraft.value
+                      : advance.percent
+                        ? String(advance.percent)
+                        : ''
+                  }
+                  onChange={(e) => setAdvanceDraft({ mode: 'percent', value: e.target.value })}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="order-advance-amount">Monto (Gs.)</Label>
+                <Input
+                  id="order-advance-amount"
+                  type="number"
+                  min={0}
+                  step="any"
+                  placeholder="Sin anticipo"
+                  value={
+                    advanceDraft.mode === 'amount'
+                      ? advanceDraft.value
+                      : advance.amount
+                        ? String(advance.amount)
+                        : ''
+                  }
+                  onChange={(e) => setAdvanceDraft({ mode: 'amount', value: e.target.value })}
+                />
+              </div>
+            </div>
+            <p className="mt-2 text-xs text-muted-foreground">
+              {advance.amount > 0
+                ? `El proveedor cobra ${formatPrice(advance.amount)} antes de enviar la mercadería. El pago se registra desde la orden y se descuenta de la cuenta por pagar al recibir.`
+                : 'Sin anticipo: la orden se paga después de recibir la mercadería. Si el proveedor pide cobrar todo antes de enviar, cargá 100%.'}
+            </p>
+          </fieldset>
 
           {/* Notas */}
           <div className="space-y-1">

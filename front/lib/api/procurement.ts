@@ -1,4 +1,6 @@
 import { apiClient, LONG_REQUEST_TIMEOUT_MS } from './client';
+import type { PaymentMethod } from './payments';
+import type { AdvanceMovementKind, OrderAdvance } from '../advance';
 import {
   numberOrNull,
   type PriceTier,
@@ -50,6 +52,8 @@ export interface OfferSupplier {
   name: string;
   email: string | null;
   paymentTermDays: number | null;
+  /** Anticipo que pide para despachar, en % de la orden. */
+  advancePercent: number | null;
   shippingCost: number | null;
   leadTimeDays: number | null;
   minOrderAmount: number | null;
@@ -119,6 +123,8 @@ export interface Supplier {
   isImporter: boolean;
   isActive: boolean;
   paymentTermDays: number | null;
+  /** Anticipo que pide para despachar, en % de la orden; null/0 = no pide. */
+  advancePercent: number | null;
   // Condiciones comerciales. null = no se sabe (distinto de cero).
   shippingCost: number | null;
   leadTimeDays: number | null;
@@ -130,6 +136,7 @@ export interface Supplier {
 function normalizeSupplier(raw: Supplier): Supplier {
   return {
     ...raw,
+    advancePercent: numberOrNull(raw.advancePercent),
     shippingCost: numberOrNull(raw.shippingCost),
     minOrderAmount: numberOrNull(raw.minOrderAmount),
     volumeDiscounts: (raw.volumeDiscounts ?? []).map((tier) => ({
@@ -172,6 +179,26 @@ export interface PurchaseOrderStatusChange {
   changedBy: { id: string; firstName: string; lastName: string } | null;
 }
 
+/** Un anticipo pagado al proveedor, o su devolución. */
+export interface AdvancePayment {
+  id: string;
+  kind: AdvanceMovementKind;
+  amount: number;
+  paymentMethod: PaymentMethod;
+  paymentDate: string;
+  reference: string | null;
+  notes: string | null;
+  createdBy: { id: string; firstName: string; lastName: string } | null;
+}
+
+export interface AdvanceMovementPayload {
+  amount: number;
+  paymentMethod: PaymentMethod;
+  paymentDate: string;
+  reference?: string;
+  notes?: string;
+}
+
 export interface PurchaseOrder {
   id: string;
   /** OC-AA-000001. */
@@ -190,6 +217,11 @@ export interface PurchaseOrder {
   items: PurchaseOrderItem[];
   /** Solo viene al pedir una orden puntual, no en el listado. */
   statusChanges?: PurchaseOrderStatusChange[];
+  /** Anticipo que pide la orden antes de despachar (0 = ninguno). */
+  advanceAmount: number;
+  /** Saldo del anticipo y sus movimientos; solo en la orden puntual. */
+  advance?: OrderAdvance;
+  advancePayments?: AdvancePayment[];
 }
 
 export interface CreatePurchaseOrderItem {
@@ -209,6 +241,8 @@ export interface CreatePurchaseOrderPayload {
   customsDuty?: number;
   customsRef?: string;
   notes?: string;
+  /** Si se omite, el porcentaje habitual del proveedor. */
+  advanceAmount?: number;
   items: CreatePurchaseOrderItem[];
 }
 
@@ -259,6 +293,7 @@ export interface CreateSupplierPayload {
   taxId?: string | null;
   isImporter?: boolean;
   paymentTermDays?: number;
+  advancePercent?: number | null;
   shippingCost?: number | null;
   leadTimeDays?: number | null;
   minOrderAmount?: number | null;
@@ -304,6 +339,22 @@ export const procurementApi = {
   cancelOrder: (id: string, reason: string): Promise<PurchaseOrder> =>
     apiClient
       .post(`/procurement/purchase-orders/${id}/cancel`, { reason })
+      .then((r) => r.data),
+
+  // Anticipos: se pagan contra la orden, antes de recibir.
+  setOrderAdvance: (id: string, amount: number): Promise<OrderAdvance> =>
+    apiClient
+      .post(`/procurement/purchase-orders/${id}/advance`, { amount })
+      .then((r) => r.data),
+
+  payOrderAdvance: (id: string, dto: AdvanceMovementPayload): Promise<OrderAdvance> =>
+    apiClient
+      .post(`/procurement/purchase-orders/${id}/advance-payments`, dto)
+      .then((r) => r.data),
+
+  refundOrderAdvance: (id: string, dto: AdvanceMovementPayload): Promise<OrderAdvance> =>
+    apiClient
+      .post(`/procurement/purchase-orders/${id}/advance-refunds`, dto)
       .then((r) => r.data),
 
   createReceipt: (id: string, dto: CreatePurchaseReceiptPayload): Promise<PurchaseReceipt> =>
@@ -382,6 +433,7 @@ export const procurementApi = {
           ...normalizeCatalogItem(raw),
           supplier: {
             ...raw.supplier,
+            advancePercent: numberOrNull(raw.supplier.advancePercent),
             shippingCost: numberOrNull(raw.supplier.shippingCost),
             minOrderAmount: numberOrNull(raw.supplier.minOrderAmount),
             volumeDiscounts: (raw.supplier.volumeDiscounts ?? []).map((tier) => ({

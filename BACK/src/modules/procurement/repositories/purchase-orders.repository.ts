@@ -31,6 +31,14 @@ export class PurchaseOrdersRepository {
             productUnits: true,
           },
         },
+        advancePayments: {
+          orderBy: { paymentDate: 'asc' },
+          include: {
+            createdBy: {
+              select: { id: true, firstName: true, lastName: true },
+            },
+          },
+        },
         statusChanges: {
           orderBy: { createdAt: 'asc' },
           include: {
@@ -40,6 +48,72 @@ export class PurchaseOrdersRepository {
           },
         },
       },
+    });
+  }
+
+  // ── Anticipos ──────────────────────────────────────────────────────────
+
+  findForAdvance(
+    tenantId: string,
+    id: string,
+    client: PrismaClientOrTx = this.prisma,
+  ) {
+    return client.purchaseOrder.findFirst({
+      where: { tenantId, id },
+      select: {
+        id: true,
+        status: true,
+        advanceAmount: true,
+        items: { select: { quantity: true, unitCost: true } },
+      },
+    });
+  }
+
+  // Bloquea la fila de la orden hasta que termine la transacción: dos pagos
+  // de anticipo (o un pago y una recepción) no pueden leer el mismo saldo.
+  lockForAdvance(tenantId: string, id: string, tx: PrismaClientOrTx) {
+    return tx.$queryRaw`
+      SELECT "id" FROM "purchase_orders"
+      WHERE "id" = ${id} AND "tenant_id" = ${tenantId}
+      FOR UPDATE
+    `;
+  }
+
+  advanceMovements(
+    tenantId: string,
+    purchaseOrderId: string,
+    client: PrismaClientOrTx = this.prisma,
+  ) {
+    return client.supplierPayment.findMany({
+      where: { tenantId, purchaseOrderId },
+      select: { kind: true, amount: true },
+    });
+  }
+
+  // Cuánto del anticipo ya se descontó de cuentas por pagar de esta orden.
+  async advanceApplied(
+    tenantId: string,
+    purchaseOrderId: string,
+    client: PrismaClientOrTx = this.prisma,
+  ) {
+    const result = await client.accountsPayable.aggregate({
+      where: { tenantId, purchaseReceipt: { purchaseOrderId } },
+      _sum: { advanceApplied: true },
+    });
+    return Number(result._sum.advanceApplied ?? 0);
+  }
+
+  setAdvanceAmount(tenantId: string, id: string, advanceAmount: number) {
+    return this.prisma.purchaseOrder.updateMany({
+      where: { tenantId, id },
+      data: { advanceAmount },
+    });
+  }
+
+  findSupplierAdvancePercent(tenantId: string, supplierId: string) {
+    return this.prisma.supplier.findFirst({
+      where: { tenantId, id: supplierId, deletedAt: null },
+      select: { advancePercent: true },
     });
   }
 

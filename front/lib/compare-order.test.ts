@@ -35,6 +35,7 @@ function quote(supplierId: string, lines: QuoteLine[]): SupplierQuote {
       name: supplierId,
       email: null,
       paymentTermDays: 0,
+      advancePercent: null,
       shippingCost: null,
       leadTimeDays: null,
       minOrderAmount: null,
