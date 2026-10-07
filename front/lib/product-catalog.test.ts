@@ -28,6 +28,7 @@ function product(id: string, status: ProductStatus): Product {
     kind: 'RESALE',
     isPurchasable: true,
     salesChannels: ['NORMAL'],
+    salesChannelsOnReceipt: [],
     deletedAt: null,
     category: null,
     brand: null,

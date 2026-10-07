@@ -18,7 +18,12 @@ function makeReceipt(overrides = {}) {
         batchNumber: null,
         expiresAt: null,
         serialNumbers: [],
-        product: { isSerialized: false, usesLots: false },
+        product: {
+          isSerialized: false,
+          usesLots: false,
+          salesChannels: ['NORMAL'],
+          salesChannelsOnReceipt: [],
+        },
       },
     ],
     ...overrides,
@@ -35,12 +40,14 @@ describe('InventoryOnPurchaseReceiptListener', () => {
   let tx: {
     stockMovement: { findFirst: jest.Mock };
     productUnit: { findFirst: jest.Mock };
+    product: { updateMany: jest.Mock };
   };
 
   beforeEach(() => {
     tx = {
       stockMovement: { findFirst: jest.fn().mockResolvedValue(null) },
       productUnit: { findFirst: jest.fn().mockResolvedValue(null) },
+      product: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
     };
     prisma = {
       purchaseReceipt: { findFirst: jest.fn() },
@@ -154,5 +161,66 @@ describe('InventoryOnPurchaseReceiptListener', () => {
         warehouseId: 'wh-1',
       }),
     ).resolves.toBeUndefined();
+  });
+  describe('products waiting for their first receipt to be sold', () => {
+    const event = {
+      tenantId: 'tenant-1',
+      purchaseOrderId: 'po-1',
+      purchaseReceiptId: 'receipt-1',
+      warehouseId: 'wh-1',
+    };
+
+    function receiptOf(product: Record<string, unknown>) {
+      const receipt = makeReceipt();
+      Object.assign(receipt.items[0].product, product);
+      return receipt;
+    }
+
+    it('opens the pending sales channels once the stock is in', async () => {
+      prisma.purchaseReceipt.findFirst.mockResolvedValue(
+        receiptOf({
+          salesChannels: ['POS'],
+          salesChannelsOnReceipt: ['NORMAL', 'POS'],
+        }),
+      );
+
+      await listener.handle(event);
+
+      expect(tx.product.updateMany).toHaveBeenCalledWith({
+        where: {
+          tenantId: 'tenant-1',
+          id: 'prod-1',
+          salesChannelsOnReceipt: { isEmpty: false },
+        },
+        data: {
+          salesChannels: ['POS', 'NORMAL'],
+          salesChannelsOnReceipt: [],
+        },
+      });
+      expect(tx.product.updateMany.mock.invocationCallOrder[0]).toBeGreaterThan(
+        stockEntryService.registerEntry.mock.invocationCallOrder[0],
+      );
+    });
+
+    it('leaves products with nothing pending untouched', async () => {
+      prisma.purchaseReceipt.findFirst.mockResolvedValue(
+        receiptOf({ salesChannels: [], salesChannelsOnReceipt: [] }),
+      );
+
+      await listener.handle(event);
+
+      expect(tx.product.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('does not open them again for a receipt already processed', async () => {
+      prisma.purchaseReceipt.findFirst.mockResolvedValue(
+        receiptOf({ salesChannels: [], salesChannelsOnReceipt: ['NORMAL'] }),
+      );
+      tx.stockMovement.findFirst.mockResolvedValue({ id: 'mov-1' });
+
+      await listener.handle(event);
+
+      expect(tx.product.updateMany).not.toHaveBeenCalled();
+    });
   });
 });

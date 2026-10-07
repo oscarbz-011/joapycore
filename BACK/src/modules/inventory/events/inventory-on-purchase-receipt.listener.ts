@@ -82,6 +82,27 @@ export class InventoryOnPurchaseReceiptListener {
           tx,
         );
       }
+
+      // Un producto creado desde el catálogo de un proveedor espera su primera
+      // mercadería para ofrecerse a la venta: recién ahora hay qué vender.
+      const opened = new Set<string>();
+      for (const { productId, product } of receipt.items) {
+        if (opened.has(productId) || !product.salesChannelsOnReceipt.length) {
+          continue;
+        }
+        opened.add(productId);
+        await this.stockSources.openSalesChannels(
+          tenantId,
+          productId,
+          [
+            ...new Set([
+              ...product.salesChannels,
+              ...product.salesChannelsOnReceipt,
+            ]),
+          ],
+          tx,
+        );
+      }
     });
   }
 }

@@ -127,11 +127,17 @@ export class ProductsService {
         await this.productsRepository.findTenantIndustry(tenantId),
       );
     const flags = KIND_DEFAULT_FLAGS[kind];
+    const salesChannels =
+      dto.salesChannels ?? defaultSalesChannelsForKind(kind);
 
     return this.productsRepository.create(tenantId, {
       kind,
       isPurchasable: dto.isPurchasable ?? flags.isPurchasable,
-      salesChannels: dto.salesChannels ?? defaultSalesChannelsForKind(kind),
+      // Con sellOnFirstReceipt los canales quedan en espera: los abre el
+      // ingreso de la primera recepción de compra (ver
+      // InventoryOnPurchaseReceiptListener).
+      salesChannels: dto.sellOnFirstReceipt ? [] : salesChannels,
+      salesChannelsOnReceipt: dto.sellOnFirstReceipt ? salesChannels : [],
       categoryId: dto.categoryId,
       brandId: dto.brandId,
       model: dto.model,

@@ -874,6 +874,13 @@ export default function InventoryPage() {
                                 {SALES_CHANNEL_LABEL[channel]}
                               </Badge>
                             ))
+                          ) : product.salesChannelsOnReceipt.length > 0 ? (
+                            <span
+                              className="text-warn"
+                              title="Se habilita para la venta al recibir la primera mercadería"
+                            >
+                              Al recibir
+                            </span>
                           ) : (
                             <span className="text-muted-foreground">Sin canales</span>
                           )}

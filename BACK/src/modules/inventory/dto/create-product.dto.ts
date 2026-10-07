@@ -97,6 +97,15 @@ export class CreateProductDto {
   @IsEnum(OrderChannel, { each: true })
   salesChannels?: OrderChannel[];
 
+  @ApiPropertyOptional({
+    default: false,
+    description:
+      'El producto queda sin canales de venta y se habilitan solos al recibir la primera mercadería',
+  })
+  @IsOptional()
+  @IsBoolean()
+  sellOnFirstReceipt?: boolean;
+
   // Opcionales a propósito: la ficha del producto se puede crear incompleta
   // (queda en DRAFT) para no frenar la carga de catálogo. Los precios se
   // exigen recién al activarlo — ver ProductsService.assertActivatable.

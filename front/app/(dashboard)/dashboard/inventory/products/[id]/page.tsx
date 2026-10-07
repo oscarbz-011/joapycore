@@ -280,6 +280,11 @@ export default function ProductDetailPage() {
                 {SALES_CHANNEL_LABEL[channel]}
               </Badge>
             ))}
+            {product.salesChannelsOnReceipt.length > 0 && (
+              <Badge className="bg-warn-subtle text-warn border-warn/30 hover:bg-warn-subtle text-xs">
+                Venta al recibir la primera mercadería
+              </Badge>
+            )}
           </div>
         </div>
         <div className="flex gap-2">
