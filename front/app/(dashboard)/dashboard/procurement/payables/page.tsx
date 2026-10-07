@@ -8,7 +8,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { NumericInput } from '../../../../../components/numeric-input';
-import { X, AlertTriangle } from 'lucide-react';
+import { X, AlertTriangle, Clock } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
   payablesApi,
@@ -68,7 +68,7 @@ type RowAccent = 'destructive' | 'warn' | null;
 
 function accentFor(level: ApUrgencyLevel): RowAccent {
   if (level === 'overdue') return 'destructive';
-  if (level === 'pending') return 'warn';
+  if (level === 'pending' || level === 'due-today') return 'warn';
   return null;
 }
 
@@ -91,6 +91,15 @@ function APStatusBadge({ status, urgency }: { status: APStatus; urgency?: ApUrge
       <Badge variant="destructive" className="gap-1 whitespace-nowrap">
         <AlertTriangle size={10} />
         Vencida · {urgency.days} {urgency.days === 1 ? 'día' : 'días'}
+      </Badge>
+    );
+  }
+  // El día del vencimiento la cuenta sigue en fecha: se avisa, no es mora.
+  if (urgency?.level === 'due-today') {
+    return (
+      <Badge variant="outline" className="gap-1 whitespace-nowrap bg-warn-subtle text-warn border-warn/30">
+        <Clock size={10} />
+        Vence hoy
       </Badge>
     );
   }
@@ -347,6 +356,7 @@ function APDetailPanel({
                 <p className={cn('text-xs mt-2', urgency.level === 'overdue' ? 'font-medium text-destructive' : 'text-muted-foreground/60')}>
                   Vencimiento: {formatDatePY(ap.dueDate, 'utc')}
                   {urgency.level === 'overdue' && ` · ${urgency.days} ${urgency.days === 1 ? 'día' : 'días'} de mora`}
+                  {urgency.level === 'due-today' && ' · vence hoy'}
                 </p>
               )}
             </div>
