@@ -20,6 +20,7 @@ function catalogItem(
     supplierId: 'sup-1',
     supplierSku: '332726',
     description: 'ABRIDOR DE VINHO SMARTFY',
+    barcode: null,
     price: 54_000,
     supplierUnit: null,
     conversionFactor: null,

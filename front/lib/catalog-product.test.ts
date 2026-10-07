@@ -15,6 +15,7 @@ function item(overrides: Partial<SupplierCatalogItem> = {}): SupplierCatalogItem
     supplierId: 'sup-1',
     supplierSku: '332726',
     description: 'ABRIDOR DE VINHO SMARTFY AV01B 10W BLACK',
+    barcode: null,
     price: 54_000,
     supplierUnit: null,
     conversionFactor: null,

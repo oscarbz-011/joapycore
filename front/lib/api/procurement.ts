@@ -26,6 +26,8 @@ export interface SupplierCatalogItem {
   supplierId: string;
   supplierSku: string;
   description: string;
+  /** Código de barras o del fabricante, si el proveedor lo informa. */
+  barcode: string | null;
   price: number | null;
   supplierUnit: string | null;
   conversionFactor: number | null;
@@ -51,6 +53,11 @@ export interface OfferSupplier {
   leadTimeDays: number | null;
   minOrderAmount: number | null;
   volumeDiscounts: VolumeDiscount[];
+}
+
+/** Un ítem encontrado por una búsqueda; `score` 1 = coincidencia total. */
+export interface CatalogSearchResult extends SupplierCatalogItem {
+  score: number;
 }
 
 /** Un ítem sin vincular que podría ser `productId`; lo confirma una persona. */
@@ -337,6 +344,7 @@ export const procurementApi = {
       // null borra la fecha.
       validFrom?: string | null;
       validTo?: string | null;
+      barcode?: string | null;
       minOrderQuantity?: number | null;
       availability?: SupplierAvailability | null;
       priceTiers?: PriceTier[];
@@ -373,6 +381,22 @@ export const procurementApi = {
               percent: Number(tier.percent),
             })),
           },
+        })),
+      ),
+
+  /**
+   * Busca en los catálogos de esos proveedores por descripción, código de
+   * barras o código del proveedor. Devuelve ítems vinculados y sin vincular.
+   */
+  searchCatalog: (query: string, supplierIds: string[]): Promise<CatalogSearchResult[]> =>
+    apiClient
+      .get('/procurement/catalog/search', {
+        params: { query, supplierIds: supplierIds.join(',') },
+      })
+      .then((r) =>
+        (r.data as CatalogSearchResult[]).map((raw) => ({
+          ...normalizeCatalogItem(raw),
+          score: raw.score,
         })),
       ),
 

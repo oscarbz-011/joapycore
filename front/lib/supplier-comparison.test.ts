@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import type { CatalogOffer, OfferSupplier } from './api/procurement';
-import { bestQuoteId, compareSuppliers } from './supplier-comparison';
+import {
+  bestQuoteId,
+  compareSuppliers,
+  priceGapLabel,
+  priceGaps,
+} from './supplier-comparison';
 
 const TODAY = '2026-10-06';
 
@@ -24,6 +29,7 @@ function offer(overrides: Partial<CatalogOffer> = {}): CatalogOffer {
     supplierId: 'sup-a',
     supplierSku: 'A-1',
     description: 'Abridor',
+    barcode: null,
     price: 50_000,
     supplierUnit: null,
     conversionFactor: null,
@@ -228,6 +234,78 @@ describe('compareSuppliers — suppliers chosen by hand', () => {
   });
 });
 
+describe('compareSuppliers — lists not linked to products yet', () => {
+  // Primer contacto con dos proveedores: sus listas están cargadas pero
+  // ningún ítem está vinculado a un producto.
+  const central = supplier({ id: 'sup-c', name: 'Importadora Central' });
+  const fromA = offer({ id: 'a-abridor', productId: null, product: null });
+  const fromC = offer({
+    id: 'c-abridor',
+    supplierId: 'sup-c',
+    supplier: central,
+    productId: null,
+    product: null,
+    price: 60_000,
+    description: 'SACACORCHOS ELECTRICO',
+  });
+  const row = { productId: 'row-1', quantity: 10, itemIds: ['a-abridor', 'c-abridor'] };
+
+  it('compares the chosen item of each supplier without any product', () => {
+    const quotes = compareSuppliers([row], [fromA, fromC], TODAY);
+
+    expect(quotes.map((q) => [q.supplier.name, q.total])).toEqual([
+      ['Importadora A', 500_000],
+      ['Importadora Central', 600_000],
+    ]);
+    expect(quotes[1].lines[0]).toMatchObject({
+      productId: 'row-1',
+      itemId: 'c-abridor',
+      linkedProductId: null,
+      description: 'SACACORCHOS ELECTRICO',
+    });
+    expect(bestQuoteId(quotes)).toBe('sup-a');
+  });
+
+  it('does not pull in other unlinked items of the same supplier', () => {
+    const other = offer({ id: 'a-otro', productId: null, product: null, price: 1 });
+    const quotes = compareSuppliers([row], [fromA, other, fromC], TODAY);
+
+    expect(quotes[0].lines.map((l) => l.itemId)).toEqual(['a-abridor']);
+  });
+
+  it('marks the row as missing for a supplier with no item chosen', () => {
+    const quotes = compareSuppliers(
+      [{ ...row, itemIds: ['a-abridor'] }],
+      [fromA, fromC],
+      TODAY,
+      [central],
+    );
+
+    expect(quotes[1].missingProductIds).toEqual(['row-1']);
+  });
+
+  it('ignores a search row with nothing chosen yet', () => {
+    expect(
+      compareSuppliers([{ ...row, itemIds: [] }], [fromA, fromC], TODAY),
+    ).toEqual([]);
+  });
+
+  it('mixes product rows and search rows in the same comparison', () => {
+    const linked = offer({ id: 'a-linked', productId: 'prod-9', price: 20_000 });
+    const quotes = compareSuppliers(
+      [row, { productId: 'prod-9', quantity: 1 }],
+      [fromA, linked],
+      TODAY,
+    );
+
+    expect(quotes[0].lines.map((l) => l.itemId)).toEqual([
+      'a-abridor',
+      'a-linked',
+    ]);
+    expect(quotes[0].total).toBe(520_000);
+  });
+});
+
 describe('bestQuoteId', () => {
   const quoteOf = (id: string, price: number, extra: Partial<OfferSupplier> = {}) =>
     offer({
@@ -272,5 +350,59 @@ describe('bestQuoteId', () => {
         ),
       ),
     ).toBeNull();
+  });
+});
+
+describe('priceGaps', () => {
+  // Una sola referencia (el más caro): la misma diferencia no puede leerse
+  // como 10% de un lado y 11,1% del otro.
+  it('measures every price against the most expensive one', () => {
+    expect(priceGaps([54_000, 60_000])).toEqual([
+      { kind: 'cheaper', percent: 10 },
+      { kind: 'highest', percent: 0 },
+    ]);
+  });
+
+  it('ranks several suppliers on the same scale', () => {
+    expect(priceGaps([100, 120, 150])).toEqual([
+      { kind: 'cheaper', percent: 33.3 },
+      { kind: 'cheaper', percent: 20 },
+      { kind: 'highest', percent: 0 },
+    ]);
+  });
+
+  it('skips suppliers without a price', () => {
+    expect(priceGaps([100, null, 150])).toEqual([
+      { kind: 'cheaper', percent: 33.3 },
+      null,
+      { kind: 'highest', percent: 0 },
+    ]);
+  });
+
+  it('has nothing to say with a single price', () => {
+    expect(priceGaps([100, null])).toEqual([null, null]);
+    expect(priceGaps([])).toEqual([]);
+  });
+
+  it('reports equal prices as equal', () => {
+    expect(priceGaps([100, 100])).toEqual([
+      { kind: 'same', percent: 0 },
+      { kind: 'same', percent: 0 },
+    ]);
+  });
+
+  it('gives tied prices the same figure', () => {
+    expect(priceGaps([100, 100, 150])).toEqual([
+      { kind: 'cheaper', percent: 33.3 },
+      { kind: 'cheaper', percent: 33.3 },
+      { kind: 'highest', percent: 0 },
+    ]);
+  });
+
+  it('puts the difference into words', () => {
+    expect(priceGapLabel({ kind: 'cheaper', percent: 15 })).toBe('15% más barato');
+    expect(priceGapLabel({ kind: 'cheaper', percent: 33.3 })).toBe('33,3% más barato');
+    expect(priceGapLabel({ kind: 'highest', percent: 0 })).toBe('El más caro');
+    expect(priceGapLabel({ kind: 'same', percent: 0 })).toBe('Mismo precio');
   });
 });

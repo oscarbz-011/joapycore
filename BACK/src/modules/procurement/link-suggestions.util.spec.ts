@@ -1,4 +1,8 @@
-import { productTokens, rankLinkSuggestions } from './link-suggestions.util';
+import {
+  productTokens,
+  rankCatalogSearch,
+  rankLinkSuggestions,
+} from './link-suggestions.util';
 
 const item = (id: string, description: string, supplierId = 'sup-b') => ({
   id,
@@ -81,5 +85,75 @@ describe('rankLinkSuggestions', () => {
         item('a', 'VENTILADOR DE PIE 18"'),
       ]),
     ).toHaveLength(1);
+  });
+});
+
+describe('rankCatalogSearch', () => {
+  const entry = (
+    id: string,
+    description: string,
+    extra: { supplierId?: string; supplierSku?: string; barcode?: string } = {},
+  ) => ({
+    id,
+    supplierId: extra.supplierId ?? 'sup-a',
+    description,
+    supplierSku: extra.supplierSku ?? id,
+    barcode: extra.barcode ?? null,
+  });
+
+  it('finds the items that match what was typed, in any supplier', () => {
+    const ranked = rankCatalogSearch('abridor de vino', [
+      entry('a', 'ABRIDOR DE VINO ELECTRICO SMARTFY'),
+      entry('b', 'Abridor de vino manual', { supplierId: 'sup-b' }),
+      entry('c', 'ADAPTADOR CARPLAY'),
+    ]);
+
+    expect(ranked.map((r) => r.item.id).sort()).toEqual(['a', 'b']);
+  });
+
+  it('puts the closest match first', () => {
+    const ranked = rankCatalogSearch('abridor vino smartfy', [
+      entry('partial', 'Abridor de vino genérico'),
+      entry('full', 'ABRIDOR DE VINO SMARTFY AV01B'),
+    ]);
+
+    expect(ranked.map((r) => r.item.id)).toEqual(['full', 'partial']);
+  });
+
+  // El código de barras es el mismo en la lista de cualquier proveedor,
+  // aunque cada uno describa el producto a su manera.
+  it('finds the same barcode across suppliers whatever the description says', () => {
+    const ranked = rankCatalogSearch('7891234567890', [
+      entry('a', 'ABRIDOR DE VINO', { barcode: '7891234567890' }),
+      entry('b', 'SACACORCHOS ELECT. 10W', {
+        supplierId: 'sup-b',
+        barcode: '7891234567890',
+      }),
+      entry('c', 'Otro producto', { barcode: '1111111111111' }),
+    ]);
+
+    expect(ranked.map((r) => r.item.id).sort()).toEqual(['a', 'b']);
+    expect(ranked.every((r) => r.score === 1)).toBe(true);
+  });
+
+  it('finds an item by the code its supplier uses', () => {
+    const ranked = rankCatalogSearch('332726', [
+      entry('a', 'ABRIDOR DE VINO', { supplierSku: '332726' }),
+      entry('b', 'ADAPTADOR', { supplierSku: '424447' }),
+    ]);
+
+    expect(ranked.map((r) => r.item.id)).toEqual(['a']);
+  });
+
+  it('keeps a few results per supplier', () => {
+    const many = Array.from({ length: 12 }, (_, n) =>
+      entry(`a-${n}`, `Abridor de vino modelo ${n}`),
+    );
+
+    expect(rankCatalogSearch('abridor vino', many)).toHaveLength(8);
+  });
+
+  it('returns nothing for an empty search', () => {
+    expect(rankCatalogSearch('   ', [entry('a', 'Abridor')])).toEqual([]);
   });
 });

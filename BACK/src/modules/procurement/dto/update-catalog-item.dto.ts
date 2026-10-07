@@ -77,6 +77,14 @@ export class UpdateCatalogItemDto extends CatalogValidityDto {
   conversionFactor?: number;
 
   @ApiPropertyOptional({
+    description: 'Código de barras o del fabricante; null lo borra',
+    nullable: true,
+  })
+  @IsOptional()
+  @IsString()
+  barcode?: string | null;
+
+  @ApiPropertyOptional({
     description: 'Cantidad mínima que vende el proveedor; null la borra',
     nullable: true,
   })

@@ -86,6 +86,7 @@ function EditItemDialog({
   const [price, setPrice] = useState(item.price ?? 0);
   const [unit, setUnit] = useState(item.supplierUnit ?? '');
   const [factor, setFactor] = useState(item.conversionFactor ?? 0);
+  const [barcode, setBarcode] = useState(item.barcode ?? '');
   const initialFrom = item.validFrom?.slice(0, 10) ?? '';
   const initialTo = item.validTo?.slice(0, 10) ?? '';
   const [validFrom, setValidFrom] = useState(initialFrom);
@@ -113,6 +114,7 @@ function EditItemDialog({
       if (price !== (item.price ?? 0)) dto.price = price;
       if (unit.trim() !== (item.supplierUnit ?? '')) dto.supplierUnit = unit.trim();
       if (factor !== (item.conversionFactor ?? 0)) dto.conversionFactor = factor;
+      if (barcode.trim() !== (item.barcode ?? '')) dto.barcode = barcode.trim() || null;
       // La vigencia sí se puede borrar: una fecha quitada viaja como null.
       if (validFrom !== initialFrom) dto.validFrom = validFrom || null;
       if (validTo !== initialTo) dto.validTo = validTo || null;
@@ -164,6 +166,21 @@ function EditItemDialog({
           <div className="space-y-1.5">
             <Label>Descripción</Label>
             <Input value={description} onChange={(e) => setDescription(e.target.value)} />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="catalog-item-barcode">Código de barras o del fabricante</Label>
+            <Input
+              id="catalog-item-barcode"
+              className="font-mono"
+              value={barcode}
+              onChange={(e) => setBarcode(e.target.value)}
+              placeholder="Opcional"
+            />
+            <p className="text-xs text-muted-foreground/60">
+              Es el mismo en la lista de cualquier proveedor: sirve para reconocer el mismo
+              producto en otro catálogo.
+            </p>
           </div>
 
           <div className="space-y-1.5">
@@ -435,6 +452,10 @@ function EmptyCatalog({ onImport }: { onImport: () => void }) {
             <Badge variant="outline" className="shrink-0">Factor</Badge>
             <span className="text-muted-foreground">opcional — unidades internas por unidad del proveedor</span>
           </li>
+          <li className="flex gap-2">
+            <Badge variant="outline" className="shrink-0">Código de barras</Badge>
+            <span className="text-muted-foreground">opcional — reconoce el mismo producto en otra lista</span>
+          </li>
         </ul>
         <p className="mt-3 text-xs text-muted-foreground/60">
           Las filas con problemas no frenan la importación: entran las buenas y te devolvemos
@@ -691,6 +712,7 @@ export default function SupplierDetailPage() {
                     <tr className="border-b border-border bg-muted/30 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
                       <th className="px-3 py-3 text-left whitespace-nowrap">Código</th>
                       <th className="px-3 py-3 text-left">Descripción</th>
+                      <th className="px-3 py-3 text-left whitespace-nowrap">Cód. barras</th>
                       <th className="px-3 py-3 text-right whitespace-nowrap">Precio</th>
                       <th className="px-3 py-3 text-left whitespace-nowrap">Vigencia</th>
                       <th className="px-3 py-3 text-left whitespace-nowrap">Unidad</th>
@@ -707,6 +729,9 @@ export default function SupplierDetailPage() {
                             {item.supplierSku}
                           </td>
                           <td className="px-3 py-2.5 text-foreground">{item.description}</td>
+                          <td className="px-3 py-2.5 font-mono text-xs text-muted-foreground whitespace-nowrap">
+                            {item.barcode ?? '—'}
+                          </td>
                           <td className="px-3 py-2.5 text-right font-mono tabular-nums whitespace-nowrap">
                             {item.price !== null
                               ? fmtGs(item.price)

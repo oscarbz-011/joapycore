@@ -125,7 +125,7 @@ describe('PurchaseOrdersService', () => {
       expect(result).toBeDefined();
     });
 
-    it.each(['DRAFT', 'INACTIVE', 'BLOCKED'])(
+    it.each(['INACTIVE', 'BLOCKED'])(
       'refuses to buy a product in %s',
       async (status) => {
         purchaseOrdersRepository.findProductStatuses.mockResolvedValue([
@@ -150,13 +150,13 @@ describe('PurchaseOrdersService', () => {
         {
           id: 'prod-1',
           name: 'Heladera Samsung',
-          status: 'DRAFT',
+          status: 'INACTIVE',
           isPurchasable: true,
         },
       ]);
 
       await expect(service.create('tenant-1', 'user-1', dto)).rejects.toThrow(
-        /Heladera Samsung \(borrador\)/,
+        /Heladera Samsung \(descontinuado\)/,
       );
     });
 
@@ -194,6 +194,41 @@ describe('PurchaseOrdersService', () => {
   });
 
   // ── confirm ────────────────────────────────────────────────────────────────
+
+  describe('products not yet complete', () => {
+    const dto = {
+      supplierId: 'sup-1',
+      purchaseType: 'LOCAL' as const,
+      orderDate: '2026-10-06',
+      items: [{ productId: 'prod-1', quantity: 2, unitCost: 100 }],
+    };
+    const withStatus = (status: string) =>
+      purchaseOrdersRepository.findProductStatuses.mockResolvedValue([
+        { id: 'prod-1', name: 'Abridor', status, isPurchasable: true },
+      ]);
+
+    // Al decidir una compra desde la comparación de catálogos el producto se
+    // puede crear incompleto: se termina de cargar antes de recibirlo.
+    it('orders a draft product', async () => {
+      withStatus('DRAFT');
+
+      await service.create('tenant-1', 'user-1', dto);
+
+      expect(purchaseOrdersRepository.create).toHaveBeenCalled();
+    });
+
+    it.each(['INACTIVE', 'BLOCKED'])(
+      'still refuses a product that is %s',
+      async (status) => {
+        withStatus(status);
+
+        await expect(
+          service.create('tenant-1', 'user-1', dto),
+        ).rejects.toBeInstanceOf(UnprocessableEntityException);
+        expect(purchaseOrdersRepository.create).not.toHaveBeenCalled();
+      },
+    );
+  });
 
   describe('order number', () => {
     const dto = {

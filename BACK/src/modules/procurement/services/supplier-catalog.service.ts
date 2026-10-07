@@ -6,7 +6,12 @@ import {
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Prisma } from '@prisma/client';
 import { normalizePriceTiers } from '../commercial-terms.util';
-import { productTokens, rankLinkSuggestions } from '../link-suggestions.util';
+import {
+  productTokens,
+  rankCatalogSearch,
+  rankLinkSuggestions,
+  searchWords,
+} from '../link-suggestions.util';
 import {
   SupplierCatalogRepository,
   type CatalogFilters,
@@ -66,20 +71,54 @@ export class SupplierCatalogService {
       tenantId,
       productIds,
     );
-    const words = [...new Set(products.flatMap((p) => productTokens(p)))];
-    if (words.length === 0) return [];
+    if (products.length === 0) return [];
+    const ownIds = products.map((product) => product.id);
 
-    const candidates = await this.repository.findUnlinkedMatching(
+    // 1) Mismo código de barras que un ítem ya vinculado: es el mismo
+    //    producto sin importar cómo lo describa el otro proveedor.
+    const linked = await this.repository.findLinkedBarcodes(tenantId, ownIds);
+    const productOfBarcode = new Map(
+      linked.map((item) => [item.barcode!, item.productId!]),
+    );
+    const sameBarcode = productOfBarcode.size
+      ? await this.repository.findUnlinkedByBarcodes(tenantId, [
+          ...productOfBarcode.keys(),
+        ])
+      : [];
+    const byBarcode = sameBarcode.map((item) => ({
+      productId: productOfBarcode.get(item.barcode!)!,
+      score: 1,
+      item,
+    }));
+    const taken = new Set(byBarcode.map((s) => `${s.productId}:${s.item.id}`));
+
+    // 2) Parecido de la descripción con el nombre del producto.
+    const words = [...new Set(products.flatMap((p) => productTokens(p)))];
+    const candidates = words.length
+      ? await this.repository.findUnlinkedMatching(tenantId, words)
+      : [];
+    const byText = products.flatMap((product) =>
+      rankLinkSuggestions(product, candidates)
+        .map(({ item, score }) => ({ productId: product.id, score, item }))
+        .filter((s) => !taken.has(`${s.productId}:${s.item.id}`)),
+    );
+
+    return [...byBarcode, ...byText];
+  }
+
+  // Búsqueda libre en los catálogos de los proveedores elegidos, vinculados o
+  // no: permite comparar listas recién cargadas sin crear productos antes.
+  async search(tenantId: string, supplierIds: string[], query: string) {
+    const candidates = await this.repository.findSearchCandidates(
       tenantId,
-      words,
+      supplierIds,
+      query,
+      searchWords(query),
     );
-    return products.flatMap((product) =>
-      rankLinkSuggestions(product, candidates).map(({ item, score }) => ({
-        productId: product.id,
-        score,
-        item,
-      })),
-    );
+    return rankCatalogSearch(query, candidates).map(({ item, score }) => ({
+      ...item,
+      score,
+    }));
   }
 
   async importFile(

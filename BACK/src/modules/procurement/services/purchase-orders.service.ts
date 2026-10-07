@@ -73,15 +73,19 @@ export class PurchaseOrdersService {
       );
     }
 
+    // Un borrador sí se puede pedir: al decidir una compra desde la
+    // comparación de catálogos el producto nace incompleto. Lo que no se
+    // puede es recibirlo así (ver PurchaseReceiptsService.create).
     const notPurchasable = products.filter(
-      (p) => p.status !== ProductStatus.ACTIVE,
+      (p) =>
+        p.status !== ProductStatus.ACTIVE && p.status !== ProductStatus.DRAFT,
     );
     if (notPurchasable.length) {
       const detail = notPurchasable
         .map((p) => `${p.name} (${PRODUCT_STATUS_LABEL[p.status]})`)
         .join(', ');
       throw new UnprocessableEntityException(
-        `No se puede comprar un producto que no está activo: ${detail}`,
+        `No se puede comprar un producto descontinuado o bloqueado: ${detail}`,
       );
     }
 

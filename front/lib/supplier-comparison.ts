@@ -2,15 +2,26 @@ import type { CatalogOffer, OfferSupplier } from './api/procurement';
 import { priceValidity } from './catalog-validity';
 import type { SupplierAvailability } from './commercial-terms';
 
-/** Lo que se quiere comprar: un producto y cuántas unidades internas. */
+/**
+ * Lo que se quiere comprar y cuántas unidades. Puede ser un producto interno
+ * (lo cotizan los ítems vinculados a él) o algo que todavía no existe como
+ * producto: en ese caso `itemIds` dice qué ítem de cada catálogo lo representa.
+ */
 export interface Need {
+  /** Identifica la fila: el id del producto, o una clave propia de la búsqueda. */
   productId: string;
   quantity: number;
+  /** Ítems de catálogo elegidos para esta fila, uno por proveedor. */
+  itemIds?: readonly string[];
 }
 
 export interface QuoteLine {
+  /** La fila (`Need.productId`) que esta línea cotiza. */
   productId: string;
   itemId: string;
+  /** Producto interno del ítem; null si todavía no está vinculado. */
+  linkedProductId: string | null;
+  description: string;
   supplierSku: string;
   /** Cuánto se le pide al proveedor, en su unidad (cajas, bultos...). */
   supplierQuantity: number;
@@ -71,6 +82,8 @@ function quoteLine(
   return {
     productId: need.productId,
     itemId: item.id,
+    linkedProductId: item.productId,
+    description: item.description,
     supplierSku: item.supplierSku,
     supplierQuantity,
     supplierUnit: item.supplierUnit,
@@ -98,7 +111,11 @@ function supplierQuote(
     // Un proveedor puede tener el mismo producto en dos presentaciones: se
     // toma la que sale más barata para esa cantidad.
     const candidates = items
-      .filter((item) => item.productId === need.productId)
+      .filter((item) =>
+        need.itemIds
+          ? need.itemIds.includes(item.id)
+          : item.productId === need.productId,
+      )
       .flatMap((item) => quoteLine(need, item, todayISO) ?? [])
       .sort((a, b) => a.subtotal - b.subtotal);
     if (candidates[0]) lines.push(candidates[0]);
@@ -160,7 +177,13 @@ export function compareSuppliers(
    */
   alsoShow: readonly OfferSupplier[] = [],
 ): SupplierQuote[] {
-  const wanted = needs.filter((need) => need.productId && need.quantity > 0);
+  const wanted = needs.filter(
+    (need) =>
+      need.productId &&
+      need.quantity > 0 &&
+      // Una búsqueda sin ningún ítem elegido todavía no es una fila.
+      (!need.itemIds || need.itemIds.length > 0),
+  );
   if (wanted.length === 0) return [];
 
   const bySupplier = new Map<string, CatalogOffer[]>();
@@ -195,4 +218,50 @@ export function bestQuoteId(quotes: readonly SupplierQuote[]): string | null {
   if (able.length === 0) return null;
   return able.reduce((best, quote) => (quote.total < best.total ? quote : best))
     .supplier.id;
+}
+
+/** Cómo queda un precio frente a los de los otros proveedores. */
+export interface PriceGap {
+  /** `cheaper`: más barato que el más caro. `highest`: es el más caro. */
+  kind: 'cheaper' | 'highest' | 'same';
+  /** Cuánto más barato que el más caro, en porcentaje con un decimal. */
+  percent: number;
+}
+
+const oneDecimal = (n: number) => Math.round(n * 10) / 10;
+
+/**
+ * Diferencia porcentual de cada precio, siempre contra la misma referencia:
+ * el más caro. Así todos los porcentajes se leen igual ("10% más barato") y
+ * no hay dos números distintos para la misma diferencia, como pasaría
+ * midiendo uno hacia arriba y otro hacia abajo.
+ * null donde no hay precio o no hay con qué comparar.
+ */
+export function priceGaps(
+  prices: readonly (number | null)[],
+): (PriceGap | null)[] {
+  const known = prices.filter((price): price is number => price !== null && price > 0);
+  if (known.length < 2) return prices.map(() => null);
+
+  const highest = Math.max(...known);
+  const allEqual = known.every((price) => price === highest);
+
+  return prices.map((price) => {
+    if (price === null || price <= 0) return null;
+    if (allEqual) return { kind: 'same', percent: 0 };
+    if (price === highest) return { kind: 'highest', percent: 0 };
+    return {
+      kind: 'cheaper',
+      percent: oneDecimal(((highest - price) / highest) * 100),
+    };
+  });
+}
+
+export function priceGapLabel(gap: PriceGap): string {
+  if (gap.kind === 'same') return 'Mismo precio';
+  if (gap.kind === 'highest') return 'El más caro';
+  const percent = new Intl.NumberFormat('es-PY', { maximumFractionDigits: 1 }).format(
+    gap.percent,
+  );
+  return `${percent}% más barato`;
 }
