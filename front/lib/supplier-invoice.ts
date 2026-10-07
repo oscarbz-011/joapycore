@@ -105,8 +105,44 @@ export function differenceLabel(difference: number): string {
 export interface InvoiceHeader {
   invoiceNumber: string;
   invoiceDate: string;
+  /** El total que figura al pie de la factura; null = todavía sin cargar. */
+  total: number | null;
   shipping: number;
   discount: number;
+}
+
+/**
+ * Lo que el total de la factura tiene de más (positivo) o de menos (negativo)
+ * respecto de lo cargado: productos + flete − descuento. Cero = cierra.
+ */
+export function invoiceTotalGap(total: number, preview: InvoicePreview): number {
+  const gap = round2(total - preview.total);
+  return Math.abs(gap) < 0.01 ? 0 : gap;
+}
+
+/** Explica por qué el total no cierra y qué mirar. */
+export function totalGapLabel(gap: number): string | null {
+  if (gap === 0) return null;
+  return gap > 0
+    ? `El total de la factura tiene ${gs(gap)} más que lo cargado. Si la factura cobra el flete en un renglón aparte, cargalo en "Flete cobrado aparte"; si no, revisá cantidades y precios.`
+    : `El total de la factura tiene ${gs(-gap)} menos que lo cargado. Si la factura trae un descuento global, cargalo en "Descuento global"; si no, revisá cantidades y precios.`;
+}
+
+const INVOICE_FILE_TYPES = ['application/pdf', 'image/jpeg', 'image/png'];
+const INVOICE_FILE_MAX_BYTES = 10 * 1024 * 1024;
+
+/** Problema con el archivo de la factura, o null si se puede adjuntar. */
+export function invoiceFileError(file: {
+  type: string;
+  size: number;
+}): string | null {
+  if (!INVOICE_FILE_TYPES.includes(file.type)) {
+    return 'La factura se adjunta en PDF o como imagen (JPG o PNG)';
+  }
+  if (file.size > INVOICE_FILE_MAX_BYTES) {
+    return 'El archivo de la factura no puede pesar más de 10 MB';
+  }
+  return null;
 }
 
 /** Problema que impide cargar la factura, o null si se puede enviar. */
@@ -132,7 +168,8 @@ export function invoiceFormError(
   }
   const preview = invoicePreview(lines, header.shipping, header.discount);
   if (preview.total < 0) return 'El descuento no puede superar lo facturado';
-  return null;
+  if (header.total === null) return 'Ingresá el total que figura en la factura';
+  return totalGapLabel(invoiceTotalGap(header.total, preview));
 }
 
 /** En qué está una cuenta por pagar respecto de la factura del proveedor. */

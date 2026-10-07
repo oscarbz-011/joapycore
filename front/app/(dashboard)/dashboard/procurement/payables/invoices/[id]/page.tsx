@@ -4,18 +4,21 @@ import { useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, FileText } from 'lucide-react';
 import { RequirePermission } from '@/components/require-permission';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
 import { apiErrorMessage } from '@/lib/api/api-error';
+import { filesApi } from '@/lib/api/files';
 import { supplierInvoicesApi } from '@/lib/api/supplier-invoices';
 import { formatDatePY } from '@/lib/date';
+import { openPdf } from '@/lib/open-pdf';
 import {
   INVOICE_STATUS_LABEL,
   differenceLabel,
+  invoiceFileError,
   type SupplierInvoiceStatus,
 } from '@/lib/supplier-invoice';
 import { cn } from '@/lib/utils';
@@ -62,6 +65,7 @@ export default function SupplierInvoicePage() {
   const [deciding, setDeciding] = useState<'approve' | 'reject' | null>(null);
   const [note, setNote] = useState('');
   const [error, setError] = useState('');
+  const [fileNote, setFileNote] = useState('');
 
   const { data: invoice, isLoading, isError, refetch } = useQuery({
     queryKey: ['supplier-invoice', id],
@@ -86,6 +90,19 @@ export default function SupplierInvoicePage() {
       setError(apiErrorMessage(err, 'No se pudo guardar la decisión'));
       void refetch();
     },
+  });
+
+  const fileMutation = useMutation({
+    mutationFn: async (picked: File) => {
+      const uploaded = await filesApi.upload(picked, {
+        module: 'procurement',
+        entityType: 'supplier-invoice',
+        entityId: id,
+      });
+      return supplierInvoicesApi.attachFile(id, uploaded.id);
+    },
+    onSuccess: (updated) => queryClient.setQueryData(['supplier-invoice', id], updated),
+    onError: (err) => setFileNote(apiErrorMessage(err, 'No se pudo adjuntar el archivo')),
   });
 
   function decide() {
@@ -176,6 +193,49 @@ export default function SupplierInvoicePage() {
                 {invoice.notes}
               </p>
             )}
+            <div className="flex flex-wrap items-center gap-3 border-t border-border pt-3">
+              {invoice.fileId ? (
+                <Button variant="outline" size="sm" onClick={() => void openPdf(invoice.fileId!)}>
+                  <FileText size={15} />
+                  Ver la factura adjunta
+                </Button>
+              ) : (
+                <p className="text-sm text-muted-foreground">Sin archivo adjunto.</p>
+              )}
+              <RequirePermission permission="procurement:payables:register">
+                <label
+                  className={cn(
+                    'cursor-pointer text-sm font-medium text-foreground underline underline-offset-2',
+                    fileMutation.isPending && 'pointer-events-none opacity-60',
+                  )}
+                >
+                  {fileMutation.isPending
+                    ? 'Subiendo...'
+                    : invoice.fileId
+                      ? 'Reemplazar el archivo'
+                      : 'Adjuntar PDF o imagen'}
+                  <input
+                    type="file"
+                    className="sr-only"
+                    accept="application/pdf,image/jpeg,image/png"
+                    disabled={fileMutation.isPending}
+                    onChange={(e) => {
+                      const picked = e.target.files?.[0];
+                      e.target.value = '';
+                      if (!picked) return;
+                      const problem = invoiceFileError(picked);
+                      setFileNote(problem ?? '');
+                      if (!problem) fileMutation.mutate(picked);
+                    }}
+                  />
+                </label>
+              </RequirePermission>
+              {fileNote && (
+                <p role="alert" className="basis-full text-xs text-destructive">
+                  {fileNote}
+                </p>
+              )}
+            </div>
           </Card>
 
           <Card className="gap-0 overflow-hidden p-0">
@@ -246,15 +306,15 @@ export default function SupplierInvoicePage() {
             <SectionTitle>Resultado</SectionTitle>
             <dl className="space-y-1.5 text-sm">
               <div className="flex justify-between gap-3">
-                <dt className="text-muted-foreground">Líneas facturadas</dt>
+                <dt className="text-muted-foreground">Productos</dt>
                 <dd className="font-mono tabular-nums">{gs(invoice.subtotal)}</dd>
               </div>
               <div className="flex justify-between gap-3">
-                <dt className="text-muted-foreground">Envío</dt>
+                <dt className="text-muted-foreground">Flete aparte</dt>
                 <dd className="font-mono tabular-nums">{gs(invoice.shippingAmount)}</dd>
               </div>
               <div className="flex justify-between gap-3">
-                <dt className="text-muted-foreground">Descuento</dt>
+                <dt className="text-muted-foreground">Descuento global</dt>
                 <dd className="font-mono tabular-nums">− {gs(invoice.discountAmount)}</dd>
               </div>
               <div className="flex justify-between gap-3 border-t border-border pt-1.5">

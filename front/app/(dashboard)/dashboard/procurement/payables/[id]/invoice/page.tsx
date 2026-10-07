@@ -14,13 +14,17 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { apiErrorMessage } from '@/lib/api/api-error';
+import { filesApi } from '@/lib/api/files';
 import { payablesApi } from '@/lib/api/payables';
 import { supplierInvoicesApi } from '@/lib/api/supplier-invoices';
 import { formatDatePY, todayISODate } from '@/lib/date';
 import {
   differenceLabel,
+  invoiceFileError,
   invoiceFormError,
   invoicePreview,
+  invoiceTotalGap,
+  totalGapLabel,
   type InvoiceLine,
 } from '@/lib/supplier-invoice';
 import { cn } from '@/lib/utils';
@@ -55,6 +59,9 @@ export default function NewSupplierInvoicePage() {
   const [invoiceNumber, setInvoiceNumber] = useState('');
   const [timbrado, setTimbrado] = useState('');
   const [invoiceDate, setInvoiceDate] = useState(todayISODate());
+  const [total, setTotal] = useState('');
+  const [file, setFile] = useState<File | null>(null);
+  const [fileError, setFileError] = useState('');
   const [shipping, setShipping] = useState('');
   const [discount, setDiscount] = useState('');
   const [notes, setNotes] = useState('');
@@ -94,15 +101,27 @@ export default function NewSupplierInvoicePage() {
   const header = {
     invoiceNumber,
     invoiceDate,
+    total: total.trim() ? amount(total) : null,
     shipping: amount(shipping),
     discount: amount(discount),
   };
   const preview = invoicePreview(lines, header.shipping, header.discount);
+  const gapMessage =
+    header.total === null ? null : totalGapLabel(invoiceTotalGap(header.total, preview));
 
   const mutation = useMutation({
-    mutationFn: () =>
-      supplierInvoicesApi.create({
+    mutationFn: async () => {
+      // El archivo se sube primero: la factura se guarda ya con su adjunto.
+      const uploaded = file
+        ? await filesApi.upload(file, {
+            module: 'procurement',
+            entityType: 'supplier-invoice',
+          })
+        : null;
+      return supplierInvoicesApi.create({
         supplierId: supplierId!,
+        total: header.total ?? 0,
+        fileId: uploaded?.id,
         payableIds: chosen.map((receipt) => receipt.id),
         invoiceNumber: invoiceNumber.trim(),
         timbrado: timbrado.trim() || undefined,
@@ -115,7 +134,8 @@ export default function NewSupplierInvoicePage() {
           quantity: line.quantity,
           unitCost: line.unitCost,
         })),
-      }),
+      });
+    },
     onSuccess: (invoice) => {
       void queryClient.invalidateQueries({ queryKey: ['accounts-payable'] });
       void queryClient.invalidateQueries({ queryKey: ['invoiceable-payables'] });
@@ -255,28 +275,45 @@ export default function NewSupplierInvoicePage() {
                 </p>
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="invoice-shipping">Envío facturado (Gs.)</Label>
+                <Label htmlFor="invoice-total">Total de la factura (Gs.) *</Label>
                 <Input
-                  id="invoice-shipping"
+                  id="invoice-total"
                   type="number"
                   min={0}
                   step="any"
-                  value={shipping}
-                  onChange={(e) => setShipping(e.target.value)}
-                  placeholder="0"
+                  value={total}
+                  onChange={(e) => setTotal(e.target.value)}
+                  aria-describedby="invoice-total-help"
                 />
+                <p id="invoice-total-help" className="text-xs text-muted-foreground">
+                  El importe total que figura al pie de la factura. Se controla contra los
+                  productos de abajo.
+                </p>
               </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="invoice-discount">Descuento facturado (Gs.)</Label>
+              <div className="space-y-1.5 sm:col-span-2">
+                <Label htmlFor="invoice-file">Factura en PDF o imagen</Label>
                 <Input
-                  id="invoice-discount"
-                  type="number"
-                  min={0}
-                  step="any"
-                  value={discount}
-                  onChange={(e) => setDiscount(e.target.value)}
-                  placeholder="0"
+                  id="invoice-file"
+                  type="file"
+                  accept="application/pdf,image/jpeg,image/png"
+                  aria-describedby="invoice-file-help"
+                  onChange={(e) => {
+                    const picked = e.target.files?.[0] ?? null;
+                    const problem = picked ? invoiceFileError(picked) : null;
+                    setFileError(problem ?? '');
+                    setFile(problem ? null : picked);
+                    if (problem) e.target.value = '';
+                  }}
                 />
+                {fileError ? (
+                  <p role="alert" className="text-xs text-destructive">
+                    {fileError}
+                  </p>
+                ) : (
+                  <p id="invoice-file-help" className="text-xs text-muted-foreground">
+                    Opcional. PDF, JPG o PNG de hasta 10 MB. También se puede adjuntar después.
+                  </p>
+                )}
               </div>
             </div>
             <div className="space-y-1.5">
@@ -429,6 +466,42 @@ export default function NewSupplierInvoicePage() {
               </div>
             )}
           </Card>
+
+          <Card className="gap-4 p-5">
+            <div className="space-y-1">
+              <SectionTitle>Cargos fuera de los productos</SectionTitle>
+              <p className="text-xs text-muted-foreground">
+                Solo si la factura los trae en un renglón aparte de los productos. Si no los
+                trae, dejalos vacíos: no va acá el total de la factura.
+              </p>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="invoice-shipping">Flete cobrado aparte (Gs.)</Label>
+                <Input
+                  id="invoice-shipping"
+                  type="number"
+                  min={0}
+                  step="any"
+                  value={shipping}
+                  onChange={(e) => setShipping(e.target.value)}
+                  placeholder="No cobra flete aparte"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="invoice-discount">Descuento global (Gs.)</Label>
+                <Input
+                  id="invoice-discount"
+                  type="number"
+                  min={0}
+                  step="any"
+                  value={discount}
+                  onChange={(e) => setDiscount(e.target.value)}
+                  placeholder="Sin descuento global"
+                />
+              </div>
+            </div>
+          </Card>
         </div>
 
         <div className="space-y-6 lg:sticky lg:top-6 lg:self-start">
@@ -436,20 +509,26 @@ export default function NewSupplierInvoicePage() {
             <SectionTitle>Resumen</SectionTitle>
             <dl className="space-y-1.5 text-sm">
               <div className="flex justify-between gap-3">
-                <dt className="text-muted-foreground">Líneas facturadas</dt>
+                <dt className="text-muted-foreground">Productos</dt>
                 <dd className="font-mono tabular-nums">{gs(preview.subtotal)}</dd>
               </div>
               <div className="flex justify-between gap-3">
-                <dt className="text-muted-foreground">Envío</dt>
+                <dt className="text-muted-foreground">Flete aparte</dt>
                 <dd className="font-mono tabular-nums">{gs(header.shipping)}</dd>
               </div>
               <div className="flex justify-between gap-3">
-                <dt className="text-muted-foreground">Descuento</dt>
+                <dt className="text-muted-foreground">Descuento global</dt>
                 <dd className="font-mono tabular-nums">− {gs(header.discount)}</dd>
               </div>
               <div className="flex justify-between gap-3 border-t border-border pt-1.5">
-                <dt className="font-semibold text-foreground">Total de la factura</dt>
+                <dt className="font-semibold text-foreground">Suma de lo cargado</dt>
                 <dd className="font-mono font-bold tabular-nums">{gs(preview.total)}</dd>
+              </div>
+              <div className="flex justify-between gap-3">
+                <dt className="font-semibold text-foreground">Total de la factura</dt>
+                <dd className="font-mono font-bold tabular-nums">
+                  {header.total === null ? '—' : gs(header.total)}
+                </dd>
               </div>
               <div className="flex justify-between gap-3">
                 <dt className="text-muted-foreground">Estimado al recibir</dt>
@@ -458,6 +537,14 @@ export default function NewSupplierInvoicePage() {
                 </dd>
               </div>
             </dl>
+            {gapMessage && (
+              <p
+                role="status"
+                className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive"
+              >
+                {gapMessage}
+              </p>
+            )}
             <p
               role="status"
               className={cn(
@@ -485,7 +572,7 @@ export default function NewSupplierInvoicePage() {
               }
             >
               <Button type="submit" className="w-full" disabled={mutation.isPending}>
-                {mutation.isPending ? 'Guardando...' : 'Cargar factura'}
+                {mutation.isPending ? 'Guardando...' : 'Guardar factura'}
               </Button>
             </RequirePermission>
           </Card>

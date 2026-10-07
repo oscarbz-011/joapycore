@@ -1,11 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import {
   differenceLabel,
+  invoiceFileError,
   invoiceFormError,
   invoicePreview,
+  invoiceTotalGap,
   lineDifferenceLabel,
   payBeforeInvoiceWarning,
   payableInvoiceState,
+  totalGapLabel,
   type InvoiceLine,
 } from './supplier-invoice';
 
@@ -110,6 +113,7 @@ describe('invoiceFormError', () => {
   const header = {
     invoiceNumber: '001-001-0000123',
     invoiceDate: '2026-10-07',
+    total: 1_000_000,
     shipping: 0,
     discount: 0,
   };
@@ -130,7 +134,9 @@ describe('invoiceFormError', () => {
 
   // Cantidad 0 es válida: el proveedor no facturó esa línea.
   it('accepts a line invoiced at zero but not a fraction or a negative', () => {
-    expect(invoiceFormError(header, [line({ quantity: 0 })])).toBeNull();
+    expect(
+      invoiceFormError({ ...header, total: 0 }, [line({ quantity: 0 })]),
+    ).toBeNull();
     expect(invoiceFormError(header, [line({ quantity: 2.5 })])).toMatch(
       /Licuadora/,
     );
@@ -142,7 +148,62 @@ describe('invoiceFormError', () => {
   it('rejects a discount larger than what was invoiced', () => {
     expect(
       invoiceFormError({ ...header, discount: 1_000_001 }, [line()]),
-    ).toMatch(/descuento/);
+    ).toMatch(/descuento no puede/);
+  });
+});
+
+// El usuario lee el total del pie de la factura; el sistema controla que
+// salga de lo cargado. Poner el total en "flete" ya no puede duplicarlo.
+describe('total printed on the invoice', () => {
+  const header = {
+    invoiceNumber: '001-001-0000123',
+    invoiceDate: '2026-10-07',
+    total: 1_000_000 as number | null,
+    shipping: 0,
+    discount: 0,
+  };
+
+  it('asks for the total', () => {
+    expect(invoiceFormError({ ...header, total: null }, [line()])).toMatch(
+      /total que figura/,
+    );
+  });
+
+  it('closes when the total is products plus shipping minus discount', () => {
+    const preview = invoicePreview([line()], 50_000, 20_000);
+    expect(invoiceTotalGap(1_030_000, preview)).toBe(0);
+    expect(
+      invoiceFormError(
+        { ...header, total: 1_030_000, shipping: 50_000, discount: 20_000 },
+        [line()],
+      ),
+    ).toBeNull();
+  });
+
+  it('stops the mistake of typing the invoice total as shipping', () => {
+    expect(
+      invoiceFormError({ ...header, shipping: 1_000_000 }, [line()]),
+    ).toMatch(/Gs\. 1\.000\.000 menos que lo cargado/);
+  });
+
+  it('points to shipping when the invoice has more than the products', () => {
+    expect(totalGapLabel(50_000)).toMatch(/Gs\. 50\.000 más.*Flete cobrado aparte/);
+    expect(totalGapLabel(-20_000)).toMatch(/Gs\. 20\.000 menos.*Descuento global/);
+    expect(totalGapLabel(0)).toBeNull();
+  });
+});
+
+describe('invoice file', () => {
+  it('accepts a PDF or a picture of the invoice', () => {
+    expect(invoiceFileError({ type: 'application/pdf', size: 200_000 })).toBeNull();
+    expect(invoiceFileError({ type: 'image/jpeg', size: 200_000 })).toBeNull();
+  });
+
+  it('rejects other files and anything over 10 MB', () => {
+    expect(invoiceFileError({ type: 'application/zip', size: 1 })).toMatch(/PDF/);
+    expect(
+      invoiceFileError({ type: 'application/pdf', size: 10 * 1024 * 1024 + 1 }),
+    ).toMatch(/10 MB/);
   });
 });
 

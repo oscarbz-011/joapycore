@@ -50,6 +50,8 @@ export interface SupplierInvoice {
   estimatedTotal: number;
   status: SupplierInvoiceStatus;
   notes: string | null;
+  /** PDF o imagen de la factura, si se adjuntó. */
+  fileId: string | null;
   reviewNote: string | null;
   reviewedAt: string | null;
   createdAt: string;
@@ -73,6 +75,9 @@ export interface CreateSupplierInvoicePayload {
   invoiceNumber: string;
   timbrado?: string;
   invoiceDate: string;
+  /** El total que figura al pie de la factura. */
+  total: number;
+  fileId?: string;
   shippingAmount?: number;
   discountAmount?: number;
   notes?: string;
@@ -130,6 +135,11 @@ export const supplierInvoicesApi = {
   create: (dto: CreateSupplierInvoicePayload): Promise<SupplierInvoice> =>
     apiClient
       .post('/procurement/supplier-invoices', dto)
+      .then((r) => normalizeInvoice(r.data)),
+
+  attachFile: (id: string, fileId: string): Promise<SupplierInvoice> =>
+    apiClient
+      .post(`/procurement/supplier-invoices/${id}/file`, { fileId })
       .then((r) => normalizeInvoice(r.data)),
 
   approve: (id: string, note?: string): Promise<SupplierInvoice> =>
