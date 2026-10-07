@@ -6,7 +6,6 @@ export interface PurchaseOrderForPdf {
   id: string;
   orderNumber: string | null;
   orderDate: Date;
-  expectedDate: Date | null;
   notes: string | null;
   tenant: {
     name: string;
@@ -101,9 +100,6 @@ export function buildPurchaseOrderVariables(order: PurchaseOrderForPdf): {
       'proveedor.email': supplier.email ?? '',
       'orden.numero': order.orderNumber ?? '—',
       'orden.fecha': formatDay(order.orderDate),
-      'orden.entregaEstimada': order.expectedDate
-        ? formatDay(order.expectedDate)
-        : 'A convenir',
       'orden.lugarEntrega': deliveryPlace,
       'orden.condicionPago': supplier.paymentTermDays
         ? `Crédito a ${supplier.paymentTermDays} días`

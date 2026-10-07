@@ -125,10 +125,13 @@ export class PurchaseOrdersRepository {
     from: PurchaseOrderStatus[],
     to: PurchaseOrderStatus,
     client: PrismaClientOrTx = this.prisma,
+    // Datos que cambian junto con el estado (ej. la entrega que confirma el
+    // proveedor): misma escritura, misma condición.
+    extra: { expectedDate?: Date } = {},
   ) {
     return client.purchaseOrder.updateMany({
       where: { tenantId, id, status: { in: from } },
-      data: { status: to },
+      data: { status: to, ...extra },
     });
   }
 

@@ -595,6 +595,44 @@ describe('PurchaseOrdersService', () => {
       },
     );
 
+    // La entrega que confirma el proveedor: control interno, no va al PDF.
+    it('records the delivery date the supplier confirms', async () => {
+      purchaseOrdersRepository.findById.mockResolvedValue(
+        makeOrder({
+          status: 'SENT',
+          orderDate: new Date('2026-10-06T00:00:00.000Z'),
+        }),
+      );
+
+      await service.confirm('tenant-1', 'po-1', 'user-1', '2026-10-20');
+
+      expect(purchaseOrdersRepository.transition).toHaveBeenCalledWith(
+        'tenant-1',
+        'po-1',
+        ['PENDING', 'SENT'],
+        'CONFIRMED',
+        expect.anything(),
+        { expectedDate: new Date('2026-10-20T00:00:00.000Z') },
+      );
+    });
+
+    it('accepts a delivery on the day of the order but not before it', async () => {
+      purchaseOrdersRepository.findById.mockResolvedValue(
+        makeOrder({
+          status: 'SENT',
+          orderDate: new Date('2026-10-06T00:00:00.000Z'),
+        }),
+      );
+
+      await service.confirm('tenant-1', 'po-1', 'user-1', '2026-10-06');
+      expect(purchaseOrdersRepository.transition).toHaveBeenCalledTimes(1);
+
+      await expect(
+        service.confirm('tenant-1', 'po-1', 'user-1', '2026-10-05'),
+      ).rejects.toThrow(/anterior a la fecha de la orden/);
+      expect(purchaseOrdersRepository.transition).toHaveBeenCalledTimes(1);
+    });
+
     it('does not confirm an order already confirmed', async () => {
       purchaseOrdersRepository.findById.mockResolvedValue(order('CONFIRMED'));
 

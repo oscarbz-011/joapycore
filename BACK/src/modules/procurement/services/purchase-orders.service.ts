@@ -34,6 +34,12 @@ const STATUS_LABEL: Record<PurchaseOrderStatus, string> = {
   CANCELLED: 'cancelada',
 };
 
+// Las fechas de la orden son días de calendario guardados a medianoche UTC.
+const startOfUtcDay = (date: Date) =>
+  new Date(
+    Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()),
+  );
+
 @Injectable()
 export class PurchaseOrdersService {
   constructor(
@@ -266,13 +272,31 @@ export class PurchaseOrdersService {
 
   // También desde borrador: el proveedor puede confirmar por teléfono sin que
   // la orden se haya enviado desde el sistema.
-  async confirm(tenantId: string, id: string, userId?: string) {
+  //
+  // `expectedDate` es la entrega que el proveedor confirma en ese momento:
+  // un dato de control interno, que no figura en el PDF de la orden.
+  async confirm(
+    tenantId: string,
+    id: string,
+    userId?: string,
+    expectedDate?: string,
+  ) {
+    const confirmedDate = expectedDate ? new Date(expectedDate) : undefined;
+    if (confirmedDate) {
+      const current = await this.findOne(tenantId, id);
+      if (confirmedDate < startOfUtcDay(current.orderDate)) {
+        throw new UnprocessableEntityException(
+          'La fecha de entrega no puede ser anterior a la fecha de la orden',
+        );
+      }
+    }
     const order = await this.changeStatus(tenantId, id, {
       from: ['PENDING', 'SENT'],
       to: 'CONFIRMED',
       userId,
       action: 'purchase.order.confirmed',
       refusal: 'Solo se puede confirmar una orden en borrador o enviada',
+      extra: confirmedDate ? { expectedDate: confirmedDate } : undefined,
     });
     this.eventEmitter.emit('purchase.order.confirmed', {
       tenantId,
@@ -312,6 +336,7 @@ export class PurchaseOrdersService {
       reason?: string;
       action: string;
       refusal: string;
+      extra?: { expectedDate?: Date };
     },
   ) {
     const order = await this.findOne(tenantId, id);
@@ -328,6 +353,7 @@ export class PurchaseOrdersService {
         change.from,
         change.to,
         tx,
+        ...(change.extra ? [change.extra] : []),
       );
       if (count === 0) {
         throw new ConflictException(
@@ -354,7 +380,13 @@ export class PurchaseOrdersService {
       action: change.action,
       resourceId: id,
       before: { status: order.status },
-      after: { status: change.to, reason: change.reason },
+      after: {
+        status: change.to,
+        reason: change.reason,
+        ...(change.extra?.expectedDate
+          ? { expectedDate: change.extra.expectedDate }
+          : {}),
+      },
     } satisfies AuditLogEvent);
     return this.findOne(tenantId, id);
   }

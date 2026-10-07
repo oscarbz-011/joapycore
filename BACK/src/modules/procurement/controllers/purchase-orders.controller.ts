@@ -8,6 +8,7 @@ import type { JwtPayload } from '../../../common/types/jwt-payload.interface';
 import { PurchaseOrdersService } from '../services/purchase-orders.service';
 import { CreatePurchaseOrderDto } from '../dto/create-purchase-order.dto';
 import { CancelPurchaseOrderDto } from '../dto/cancel-purchase-order.dto';
+import { ConfirmPurchaseOrderDto } from '../dto/confirm-purchase-order.dto';
 import { EmailPurchaseOrderDto } from '../dto/email-purchase-order.dto';
 import { RegisterSupplierPaymentDto } from '../dto/register-supplier-payment.dto';
 import { SetOrderAdvanceDto } from '../dto/set-order-advance.dto';
@@ -146,7 +147,13 @@ export class PurchaseOrdersController {
     @CurrentTenant() tenantId: string,
     @CurrentUser() user: JwtPayload,
     @Param('id') id: string,
+    @Body() dto: ConfirmPurchaseOrderDto,
   ) {
-    return this.purchaseOrdersService.confirm(tenantId, id, user.sub);
+    return this.purchaseOrdersService.confirm(
+      tenantId,
+      id,
+      user.sub,
+      dto.expectedDate,
+    );
   }
 }

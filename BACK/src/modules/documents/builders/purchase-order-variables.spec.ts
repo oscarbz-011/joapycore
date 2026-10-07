@@ -10,7 +10,6 @@ function makeOrder(
     id: 'po-1',
     orderNumber: 'OC-26-000007',
     orderDate: new Date('2026-10-06T00:00:00.000Z'),
-    expectedDate: new Date('2026-10-20T00:00:00.000Z'),
     notes: 'Entregar por la mañana',
     tenant: {
       name: 'Mi Empresa',
@@ -72,7 +71,6 @@ describe('buildPurchaseOrderVariables', () => {
     const { variables } = buildPurchaseOrderVariables(makeOrder());
 
     expect(variables['orden.fecha']).toBe('06/10/2026');
-    expect(variables['orden.entregaEstimada']).toBe('20/10/2026');
   });
 
   it('describes the payment terms agreed with the supplier', () => {
@@ -145,7 +143,6 @@ describe('buildPurchaseOrderVariables', () => {
     const { variables } = buildPurchaseOrderVariables(
       makeOrder({
         orderNumber: null,
-        expectedDate: null,
         notes: null,
         tenant: {
           name: 'Mi Empresa',
@@ -161,8 +158,19 @@ describe('buildPurchaseOrderVariables', () => {
 
     expect(variables['tenant.razonSocial']).toBe('Mi Empresa');
     expect(variables['orden.numero']).toBe('—');
-    expect(variables['orden.entregaEstimada']).toBe('A convenir');
     expect(variables['orden.notas']).toBe('');
     expect(Object.values(variables).join(' ')).not.toMatch(/null|undefined/);
+  });
+
+  // La fecha estimada de entrega es un dato de control interno: el proveedor
+  // no la ve en la orden.
+  it('does not expose the expected delivery date to the document', () => {
+    const { variables } = buildPurchaseOrderVariables({
+      ...makeOrder(),
+      expectedDate: new Date('2026-10-20T00:00:00.000Z'),
+    } as never);
+
+    expect(Object.keys(variables)).not.toContain('orden.entregaEstimada');
+    expect(Object.values(variables)).not.toContain('20/10/2026');
   });
 });
