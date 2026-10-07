@@ -15,6 +15,7 @@ describe('orderActions', () => {
       confirm: true,
       cancel: true,
       receive: false,
+      delivery: true,
     });
   });
 
@@ -24,6 +25,7 @@ describe('orderActions', () => {
       confirm: true,
       cancel: true,
       receive: false,
+      delivery: true,
     });
   });
 
@@ -33,6 +35,7 @@ describe('orderActions', () => {
       confirm: false,
       cancel: true,
       receive: true,
+      delivery: true,
     });
   });
 
@@ -43,11 +46,13 @@ describe('orderActions', () => {
       confirm: false,
       cancel: false,
       receive: true,
+      delivery: true,
     });
   });
 
   it.each(['RECEIVED', 'CANCELLED'] as const)('offers nothing on %s', (status) => {
     expect(Object.values(orderActions(status))).toEqual([
+      false,
       false,
       false,
       false,
@@ -114,5 +119,19 @@ describe('delivery date on confirmation', () => {
     expect(confirmDeliveryError('2026-10-05', ORDER_DATE)).toMatch(
       /anterior a la fecha de la orden/,
     );
+  });
+});
+
+// El proveedor puede reprogramar una entrega ya confirmada.
+describe('changing the expected delivery', () => {
+  it('is offered while the order still waits for goods', () => {
+    for (const status of ['PENDING', 'SENT', 'CONFIRMED', 'PARTIALLY_RECEIVED'] as const) {
+      expect(orderActions(status).delivery).toBe(true);
+    }
+  });
+
+  it('is not offered once received or cancelled', () => {
+    expect(orderActions('RECEIVED').delivery).toBe(false);
+    expect(orderActions('CANCELLED').delivery).toBe(false);
   });
 });

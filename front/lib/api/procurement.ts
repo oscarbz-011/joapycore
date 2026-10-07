@@ -314,6 +314,12 @@ export const procurementApi = {
   createOrder: (dto: CreatePurchaseOrderPayload): Promise<PurchaseOrder> =>
     apiClient.post('/procurement/purchase-orders', dto).then((r) => r.data),
 
+  /** Cambia la entrega estimada (control interno); null = a convenir. */
+  setExpectedDate: (id: string, expectedDate: string | null): Promise<PurchaseOrder> =>
+    apiClient
+      .post(`/procurement/purchase-orders/${id}/expected-date`, { expectedDate })
+      .then((r) => r.data),
+
   /** `expectedDate` (AAAA-MM-DD): la entrega que confirma el proveedor; opcional. */
   confirmOrder: (id: string, expectedDate?: string): Promise<PurchaseOrder> =>
     apiClient

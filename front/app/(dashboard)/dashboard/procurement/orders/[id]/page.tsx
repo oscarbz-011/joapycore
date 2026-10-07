@@ -4,7 +4,7 @@ import { useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, FileText, Mail, PackageCheck } from 'lucide-react';
+import { ArrowLeft, CalendarClock, FileText, Mail, PackageCheck } from 'lucide-react';
 import { OrderAdvanceCard } from '@/components/procurement/order-advance-card';
 import {
   ReceiveModal,
@@ -37,7 +37,8 @@ import {
 } from '@/lib/purchase-order-status';
 import { cn } from '@/lib/utils';
 
-type StatusAction = 'send' | 'confirm' | 'cancel';
+// 'delivery' no cambia el estado: solo la entrega estimada.
+type StatusAction = 'send' | 'confirm' | 'cancel' | 'delivery';
 
 const ACTION_COPY: Record<StatusAction, { question: string; yes: string; busy: string }> = {
   send: {
@@ -49,6 +50,11 @@ const ACTION_COPY: Record<StatusAction, { question: string; yes: string; busy: s
     question: '¿El proveedor confirmó esta orden?',
     yes: 'Sí, confirmada',
     busy: 'Confirmando...',
+  },
+  delivery: {
+    question: 'Entrega estimada de esta orden.',
+    yes: 'Guardar fecha',
+    busy: 'Guardando...',
   },
   cancel: {
     question: 'Cancelar la orden. El motivo queda en el historial.',
@@ -147,7 +153,9 @@ export default function PurchaseOrderDetailPage() {
         ? procurementApi.sendOrder(id)
         : action === 'confirm'
           ? procurementApi.confirmOrder(id, confirmDate || undefined)
-          : procurementApi.cancelOrder(id, cancelReason.trim()),
+          : action === 'delivery'
+            ? procurementApi.setExpectedDate(id, confirmDate || null)
+            : procurementApi.cancelOrder(id, cancelReason.trim()),
     onSuccess: (updated) => {
       queryClient.setQueryData(['purchase-order', id], updated);
       void queryClient.invalidateQueries({ queryKey: ['purchase-orders'] });
@@ -188,7 +196,7 @@ export default function PurchaseOrderDetailPage() {
     const problem =
       pendingAction === 'cancel'
         ? cancelReasonError(cancelReason)
-        : pendingAction === 'confirm' && order
+        : (pendingAction === 'confirm' || pendingAction === 'delivery') && order
           ? confirmDeliveryError(confirmDate, order.orderDate)
           : null;
     setActionError(problem ?? '');
@@ -514,15 +522,32 @@ export default function PurchaseOrderDetailPage() {
                       Confirmada por el proveedor
                     </Button>
                   )}
+                  {actions.delivery && (
+                    <Button
+                      className="w-full"
+                      variant="outline"
+                      onClick={() => {
+                        setConfirmDate(orderCalendarDay(order.expectedDate));
+                        setPendingAction('delivery');
+                      }}
+                    >
+                      <CalendarClock size={15} />
+                      {order.expectedDate ? 'Cambiar entrega estimada' : 'Cargar entrega estimada'}
+                    </Button>
+                  )}
                 </>
               ) : (
                 <div className="rounded-xl border border-border bg-muted/20 px-4 py-3">
                   <p className="mb-2 text-xs text-muted-foreground">
                     {ACTION_COPY[pendingAction].question}
                   </p>
-                  {pendingAction === 'confirm' && (
+                  {(pendingAction === 'confirm' || pendingAction === 'delivery') && (
                     <div className="mb-2 space-y-1.5">
-                      <Label className="text-xs">Fecha de entrega que confirmó (opcional)</Label>
+                      <Label className="text-xs">
+                        {pendingAction === 'confirm'
+                          ? 'Fecha de entrega que confirmó (opcional)'
+                          : 'Nueva fecha de entrega (vacía = a convenir)'}
+                      </Label>
                       <DatePicker value={confirmDate} onChange={setConfirmDate} />
                       <p className="text-xs text-muted-foreground">
                         Para el seguimiento interno: no figura en el PDF de la orden.

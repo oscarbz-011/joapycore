@@ -19,6 +19,8 @@ export interface OrderActions {
   confirm: boolean;
   cancel: boolean;
   receive: boolean;
+  /** Cambiar la entrega estimada: mientras la orden espere mercadería. */
+  delivery: boolean;
 }
 
 // Mismas reglas que valida el backend (PurchaseOrdersService): acá solo
@@ -30,6 +32,7 @@ export function orderActions(status: PurchaseOrderStatus): OrderActions {
     confirm: status === 'PENDING' || status === 'SENT',
     cancel: status === 'PENDING' || status === 'SENT' || status === 'CONFIRMED',
     receive: status === 'CONFIRMED' || status === 'PARTIALLY_RECEIVED',
+    delivery: status !== 'RECEIVED' && status !== 'CANCELLED',
   };
 }
 
