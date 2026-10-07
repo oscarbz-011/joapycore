@@ -1,5 +1,6 @@
 import { apiClient } from './client';
 import type { PaymentMethod } from './payments';
+import type { SupplierInvoiceStatus } from '../supplier-invoice';
 
 export type APStatus = 'PENDING' | 'PARTIAL' | 'PAID' | 'CANCELLED';
 
@@ -35,6 +36,17 @@ export interface AccountsPayable {
     purchaseOrder: { id: string };
   };
   supplierPayments: SupplierPayment[];
+  /** Lo estimado al recibir, una vez que la factura fijó `amount`. */
+  estimatedAmount: number | null;
+  /** Factura del proveedor; sin ella `amount` es una estimación. */
+  supplierInvoice: {
+    id: string;
+    invoiceNumber: string;
+    invoiceDate: string;
+    status: SupplierInvoiceStatus;
+    total: number;
+    estimatedTotal: number;
+  } | null;
 }
 
 export interface RegisterSupplierPaymentPayload {

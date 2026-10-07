@@ -278,6 +278,13 @@ enum SupplierPaymentKind {
   ADVANCE_REFUND // Devolución de un anticipo por parte del proveedor
 }
 
+enum SupplierInvoiceStatus {
+  MATCHED // Coincide con lo recibido: se aplicó sola
+  PENDING_APPROVAL // Difiere de lo recibido: espera que alguien la apruebe
+  APPROVED // Se aceptó la diferencia
+  REJECTED // Se reclama al proveedor; las recepciones quedan libres
+}
+
 enum APStatus {
   PENDING
   PARTIAL
@@ -475,6 +482,7 @@ model Tenant {
   paymentRecords             PaymentRecord[]
   accountsPayable            AccountsPayable[]
   supplierPayments           SupplierPayment[]
+  supplierInvoices           SupplierInvoice[]
   areas                      Area[]
   positions                  Position[]
   employees                  Employee[]
@@ -669,6 +677,8 @@ model User {
   createdSupplierPayments        SupplierPayment[]
   reviewedDelinquencyReports     DelinquencyReport[]         @relation("DelinquencyReportReviewedBy")
   sentAppEmailMessages           AppEmailMessage[]           @relation("AppEmailSender")
+  supplierInvoicesCreated        SupplierInvoice[]           @relation("SupplierInvoiceCreatedBy")
+  supplierInvoicesReviewed       SupplierInvoice[]           @relation("SupplierInvoiceReviewedBy")
 
   @@index([tenantId])
   @@map("users")
@@ -1112,6 +1122,7 @@ model Supplier {
   productSuppliers ProductSupplier[]
   catalogItems     SupplierCatalogItem[]
   accountsPayable  AccountsPayable[]
+  supplierInvoices SupplierInvoice[]
 
   @@index([tenantId])
   @@map("suppliers")
@@ -1242,10 +1253,11 @@ model PurchaseReceiptItem {
   // payload del evento (mismo criterio defensivo que el resto del proyecto).
   serialNumbers       String[]  @default([]) @map("serial_numbers")
 
-  purchaseReceipt   PurchaseReceipt   @relation(fields: [purchaseReceiptId], references: [id])
-  purchaseOrderItem PurchaseOrderItem @relation(fields: [purchaseOrderItemId], references: [id])
-  product           Product           @relation(fields: [productId], references: [id])
+  purchaseReceipt   PurchaseReceipt       @relation(fields: [purchaseReceiptId], references: [id])
+  purchaseOrderItem PurchaseOrderItem     @relation(fields: [purchaseOrderItemId], references: [id])
+  product           Product               @relation(fields: [productId], references: [id])
   productUnits      ProductUnit[]
+  invoiceItems      SupplierInvoiceItem[]
 
   @@index([purchaseReceiptId])
   @@map("purchase_receipt_items")
@@ -1753,19 +1765,90 @@ model AccountsPayable {
   // Parte de paidAmount que vino de un anticipo de la orden, no de un pago
   // hecho sobre esta cuenta.
   advanceApplied    Decimal   @default(0) @map("advance_applied") @db.Decimal(12, 2)
+  // Factura del proveedor que cubre esta cuenta. Sin factura, `amount` es
+  // una estimación (cantidad recibida × costo de la orden).
+  supplierInvoiceId String?   @map("supplier_invoice_id")
+  // Lo estimado al recibir, una vez que la factura fijó `amount`.
+  estimatedAmount   Decimal?  @map("estimated_amount") @db.Decimal(12, 2)
   status            APStatus  @default(PENDING)
   dueDate           DateTime? @map("due_date")
   createdAt         DateTime  @default(now()) @map("created_at")
   updatedAt         DateTime  @updatedAt @map("updated_at")
 
-  tenant           Tenant            @relation(fields: [tenantId], references: [id])
-  purchaseReceipt  PurchaseReceipt   @relation(fields: [purchaseReceiptId], references: [id])
-  supplier         Supplier          @relation(fields: [supplierId], references: [id])
+  tenant           Tenant                @relation(fields: [tenantId], references: [id])
+  purchaseReceipt  PurchaseReceipt       @relation(fields: [purchaseReceiptId], references: [id])
+  supplier         Supplier              @relation(fields: [supplierId], references: [id])
   supplierPayments SupplierPayment[]
+  supplierInvoice  SupplierInvoice?      @relation(fields: [supplierInvoiceId], references: [id])
+  invoiceItems     SupplierInvoiceItem[]
 
   @@index([tenantId, status])
   @@index([supplierId])
+  @@index([supplierInvoiceId])
   @@map("accounts_payable")
+}
+
+// Factura del proveedor. Cubre una o varias recepciones (una cuenta por pagar
+// cada una) y fija cuánto se debe de verdad: hasta que llega, la cuenta por
+// pagar es una estimación.
+model SupplierInvoice {
+  id             String                @id @default(uuid())
+  tenantId       String                @map("tenant_id")
+  supplierId     String                @map("supplier_id")
+  invoiceNumber  String                @map("invoice_number")
+  timbrado       String?
+  // Día de calendario (medianoche UTC). El plazo de pago corre desde acá.
+  invoiceDate    DateTime              @map("invoice_date")
+  subtotal       Decimal               @db.Decimal(12, 2)
+  shippingAmount Decimal               @default(0) @map("shipping_amount") @db.Decimal(12, 2)
+  discountAmount Decimal               @default(0) @map("discount_amount") @db.Decimal(12, 2)
+  total          Decimal               @db.Decimal(12, 2)
+  // Lo que se había estimado al recibir, al momento de cargar la factura.
+  estimatedTotal Decimal               @map("estimated_total") @db.Decimal(12, 2)
+  status         SupplierInvoiceStatus
+  notes          String?
+  // Factura escaneada o en PDF, tal como la mandó el proveedor.
+  fileId         String?               @map("file_id")
+  // Por qué se aprobó la diferencia, o qué se reclama al rechazarla.
+  reviewNote     String?               @map("review_note")
+  reviewedById   String?               @map("reviewed_by_id")
+  reviewedAt     DateTime?             @map("reviewed_at")
+  createdById    String?               @map("created_by_id")
+  createdAt      DateTime              @default(now()) @map("created_at")
+
+  tenant     Tenant                @relation(fields: [tenantId], references: [id])
+  supplier   Supplier              @relation(fields: [supplierId], references: [id])
+  createdBy  User?                 @relation("SupplierInvoiceCreatedBy", fields: [createdById], references: [id])
+  reviewedBy User?                 @relation("SupplierInvoiceReviewedBy", fields: [reviewedById], references: [id])
+  items      SupplierInvoiceItem[]
+  payables   AccountsPayable[]
+
+  // El número no se repite por proveedor entre facturas vigentes; la
+  // unicidad (que excluye las rechazadas) está en la migración.
+  @@index([tenantId, supplierId, invoiceNumber])
+  @@index([tenantId, status])
+  @@map("supplier_invoices")
+}
+
+model SupplierInvoiceItem {
+  id                    String  @id @default(uuid())
+  supplierInvoiceId     String  @map("supplier_invoice_id")
+  purchaseReceiptItemId String  @map("purchase_receipt_item_id")
+  accountsPayableId     String  @map("accounts_payable_id")
+  // Lo que dice la factura.
+  quantity              Int
+  unitCost              Decimal @map("unit_cost") @db.Decimal(12, 2)
+  // Lo que se había recibido, tal como estaba al cargar la factura.
+  receivedQuantity      Int     @map("received_quantity")
+  receivedUnitCost      Decimal @map("received_unit_cost") @db.Decimal(12, 2)
+
+  supplierInvoice     SupplierInvoice     @relation(fields: [supplierInvoiceId], references: [id], onDelete: Cascade)
+  purchaseReceiptItem PurchaseReceiptItem @relation(fields: [purchaseReceiptItemId], references: [id])
+  accountsPayable     AccountsPayable     @relation(fields: [accountsPayableId], references: [id])
+
+  @@index([supplierInvoiceId])
+  @@index([purchaseReceiptItemId])
+  @@map("supplier_invoice_items")
 }
 
 model SupplierPayment {

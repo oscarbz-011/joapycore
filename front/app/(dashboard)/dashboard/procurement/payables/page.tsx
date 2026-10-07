@@ -8,7 +8,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { NumericInput } from '../../../../../components/numeric-input';
-import { X, AlertTriangle } from 'lucide-react';
+import { X, AlertTriangle, Clock } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
   payablesApi,
@@ -19,6 +19,12 @@ import {
 import { PAYMENT_METHOD_LABELS, type PaymentMethod } from '../../../../../lib/api/payments';
 import { apUrgency, type ApUrgency, type ApUrgencyLevel } from '../../../../../lib/ap-urgency';
 import { formatDatePY, todayISODate } from '../../../../../lib/date';
+import {
+  PAYABLE_INVOICE_LABEL,
+  payBeforeInvoiceWarning,
+  payableInvoiceState,
+  type PayableInvoiceState,
+} from '@/lib/supplier-invoice';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -62,7 +68,7 @@ type RowAccent = 'destructive' | 'warn' | null;
 
 function accentFor(level: ApUrgencyLevel): RowAccent {
   if (level === 'overdue') return 'destructive';
-  if (level === 'pending') return 'warn';
+  if (level === 'pending' || level === 'due-today') return 'warn';
   return null;
 }
 
@@ -88,12 +94,29 @@ function APStatusBadge({ status, urgency }: { status: APStatus; urgency?: ApUrge
       </Badge>
     );
   }
+  // El día del vencimiento la cuenta sigue en fecha: se avisa, no es mora.
+  if (urgency?.level === 'due-today') {
+    return (
+      <Badge variant="outline" className="gap-1 whitespace-nowrap bg-warn-subtle text-warn border-warn/30">
+        <Clock size={10} />
+        Vence hoy
+      </Badge>
+    );
+  }
   return (
     <Badge variant={status === 'CANCELLED' ? 'destructive' : 'outline'} className={AP_STATUS_CLASS[status]}>
       {AP_STATUS_LABELS[status]}
     </Badge>
   );
 }
+
+const INVOICE_STATE_CLASS: Record<PayableInvoiceState, string> = {
+  estimated: 'text-muted-foreground',
+  pending: 'bg-warn-subtle text-warn border-warn/30',
+  invoiced: 'bg-accent-subtle text-accent-on border-accent-on/20',
+};
+
+const INVOICES_PATH = '/dashboard/procurement/payables';
 
 // ── Register payment modal ─────────────────────────────────────────────────────
 
@@ -116,6 +139,7 @@ function RegisterPaymentModal({
   const [reference, setReference] = useState('');
   const [notes, setNotes] = useState('');
   const [error, setError] = useState('');
+  const invoiceWarning = payBeforeInvoiceWarning(payableInvoiceState(ap));
 
   const mutation = useMutation({
     mutationFn: () => {
@@ -153,6 +177,14 @@ function RegisterPaymentModal({
           onSubmit={(e) => { e.preventDefault(); setError(''); mutation.mutate(); }}
           className="px-6 py-5 space-y-4"
         >
+          {invoiceWarning && (
+            <p
+              role="status"
+              className="rounded-lg border border-warn/30 bg-warn-subtle px-4 py-3 text-sm text-warn"
+            >
+              {invoiceWarning}
+            </p>
+          )}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <Label>Monto (PYG) *</Label>
@@ -223,6 +255,7 @@ function APDetailPanel({
   const urgency   = apUrgency(ap);
   const remaining = Number(ap.amount) - Number(ap.paidAmount);
   const pct       = Number(ap.amount) > 0 ? (Number(ap.paidAmount) / Number(ap.amount)) * 100 : 0;
+  const invoiceState = payableInvoiceState(ap);
 
   return (
     <>
@@ -254,6 +287,47 @@ function APDetailPanel({
             </div>
 
             <div className="border-b border-border px-5 py-4">
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/60 mb-3">Factura del proveedor</p>
+              {invoiceState === 'estimated' ? (
+                <div className="space-y-2">
+                  <p className="text-sm text-muted-foreground">
+                    Sin factura: el total es una estimación de lo recibido.
+                  </p>
+                  {ap.status !== 'CANCELLED' && (
+                    <RequirePermission permission="procurement:payables:register">
+                      <Link
+                        href={`${INVOICES_PATH}/${ap.id}/invoice`}
+                        className="text-sm font-medium text-foreground underline underline-offset-2"
+                      >
+                        Cargar la factura del proveedor
+                      </Link>
+                    </RequirePermission>
+                  )}
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-mono text-sm text-foreground">{ap.supplierInvoice?.invoiceNumber}</span>
+                    <Badge variant="outline" className={INVOICE_STATE_CLASS[invoiceState]}>
+                      {PAYABLE_INVOICE_LABEL[invoiceState]}
+                    </Badge>
+                  </div>
+                  {ap.estimatedAmount !== null && Number(ap.estimatedAmount) !== Number(ap.amount) && (
+                    <p className="text-xs text-muted-foreground">
+                      Estimado al recibir: {formatPrice(Number(ap.estimatedAmount))}
+                    </p>
+                  )}
+                  <Link
+                    href={`${INVOICES_PATH}/invoices/${ap.supplierInvoice?.id}`}
+                    className="text-sm font-medium text-foreground underline underline-offset-2"
+                  >
+                    {invoiceState === 'pending' ? 'Revisar la diferencia' : 'Ver la factura'}
+                  </Link>
+                </div>
+              )}
+            </div>
+
+            <div className="border-b border-border px-5 py-4">
               <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/60 mb-3">Saldo</p>
               <div className="space-y-2 text-sm">
                 <div className="flex justify-between">
@@ -282,6 +356,7 @@ function APDetailPanel({
                 <p className={cn('text-xs mt-2', urgency.level === 'overdue' ? 'font-medium text-destructive' : 'text-muted-foreground/60')}>
                   Vencimiento: {formatDatePY(ap.dueDate, 'utc')}
                   {urgency.level === 'overdue' && ` · ${urgency.days} ${urgency.days === 1 ? 'día' : 'días'} de mora`}
+                  {urgency.level === 'due-today' && ' · vence hoy'}
                 </p>
               )}
             </div>
@@ -405,6 +480,7 @@ export default function PayablesPage() {
                   <th className="px-4 py-3 text-left">Recepción</th>
                   <th className="px-4 py-3 text-left">Vencimiento</th>
                   <th className="px-4 py-3 text-left">Estado</th>
+                  <th className="px-4 py-3 text-left">Factura</th>
                   <th className="px-4 py-3 text-right">Total</th>
                   <th className="px-4 py-3 text-right">Pagado</th>
                   <th className="px-4 py-3 text-right">Pendiente</th>
@@ -415,6 +491,7 @@ export default function PayablesPage() {
                   const urgency = apUrgency(ap);
                   const accent = accentFor(urgency.level);
                   const pending = Number(ap.amount) - Number(ap.paidAmount);
+                  const invoiceState = payableInvoiceState(ap);
                   return (
                     <tr key={ap.id} onClick={() => openPanel(ap)} className="cursor-pointer hover:bg-muted/20 transition-colors">
                       <td className={cn('px-4 py-3', accent && cn('border-l-[3px]', ACCENT_BORDER[accent]))}>
@@ -430,6 +507,17 @@ export default function PayablesPage() {
                         {formatDatePY(ap.dueDate, 'utc')}
                       </td>
                       <td className="px-4 py-3"><APStatusBadge status={ap.status} urgency={urgency} /></td>
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        {invoiceState === 'estimated' ? (
+                          <span className="text-xs text-muted-foreground">Sin factura</span>
+                        ) : (
+                          <Badge variant="outline" className={INVOICE_STATE_CLASS[invoiceState]}>
+                            {invoiceState === 'pending'
+                              ? PAYABLE_INVOICE_LABEL.pending
+                              : ap.supplierInvoice?.invoiceNumber}
+                          </Badge>
+                        )}
+                      </td>
                       <td className="px-4 py-3 text-right font-mono text-muted-foreground">{formatPrice(Number(ap.amount))}</td>
                       <td className="px-4 py-3 text-right font-mono text-emerald-600">{formatPrice(Number(ap.paidAmount))}</td>
                       <td className="px-4 py-3 text-right font-mono font-medium text-foreground">{formatPrice(pending)}</td>

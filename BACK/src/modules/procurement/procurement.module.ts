@@ -7,6 +7,9 @@ import { PurchaseOrdersController } from './controllers/purchase-orders.controll
 import { PurchaseReceiptsController } from './controllers/purchase-receipts.controller';
 import { SuppliersController } from './controllers/suppliers.controller';
 import { PayablesController } from './controllers/payables.controller';
+import { SupplierInvoicesController } from './controllers/supplier-invoices.controller';
+import { SupplierInvoicesService } from './services/supplier-invoices.service';
+import { SupplierInvoicesRepository } from './repositories/supplier-invoices.repository';
 import { SupplierCatalogController } from './controllers/supplier-catalog.controller';
 import { PurchaseOrdersRepository } from './repositories/purchase-orders.repository';
 import { PurchaseReceiptsRepository } from './repositories/purchase-receipts.repository';
@@ -35,6 +38,7 @@ import { ProcurementOnReceiptListener } from './events/procurement-on-receipt.li
     PurchaseOrdersController,
     PurchaseReceiptsController,
     PayablesController,
+    SupplierInvoicesController,
     SupplierCatalogController,
   ],
   providers: [
@@ -42,6 +46,8 @@ import { ProcurementOnReceiptListener } from './events/procurement-on-receipt.li
     PurchaseOrdersService,
     PurchaseOrderDocumentService,
     PurchaseOrderAdvancesService,
+    SupplierInvoicesService,
+    SupplierInvoicesRepository,
     PurchaseReceiptsService,
     PayablesService,
     SuppliersRepository,
