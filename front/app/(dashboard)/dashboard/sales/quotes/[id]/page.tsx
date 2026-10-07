@@ -123,7 +123,7 @@ export default function QuoteDetailPage() {
   }
 
   return (
-    <div className="mx-auto max-w-2xl">
+    <div>
       <div className="mb-6 flex items-center gap-3">
         <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => router.push('/dashboard/sales/quotes')}>
           <ArrowLeft size={18} />
@@ -137,6 +137,8 @@ export default function QuoteDetailPage() {
         </Badge>
       </div>
 
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
+      <div className="min-w-0 space-y-6">
       <div className="rounded-xl border border-border bg-card overflow-hidden">
         <div className="border-b border-border px-5 py-4">
           <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/60 mb-1">Cliente</p>
@@ -174,14 +176,8 @@ export default function QuoteDetailPage() {
         </div>
       </div>
 
-      {(convertMutation.isError || cancelMutation.isError || pdfMutation.isError) && (
-        <p role="alert" className="mt-3 text-sm text-destructive">
-          {apiErrorMessage((convertMutation.error ?? cancelMutation.error ?? pdfMutation.error), 'Ocurrió un error')}
-        </p>
-      )}
-
       {isQuoted && canManage && isProspect && choosingCustomer && (
-        <div className="mt-4 space-y-3 rounded-xl border border-border bg-card p-5">
+        <div className="space-y-3 rounded-xl border border-border bg-card p-5">
           <div>
             <p className="text-sm font-medium text-foreground">
               Registrá a {quote.prospectName} como cliente para convertirlo en pedido
@@ -215,7 +211,21 @@ export default function QuoteDetailPage() {
         </div>
       )}
 
-      <div className="mt-4 flex flex-wrap gap-2">
+      </div>
+
+      {/* Total y acciones, siempre a la vista */}
+      <div className="lg:sticky lg:top-6 lg:self-start">
+      <div className="space-y-3 rounded-xl border border-border bg-card p-5">
+        <div>
+          <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Total</p>
+          <p className="mt-1 font-mono text-2xl font-bold tabular-nums text-foreground">{formatPrice(total)}</p>
+        </div>
+        {(convertMutation.isError || cancelMutation.isError || pdfMutation.isError) && (
+          <p role="alert" className="text-sm text-destructive">
+            {apiErrorMessage((convertMutation.error ?? cancelMutation.error ?? pdfMutation.error), 'Ocurrió un error')}
+          </p>
+        )}
+      <div className="flex flex-col gap-2 [&>button]:w-full">
         {quote.quotePdfFileId && (
           <Button variant="outline" className="gap-1.5" onClick={() => void openPdf(quote.quotePdfFileId!)}>
             <Download size={15} /> Descargar PDF
@@ -254,6 +264,9 @@ export default function QuoteDetailPage() {
             </Button>
           </>
         )}
+      </div>
+      </div>
+      </div>
       </div>
     </div>
   );

@@ -15,6 +15,7 @@ import { useAuth } from '../../../../../../lib/auth-context';
 import { NumericInput } from '../../../../../../components/numeric-input';
 import { SearchSelect } from '../../../components/search-select';
 import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -235,7 +236,7 @@ export default function NewQuotePage() {
   }
 
   return (
-    <div className="mx-auto max-w-2xl">
+    <div>
       <div className="mb-6 flex items-center gap-3">
         <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => router.push('/dashboard/sales/quotes')}>
           <ArrowLeft size={18} />
@@ -257,11 +258,13 @@ export default function NewQuotePage() {
           if (lines.length === 0) { setError('Agregá al menos un ítem'); return; }
           mutation.mutate();
         }}
-        className="space-y-5"
+        className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]"
       >
-        <div className="rounded-xl border border-border bg-card p-5 space-y-5">
+        <div className="min-w-0 space-y-6">
+        <Card className="gap-4 p-5">
+          <h2 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Para quién es</h2>
           <Tabs value={partyMode} onValueChange={(v) => setPartyMode(v as 'customer' | 'prospect')}>
-            <TabsList className="w-full">
+            <TabsList className="w-full sm:w-auto">
               <TabsTrigger value="customer" className="flex-1">Cliente registrado</TabsTrigger>
               <TabsTrigger value="prospect" className="flex-1">Persona o empresa sin registrar</TabsTrigger>
             </TabsList>
@@ -281,7 +284,7 @@ export default function NewQuotePage() {
                   onChange={(e) => setProspect((p) => ({ ...p, name: e.target.value }))}
                 />
               </div>
-              <div className="grid gap-3 sm:grid-cols-2">
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                 <div>
                   <Label htmlFor="prospect-document" className="mb-1 text-xs">CI o RUC</Label>
                   <Input
@@ -342,10 +345,11 @@ export default function NewQuotePage() {
             />
           </div>
 
+        </Card>
+
+        <Card className="gap-4 p-5">
           <div>
-            <div className="mb-2 flex items-center justify-between">
-              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/60">Ítems</p>
-            </div>
+            <h2 className="mb-3 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Ítems</h2>
             <div className="space-y-2">
               {lines.map((line, idx) => (
                 <QuoteLineRow
@@ -366,22 +370,45 @@ export default function NewQuotePage() {
             </button>
           </div>
 
-          <div className="flex items-center justify-between border-t border-border pt-4">
-            <span className="text-sm font-medium text-muted-foreground">Total estimado</span>
-            <span className="text-lg font-semibold text-foreground">{formatPrice(total)}</span>
-          </div>
+        </Card>
 
-          <div>
-            <Label className="mb-1 text-xs">Notas (opcional)</Label>
-            <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Observaciones para el cliente..." rows={2} />
-          </div>
+        <Card className="gap-3 p-5">
+          <h2 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Notas</h2>
+          <Textarea
+            aria-label="Notas para el cliente"
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            placeholder="Observaciones para el cliente (opcional)..."
+            rows={3}
+          />
+        </Card>
         </div>
 
-        {error && <p className="text-sm text-destructive">{error}</p>}
-
-        <div className="flex gap-2 justify-end">
-          <Button type="button" variant="outline" onClick={() => router.push('/dashboard/sales/quotes')}>Cancelar</Button>
-          <Button type="submit" disabled={mutation.isPending}>{mutation.isPending ? 'Guardando...' : 'Crear presupuesto'}</Button>
+        {/* Resumen y acciones, siempre a la vista */}
+        <div className="lg:sticky lg:top-6 lg:self-start">
+          <Card className="gap-3 p-5">
+            <h2 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Resumen</h2>
+            <dl className="space-y-1.5 text-sm">
+              <div className="flex justify-between gap-3">
+                <dt className="text-muted-foreground">Ítems</dt>
+                <dd className="tabular-nums text-foreground">{lines.length}</dd>
+              </div>
+              <div className="flex items-baseline justify-between gap-3 border-t border-border pt-2">
+                <dt className="font-semibold text-foreground">Total estimado</dt>
+                <dd className="font-mono text-lg font-bold tabular-nums text-foreground">{formatPrice(total)}</dd>
+              </div>
+            </dl>
+            <p className="text-xs text-muted-foreground">
+              No compromete stock. Al guardarlo se genera el PDF del presupuesto.
+            </p>
+            {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
+            <Button type="submit" className="w-full" disabled={mutation.isPending}>
+              {mutation.isPending ? 'Guardando...' : 'Crear presupuesto'}
+            </Button>
+            <Button type="button" variant="outline" className="w-full" onClick={() => router.push('/dashboard/sales/quotes')}>
+              Cancelar
+            </Button>
+          </Card>
         </div>
       </form>
     </div>
