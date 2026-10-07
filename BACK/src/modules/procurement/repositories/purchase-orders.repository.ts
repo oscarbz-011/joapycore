@@ -31,8 +31,38 @@ export class PurchaseOrdersRepository {
             productUnits: true,
           },
         },
+        statusChanges: {
+          orderBy: { createdAt: 'asc' },
+          include: {
+            changedBy: {
+              select: { id: true, firstName: true, lastName: true },
+            },
+          },
+        },
       },
     });
+  }
+
+  // Cambia el estado solo si la orden sigue en uno de los estados de partida:
+  // dos usuarios que la mueven a la vez no se pisan (el segundo recibe 0).
+  transition(
+    tenantId: string,
+    id: string,
+    from: PurchaseOrderStatus[],
+    to: PurchaseOrderStatus,
+    client: PrismaClientOrTx = this.prisma,
+  ) {
+    return client.purchaseOrder.updateMany({
+      where: { tenantId, id, status: { in: from } },
+      data: { status: to },
+    });
+  }
+
+  recordStatusChange(
+    data: Prisma.PurchaseOrderStatusChangeUncheckedCreateInput,
+    client: PrismaClientOrTx = this.prisma,
+  ) {
+    return client.purchaseOrderStatusChange.create({ data });
   }
 
   // Estado de las fichas que se van a comprar — se valida en el servicio

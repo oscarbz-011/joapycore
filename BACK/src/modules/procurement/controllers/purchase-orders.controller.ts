@@ -7,6 +7,7 @@ import { RequiredModule } from '../../../common/decorators/required-module.decor
 import type { JwtPayload } from '../../../common/types/jwt-payload.interface';
 import { PurchaseOrdersService } from '../services/purchase-orders.service';
 import { CreatePurchaseOrderDto } from '../dto/create-purchase-order.dto';
+import { CancelPurchaseOrderDto } from '../dto/cancel-purchase-order.dto';
 
 @ApiTags('Procurement')
 @ApiBearerAuth()
@@ -38,6 +39,34 @@ export class PurchaseOrdersController {
     @Body() dto: CreatePurchaseOrderDto,
   ) {
     return this.purchaseOrdersService.create(tenantId, user.sub, dto);
+  }
+
+  @Post(':id/send')
+  @Permissions('procurement:update')
+  @ApiOperation({ summary: 'Marcar la orden como enviada al proveedor' })
+  send(
+    @CurrentTenant() tenantId: string,
+    @CurrentUser() user: JwtPayload,
+    @Param('id') id: string,
+  ) {
+    return this.purchaseOrdersService.send(tenantId, id, user.sub);
+  }
+
+  @Post(':id/cancel')
+  @Permissions('procurement:update')
+  @ApiOperation({ summary: 'Cancelar una orden sin mercadería recibida' })
+  cancel(
+    @CurrentTenant() tenantId: string,
+    @CurrentUser() user: JwtPayload,
+    @Param('id') id: string,
+    @Body() dto: CancelPurchaseOrderDto,
+  ) {
+    return this.purchaseOrdersService.cancel(
+      tenantId,
+      id,
+      dto.reason,
+      user.sub,
+    );
   }
 
   @Post(':id/confirm')

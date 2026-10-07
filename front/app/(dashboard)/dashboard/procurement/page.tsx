@@ -10,6 +10,13 @@ import { useSearchParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { BookOpen, Plus, X, Trash2, AlertTriangle } from 'lucide-react';
 import { CatalogItemPicker } from '@/components/procurement/catalog-item-picker';
+import {
+  PURCHASE_ORDER_STATUSES,
+  PURCHASE_ORDER_STATUS_LABEL,
+  cancelReasonError,
+  historyEntryLabel,
+  orderActions,
+} from '@/lib/purchase-order-status';
 import { localISODate } from '@/lib/date';
 import {
   emptyLine,
@@ -78,11 +85,12 @@ const TEXTAREA_CLS = 'w-full min-w-0 rounded-2xl border border-transparent bg-in
 // ── Status badge ───────────────────────────────────────────────────────────────
 
 const STATUS_MAP: Record<PurchaseOrderStatus, { label: string; className?: string; destructive?: boolean }> = {
-  PENDING:              { label: 'Borrador',          className: 'bg-muted/30 text-muted-foreground border-border' },
-  CONFIRMED:            { label: 'Confirmada',         className: 'bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-950 dark:text-sky-300 dark:border-sky-800' },
-  PARTIALLY_RECEIVED:   { label: 'Recepción parcial',  className: 'bg-warn-subtle text-warn border-warn/30' },
-  RECEIVED:             { label: 'Recibida',           className: 'bg-accent-subtle text-accent-on border-accent-on/20' },
-  CANCELLED:            { label: 'Cancelada',          destructive: true },
+  PENDING:              { label: PURCHASE_ORDER_STATUS_LABEL.PENDING,            className: 'bg-muted/30 text-muted-foreground border-border' },
+  SENT:                 { label: PURCHASE_ORDER_STATUS_LABEL.SENT,               className: 'bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-950 dark:text-violet-300 dark:border-violet-800' },
+  CONFIRMED:            { label: PURCHASE_ORDER_STATUS_LABEL.CONFIRMED,          className: 'bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-950 dark:text-sky-300 dark:border-sky-800' },
+  PARTIALLY_RECEIVED:   { label: PURCHASE_ORDER_STATUS_LABEL.PARTIALLY_RECEIVED, className: 'bg-warn-subtle text-warn border-warn/30' },
+  RECEIVED:             { label: PURCHASE_ORDER_STATUS_LABEL.RECEIVED,           className: 'bg-accent-subtle text-accent-on border-accent-on/20' },
+  CANCELLED:            { label: PURCHASE_ORDER_STATUS_LABEL.CANCELLED,          destructive: true },
 };
 
 function StatusBadge({ status, deliveryOverdueDays }: { status: PurchaseOrderStatus; deliveryOverdueDays?: number }) {
@@ -624,8 +632,28 @@ function ReceiveModal({
 
 // ── Order detail panel ─────────────────────────────────────────────────────────
 
+type StatusAction = 'send' | 'confirm' | 'cancel';
+
+const ACTION_COPY: Record<StatusAction, { question: string; yes: string; busy: string }> = {
+  send: {
+    question: '¿Marcar la orden como enviada al proveedor?',
+    yes: 'Sí, enviada',
+    busy: 'Guardando...',
+  },
+  confirm: {
+    question: '¿El proveedor confirmó esta orden?',
+    yes: 'Sí, confirmada',
+    busy: 'Confirmando...',
+  },
+  cancel: {
+    question: 'Cancelar la orden. El motivo queda en el historial.',
+    yes: 'Cancelar la orden',
+    busy: 'Cancelando...',
+  },
+};
+
 function OrderDetailPanel({
-  order,
+  order: listed,
   open,
   onOpenChange,
 }: {
@@ -635,25 +663,62 @@ function OrderDetailPanel({
 }) {
   const queryClient = useQueryClient();
   const [showReceive, setShowReceive] = useState(false);
-  const [confirmAction, setConfirmAction] = useState<'confirm' | null>(null);
+  const [pendingAction, setPendingAction] = useState<StatusAction | null>(null);
+  const [cancelReason, setCancelReason] = useState('');
+  const [actionError, setActionError] = useState('');
+
+  // La orden que llega por props es la del listado: no trae el historial y
+  // queda vieja después de un cambio de estado. El detalle manda cuando está.
+  const { data: detail } = useQuery({
+    queryKey: ['purchase-order', listed?.id],
+    queryFn: () => procurementApi.getOrder(listed!.id),
+    enabled: !!listed && open,
+  });
+  const order = listed && detail?.id === listed.id ? detail : listed;
 
   const { data: receipts = [] } = useQuery({
     queryKey: ['purchase-receipts', order?.id],
     queryFn: () => procurementApi.listReceipts(order!.id),
-    enabled: !!order && order.status !== 'PENDING',
+    enabled: !!order && order.status !== 'PENDING' && order.status !== 'SENT',
   });
 
-  const confirmMutation = useMutation({
-    mutationFn: () => procurementApi.confirmOrder(order!.id),
-    onSuccess: () => {
+  function closeAction() {
+    setPendingAction(null);
+    setCancelReason('');
+    setActionError('');
+  }
+
+  const statusMutation = useMutation({
+    mutationFn: (action: StatusAction) =>
+      action === 'send'
+        ? procurementApi.sendOrder(order!.id)
+        : action === 'confirm'
+          ? procurementApi.confirmOrder(order!.id)
+          : procurementApi.cancelOrder(order!.id, cancelReason.trim()),
+    onSuccess: (updated) => {
+      queryClient.setQueryData(['purchase-order', updated.id], updated);
       void queryClient.invalidateQueries({ queryKey: ['purchase-orders'] });
-      setConfirmAction(null);
-      onOpenChange(false);
+      closeAction();
+    },
+    onError: (err) => {
+      setActionError(apiErrorMessage(err, 'No se pudo cambiar el estado de la orden'));
+      // Si otro usuario la movió, lo que se ve ya no es cierto.
+      void queryClient.invalidateQueries({ queryKey: ['purchase-order', order?.id] });
+      void queryClient.invalidateQueries({ queryKey: ['purchase-orders'] });
     },
   });
 
-  const canConfirm = order?.status === 'PENDING';
-  const canReceive = order?.status === 'CONFIRMED' || order?.status === 'PARTIALLY_RECEIVED';
+  function runAction() {
+    if (!pendingAction) return;
+    const problem = pendingAction === 'cancel' ? cancelReasonError(cancelReason) : null;
+    setActionError(problem ?? '');
+    if (!problem) statusMutation.mutate(pendingAction);
+  }
+
+  const actions = order
+    ? orderActions(order.status)
+    : { send: false, confirm: false, cancel: false, receive: false };
+  const canReceive = actions.receive;
 
   return (
     <>
@@ -733,7 +798,7 @@ function OrderDetailPanel({
                               <p className="text-xs text-muted-foreground/60">Recibido: {received}/{total}</p>
                             </div>
                           </div>
-                          {order.status !== 'PENDING' && (
+                          {order.status !== 'PENDING' && order.status !== 'SENT' && (
                             <div className="mt-1.5 h-1.5 w-full rounded-full bg-muted/20">
                               <div className="h-1.5 rounded-full bg-emerald-500 transition-all" style={{ width: `${pct}%` }} />
                             </div>
@@ -785,39 +850,101 @@ function OrderDetailPanel({
                     <p className="text-sm text-muted-foreground">{order.notes}</p>
                   </div>
                 )}
+
+                {order.statusChanges && order.statusChanges.length > 0 && (
+                  <div className="px-5 py-4">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/60 mb-3">Historial</p>
+                    <ol className="space-y-3">
+                      {order.statusChanges.map((change) => (
+                        <li key={change.id} className="relative pl-4 before:absolute before:left-0 before:top-1.5 before:h-1.5 before:w-1.5 before:rounded-full before:bg-primary">
+                          <p className="text-sm font-medium text-foreground">{historyEntryLabel(change)}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {new Date(change.createdAt).toLocaleString('es-PY', {
+                              day: '2-digit', month: '2-digit', year: 'numeric',
+                              hour: '2-digit', minute: '2-digit',
+                              timeZone: 'America/Asuncion',
+                            })}
+                            {change.changedBy && ` · ${change.changedBy.firstName} ${change.changedBy.lastName}`}
+                          </p>
+                          {change.reason && (
+                            <p className="mt-0.5 text-xs text-muted-foreground">Motivo: {change.reason}</p>
+                          )}
+                        </li>
+                      ))}
+                    </ol>
+                  </div>
+                )}
               </div>
 
               {/* Actions */}
               <div className="px-5 py-4 space-y-2 border-t border-border shrink-0">
                 <RequirePermission permission="procurement:update">
-                  {canConfirm && confirmAction === null && (
-                    <Button className="w-full" onClick={() => setConfirmAction('confirm')}>
-                      Confirmar orden
-                    </Button>
+                  {pendingAction === null ? (
+                    <>
+                      {actions.send && (
+                        <Button className="w-full" onClick={() => setPendingAction('send')}>
+                          Marcar como enviada al proveedor
+                        </Button>
+                      )}
+                      {actions.confirm && (
+                        <Button
+                          className="w-full"
+                          variant={actions.send ? 'outline' : 'default'}
+                          onClick={() => setPendingAction('confirm')}
+                        >
+                          Confirmada por el proveedor
+                        </Button>
+                      )}
+                    </>
+                  ) : (
+                    <div className="rounded-xl border border-border bg-muted/20 px-4 py-3">
+                      <p className="text-xs text-muted-foreground mb-2">{ACTION_COPY[pendingAction].question}</p>
+                      {pendingAction === 'cancel' && (
+                        <textarea
+                          className={cn(TEXTAREA_CLS, 'mb-2')}
+                          rows={2}
+                          autoFocus
+                          aria-label="Motivo de la cancelación"
+                          placeholder="Motivo de la cancelación..."
+                          value={cancelReason}
+                          onChange={(e) => setCancelReason(e.target.value)}
+                        />
+                      )}
+                      {actionError && (
+                        <p role="alert" className="mb-2 text-xs text-destructive">{actionError}</p>
+                      )}
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          className="flex-1"
+                          variant={pendingAction === 'cancel' ? 'destructive' : 'default'}
+                          onClick={runAction}
+                          disabled={statusMutation.isPending}
+                        >
+                          {statusMutation.isPending ? ACTION_COPY[pendingAction].busy : ACTION_COPY[pendingAction].yes}
+                        </Button>
+                        <Button size="sm" variant="outline" className="flex-1" onClick={closeAction} disabled={statusMutation.isPending}>
+                          Volver
+                        </Button>
+                      </div>
+                    </div>
                   )}
                 </RequirePermission>
-                {canConfirm && confirmAction === 'confirm' && (
-                  <div className="rounded-xl border border-border bg-muted/20 px-4 py-3">
-                    <p className="text-xs text-muted-foreground mb-2">¿Confirmar esta orden de compra?</p>
-                    <div className="flex gap-2">
-                      <Button
-                        size="sm"
-                        className="flex-1"
-                        onClick={() => confirmMutation.mutate()}
-                        disabled={confirmMutation.isPending}
-                      >
-                        {confirmMutation.isPending ? 'Confirmando...' : 'Sí, confirmar'}
-                      </Button>
-                      <Button size="sm" variant="outline" className="flex-1" onClick={() => setConfirmAction(null)}>
-                        Volver
-                      </Button>
-                    </div>
-                  </div>
-                )}
                 <RequirePermission permission="procurement:receive">
                   {canReceive && (
                     <Button className="w-full bg-emerald-600 hover:bg-emerald-700" onClick={() => setShowReceive(true)}>
                       Registrar recepción de mercadería
+                    </Button>
+                  )}
+                </RequirePermission>
+                <RequirePermission permission="procurement:update">
+                  {actions.cancel && pendingAction === null && (
+                    <Button
+                      variant="ghost"
+                      className="w-full text-destructive hover:bg-destructive/10 hover:text-destructive"
+                      onClick={() => setPendingAction('cancel')}
+                    >
+                      Cancelar orden
                     </Button>
                   )}
                 </RequirePermission>
@@ -914,11 +1041,11 @@ export default function ProcurementPage() {
           </SelectTrigger>
           <SelectContent className="w-auto min-w-[10rem]">
             <SelectItem value="all">Todos los estados</SelectItem>
-            <SelectItem value="PENDING">Borrador</SelectItem>
-            <SelectItem value="CONFIRMED">Confirmada</SelectItem>
-            <SelectItem value="PARTIALLY_RECEIVED">Recepción parcial</SelectItem>
-            <SelectItem value="RECEIVED">Recibida</SelectItem>
-            <SelectItem value="CANCELLED">Cancelada</SelectItem>
+            {PURCHASE_ORDER_STATUSES.map((status) => (
+              <SelectItem key={status} value={status}>
+                {PURCHASE_ORDER_STATUS_LABEL[status]}
+              </SelectItem>
+            ))}
           </SelectContent>
         </Select>
       </div>

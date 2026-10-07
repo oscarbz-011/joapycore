@@ -1,10 +1,11 @@
 import {
+  ConflictException,
   Injectable,
   NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
-import { ProductStatus } from '@prisma/client';
+import { ProductStatus, PurchaseOrderStatus } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
 import type { PrismaClientOrTx } from '../../../prisma/types';
 import {
@@ -22,6 +23,15 @@ const PRODUCT_STATUS_LABEL: Record<ProductStatus, string> = {
 };
 
 const MAX_NUMBER_ATTEMPTS = 3;
+
+const STATUS_LABEL: Record<PurchaseOrderStatus, string> = {
+  PENDING: 'en borrador',
+  SENT: 'enviada',
+  CONFIRMED: 'confirmada',
+  PARTIALLY_RECEIVED: 'con recepción parcial',
+  RECEIVED: 'recibida',
+  CANCELLED: 'cancelada',
+};
 
 @Injectable()
 export class PurchaseOrdersService {
@@ -143,6 +153,17 @@ export class PurchaseOrdersService {
           );
         }
 
+        await this.purchaseOrdersRepository.recordStatusChange(
+          {
+            tenantId,
+            purchaseOrderId: order.id,
+            fromStatus: null,
+            toStatus: 'PENDING',
+            changedById: userId,
+          },
+          tx,
+        );
+
         this.eventEmitter.emit('audit.log', {
           tenantId,
           userId,
@@ -176,24 +197,99 @@ export class PurchaseOrdersService {
     return `OC-${year}-${String(next).padStart(6, '0')}`;
   }
 
+  send(tenantId: string, id: string, userId?: string) {
+    return this.changeStatus(tenantId, id, {
+      from: ['PENDING'],
+      to: 'SENT',
+      userId,
+      action: 'purchase.order.sent',
+      refusal: 'Solo se puede enviar una orden en borrador',
+    });
+  }
+
+  // También desde borrador: el proveedor puede confirmar por teléfono sin que
+  // la orden se haya enviado desde el sistema.
   async confirm(tenantId: string, id: string, userId?: string) {
-    const order = await this.findOne(tenantId, id);
-    if (order.status !== 'PENDING') {
-      throw new UnprocessableEntityException(
-        'Only PENDING orders can be confirmed',
-      );
-    }
-    await this.purchaseOrdersRepository.updateStatus(tenantId, id, 'CONFIRMED');
+    const order = await this.changeStatus(tenantId, id, {
+      from: ['PENDING', 'SENT'],
+      to: 'CONFIRMED',
+      userId,
+      action: 'purchase.order.confirmed',
+      refusal: 'Solo se puede confirmar una orden en borrador o enviada',
+    });
     this.eventEmitter.emit('purchase.order.confirmed', {
       tenantId,
       purchaseOrderId: id,
     });
+    return order;
+  }
+
+  // Con mercadería recibida ya hay stock y una cuenta por pagar que dependen
+  // de la orden: a partir de ahí no se cancela.
+  cancel(tenantId: string, id: string, reason: string, userId?: string) {
+    return this.changeStatus(tenantId, id, {
+      from: ['PENDING', 'SENT', 'CONFIRMED'],
+      to: 'CANCELLED',
+      userId,
+      reason: reason.trim(),
+      action: 'purchase.order.cancelled',
+      refusal: 'No se puede cancelar una orden con mercadería recibida',
+    });
+  }
+
+  private async changeStatus(
+    tenantId: string,
+    id: string,
+    change: {
+      from: PurchaseOrderStatus[];
+      to: PurchaseOrderStatus;
+      userId?: string;
+      reason?: string;
+      action: string;
+      refusal: string;
+    },
+  ) {
+    const order = await this.findOne(tenantId, id);
+    if (!change.from.includes(order.status)) {
+      throw new UnprocessableEntityException(
+        `${change.refusal}: esta orden está ${STATUS_LABEL[order.status]}`,
+      );
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      const { count } = await this.purchaseOrdersRepository.transition(
+        tenantId,
+        id,
+        change.from,
+        change.to,
+        tx,
+      );
+      if (count === 0) {
+        throw new ConflictException(
+          'La orden cambió de estado mientras tanto. Volvé a cargarla.',
+        );
+      }
+      await this.purchaseOrdersRepository.recordStatusChange(
+        {
+          tenantId,
+          purchaseOrderId: id,
+          fromStatus: order.status,
+          toStatus: change.to,
+          reason: change.reason ?? null,
+          changedById: change.userId ?? null,
+        },
+        tx,
+      );
+    });
+
     this.eventEmitter.emit('audit.log', {
       tenantId,
-      userId,
+      userId: change.userId,
       module: 'procurement',
-      action: 'purchase.order.confirmed',
+      action: change.action,
       resourceId: id,
+      before: { status: order.status },
+      after: { status: change.to, reason: change.reason },
     } satisfies AuditLogEvent);
     return this.purchaseOrdersRepository.findById(tenantId, id);
   }

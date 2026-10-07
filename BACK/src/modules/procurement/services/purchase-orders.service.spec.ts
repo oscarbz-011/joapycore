@@ -1,4 +1,5 @@
 import {
+  ConflictException,
   NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
@@ -34,6 +35,8 @@ describe('PurchaseOrdersService', () => {
     findProductStatuses: jest.Mock;
     findLastOrderNumber: jest.Mock;
     findCatalogItems: jest.Mock;
+    transition: jest.Mock;
+    recordStatusChange: jest.Mock;
   };
   let eventEmitter: { emit: jest.Mock };
   let prisma: { $transaction: jest.Mock };
@@ -59,6 +62,8 @@ describe('PurchaseOrdersService', () => {
       ]),
       findLastOrderNumber: jest.fn().mockResolvedValue(null),
       findCatalogItems: jest.fn().mockResolvedValue([]),
+      transition: jest.fn().mockResolvedValue({ count: 1 }),
+      recordStatusChange: jest.fn(),
     };
     eventEmitter = { emit: jest.fn() };
 
@@ -365,30 +370,148 @@ describe('PurchaseOrdersService', () => {
     });
   });
 
-  describe('confirm', () => {
-    it('throws UnprocessableEntityException when order is not PENDING', async () => {
-      purchaseOrdersRepository.findById.mockResolvedValue(
-        makeOrder({ status: 'CONFIRMED' }),
+  describe('status changes', () => {
+    const order = (status: string, items: unknown[] = []) =>
+      makeOrder({ status, items });
+
+    it('records the creation as the first entry of the history', async () => {
+      await service.create('tenant-1', 'user-1', {
+        supplierId: 'sup-1',
+        purchaseType: 'LOCAL' as const,
+        orderDate: '2026-10-06',
+        items: [{ productId: 'prod-1', quantity: 1, unitCost: 100 }],
+      });
+
+      expect(purchaseOrdersRepository.recordStatusChange).toHaveBeenCalledWith(
+        {
+          tenantId: 'tenant-1',
+          purchaseOrderId: 'po-1',
+          fromStatus: null,
+          toStatus: 'PENDING',
+          changedById: 'user-1',
+        },
+        expect.anything(),
       );
+    });
+
+    it('sends a draft to the supplier', async () => {
+      purchaseOrdersRepository.findById.mockResolvedValue(order('PENDING'));
+
+      await service.send('tenant-1', 'po-1', 'user-1');
+
+      expect(purchaseOrdersRepository.transition).toHaveBeenCalledWith(
+        'tenant-1',
+        'po-1',
+        ['PENDING'],
+        'SENT',
+        expect.anything(),
+      );
+      expect(purchaseOrdersRepository.recordStatusChange).toHaveBeenCalledWith(
+        expect.objectContaining({
+          tenantId: 'tenant-1',
+          purchaseOrderId: 'po-1',
+          fromStatus: 'PENDING',
+          toStatus: 'SENT',
+          changedById: 'user-1',
+        }),
+        expect.anything(),
+      );
+    });
+
+    it('does not send an order twice', async () => {
+      purchaseOrdersRepository.findById.mockResolvedValue(order('SENT'));
+
+      await expect(
+        service.send('tenant-1', 'po-1', 'user-1'),
+      ).rejects.toBeInstanceOf(UnprocessableEntityException);
+      expect(purchaseOrdersRepository.transition).not.toHaveBeenCalled();
+    });
+
+    it.each(['PENDING', 'SENT'])(
+      'confirms an order in %s — the supplier may confirm by phone before it is sent',
+      async (status) => {
+        purchaseOrdersRepository.findById.mockResolvedValue(order(status));
+
+        await service.confirm('tenant-1', 'po-1', 'user-1');
+
+        expect(purchaseOrdersRepository.transition).toHaveBeenCalledWith(
+          'tenant-1',
+          'po-1',
+          ['PENDING', 'SENT'],
+          'CONFIRMED',
+          expect.anything(),
+        );
+        expect(eventEmitter.emit).toHaveBeenCalledWith(
+          'purchase.order.confirmed',
+          { tenantId: 'tenant-1', purchaseOrderId: 'po-1' },
+        );
+      },
+    );
+
+    it('does not confirm an order already confirmed', async () => {
+      purchaseOrdersRepository.findById.mockResolvedValue(order('CONFIRMED'));
 
       await expect(service.confirm('tenant-1', 'po-1')).rejects.toBeInstanceOf(
         UnprocessableEntityException,
       );
-      expect(purchaseOrdersRepository.updateStatus).not.toHaveBeenCalled();
+      expect(purchaseOrdersRepository.transition).not.toHaveBeenCalled();
     });
 
-    it('confirms a PENDING order', async () => {
-      purchaseOrdersRepository.findById
-        .mockResolvedValueOnce(makeOrder({ status: 'PENDING' }))
-        .mockResolvedValueOnce(makeOrder({ status: 'CONFIRMED' }));
+    it('cancels with a reason that stays in the history', async () => {
+      purchaseOrdersRepository.findById.mockResolvedValue(order('CONFIRMED'));
 
-      await service.confirm('tenant-1', 'po-1');
+      await service.cancel('tenant-1', 'po-1', '  Sin stock  ', 'user-1');
 
-      expect(purchaseOrdersRepository.updateStatus).toHaveBeenCalledWith(
+      expect(purchaseOrdersRepository.transition).toHaveBeenCalledWith(
         'tenant-1',
         'po-1',
-        'CONFIRMED',
+        ['PENDING', 'SENT', 'CONFIRMED'],
+        'CANCELLED',
+        expect.anything(),
       );
+      expect(purchaseOrdersRepository.recordStatusChange).toHaveBeenCalledWith(
+        expect.objectContaining({
+          fromStatus: 'CONFIRMED',
+          toStatus: 'CANCELLED',
+          reason: 'Sin stock',
+        }),
+        expect.anything(),
+      );
+    });
+
+    // Con mercadería recibida ya hay stock y una cuenta por pagar: cancelar
+    // la orden los dejaría sin respaldo.
+    it.each(['PARTIALLY_RECEIVED', 'RECEIVED', 'CANCELLED'])(
+      'does not cancel an order in %s',
+      async (status) => {
+        purchaseOrdersRepository.findById.mockResolvedValue(order(status));
+
+        await expect(
+          service.cancel('tenant-1', 'po-1', 'Motivo', 'user-1'),
+        ).rejects.toBeInstanceOf(UnprocessableEntityException);
+        expect(purchaseOrdersRepository.transition).not.toHaveBeenCalled();
+      },
+    );
+
+    it('reports a conflict when the order changed in the meantime', async () => {
+      purchaseOrdersRepository.findById.mockResolvedValue(order('PENDING'));
+      purchaseOrdersRepository.transition.mockResolvedValue({ count: 0 });
+
+      await expect(
+        service.send('tenant-1', 'po-1', 'user-1'),
+      ).rejects.toBeInstanceOf(ConflictException);
+      expect(
+        purchaseOrdersRepository.recordStatusChange,
+      ).not.toHaveBeenCalled();
+    });
+
+    it('does not touch an order of another tenant', async () => {
+      purchaseOrdersRepository.findById.mockResolvedValue(null);
+
+      await expect(
+        service.cancel('tenant-2', 'po-1', 'Motivo', 'user-1'),
+      ).rejects.toBeInstanceOf(NotFoundException);
+      expect(purchaseOrdersRepository.transition).not.toHaveBeenCalled();
     });
   });
 });
