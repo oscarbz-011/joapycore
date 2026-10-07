@@ -3,6 +3,7 @@ import {
   customerPrefillFrom,
   emptyProspect,
   isProspectOrder,
+  keepFirstRead,
   orderPartyDocument,
   orderPartyName,
   prospectError,
@@ -103,5 +104,24 @@ describe('registering the prospect as a customer', () => {
     expect(
       customerPrefillFrom({ ...prospect, prospectName: 'Coopeduc' }),
     ).toMatchObject({ firstName: 'Coopeduc', lastName: '' });
+  });
+});
+
+// El alta de cliente lee los datos del presupuesto y borra la clave. En
+// desarrollo la pantalla se monta dos veces y la segunda lectura llega vacía.
+describe('keepFirstRead', () => {
+  const prefill = { firstName: 'ANTONIO', lastName: 'BRITEZ' };
+
+  it('takes what the first read brings', () => {
+    expect(keepFirstRead(undefined, prefill)).toBe(prefill);
+  });
+
+  it('is not wiped by a second, empty read', () => {
+    expect(keepFirstRead(prefill, null)).toBe(prefill);
+  });
+
+  it('settles on nothing when there was nothing to read', () => {
+    expect(keepFirstRead(undefined, null)).toBeNull();
+    expect(keepFirstRead(null, null)).toBeNull();
   });
 });

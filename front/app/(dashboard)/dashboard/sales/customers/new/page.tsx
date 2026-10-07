@@ -6,7 +6,7 @@ import { ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { CustomerForm } from '../_form';
 import type { Customer } from '../../../../../../lib/api/sales';
-import { CUSTOMER_PREFILL_KEY, type CustomerPrefill } from '@/lib/quote-party';
+import { CUSTOMER_PREFILL_KEY, keepFirstRead, type CustomerPrefill } from '@/lib/quote-party';
 
 export default function NewCustomerPage() {
   const router = useRouter();
@@ -29,7 +29,7 @@ export default function NewCustomerPage() {
     // Lectura de sessionStorage al montar: es sincronizar con un sistema
     // externo (no derivable en el render, que también corre en el servidor).
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setPrefill(parsed);
+    setPrefill((current) => keepFirstRead(current, parsed));
   }, []);
 
   function handleDone(customer?: Customer) {

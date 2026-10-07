@@ -111,3 +111,16 @@ export function customerPrefillFrom(order: OrderPartySource): CustomerPrefill {
 export const CUSTOMER_PREFILL_KEY = 'sales:new-customer-prefill';
 /** La escribe el alta de cliente al volver a quien la pidió. */
 export const NEW_CUSTOMER_ID_KEY = 'sales:new-order-draft-customer-id';
+
+/**
+ * Valor leído de sessionStorage al montar. La lectura borra la clave, y en
+ * desarrollo React monta cada pantalla dos veces: la segunda lectura llega
+ * vacía y no tiene que pisar lo que trajo la primera.
+ * `undefined` = todavía no se leyó; `null` = se leyó y no había nada.
+ */
+export function keepFirstRead<T>(
+  current: T | null | undefined,
+  read: T | null,
+): T | null {
+  return current ?? read;
+}
