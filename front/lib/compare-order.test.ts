@@ -12,6 +12,7 @@ function line(overrides: Partial<QuoteLine> = {}): QuoteLine {
     productId: 'row-1',
     itemId: 'a-1',
     linkedProductId: null,
+    needProductId: null,
     description: 'ABRIDOR DE VINO',
     supplierSku: 'A-1',
     supplierQuantity: 3,
@@ -200,5 +201,21 @@ describe('orderPayload', () => {
         catalogItemId: 'a-1',
       },
     ]);
+  });
+});
+
+// Se comparó un producto interno contra un ítem todavía sin vincular y se
+// decidió comprarle a ese proveedor: el producto ya existe, solo se vincula.
+describe('orderPlan — buying a look-alike of an existing product', () => {
+  it('links the item to the product instead of creating a new one', () => {
+    const chosen = quote('sup-c', [
+      line({ productId: 'prod-1', itemId: 'c-1', needProductId: 'prod-1' }),
+    ]);
+
+    const plan = orderPlan(chosen, [chosen]);
+
+    expect(plan.newProducts).toEqual([]);
+    expect(plan.links).toEqual([{ itemId: 'c-1', productId: 'prod-1' }]);
+    expect(plan.lines[0].productId).toBe('prod-1');
   });
 });

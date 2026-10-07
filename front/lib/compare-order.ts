@@ -47,9 +47,11 @@ export function orderPlan(
       .flatMap((quote) => quote.lines)
       .filter((other) => other.productId === line.productId);
 
-    // Si otro proveedor ya lo tiene vinculado, el producto existe.
+    // El producto existe si la fila ya era de un producto interno, o si otro
+    // proveedor lo tiene vinculado.
     const existing =
       line.linkedProductId ??
+      line.needProductId ??
       siblings.find((other) => other.linkedProductId)?.linkedProductId ??
       null;
 
