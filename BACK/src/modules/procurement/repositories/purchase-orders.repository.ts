@@ -3,6 +3,11 @@ import { PurchaseOrderStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { PrismaClientOrTx } from '../../../prisma/types';
 
+export function orderSequence(orderNumber: string | null): number {
+  const match = orderNumber?.match(/^OC-\d{2}-(\d+)$/);
+  return match ? parseInt(match[1], 10) : 0;
+}
+
 @Injectable()
 export class PurchaseOrdersRepository {
   constructor(private readonly prisma: PrismaService) {}
@@ -38,6 +43,34 @@ export class PurchaseOrdersRepository {
     return this.prisma.product.findMany({
       where: { tenantId, id: { in: ids }, deletedAt: null },
       select: { id: true, name: true, status: true, isPurchasable: true },
+    });
+  }
+
+  // El correlativo es por empresa y no se reinicia con el año, así que el
+  // número más alto es siempre el del año más reciente y alcanza con ordenar
+  // el texto (mismo criterio que los presupuestos, PRES-AA-000001).
+  findLastOrderNumber(
+    tenantId: string,
+    client: PrismaClientOrTx = this.prisma,
+  ) {
+    return client.purchaseOrder.findFirst({
+      where: { tenantId, orderNumber: { startsWith: 'OC-' } },
+      orderBy: { orderNumber: 'desc' },
+      select: { orderNumber: true },
+    });
+  }
+
+  // Filtra por empresa y proveedor: un ítem de otro proveedor no se devuelve
+  // y el servicio lo rechaza.
+  findCatalogItems(tenantId: string, supplierId: string, ids: string[]) {
+    return this.prisma.supplierCatalogItem.findMany({
+      where: { tenantId, supplierId, id: { in: ids } },
+      select: {
+        id: true,
+        productId: true,
+        supplierSku: true,
+        description: true,
+      },
     });
   }
 

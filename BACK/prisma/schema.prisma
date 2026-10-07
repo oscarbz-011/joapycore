@@ -1076,6 +1076,9 @@ model Supplier {
 model PurchaseOrder {
   id           String              @id @default(uuid())
   tenantId     String              @map("tenant_id")
+  // Número visible de la orden (OC-AA-000001), correlativo por empresa. Es
+  // con lo que el proveedor la identifica en el PDF.
+  orderNumber  String?             @map("order_number")
   supplierId   String              @map("supplier_id")
   branchId     String?             @map("branch_id")
   purchaseType PurchaseType        @default(LOCAL) @map("purchase_type")
@@ -1095,18 +1098,25 @@ model PurchaseOrder {
   items    PurchaseOrderItem[]
   receipts PurchaseReceipt[]
 
+  @@unique([tenantId, orderNumber])
   @@index([tenantId, status])
   @@index([supplierId])
   @@map("purchase_orders")
 }
 
 model PurchaseOrderItem {
-  id              String  @id @default(uuid())
-  purchaseOrderId String  @map("purchase_order_id")
-  productId       String  @map("product_id")
-  quantity        Int
-  receivedQty     Int     @default(0) @map("received_qty")
-  unitCost        Decimal @map("unit_cost") @db.Decimal(12, 2)
+  id                  String  @id @default(uuid())
+  purchaseOrderId     String  @map("purchase_order_id")
+  productId           String  @map("product_id")
+  quantity            Int
+  receivedQty         Int     @default(0) @map("received_qty")
+  unitCost            Decimal @map("unit_cost") @db.Decimal(12, 2)
+  // Copia del ítem del catálogo del proveedor con que se pidió: la orden
+  // tiene que seguir diciendo lo mismo aunque el catálogo cambie o el ítem se
+  // borre. Sin relación a propósito; null = producto agregado suelto.
+  catalogItemId       String? @map("catalog_item_id")
+  supplierSku         String? @map("supplier_sku")
+  supplierDescription String? @map("supplier_description")
 
   purchaseOrder        PurchaseOrder         @relation(fields: [purchaseOrderId], references: [id])
   product              Product               @relation(fields: [productId], references: [id])
