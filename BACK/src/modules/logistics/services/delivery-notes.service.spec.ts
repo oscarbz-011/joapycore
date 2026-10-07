@@ -12,6 +12,7 @@ function makeNote(overrides = {}) {
     tenantId: 'tenant-1',
     saleOrderId: 'order-1',
     status: 'PENDING' as const,
+    method: 'HOME_DELIVERY' as string,
     assignmentMode: null as string | null,
     assignedEmployeeId: null,
     carrier: null,
@@ -195,6 +196,42 @@ describe('DeliveryNotesService', () => {
       await expect(
         service.markDelivered('tenant-1', 'note-1'),
       ).rejects.toBeInstanceOf(UnprocessableEntityException);
+    });
+
+    // El retiro se cierra registrando quién se llevó el pedido.
+    it('refuses to mark a pickup as delivered without registering who took it', async () => {
+      repo.findById.mockResolvedValue(
+        makeNote({ status: 'DISPATCHED', method: 'PICKUP' }),
+      );
+
+      await expect(
+        service.markDelivered('tenant-1', 'note-1', 'user-1'),
+      ).rejects.toThrow(/registrá el retiro/);
+      expect(repo.update).not.toHaveBeenCalled();
+    });
+
+    it('closes a pending delivery that never goes through dispatch', async () => {
+      repo.findById.mockResolvedValue(makeNote({ method: 'PICKUP' }));
+
+      await service.complete('tenant-1', 'note-1', 'user-1');
+
+      expect(repo.update).toHaveBeenCalledWith(
+        'tenant-1',
+        'note-1',
+        expect.objectContaining({ status: 'DELIVERED' }),
+      );
+      expect(eventEmitter.emit).toHaveBeenCalledWith(
+        'delivery.note.delivered',
+        expect.objectContaining({ saleOrderId: 'order-1' }),
+      );
+    });
+
+    it('does not close a delivery twice', async () => {
+      repo.findById.mockResolvedValue(makeNote({ status: 'DELIVERED' }));
+
+      await expect(
+        service.complete('tenant-1', 'note-1', 'user-1'),
+      ).rejects.toThrow(/ya fue cerrada/);
     });
 
     it('marks a DISPATCHED note as DELIVERED and emits the stock-out chain event', async () => {

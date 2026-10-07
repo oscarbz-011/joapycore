@@ -52,6 +52,15 @@ export class DeliveryTrackingService {
         'Solo se puede asignar una entrega pendiente o despachada',
       );
     }
+    // Un retiro en sucursal no tiene repartidor, y la entrega a cargo del
+    // vendedor la asigna el supervisor al autorizarla.
+    if (note.method !== 'HOME_DELIVERY') {
+      throw new UnprocessableEntityException(
+        note.method === 'PICKUP'
+          ? 'Este pedido lo retira el cliente en la sucursal. Para asignarle un repartidor, pasalo primero a envío a domicilio.'
+          : 'Este pedido lo pidió llevar el vendedor. Para asignarle un repartidor, pasalo primero a envío a domicilio.',
+      );
+    }
 
     let employee: { id: string; firstName: string; lastName: string } | null =
       null;
