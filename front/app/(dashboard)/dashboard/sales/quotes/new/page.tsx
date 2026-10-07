@@ -18,6 +18,14 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+  NEW_CUSTOMER_ID_KEY,
+  emptyProspect,
+  prospectError,
+  toProspectPayload,
+  type ProspectForm,
+} from '@/lib/quote-party';
 import { cn } from '@/lib/utils';
 
 const NUM_CLS = 'h-9 w-full min-w-0 rounded-3xl border border-transparent bg-input/50 px-3 text-sm outline-none transition-[color,box-shadow,background-color] focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30';
@@ -37,7 +45,9 @@ function emptyLine(): QuoteLine {
 }
 
 const DRAFT_KEY = 'sales:new-quote-draft';
-const DRAFT_CUSTOMER_KEY = 'sales:new-quote-draft-customer-id';
+// La clave que escribe el alta de cliente al volver (antes se leía otra y
+// el presupuesto en curso se perdía).
+const DRAFT_CUSTOMER_KEY = NEW_CUSTOMER_ID_KEY;
 
 interface QuoteDraft {
   lines: Omit<QuoteLine, 'product'>[];
@@ -134,6 +144,9 @@ export default function NewQuotePage() {
   const canManage = jwtPayload?.permissions.includes('sales:quotes:manage') ?? false;
 
   const [customerId, setCustomerId] = useState('');
+  // A quién va: un cliente registrado o datos cargados a mano.
+  const [partyMode, setPartyMode] = useState<'customer' | 'prospect'>('customer');
+  const [prospect, setProspect] = useState<ProspectForm>(emptyProspect());
   const [lines, setLines] = useState<QuoteLine[]>([emptyLine()]);
   const [notes, setNotes] = useState('');
   const [error, setError] = useState('');
@@ -185,7 +198,9 @@ export default function NewQuotePage() {
   const mutation = useMutation({
     mutationFn: () => {
       const dto: Parameters<typeof salesApi.createOrder>[0] = {
-        customerId,
+        ...(partyMode === 'customer'
+          ? { customerId }
+          : { prospect: toProspectPayload(prospect) }),
         orderType: 'QUOTE',
         notes: notes.trim() || undefined,
         items: lines.map((l): CreateSaleOrderItem => ({
@@ -234,14 +249,82 @@ export default function NewQuotePage() {
       <form
         onSubmit={(e) => {
           e.preventDefault(); setError('');
-          if (!customerId) { setError('Seleccioná un cliente'); return; }
+          const partyProblem =
+            partyMode === 'customer'
+              ? customerId ? null : 'Seleccioná un cliente'
+              : prospectError(prospect);
+          if (partyProblem) { setError(partyProblem); return; }
           if (lines.length === 0) { setError('Agregá al menos un ítem'); return; }
           mutation.mutate();
         }}
         className="space-y-5"
       >
         <div className="rounded-xl border border-border bg-card p-5 space-y-5">
-          <div>
+          <Tabs value={partyMode} onValueChange={(v) => setPartyMode(v as 'customer' | 'prospect')}>
+            <TabsList className="w-full">
+              <TabsTrigger value="customer" className="flex-1">Cliente registrado</TabsTrigger>
+              <TabsTrigger value="prospect" className="flex-1">Persona o empresa sin registrar</TabsTrigger>
+            </TabsList>
+          </Tabs>
+
+          {partyMode === 'prospect' && (
+            <fieldset className="space-y-3">
+              <legend className="mb-2 text-xs text-muted-foreground">
+                Cargá los datos a mano. No se crea un cliente: recién hay que registrarlo si acepta el presupuesto y se convierte en pedido.
+              </legend>
+              <div>
+                <Label htmlFor="prospect-name" className="mb-1 text-xs">Nombre o razón social *</Label>
+                <Input
+                  id="prospect-name"
+                  value={prospect.name}
+                  maxLength={150}
+                  onChange={(e) => setProspect((p) => ({ ...p, name: e.target.value }))}
+                />
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <Label htmlFor="prospect-document" className="mb-1 text-xs">CI o RUC</Label>
+                  <Input
+                    id="prospect-document"
+                    value={prospect.document}
+                    maxLength={30}
+                    onChange={(e) => setProspect((p) => ({ ...p, document: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="prospect-phone" className="mb-1 text-xs">Teléfono</Label>
+                  <Input
+                    id="prospect-phone"
+                    type="tel"
+                    value={prospect.phone}
+                    maxLength={40}
+                    onChange={(e) => setProspect((p) => ({ ...p, phone: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="prospect-email" className="mb-1 text-xs">Email</Label>
+                  <Input
+                    id="prospect-email"
+                    type="email"
+                    value={prospect.email}
+                    maxLength={150}
+                    onChange={(e) => setProspect((p) => ({ ...p, email: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="prospect-address" className="mb-1 text-xs">Dirección</Label>
+                  <Input
+                    id="prospect-address"
+                    value={prospect.address}
+                    maxLength={250}
+                    onChange={(e) => setProspect((p) => ({ ...p, address: e.target.value }))}
+                  />
+                </div>
+              </div>
+            </fieldset>
+          )}
+
+          <div className={partyMode === 'customer' ? undefined : 'hidden'}>
             <Label className="mb-1 text-xs">Cliente *</Label>
             <SearchSelect<Customer>
               items={customers}
@@ -255,7 +338,7 @@ export default function NewQuotePage() {
               emptyMessage="No se encontró. Podés crear uno abajo."
               onCreate={goToNewCustomer}
               createLabel=" Crear cliente nuevo"
-              required
+              required={partyMode === 'customer'}
             />
           </div>
 

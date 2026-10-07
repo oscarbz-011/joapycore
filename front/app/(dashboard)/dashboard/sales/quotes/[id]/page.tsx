@@ -2,15 +2,26 @@
 
 import { apiErrorMessage } from '@/lib/api/api-error';
 
+import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, Download, ArrowRightCircle, Ban, FileText } from 'lucide-react';
-import { salesApi } from '../../../../../../lib/api/sales';
+import { salesApi, type Customer } from '../../../../../../lib/api/sales';
+import { SearchSelect } from '../../../components/search-select';
 import { useAuth } from '../../../../../../lib/auth-context';
 import { openPdf } from '../../../../../../lib/open-pdf';
 import { formatDatePY } from '../../../../../../lib/date';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Label } from '@/components/ui/label';
+import {
+  CUSTOMER_PREFILL_KEY,
+  NEW_CUSTOMER_ID_KEY,
+  customerPrefillFrom,
+  isProspectOrder,
+  orderPartyDocument,
+  orderPartyName,
+} from '@/lib/quote-party';
 
 function formatPrice(n: number) {
   return new Intl.NumberFormat('es-PY', { style: 'currency', currency: 'PYG', maximumFractionDigits: 0 }).format(n);
@@ -32,7 +43,7 @@ export default function QuoteDetailPage() {
   });
 
   const convertMutation = useMutation({
-    mutationFn: () => salesApi.convertQuote(id),
+    mutationFn: () => salesApi.convertQuote(id, convertCustomerId || undefined),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['sale-order', id] });
       void qc.invalidateQueries({ queryKey: ['sale-orders'] });
@@ -51,6 +62,27 @@ export default function QuoteDetailPage() {
       if (updated.quotePdfFileId) void openPdf(updated.quotePdfFileId);
     },
   });
+
+  // Para convertir un presupuesto hecho sin cliente registrado.
+  const [convertCustomerId, setConvertCustomerId] = useState('');
+  const [choosingCustomer, setChoosingCustomer] = useState(false);
+  const { data: customers = [] } = useQuery({
+    queryKey: ['sale-customers'],
+    queryFn: salesApi.listCustomers,
+    enabled: canManage && choosingCustomer,
+  });
+
+  // Al volver de registrar al cliente, queda elegido para convertir.
+  useEffect(() => {
+    const newCustomerId = sessionStorage.getItem(NEW_CUSTOMER_ID_KEY);
+    if (!newCustomerId) return;
+    sessionStorage.removeItem(NEW_CUSTOMER_ID_KEY);
+    // Lectura de sessionStorage al montar: es sincronizar con un sistema
+    // externo (no derivable en el render, que también corre en el servidor).
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setConvertCustomerId(newCustomerId);
+    setChoosingCustomer(true);
+  }, []);
 
   const cancelMutation = useMutation({
     mutationFn: () => salesApi.cancelOrder(id),
@@ -80,6 +112,15 @@ export default function QuoteDetailPage() {
 
   const total = quote.items.reduce((sum, i) => sum + i.unitPrice * i.quantity, 0);
   const isQuoted = quote.status === 'QUOTED';
+  const isProspect = isProspectOrder(quote);
+  const partyDocument = orderPartyDocument(quote);
+
+  // El alta de cliente arranca con lo que ya se cargó en el presupuesto y
+  // vuelve acá con el cliente nuevo elegido.
+  function registerCustomer() {
+    sessionStorage.setItem(CUSTOMER_PREFILL_KEY, JSON.stringify(customerPrefillFrom(quote!)));
+    router.push(`/dashboard/sales/customers/new?returnTo=/dashboard/sales/quotes/${id}`);
+  }
 
   return (
     <div className="mx-auto max-w-2xl">
@@ -99,8 +140,16 @@ export default function QuoteDetailPage() {
       <div className="rounded-xl border border-border bg-card overflow-hidden">
         <div className="border-b border-border px-5 py-4">
           <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/60 mb-1">Cliente</p>
-          <p className="text-sm text-foreground">{quote.customer.firstName} {quote.customer.lastName}</p>
-          {quote.customer.documentNumber && <p className="text-xs text-muted-foreground">{quote.customer.documentType}: {quote.customer.documentNumber}</p>}
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="text-sm text-foreground">{orderPartyName(quote)}</p>
+            {isProspect && <Badge variant="outline">Sin registrar como cliente</Badge>}
+          </div>
+          {partyDocument && <p className="text-xs text-muted-foreground">{partyDocument}</p>}
+          {isProspect && (
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              {[quote.prospectPhone, quote.prospectEmail, quote.prospectAddress].filter(Boolean).join(' · ')}
+            </p>
+          )}
         </div>
 
         <div className="px-5 py-4">
@@ -131,6 +180,41 @@ export default function QuoteDetailPage() {
         </p>
       )}
 
+      {isQuoted && canManage && isProspect && choosingCustomer && (
+        <div className="mt-4 space-y-3 rounded-xl border border-border bg-card p-5">
+          <div>
+            <p className="text-sm font-medium text-foreground">
+              Registrá a {quote.prospectName} como cliente para convertirlo en pedido
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Un pedido termina en factura y cuenta por cobrar, así que necesita un cliente registrado.
+            </p>
+          </div>
+          <Button variant="outline" onClick={registerCustomer}>
+            Registrar como cliente nuevo
+          </Button>
+          <div>
+            <Label className="mb-1 text-xs">O elegí un cliente que ya existe</Label>
+            <SearchSelect<Customer>
+              items={customers}
+              value={convertCustomerId}
+              onChange={(customerId) => setConvertCustomerId(customerId)}
+              getKey={(c) => c.id}
+              getLabel={(c) => `${c.firstName} ${c.lastName}`}
+              getDescription={(c) => [c.documentNumber ?? null, c.phone ?? null].filter(Boolean).join(' · ') || null}
+              filterFn={(c, q) => `${c.firstName} ${c.lastName} ${c.documentNumber ?? ''} ${c.customerCode ?? ''}`.toLowerCase().includes(q.toLowerCase())}
+              placeholder="Buscar cliente..."
+              emptyMessage="No se encontró."
+            />
+          </div>
+          {convertCustomerId && (
+            <p role="status" className="text-xs text-muted-foreground">
+              Cliente elegido. Tocá «Convertir a pedido» para terminar.
+            </p>
+          )}
+        </div>
+      )}
+
       <div className="mt-4 flex flex-wrap gap-2">
         {quote.quotePdfFileId && (
           <Button variant="outline" className="gap-1.5" onClick={() => void openPdf(quote.quotePdfFileId!)}>
@@ -152,7 +236,11 @@ export default function QuoteDetailPage() {
             <Button
               className="gap-1.5"
               disabled={convertMutation.isPending}
-              onClick={() => convertMutation.mutate()}
+              onClick={() => {
+                // Sin cliente registrado no hay pedido: primero se elige uno.
+                if (isProspect && !convertCustomerId) setChoosingCustomer(true);
+                else convertMutation.mutate();
+              }}
             >
               <ArrowRightCircle size={15} /> {convertMutation.isPending ? 'Convirtiendo...' : 'Convertir a pedido'}
             </Button>

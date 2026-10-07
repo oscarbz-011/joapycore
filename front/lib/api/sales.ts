@@ -1,4 +1,5 @@
 import { apiClient } from './client';
+import type { ProspectPayload } from '../quote-party';
 
 export type DocumentType = 'CI' | 'RUC' | 'PASSPORT';
 export type SaleType = 'CASH' | 'CREDIT';
@@ -213,6 +214,13 @@ export interface SaleOrder {
   notes: string | null;
   quoteNumber: string | null;
   quotePdfFileId: string | null;
+  // Presupuesto para alguien que todavía no es cliente: datos cargados a
+  // mano. Con esto cargado, `customer` es el cliente genérico y no se muestra.
+  prospectName: string | null;
+  prospectDocument: string | null;
+  prospectPhone: string | null;
+  prospectEmail: string | null;
+  prospectAddress: string | null;
   customer: {
     id: string;
     firstName: string;
@@ -291,7 +299,10 @@ export interface CreateComboPayload {
 export type UpdateComboPayload = Partial<CreateComboPayload> & { isActive?: boolean };
 
 export interface CreateSaleOrderPayload {
-  customerId: string;
+  /** Cliente registrado; se omite en un presupuesto con `prospect`. */
+  customerId?: string;
+  /** Solo presupuestos: persona o empresa que todavía no es cliente. */
+  prospect?: ProspectPayload;
   sellerId?: string;
   orderType?: OrderType;
   saleType?: SaleType;
@@ -414,8 +425,11 @@ export const salesApi = {
   retryQuotePdf: (id: string): Promise<SaleOrder> =>
     apiClient.post(`/sales/orders/${id}/quote-pdf/retry`).then((r) => r.data),
 
-  convertQuote: (id: string): Promise<SaleOrder> =>
-    apiClient.post(`/sales/orders/${id}/convert`).then((r) => r.data),
+  /** `customerId` es obligatorio si el presupuesto se hizo sin cliente registrado. */
+  convertQuote: (id: string, customerId?: string): Promise<SaleOrder> =>
+    apiClient
+      .post(`/sales/orders/${id}/convert`, customerId ? { customerId } : {})
+      .then((r) => r.data),
 
   deliverOrder: (id: string): Promise<SaleOrder> =>
     apiClient.post(`/sales/orders/${id}/deliver`).then((r) => r.data),
