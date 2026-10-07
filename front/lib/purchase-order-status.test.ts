@@ -4,6 +4,8 @@ import {
   historyEntryLabel,
   orderActions,
   orderEmailError,
+  confirmDeliveryError,
+  orderCalendarDay,
 } from './purchase-order-status';
 
 describe('orderActions', () => {
@@ -90,5 +92,27 @@ describe('orderEmailError', () => {
 
   it('accepts an address, ignoring the spaces around it', () => {
     expect(orderEmailError(' roman@mail.com ')).toBeNull();
+  });
+});
+
+// La entrega que confirma el proveedor: control interno, no va al PDF.
+describe('delivery date on confirmation', () => {
+  const ORDER_DATE = '2026-10-06T00:00:00.000Z';
+
+  it('reads the calendar day the order keeps in UTC', () => {
+    expect(orderCalendarDay(ORDER_DATE)).toBe('2026-10-06');
+    expect(orderCalendarDay(null)).toBe('');
+  });
+
+  it('is optional: the order can be confirmed without touching the date', () => {
+    expect(confirmDeliveryError('', ORDER_DATE)).toBeNull();
+  });
+
+  it('accepts the day of the order and later, not before', () => {
+    expect(confirmDeliveryError('2026-10-06', ORDER_DATE)).toBeNull();
+    expect(confirmDeliveryError('2026-10-20', ORDER_DATE)).toBeNull();
+    expect(confirmDeliveryError('2026-10-05', ORDER_DATE)).toMatch(
+      /anterior a la fecha de la orden/,
+    );
   });
 });

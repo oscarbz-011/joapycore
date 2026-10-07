@@ -65,3 +65,22 @@ export function orderEmailError(to: string): string | null {
   if (!value) return 'Indicá a qué dirección enviar la orden';
   return EMAIL.test(value) ? null : 'La dirección de email no es válida';
 }
+
+/** Día de calendario (AAAA-MM-DD) de una fecha de la orden, guardada en UTC. */
+export function orderCalendarDay(iso: string | null | undefined): string {
+  return iso ? iso.slice(0, 10) : '';
+}
+
+/**
+ * Problema con la fecha de entrega que confirma el proveedor, o null si está
+ * bien. Vacía es válida: la orden se confirma sin tocar la fecha que tenía.
+ */
+export function confirmDeliveryError(
+  expectedDate: string,
+  orderDate: string,
+): string | null {
+  if (!expectedDate) return null;
+  return expectedDate < orderCalendarDay(orderDate)
+    ? 'La fecha de entrega no puede ser anterior a la fecha de la orden'
+    : null;
+}

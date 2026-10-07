@@ -19,6 +19,7 @@ import {
 import { RequirePermission } from '@/components/require-permission';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { DatePicker } from '@/components/ui/date-picker';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { cancelAdvanceBlock } from '@/lib/advance';
@@ -28,7 +29,9 @@ import { formatDatePY } from '@/lib/date';
 import { openPdf } from '@/lib/open-pdf';
 import {
   cancelReasonError,
+  confirmDeliveryError,
   historyEntryLabel,
+  orderCalendarDay,
   orderActions,
   orderEmailError,
 } from '@/lib/purchase-order-status';
@@ -103,6 +106,8 @@ export default function PurchaseOrderDetailPage() {
   const [showReceive, setShowReceive] = useState(false);
   const [pendingAction, setPendingAction] = useState<StatusAction | null>(null);
   const [cancelReason, setCancelReason] = useState('');
+  // Entrega que confirma el proveedor al confirmar la orden (control interno).
+  const [confirmDate, setConfirmDate] = useState('');
   const [actionError, setActionError] = useState('');
   const [emailing, setEmailing] = useState(false);
   const [emailTo, setEmailTo] = useState('');
@@ -141,7 +146,7 @@ export default function PurchaseOrderDetailPage() {
       action === 'send'
         ? procurementApi.sendOrder(id)
         : action === 'confirm'
-          ? procurementApi.confirmOrder(id)
+          ? procurementApi.confirmOrder(id, confirmDate || undefined)
           : procurementApi.cancelOrder(id, cancelReason.trim()),
     onSuccess: (updated) => {
       queryClient.setQueryData(['purchase-order', id], updated);
@@ -180,7 +185,12 @@ export default function PurchaseOrderDetailPage() {
 
   function runAction() {
     if (!pendingAction) return;
-    const problem = pendingAction === 'cancel' ? cancelReasonError(cancelReason) : null;
+    const problem =
+      pendingAction === 'cancel'
+        ? cancelReasonError(cancelReason)
+        : pendingAction === 'confirm' && order
+          ? confirmDeliveryError(confirmDate, order.orderDate)
+          : null;
     setActionError(problem ?? '');
     if (!problem) statusMutation.mutate(pendingAction);
   }
@@ -292,7 +302,7 @@ export default function PurchaseOrderDetailPage() {
               </Fact>
               <Fact label="Fecha de la orden">{formatDatePY(order.orderDate, 'utc')}</Fact>
               <Fact
-                label="Entrega estimada"
+                label="Entrega estimada (interno)"
                 className={cn(
                   accent === 'destructive' && 'text-destructive',
                   accent === 'warn' && 'text-warn',
@@ -496,7 +506,10 @@ export default function PurchaseOrderDetailPage() {
                     <Button
                       className="w-full"
                       variant={actions.send ? 'outline' : 'default'}
-                      onClick={() => setPendingAction('confirm')}
+                      onClick={() => {
+                        setConfirmDate(orderCalendarDay(order.expectedDate));
+                        setPendingAction('confirm');
+                      }}
                     >
                       Confirmada por el proveedor
                     </Button>
@@ -507,6 +520,15 @@ export default function PurchaseOrderDetailPage() {
                   <p className="mb-2 text-xs text-muted-foreground">
                     {ACTION_COPY[pendingAction].question}
                   </p>
+                  {pendingAction === 'confirm' && (
+                    <div className="mb-2 space-y-1.5">
+                      <Label className="text-xs">Fecha de entrega que confirmó (opcional)</Label>
+                      <DatePicker value={confirmDate} onChange={setConfirmDate} />
+                      <p className="text-xs text-muted-foreground">
+                        Para el seguimiento interno: no figura en el PDF de la orden.
+                      </p>
+                    </div>
+                  )}
                   {pendingAction === 'cancel' && cancelBlock && (
                     <p role="alert" className="mb-2 text-xs text-warn">
                       {cancelBlock}
