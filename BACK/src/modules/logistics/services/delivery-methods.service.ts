@@ -9,7 +9,6 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import type { AuditLogEvent } from '../../../audit/audit-log.event';
 import {
   DecideSellerDeliveryDto,
-  RegisterPickupDto,
   RequestSellerDeliveryDto,
   SellerDeliveredDto,
   SetDeliveryMethodDto,
@@ -24,6 +23,21 @@ export interface DeliveryActor {
   userId: string;
   permissions: string[];
 }
+
+const customerName = (customer: {
+  firstName: string;
+  secondFirstName?: string | null;
+  lastName: string;
+  secondLastName?: string | null;
+}) =>
+  [
+    customer.firstName,
+    customer.secondFirstName,
+    customer.lastName,
+    customer.secondLastName,
+  ]
+    .filter(Boolean)
+    .join(' ');
 
 // Lo que se limpia al dejar de ser una entrega asignada a alguien.
 const NO_ASSIGNMENT = {
@@ -48,8 +62,8 @@ const NO_SELLER_REQUEST = {
  * Cómo se entrega una venta lista para entregar:
  *  - HOME_DELIVERY: la empresa la lleva a la dirección del cliente (un
  *    repartidor propio o un courier). Es el camino de siempre.
- *  - PICKUP: el cliente la retira en la sucursal. No hay repartidor ni
- *    recorrido; se cierra registrando quién retiró.
+ *  - PICKUP: el cliente de la venta la retira en la sucursal. No hay
+ *    repartidor ni recorrido; se cierra confirmando que la retiró.
  *  - SELLER: caso excepcional, el vendedor la lleva en persona. Lo pide el
  *    vendedor y lo tiene que autorizar un supervisor.
  */
@@ -116,13 +130,12 @@ export class DeliveryMethodsService {
     return this.load(tenantId, id);
   }
 
-  /** El cliente retiró el pedido en la sucursal: cierra la entrega. */
-  async registerPickup(
-    tenantId: string,
-    id: string,
-    dto: RegisterPickupDto,
-    actor: DeliveryActor,
-  ) {
+  /**
+   * El cliente retiró el pedido en la sucursal: cierra la entrega. Quien
+   * retira es siempre el cliente de la venta, no un tercero: no se elige, se
+   * confirma. Sus datos quedan copiados en la entrega tal como eran ese día.
+   */
+  async registerPickup(tenantId: string, id: string, actor: DeliveryActor) {
     const note = await this.load(tenantId, id);
     if (
       !actor.permissions.includes('logistics:manage') &&
@@ -144,8 +157,8 @@ export class DeliveryMethodsService {
       id,
       { status: 'PENDING', method: 'PICKUP' },
       {
-        pickedUpByName: dto.receivedByName.trim(),
-        pickedUpByDocument: dto.receivedByDocument?.trim() || null,
+        pickedUpByName: customerName(note.saleOrder.customer),
+        pickedUpByDocument: note.saleOrder.customer.documentNumber ?? null,
       },
     );
     return this.deliveryNotesService.complete(tenantId, id, actor.userId);

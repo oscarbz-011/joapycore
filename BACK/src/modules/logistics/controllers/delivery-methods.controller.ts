@@ -15,7 +15,6 @@ import { RequiredModule } from '../../../common/decorators/required-module.decor
 import type { JwtPayload } from '../../../common/types/jwt-payload.interface';
 import {
   DecideSellerDeliveryDto,
-  RegisterPickupDto,
   RequestSellerDeliveryDto,
   SellerDeliveredDto,
   SetDeliveryMethodDto,
@@ -66,14 +65,15 @@ export class DeliveryMethodsController {
 
   @Post(':id/pickup')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Registrar que el cliente retiró el pedido' })
+  @ApiOperation({
+    summary: 'Registrar que el cliente de la venta retiró el pedido',
+  })
   registerPickup(
     @CurrentTenant() tenantId: string,
     @CurrentUser() user: JwtPayload,
     @Param('id') id: string,
-    @Body() dto: RegisterPickupDto,
   ) {
-    return this.service.registerPickup(tenantId, id, dto, actorOf(user));
+    return this.service.registerPickup(tenantId, id, actorOf(user));
   }
 
   @Post(':id/seller-request')

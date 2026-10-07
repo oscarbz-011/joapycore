@@ -104,9 +104,21 @@ export function deliveryMethodSummary(note: {
   return closed ? 'Entregado a domicilio' : 'Se envía a la dirección del cliente';
 }
 
-/** Problema con los datos del retiro, o null si están bien. */
-export function pickupError(receivedByName: string): string | null {
-  return receivedByName.trim() ? null : 'Ingresá quién retiró el pedido';
+/**
+ * Lo que se le pregunta a quien entrega en el mostrador. Retira siempre el
+ * cliente de la venta: no se carga un nombre, se confirma que es él.
+ */
+export function pickupConfirmation(customer: {
+  firstName: string;
+  lastName: string;
+  documentType?: string | null;
+  documentNumber?: string | null;
+}): string {
+  const name = `${customer.firstName} ${customer.lastName}`.trim();
+  const document = customer.documentNumber
+    ? ` (${customer.documentType ?? 'CI'}: ${customer.documentNumber})`
+    : '';
+  return `El pedido lo retira el cliente de la venta: ${name}${document}. Comprobá que sea él antes de entregarlo.`;
 }
 
 /** Problema al rechazar el pedido del vendedor, o null si está bien. */

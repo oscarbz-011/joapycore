@@ -3,7 +3,6 @@ import {
   IsIn,
   IsLatitude,
   IsLongitude,
-  IsNotEmpty,
   IsOptional,
   IsString,
   MaxLength,
@@ -17,20 +16,6 @@ export class SetDeliveryMethodDto {
   })
   @IsIn(['HOME_DELIVERY', 'PICKUP'])
   method: 'HOME_DELIVERY' | 'PICKUP';
-}
-
-export class RegisterPickupDto {
-  @ApiProperty({ description: 'Quién retiró el pedido' })
-  @IsString()
-  @IsNotEmpty()
-  @MaxLength(150)
-  receivedByName: string;
-
-  @ApiPropertyOptional({ description: 'Documento de quien retiró' })
-  @IsOptional()
-  @IsString()
-  @MaxLength(30)
-  receivedByDocument?: string;
 }
 
 export class RequestSellerDeliveryDto {

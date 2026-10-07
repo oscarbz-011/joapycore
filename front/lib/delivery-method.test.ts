@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   deliveryMethodActions,
   deliveryMethodSummary,
-  pickupError,
+  pickupConfirmation,
   rejectionError,
   usesCourier,
   type DeliveryMethodState,
@@ -80,9 +80,24 @@ describe('pickup at the branch', () => {
     expect(deliveryMethodActions(note(), seller).registerPickup).toBe(false);
   });
 
-  it('needs to know who took the order', () => {
-    expect(pickupError('  ')).toMatch(/quién retiró/);
-    expect(pickupError('Juan Pérez')).toBeNull();
+  // Retira siempre el cliente de la venta: se confirma, no se elige.
+  it('asks to check that it is the customer of the sale', () => {
+    expect(
+      pickupConfirmation({
+        firstName: 'María',
+        lastName: 'González',
+        documentType: 'CI',
+        documentNumber: '4557744',
+      }),
+    ).toBe(
+      'El pedido lo retira el cliente de la venta: María González (CI: 4557744). Comprobá que sea él antes de entregarlo.',
+    );
+  });
+
+  it('leaves the document out when the customer has none', () => {
+    expect(
+      pickupConfirmation({ firstName: 'María', lastName: 'González' }),
+    ).toMatch(/María González\. Comprobá/);
   });
 });
 
@@ -151,9 +166,9 @@ describe('deliveryMethodSummary', () => {
     expect(
       deliveryMethodSummary({
         ...note({ method: 'PICKUP', status: 'DELIVERED' }),
-        pickedUpByName: 'Juan Pérez',
+        pickedUpByName: 'María González',
       }),
-    ).toBe('Retirado en sucursal por Juan Pérez');
+    ).toBe('Retirado en sucursal por María González');
   });
 
   it('explains a rejected request', () => {

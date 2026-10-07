@@ -149,11 +149,9 @@ export const logisticsApi = {
   setDeliveryMethod: (id: string, method: 'HOME_DELIVERY' | 'PICKUP'): Promise<DeliveryNote> =>
     apiClient.post(`/logistics/deliveries/${id}/method`, { method }).then((r) => r.data),
 
-  registerPickup: (
-    id: string,
-    dto: { receivedByName: string; receivedByDocument?: string },
-  ): Promise<DeliveryNote> =>
-    apiClient.post(`/logistics/deliveries/${id}/pickup`, dto).then((r) => r.data),
+  /** Confirma que el cliente de la venta retiró el pedido. */
+  registerPickup: (id: string): Promise<DeliveryNote> =>
+    apiClient.post(`/logistics/deliveries/${id}/pickup`, {}).then((r) => r.data),
 
   requestSellerDelivery: (id: string, note?: string): Promise<DeliveryNote> =>
     apiClient

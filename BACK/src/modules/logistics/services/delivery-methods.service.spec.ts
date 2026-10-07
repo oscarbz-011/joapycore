@@ -16,7 +16,18 @@ function makeNote(overrides = {}) {
     assignedEmployeeId: null as string | null,
     sellerRequestStatus: null as string | null,
     sellerRequestedById: null as string | null,
-    saleOrder: { id: 'order-1', sellerId: 'seller-1', customerId: 'cust-1' },
+    saleOrder: {
+      id: 'order-1',
+      sellerId: 'seller-1',
+      customerId: 'cust-1',
+      customer: {
+        firstName: 'María',
+        secondFirstName: null,
+        lastName: 'González',
+        secondLastName: null,
+        documentNumber: '4557744',
+      },
+    },
     ...overrides,
   };
 }
@@ -160,20 +171,16 @@ describe('DeliveryMethodsService', () => {
       ).rejects.toBeInstanceOf(UnprocessableEntityException);
     });
 
-    it('closes the delivery recording who took the order', async () => {
+    // Siempre retira el cliente de la venta: no se elige quién.
+    it('closes the delivery in the name of the customer of the sale', async () => {
       notes.findById.mockResolvedValue(makeNote({ method: 'PICKUP' }));
 
-      await service.registerPickup(
-        'tenant-1',
-        'note-1',
-        { receivedByName: ' Juan Pérez ', receivedByDocument: '1234567' },
-        seller,
-      );
+      await service.registerPickup('tenant-1', 'note-1', seller);
 
       expect(patched()[2]).toEqual({ status: 'PENDING', method: 'PICKUP' });
       expect(patched()[3]).toEqual({
-        pickedUpByName: 'Juan Pérez',
-        pickedUpByDocument: '1234567',
+        pickedUpByName: 'María González',
+        pickedUpByDocument: '4557744',
       });
       // Sin despacho: se cierra desde pendiente y descuenta stock.
       expect(deliveryNotesService.complete).toHaveBeenCalledWith(
@@ -185,12 +192,7 @@ describe('DeliveryMethodsService', () => {
 
     it('does not register a pickup on a delivery that is not a pickup', async () => {
       await expect(
-        service.registerPickup(
-          'tenant-1',
-          'note-1',
-          { receivedByName: 'Juan Pérez' },
-          dispatcher,
-        ),
+        service.registerPickup('tenant-1', 'note-1', dispatcher),
       ).rejects.toThrow(/retiro en sucursal/);
       expect(deliveryNotesService.complete).not.toHaveBeenCalled();
     });

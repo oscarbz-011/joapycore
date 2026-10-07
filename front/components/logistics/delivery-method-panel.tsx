@@ -4,8 +4,6 @@ import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { apiErrorMessage } from '@/lib/api/api-error';
 import { logisticsApi, type DeliveryNote } from '@/lib/api/logistics';
@@ -15,7 +13,7 @@ import {
   DELIVERY_METHOD_LABEL,
   deliveryMethodActions,
   deliveryMethodSummary,
-  pickupError,
+  pickupConfirmation,
   rejectionError,
   type DeliveryMethod,
 } from '@/lib/delivery-method';
@@ -60,16 +58,12 @@ export function DeliveryMethodPanel({
   });
 
   const [form, setForm] = useState<Form>(null);
-  const [name, setName] = useState('');
-  const [document, setDocument] = useState('');
   const [text, setText] = useState('');
   const [error, setError] = useState('');
 
   function open(next: Form) {
     setError('');
     setText('');
-    setName('');
-    setDocument('');
     setForm(next);
   }
 
@@ -96,14 +90,7 @@ export function DeliveryMethodPanel({
 
   function submit() {
     if (form === 'pickup') {
-      const problem = pickupError(name);
-      if (problem) return setError(problem);
-      return run(() =>
-        logisticsApi.registerPickup(note.id, {
-          receivedByName: name.trim(),
-          receivedByDocument: document.trim() || undefined,
-        }),
-      );
+      return run(() => logisticsApi.registerPickup(note.id));
     }
     if (form === 'request') {
       return run(() => logisticsApi.requestSellerDelivery(note.id, text.trim() || undefined));
@@ -119,7 +106,10 @@ export function DeliveryMethodPanel({
   }
 
   const FORM_COPY: Record<Exclude<Form, null>, { title: string; submit: string }> = {
-    pickup: { title: 'Registrar el retiro del cliente', submit: 'Registrar retiro' },
+    pickup: {
+      title: pickupConfirmation(note.saleOrder.customer),
+      submit: 'Sí, lo retiró el cliente',
+    },
     request: {
       title: 'Pedir llevar este pedido en persona. Lo tiene que autorizar un supervisor.',
       submit: 'Pedir autorización',
@@ -228,33 +218,7 @@ export function DeliveryMethodPanel({
           }}
         >
           <p className="text-xs text-muted-foreground">{FORM_COPY[form].title}</p>
-          {form === 'pickup' ? (
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="space-y-1.5">
-                <Label htmlFor={`pickup-name-${note.id}`} className="text-xs">
-                  Quién retiró *
-                </Label>
-                <Input
-                  id={`pickup-name-${note.id}`}
-                  autoFocus
-                  value={name}
-                  maxLength={150}
-                  onChange={(e) => setName(e.target.value)}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor={`pickup-document-${note.id}`} className="text-xs">
-                  Documento
-                </Label>
-                <Input
-                  id={`pickup-document-${note.id}`}
-                  value={document}
-                  maxLength={30}
-                  onChange={(e) => setDocument(e.target.value)}
-                />
-              </div>
-            </div>
-          ) : (
+          {form === 'pickup' ? null : (
             <Textarea
               rows={2}
               autoFocus
