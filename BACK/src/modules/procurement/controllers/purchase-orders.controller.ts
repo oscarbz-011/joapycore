@@ -8,13 +8,18 @@ import type { JwtPayload } from '../../../common/types/jwt-payload.interface';
 import { PurchaseOrdersService } from '../services/purchase-orders.service';
 import { CreatePurchaseOrderDto } from '../dto/create-purchase-order.dto';
 import { CancelPurchaseOrderDto } from '../dto/cancel-purchase-order.dto';
+import { EmailPurchaseOrderDto } from '../dto/email-purchase-order.dto';
+import { PurchaseOrderDocumentService } from '../services/purchase-order-document.service';
 
 @ApiTags('Procurement')
 @ApiBearerAuth()
 @RequiredModule('procurement')
 @Controller('procurement/purchase-orders')
 export class PurchaseOrdersController {
-  constructor(private readonly purchaseOrdersService: PurchaseOrdersService) {}
+  constructor(
+    private readonly purchaseOrdersService: PurchaseOrdersService,
+    private readonly documentService: PurchaseOrderDocumentService,
+  ) {}
 
   @Get()
   @Permissions('procurement:read')
@@ -39,6 +44,29 @@ export class PurchaseOrdersController {
     @Body() dto: CreatePurchaseOrderDto,
   ) {
     return this.purchaseOrdersService.create(tenantId, user.sub, dto);
+  }
+
+  @Post(':id/pdf')
+  @Permissions('procurement:read')
+  @ApiOperation({ summary: 'Obtener el PDF de la orden, generándolo si falta' })
+  pdf(
+    @CurrentTenant() tenantId: string,
+    @CurrentUser() user: JwtPayload,
+    @Param('id') id: string,
+  ) {
+    return this.documentService.ensurePdf(tenantId, id, user.sub);
+  }
+
+  @Post(':id/email')
+  @Permissions('procurement:update')
+  @ApiOperation({ summary: 'Enviar el PDF de la orden al proveedor por email' })
+  email(
+    @CurrentTenant() tenantId: string,
+    @CurrentUser() user: JwtPayload,
+    @Param('id') id: string,
+    @Body() dto: EmailPurchaseOrderDto,
+  ) {
+    return this.documentService.emailToSupplier(tenantId, id, dto.to, user.sub);
   }
 
   @Post(':id/send')

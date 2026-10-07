@@ -1,4 +1,7 @@
 import { Module } from '@nestjs/common';
+import { EmailModule } from '../../email/email.module';
+import { FilesModule } from '../../files/files.module';
+import { PurchaseOrderDocumentService } from './services/purchase-order-document.service';
 import { PurchaseOrdersController } from './controllers/purchase-orders.controller';
 import { PurchaseReceiptsController } from './controllers/purchase-receipts.controller';
 import { SuppliersController } from './controllers/suppliers.controller';
@@ -22,8 +25,10 @@ import { ProcurementOnReceiptListener } from './events/procurement-on-receipt.li
 // `purchase.receipt.created` y tanto inventory (stock) como el propio
 // procurement (AccountsPayable, ver ProcurementOnReceiptListener) reaccionan
 // cada uno con su propio listener — procurement no conoce ni toca tablas de
-// inventory.
+// inventory. FilesModule y EmailModule son infraestructura (leer el PDF ya
+// generado y mandarlo), no módulos de negocio.
 @Module({
+  imports: [FilesModule, EmailModule],
   controllers: [
     SuppliersController,
     PurchaseOrdersController,
@@ -34,6 +39,7 @@ import { ProcurementOnReceiptListener } from './events/procurement-on-receipt.li
   providers: [
     SuppliersService,
     PurchaseOrdersService,
+    PurchaseOrderDocumentService,
     PurchaseReceiptsService,
     PayablesService,
     SuppliersRepository,

@@ -431,6 +431,89 @@ export const TEMPLATE_KIND_DEFS: Record<TemplateKind, TemplateKindDef> = {
       },
     ],
   },
+  [TemplateKind.PURCHASE_ORDER]: {
+    key: TemplateKind.PURCHASE_ORDER,
+    label: 'Orden de compra',
+    variables: [
+      {
+        key: 'tenant.razonSocial',
+        label: 'Razón social de la empresa',
+        type: 'text',
+      },
+      { key: 'tenant.ruc', label: 'RUC de la empresa', type: 'text' },
+      {
+        key: 'tenant.direccion',
+        label: 'Dirección de la empresa',
+        type: 'text',
+      },
+      { key: 'tenant.ciudad', label: 'Ciudad de la empresa', type: 'text' },
+      { key: 'tenant.telefono', label: 'Teléfono de la empresa', type: 'text' },
+      { key: 'tenant.email', label: 'Email de la empresa', type: 'text' },
+      {
+        key: 'proveedor.nombre',
+        label: 'Nombre o razón social del proveedor',
+        type: 'text',
+      },
+      { key: 'proveedor.ruc', label: 'RUC del proveedor', type: 'text' },
+      {
+        key: 'proveedor.direccion',
+        label: 'Dirección del proveedor',
+        type: 'text',
+      },
+      {
+        key: 'proveedor.contacto',
+        label: 'Persona de contacto del proveedor',
+        type: 'text',
+      },
+      {
+        key: 'proveedor.telefono',
+        label: 'Teléfono del proveedor',
+        type: 'text',
+      },
+      { key: 'proveedor.email', label: 'Email del proveedor', type: 'text' },
+      {
+        key: 'orden.numero',
+        label: 'Número de la orden de compra',
+        type: 'text',
+      },
+      { key: 'orden.fecha', label: 'Fecha de la orden', type: 'text' },
+      {
+        key: 'orden.entregaEstimada',
+        label: 'Fecha estimada de entrega',
+        type: 'text',
+      },
+      {
+        key: 'orden.lugarEntrega',
+        label: 'Lugar de entrega (sucursal o empresa)',
+        type: 'text',
+      },
+      {
+        key: 'orden.condicionPago',
+        label: 'Condición de pago acordada con el proveedor',
+        type: 'text',
+      },
+      { key: 'orden.notas', label: 'Observaciones de la orden', type: 'text' },
+      { key: 'orden.total', label: 'Total de la orden', type: 'text' },
+      {
+        key: 'orden.totalEnLetras',
+        label: 'Total de la orden, en letras',
+        type: 'text',
+      },
+      {
+        key: 'orden.items',
+        label: 'Detalle de ítems, con el código del proveedor (tabla)',
+        type: 'table',
+        columns: [
+          'Código',
+          'Descripción',
+          'Cant.',
+          'Unidad',
+          'Costo unit.',
+          'Subtotal',
+        ],
+      },
+    ],
+  },
 };
 
 export function getTemplateKindDefs(): TemplateKindDef[] {

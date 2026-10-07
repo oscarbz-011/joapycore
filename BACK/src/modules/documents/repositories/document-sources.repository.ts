@@ -91,6 +91,31 @@ export class DocumentSourcesRepository {
     });
   }
 
+  findPurchaseOrderForPdf(tenantId: string, purchaseOrderId: string) {
+    return this.prisma.purchaseOrder.findFirst({
+      where: { id: purchaseOrderId, tenantId },
+      include: {
+        tenant: true,
+        branch: true,
+        supplier: true,
+        items: {
+          include: { product: { select: { name: true, unit: true } } },
+        },
+      },
+    });
+  }
+
+  setPurchaseOrderPdf(
+    tenantId: string,
+    purchaseOrderId: string,
+    fileId: string,
+  ) {
+    return this.prisma.purchaseOrder.updateMany({
+      where: { id: purchaseOrderId, tenantId },
+      data: { pdfFileId: fileId },
+    });
+  }
+
   setQuotePdf(tenantId: string, saleOrderId: string, fileId: string) {
     return this.prisma.saleOrder.updateMany({
       where: { id: saleOrderId, tenantId },

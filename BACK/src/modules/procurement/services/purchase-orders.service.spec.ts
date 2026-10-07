@@ -418,6 +418,21 @@ describe('PurchaseOrdersService', () => {
       );
     });
 
+    it('asks for the PDF of the order it just sent', async () => {
+      purchaseOrdersRepository.findById.mockResolvedValue(order('PENDING'));
+
+      await service.send('tenant-1', 'po-1', 'user-1');
+
+      expect(eventEmitter.emit).toHaveBeenCalledWith(
+        'purchase.order.pdf.requested',
+        {
+          tenantId: 'tenant-1',
+          purchaseOrderId: 'po-1',
+          requestedById: 'user-1',
+        },
+      );
+    });
+
     it('does not send an order twice', async () => {
       purchaseOrdersRepository.findById.mockResolvedValue(order('SENT'));
 

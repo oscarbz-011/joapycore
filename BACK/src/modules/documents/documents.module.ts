@@ -5,6 +5,7 @@ import { DocumentsController } from './controllers/documents.controller';
 import { InterestInvoiceOnIssueListener } from './events/interest-invoice-on-issue.listener';
 import { InvoiceOnIssueListener } from './events/invoice-on-issue.listener';
 import { QuoteOnCreateListener } from './events/quote-on-create.listener';
+import { PurchaseOrderPdfListener } from './events/purchase-order-pdf.listener';
 import { ReceiptOnPaymentListener } from './events/receipt-on-payment.listener';
 import { SaleContractOnInvoiceListener } from './events/sale-contract-on-invoice.listener';
 import { SeedBillingTemplatesOnTenantRegisteredListener } from './events/seed-billing-templates-on-tenant-registered.listener';
@@ -29,6 +30,7 @@ import { DocumentsService } from './services/documents.service';
     ReceiptOnPaymentListener,
     SeedBillingTemplatesOnTenantRegisteredListener,
     QuoteOnCreateListener,
+    PurchaseOrderPdfListener,
   ],
 })
 export class DocumentsModule {}

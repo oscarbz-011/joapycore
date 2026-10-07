@@ -56,3 +56,12 @@ export function cancelReasonError(reason: string): string | null {
     ? 'Indicá el motivo de la cancelación'
     : null;
 }
+
+const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/** Valida la dirección a la que se manda la orden; null si está bien. */
+export function orderEmailError(to: string): string | null {
+  const value = to.trim();
+  if (!value) return 'Indicá a qué dirección enviar la orden';
+  return EMAIL.test(value) ? null : 'La dirección de email no es válida';
+}

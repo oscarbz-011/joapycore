@@ -197,14 +197,22 @@ export class PurchaseOrdersService {
     return `OC-${year}-${String(next).padStart(6, '0')}`;
   }
 
-  send(tenantId: string, id: string, userId?: string) {
-    return this.changeStatus(tenantId, id, {
+  async send(tenantId: string, id: string, userId?: string) {
+    const order = await this.changeStatus(tenantId, id, {
       from: ['PENDING'],
       to: 'SENT',
       userId,
       action: 'purchase.order.sent',
       refusal: 'Solo se puede enviar una orden en borrador',
     });
+    // El PDF es lo que se le manda al proveedor: se deja pedido al enviar,
+    // sin esperarlo (si falla, se puede volver a pedir desde la orden).
+    this.eventEmitter.emit('purchase.order.pdf.requested', {
+      tenantId,
+      purchaseOrderId: id,
+      requestedById: userId,
+    });
+    return order;
   }
 
   // También desde borrador: el proveedor puede confirmar por teléfono sin que

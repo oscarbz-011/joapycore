@@ -3,6 +3,7 @@ import {
   cancelReasonError,
   historyEntryLabel,
   orderActions,
+  orderEmailError,
 } from './purchase-order-status';
 
 describe('orderActions', () => {
@@ -74,5 +75,20 @@ describe('cancelReasonError', () => {
 
   it('accepts a real reason', () => {
     expect(cancelReasonError('El proveedor no tiene stock')).toBeNull();
+  });
+});
+
+describe('orderEmailError', () => {
+  it('needs an address when the supplier has none', () => {
+    expect(orderEmailError('  ')).toContain('dirección');
+  });
+
+  it('rejects something that is not an email', () => {
+    expect(orderEmailError('roman@mail')).toContain('no es válida');
+    expect(orderEmailError('roman mail.com')).toContain('no es válida');
+  });
+
+  it('accepts an address, ignoring the spaces around it', () => {
+    expect(orderEmailError(' roman@mail.com ')).toBeNull();
   });
 });
