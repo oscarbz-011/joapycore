@@ -2,6 +2,7 @@ import { apiClient, LONG_REQUEST_TIMEOUT_MS } from './client';
 import {
   numberOrNull,
   type PriceTier,
+  type QuantityDiscount,
   type SupplierAvailability,
   type VolumeDiscount,
 } from '../commercial-terms';
@@ -53,6 +54,7 @@ export interface OfferSupplier {
   leadTimeDays: number | null;
   minOrderAmount: number | null;
   volumeDiscounts: VolumeDiscount[];
+  quantityDiscounts: QuantityDiscount[];
 }
 
 /** Un ítem encontrado por una búsqueda; `score` 1 = coincidencia total. */
@@ -122,6 +124,7 @@ export interface Supplier {
   leadTimeDays: number | null;
   minOrderAmount: number | null;
   volumeDiscounts: VolumeDiscount[];
+  quantityDiscounts: QuantityDiscount[];
 }
 
 function normalizeSupplier(raw: Supplier): Supplier {
@@ -131,6 +134,10 @@ function normalizeSupplier(raw: Supplier): Supplier {
     minOrderAmount: numberOrNull(raw.minOrderAmount),
     volumeDiscounts: (raw.volumeDiscounts ?? []).map((tier) => ({
       minAmount: Number(tier.minAmount),
+      percent: Number(tier.percent),
+    })),
+    quantityDiscounts: (raw.quantityDiscounts ?? []).map((tier) => ({
+      minQuantity: Number(tier.minQuantity),
       percent: Number(tier.percent),
     })),
   };
@@ -256,6 +263,7 @@ export interface CreateSupplierPayload {
   leadTimeDays?: number | null;
   minOrderAmount?: number | null;
   volumeDiscounts?: VolumeDiscount[];
+  quantityDiscounts?: QuantityDiscount[];
 }
 
 export type UpdateSupplierPayload = Partial<CreateSupplierPayload>;
@@ -378,6 +386,10 @@ export const procurementApi = {
             minOrderAmount: numberOrNull(raw.supplier.minOrderAmount),
             volumeDiscounts: (raw.supplier.volumeDiscounts ?? []).map((tier) => ({
               minAmount: Number(tier.minAmount),
+              percent: Number(tier.percent),
+            })),
+            quantityDiscounts: (raw.supplier.quantityDiscounts ?? []).map((tier) => ({
+              minQuantity: Number(tier.minQuantity),
               percent: Number(tier.percent),
             })),
           },

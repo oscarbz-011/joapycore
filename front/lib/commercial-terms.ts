@@ -6,6 +6,12 @@ export interface VolumeDiscount {
   percent: number;
 }
 
+/** Descuento sobre el total de la orden, desde cierta cantidad de unidades. */
+export interface QuantityDiscount {
+  minQuantity: number;
+  percent: number;
+}
+
 /** Precio de un ítem desde cierta cantidad, en la unidad del proveedor. */
 export interface PriceTier {
   minQuantity: number;
@@ -94,5 +100,17 @@ export function volumeDiscountsSummary(
   if (discounts.length === 0) return 'Sin descuentos';
   return discounts
     .map((tier) => `${plain(tier.percent)}% desde ${gs(tier.minAmount)}`)
+    .join(' · ');
+}
+
+export function quantityDiscountsSummary(
+  discounts: readonly QuantityDiscount[],
+): string {
+  if (discounts.length === 0) return 'Sin descuentos';
+  return discounts
+    .map(
+      (tier) =>
+        `${plain(tier.percent)}% desde ${plain(tier.minQuantity)} ${tier.minQuantity === 1 ? 'unidad' : 'unidades'}`,
+    )
     .join(' · ');
 }

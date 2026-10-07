@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   AVAILABILITY_LABEL,
   numberOrNull,
+  quantityDiscountsSummary,
   tierRowsError,
   tierRowsFrom,
   tierRowsTo,
@@ -95,5 +96,21 @@ describe('AVAILABILITY_LABEL', () => {
       ON_ORDER: 'A pedido',
       OUT_OF_STOCK: 'Sin stock',
     });
+  });
+});
+
+describe('quantityDiscountsSummary', () => {
+  it('describes each tier by the units it starts at', () => {
+    expect(
+      quantityDiscountsSummary([
+        { minQuantity: 1, percent: 2 },
+        { minQuantity: 5, percent: 5 },
+        { minQuantity: 51, percent: 10 },
+      ]),
+    ).toBe('2% desde 1 unidad · 5% desde 5 unidades · 10% desde 51 unidades');
+  });
+
+  it('says so when there are none', () => {
+    expect(quantityDiscountsSummary([])).toBe('Sin descuentos');
   });
 });

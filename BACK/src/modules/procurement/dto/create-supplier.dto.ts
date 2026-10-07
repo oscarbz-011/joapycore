@@ -29,6 +29,19 @@ export class VolumeDiscountDto {
   percent: number;
 }
 
+export class QuantityDiscountDto {
+  @ApiProperty({ description: 'Unidades de la orden desde las que aplica' })
+  @IsInt()
+  @Min(1)
+  minQuantity: number;
+
+  @ApiProperty({ description: 'Porcentaje de descuento sobre el total' })
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @IsPositive()
+  @Max(100)
+  percent: number;
+}
+
 export class CreateSupplierDto {
   @ApiProperty()
   @IsString()
@@ -102,6 +115,17 @@ export class CreateSupplierDto {
   @ValidateNested({ each: true })
   @Type(() => VolumeDiscountDto)
   volumeDiscounts?: VolumeDiscountDto[];
+
+  @ApiPropertyOptional({
+    type: [QuantityDiscountDto],
+    description: 'Descuentos según la cantidad de unidades de la orden',
+  })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(20)
+  @ValidateNested({ each: true })
+  @Type(() => QuantityDiscountDto)
+  quantityDiscounts?: QuantityDiscountDto[];
 }
 
 // Clase y no Partial<CreateSupplierDto>: un tipo no existe en ejecución y el

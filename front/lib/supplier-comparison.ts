@@ -50,6 +50,10 @@ export interface SupplierQuote {
   subtotal: number;
   discountPercent: number;
   discountAmount: number;
+  /** Por qué se aplicó el descuento: el total, las unidades, o ninguno. */
+  discountBasis: 'amount' | 'quantity' | null;
+  /** Unidades internas de toda la orden: la base del descuento por cantidad. */
+  totalUnits: number;
   /** null = sin dato: el total no lo incluye. */
   shippingCost: number | null;
   total: number;
@@ -123,10 +127,20 @@ function supplierQuote(
   }
 
   const subtotal = lines.reduce((sum, line) => sum + line.subtotal, 0);
-  const discountPercent = supplier.volumeDiscounts.reduce(
+  const totalUnits = lines.reduce((sum, line) => sum + line.unitsReceived, 0);
+  const byAmount = supplier.volumeDiscounts.reduce(
     (percent, tier) => (subtotal >= tier.minAmount ? tier.percent : percent),
     0,
   );
+  const byQuantity = supplier.quantityDiscounts.reduce(
+    (percent, tier) => (totalUnits >= tier.minQuantity ? tier.percent : percent),
+    0,
+  );
+  // Un proveedor puede descontar por el total, por las unidades o por las
+  // dos cosas. No se suman: rige el que más conviene al comprador.
+  const discountPercent = Math.max(byAmount, byQuantity);
+  const discountBasis =
+    discountPercent === 0 ? null : byQuantity > byAmount ? 'quantity' : 'amount';
   const discountAmount = Math.round((subtotal * discountPercent) / 100);
   const goods = subtotal - discountAmount;
 
@@ -153,6 +167,8 @@ function supplierQuote(
     subtotal,
     discountPercent,
     discountAmount,
+    discountBasis,
+    totalUnits,
     shippingCost: supplier.shippingCost,
     total: goods + (supplier.shippingCost ?? 0),
     meetsMinimum,

@@ -86,6 +86,7 @@ describe('SuppliersService', () => {
       expect(suppliersRepository.create).toHaveBeenCalledWith('tenant-1', {
         ...dto,
         volumeDiscounts: [],
+        quantityDiscounts: [],
       });
     });
 
@@ -149,6 +150,28 @@ describe('SuppliersService', () => {
         expect.objectContaining({ name: 'Nuevo nombre' }),
       );
       expect(result?.name).toBe('Nuevo nombre');
+    });
+
+    it('stores the discounts by quantity in order', async () => {
+      suppliersRepository.findById.mockResolvedValue(makeSupplier());
+
+      await service.update('tenant-1', 'sup-1', {
+        quantityDiscounts: [
+          { minQuantity: 51, percent: 10 },
+          { minQuantity: 5, percent: 5 },
+        ],
+      });
+
+      expect(suppliersRepository.update).toHaveBeenCalledWith(
+        'tenant-1',
+        'sup-1',
+        {
+          quantityDiscounts: [
+            { minQuantity: 5, percent: 5 },
+            { minQuantity: 51, percent: 10 },
+          ],
+        },
+      );
     });
 
     it('leaves the discounts alone when an edit does not mention them', async () => {

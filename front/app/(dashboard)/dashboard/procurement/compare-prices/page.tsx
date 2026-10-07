@@ -273,9 +273,16 @@ const SUMMARY_ROWS: { label: string; strong?: boolean; cell: (q: SupplierQuote) 
     label: 'Descuento por volumen',
     cell: (q) =>
       q.discountAmount > 0 ? (
-        <span className="font-mono tabular-nums text-foreground">
-          − {gs(q.discountAmount)} ({plain(q.discountPercent)}%)
-        </span>
+        <>
+          <span className="font-mono tabular-nums text-foreground">
+            − {gs(q.discountAmount)} ({plain(q.discountPercent)}%)
+          </span>
+          <p className="text-xs text-muted-foreground">
+            {q.discountBasis === 'quantity'
+              ? `por ${plain(q.totalUnits)} ${q.totalUnits === 1 ? 'unidad' : 'unidades'}`
+              : 'por el total de la orden'}
+          </p>
+        </>
       ) : (
         <span className="text-muted-foreground">No aplica</span>
       ),

@@ -24,7 +24,6 @@ import { CatalogImportDialog } from '@/components/procurement/catalog-import-dia
 import { CatalogMapDialog } from '@/components/procurement/catalog-map-dialog';
 import { TierRows } from '@/components/procurement/tier-rows';
 import { ValidityFields } from '@/components/procurement/validity-fields';
-import { SupplierDialog } from '@/components/procurement/supplier-dialog';
 import { SupplierSummary } from '@/components/procurement/supplier-summary';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -493,7 +492,6 @@ export default function SupplierDetailPage() {
   const canImport = usePermission('procurement:create');
   const canEditCatalog = usePermission('procurement:update');
   const canEditSupplier = usePermission('suppliers:update');
-  const [editingSupplier, setEditingSupplier] = useState(false);
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(search.trim()), 300);
@@ -589,7 +587,7 @@ export default function SupplierDetailPage() {
           supplier={supplier}
           actions={
             <>
-              <Button variant="outline" onClick={() => setEditingSupplier(true)}>
+              <Button variant="outline" onClick={() => router.push(`/dashboard/procurement/suppliers/${supplierId}/edit`)}>
                 <Pencil size={15} />
                 {canEditSupplier ? 'Editar datos' : 'Ver datos'}
               </Button>
@@ -603,14 +601,6 @@ export default function SupplierDetailPage() {
           }
         />
       </div>
-
-      {editingSupplier && (
-        <SupplierDialog
-          supplier={supplier}
-          onClose={() => setEditingSupplier(false)}
-          onDeleted={() => router.push('/dashboard/procurement/suppliers')}
-        />
-      )}
 
       <div className="mb-4 flex items-baseline justify-between gap-3">
         <h2 className="text-sm font-semibold text-foreground">Catálogo del proveedor</h2>

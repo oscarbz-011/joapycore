@@ -1,6 +1,7 @@
 import { UnprocessableEntityException } from '@nestjs/common';
 import {
   normalizePriceTiers,
+  normalizeQuantityDiscounts,
   normalizeVolumeDiscounts,
 } from './commercial-terms.util';
 
@@ -83,5 +84,44 @@ describe('normalizePriceTiers', () => {
     expect(
       normalizePriceTiers([{ minQuantity: 10, price: 50_000 }], 54_000),
     ).toHaveLength(1);
+  });
+});
+
+describe('normalizeQuantityDiscounts', () => {
+  // "Menos de 5 un descuento, de 5 a 50 otro, más de 50 otro."
+  it('orders the tiers by the quantity they start at', () => {
+    expect(
+      normalizeQuantityDiscounts([
+        { minQuantity: 51, percent: 10 },
+        { minQuantity: 1, percent: 2 },
+        { minQuantity: 5, percent: 5 },
+      ]),
+    ).toEqual([
+      { minQuantity: 1, percent: 2 },
+      { minQuantity: 5, percent: 5 },
+      { minQuantity: 51, percent: 10 },
+    ]);
+  });
+
+  it('treats nothing as no discount', () => {
+    expect(normalizeQuantityDiscounts(null)).toEqual([]);
+  });
+
+  it('rejects two tiers that start at the same quantity', () => {
+    expect(() =>
+      normalizeQuantityDiscounts([
+        { minQuantity: 5, percent: 2 },
+        { minQuantity: 5, percent: 3 },
+      ]),
+    ).toThrow(UnprocessableEntityException);
+  });
+
+  it('rejects buying more units for a smaller discount', () => {
+    expect(() =>
+      normalizeQuantityDiscounts([
+        { minQuantity: 5, percent: 5 },
+        { minQuantity: 50, percent: 2 },
+      ]),
+    ).toThrow(UnprocessableEntityException);
   });
 });

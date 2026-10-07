@@ -64,3 +64,33 @@ export function normalizePriceTiers(
   });
   return sorted;
 }
+
+/** Descuento sobre el total de la orden, desde cierta cantidad de unidades. */
+export interface QuantityDiscount {
+  minQuantity: number;
+  percent: number;
+}
+
+export function normalizeQuantityDiscounts(
+  discounts: QuantityDiscount[] | undefined | null,
+): QuantityDiscount[] {
+  const sorted = [...(discounts ?? [])]
+    .map(({ minQuantity, percent }) => ({ minQuantity, percent }))
+    .sort((a, b) => a.minQuantity - b.minQuantity);
+
+  sorted.forEach((tier, index) => {
+    const previous = sorted[index - 1];
+    if (!previous) return;
+    if (tier.minQuantity === previous.minQuantity) {
+      throw new UnprocessableEntityException(
+        'Hay dos descuentos por cantidad que empiezan en la misma cantidad',
+      );
+    }
+    if (tier.percent < previous.percent) {
+      throw new UnprocessableEntityException(
+        'Un descuento por cantidad no puede ser menor que el del tramo anterior',
+      );
+    }
+  });
+  return sorted;
+}

@@ -19,6 +19,7 @@ function supplier(overrides: Partial<OfferSupplier> = {}): OfferSupplier {
     leadTimeDays: null,
     minOrderAmount: null,
     volumeDiscounts: [],
+    quantityDiscounts: [],
     ...overrides,
   };
 }
@@ -303,6 +304,66 @@ describe('compareSuppliers — lists not linked to products yet', () => {
       'a-linked',
     ]);
     expect(quotes[0].total).toBe(520_000);
+  });
+});
+
+describe('compareSuppliers — discount by units ordered', () => {
+  // "Menos de 5 un descuento, de 5 a 50 otro, más de 50 otro."
+  const terms = supplier({
+    quantityDiscounts: [
+      { minQuantity: 1, percent: 2 },
+      { minQuantity: 5, percent: 5 },
+      { minQuantity: 51, percent: 10 },
+    ],
+  });
+  const quoteFor = (quantity: number) =>
+    only([need(quantity)], [offer({ supplier: terms })]);
+
+  it('applies the tier the number of units reaches', () => {
+    expect(quoteFor(4).discountPercent).toBe(2);
+    expect(quoteFor(5).discountPercent).toBe(5);
+    expect(quoteFor(50).discountPercent).toBe(5);
+    expect(quoteFor(51).discountPercent).toBe(10);
+  });
+
+  it('discounts the order total and says why', () => {
+    const quote = quoteFor(10);
+
+    expect(quote).toMatchObject({
+      subtotal: 500_000,
+      totalUnits: 10,
+      discountPercent: 5,
+      discountAmount: 25_000,
+      discountBasis: 'quantity',
+      total: 475_000,
+    });
+  });
+
+  it('counts the units of every line of the order', () => {
+    const second = offer({ id: 'item-2', productId: 'prod-2', supplier: terms });
+    const quote = only(
+      [need(30), need(25, 'prod-2')],
+      [offer({ supplier: terms }), second],
+    );
+
+    expect(quote.totalUnits).toBe(55);
+    expect(quote.discountPercent).toBe(10);
+  });
+
+  // Con los dos tipos de descuento cargados no se suman: rige el mayor.
+  it('takes the better of the discount by amount and by quantity', () => {
+    const both = supplier({
+      volumeDiscounts: [{ minAmount: 400_000, percent: 8 }],
+      quantityDiscounts: [{ minQuantity: 5, percent: 5 }],
+    });
+    const quote = only([need(10)], [offer({ supplier: both })]);
+
+    expect(quote.discountPercent).toBe(8);
+    expect(quote.discountBasis).toBe('amount');
+  });
+
+  it('has no basis when no discount applies', () => {
+    expect(only([need(10)], [offer()]).discountBasis).toBeNull();
   });
 });
 

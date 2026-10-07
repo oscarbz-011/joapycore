@@ -79,6 +79,7 @@ export class SupplierCatalogRepository {
             leadTimeDays: true,
             minOrderAmount: true,
             volumeDiscounts: true,
+            quantityDiscounts: true,
           },
         },
       },
