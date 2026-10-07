@@ -6,7 +6,8 @@
 packages:
   - .
 
-# Parches de seguridad para dependencias transitivas (pnpm audit, 13/09/2026).
+# Parches de seguridad para dependencias transitivas (pnpm audit, 13/09/2026;
+# sharp y source-map-js, 07/10/2026).
 # Cada override queda acotado a la misma versión mayor que ya resolvía el
 # lockfile: `pnpm audit --fix` genera rangos abiertos (">=x") que suben de
 # major (brace-expansion 1→5, js-yaml 4→5, nanoid 3→6) y rompen a quien los usa.
@@ -24,6 +25,7 @@ overrides:
   nanoid@<3.3.18: ^3.3.18
   postcss@<8.5.23: ^8.5.23
   qs@<6.16.0: ^6.16.0
-  sharp@<0.35.4: ^0.35.4
+  sharp@<0.35.5: ^0.35.5
+  source-map-js@<1.2.2: ^1.2.2
   baseline-browser-mapping@<2.11.0: ^2.11.0
   undici@>=7.0.0 <7.29.1: ^7.29.1
