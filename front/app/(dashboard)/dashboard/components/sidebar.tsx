@@ -133,7 +133,7 @@ const STATIC_GROUPS: SidebarGroup[] = [
         permission: "procurement:read",
       },
       {
-        label: "Comparar precios",
+        label: "Comparar proveedores",
         href: "/dashboard/procurement/compare-prices",
         permission: "procurement:read",
       },

@@ -41,6 +41,31 @@ export interface SupplierCatalogItem {
   product: { id: string; name: string; unit: string } | null;
 }
 
+/** El proveedor de una oferta, con lo que se compara además del precio. */
+export interface OfferSupplier {
+  id: string;
+  name: string;
+  email: string | null;
+  paymentTermDays: number | null;
+  shippingCost: number | null;
+  leadTimeDays: number | null;
+  minOrderAmount: number | null;
+  volumeDiscounts: VolumeDiscount[];
+}
+
+/** Un ítem sin vincular que podría ser `productId`; lo confirma una persona. */
+export interface LinkSuggestion {
+  productId: string;
+  /** Parte de las palabras del producto que aparecen en el ítem (0 a 1). */
+  score: number;
+  item: SupplierCatalogItem & { supplier: { id: string; name: string } };
+}
+
+/** Un ítem de catálogo junto con su proveedor: una fila del comparador. */
+export interface CatalogOffer extends SupplierCatalogItem {
+  supplier: OfferSupplier;
+}
+
 // La API manda los decimales como texto: se pasan a número una sola vez, acá,
 // para que los cálculos (costo unitario, comparador) no dependan de coerción.
 function normalizeCatalogItem(raw: SupplierCatalogItem): SupplierCatalogItem {
@@ -329,6 +354,40 @@ export const procurementApi = {
 
   removeCatalogItem: (id: string): Promise<void> =>
     apiClient.delete(`/procurement/catalog/${id}`).then(() => undefined),
+
+  /** Ofertas de todos los proveedores activos para esos productos. */
+  listOffers: (productIds: string[]): Promise<CatalogOffer[]> =>
+    apiClient
+      .get('/procurement/catalog/offers', {
+        params: { productIds: productIds.join(',') },
+      })
+      .then((r) =>
+        (r.data as CatalogOffer[]).map((raw) => ({
+          ...normalizeCatalogItem(raw),
+          supplier: {
+            ...raw.supplier,
+            shippingCost: numberOrNull(raw.supplier.shippingCost),
+            minOrderAmount: numberOrNull(raw.supplier.minOrderAmount),
+            volumeDiscounts: (raw.supplier.volumeDiscounts ?? []).map((tier) => ({
+              minAmount: Number(tier.minAmount),
+              percent: Number(tier.percent),
+            })),
+          },
+        })),
+      ),
+
+  /** Ítems sin vincular, de cualquier proveedor, que parecen ser esos productos. */
+  listLinkSuggestions: (productIds: string[]): Promise<LinkSuggestion[]> =>
+    apiClient
+      .get('/procurement/catalog/link-suggestions', {
+        params: { productIds: productIds.join(',') },
+      })
+      .then((r) =>
+        (r.data as LinkSuggestion[]).map((raw) => ({
+          ...raw,
+          item: { ...normalizeCatalogItem(raw.item), supplier: raw.item.supplier },
+        })),
+      ),
 
   listSuppliers: (): Promise<Supplier[]> =>
     apiClient

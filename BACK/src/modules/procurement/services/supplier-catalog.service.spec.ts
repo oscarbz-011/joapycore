@@ -10,6 +10,9 @@ describe('SupplierCatalogService', () => {
   let service: SupplierCatalogService;
   let repository: {
     findBySupplier: jest.Mock;
+    findOffers: jest.Mock;
+    findProductsForMatching: jest.Mock;
+    findUnlinkedMatching: jest.Mock;
     findById: jest.Mock;
     update: jest.Mock;
     delete: jest.Mock;
@@ -25,6 +28,9 @@ describe('SupplierCatalogService', () => {
   beforeEach(() => {
     repository = {
       findBySupplier: jest.fn().mockResolvedValue([]),
+      findOffers: jest.fn().mockResolvedValue([]),
+      findProductsForMatching: jest.fn().mockResolvedValue([]),
+      findUnlinkedMatching: jest.fn().mockResolvedValue([]),
       findById: jest.fn().mockResolvedValue({ id: 'item-1', productId: null }),
       update: jest.fn(),
       delete: jest.fn(),
@@ -246,6 +252,69 @@ describe('SupplierCatalogService', () => {
         }),
       ).rejects.toBeInstanceOf(UnprocessableEntityException);
       expect(repository.update).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('findOffers', () => {
+    it('asks for the offers of the tenant only', async () => {
+      await service.findOffers('tenant-1', ['prod-1', 'prod-2']);
+
+      expect(repository.findOffers).toHaveBeenCalledWith('tenant-1', [
+        'prod-1',
+        'prod-2',
+      ]);
+    });
+  });
+
+  describe('findLinkSuggestions', () => {
+    const product = {
+      id: 'prod-1',
+      name: 'ABRIDOR DE VINHO SMARTFY AV01B',
+      model: null,
+    };
+
+    it('proposes the unlinked items that look like the product', async () => {
+      repository.findProductsForMatching.mockResolvedValue([product]);
+      repository.findUnlinkedMatching.mockResolvedValue([
+        {
+          id: 'item-b',
+          supplierId: 'sup-b',
+          description: 'Abridor de vinho Smartfy AV01B negro',
+        },
+        { id: 'item-c', supplierId: 'sup-c', description: 'PARLANTE SMARTFY' },
+      ]);
+
+      const suggestions = await service.findLinkSuggestions('tenant-1', [
+        'prod-1',
+      ]);
+
+      expect(repository.findProductsForMatching).toHaveBeenCalledWith(
+        'tenant-1',
+        ['prod-1'],
+      );
+      expect(repository.findUnlinkedMatching).toHaveBeenCalledWith('tenant-1', [
+        'abridor',
+        'vinho',
+        'smartfy',
+        'av01b',
+      ]);
+      expect(suggestions).toEqual([
+        {
+          productId: 'prod-1',
+          score: 1,
+          item: expect.objectContaining({ id: 'item-b' }),
+        },
+      ]);
+    });
+
+    // Un producto de otra empresa no vuelve del repositorio: no se busca nada.
+    it('searches nothing for products the tenant does not have', async () => {
+      const suggestions = await service.findLinkSuggestions('tenant-2', [
+        'prod-1',
+      ]);
+
+      expect(suggestions).toEqual([]);
+      expect(repository.findUnlinkedMatching).not.toHaveBeenCalled();
     });
   });
 

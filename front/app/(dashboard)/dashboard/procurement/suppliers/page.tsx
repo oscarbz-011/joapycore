@@ -20,6 +20,8 @@ import {
 import { useTableSort } from '@/lib/use-table-sort';
 import { procurementApi, type Supplier } from '../../../../../lib/api/procurement';
 
+const EMPTY = <span className="text-muted-foreground">—</span>;
+
 // ── Página ────────────────────────────────────────────────────────────────────
 
 type DialogState = { mode: 'create' } | { mode: 'edit'; supplier: Supplier } | null;
@@ -123,8 +125,11 @@ export default function SuppliersPage() {
                 <tr className="border-b border-border bg-muted/30 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
                   <SortableHeader label="Proveedor" sortKey="name" sort={sort} onSort={toggle} />
                   <SortableHeader label="Contacto" sortKey="contact" sort={sort} onSort={toggle} />
+                  <SortableHeader label="Email" sortKey="email" sort={sort} onSort={toggle} />
+                  <SortableHeader label="Teléfono" sortKey="phone" sort={sort} onSort={toggle} />
                   <SortableHeader label="RUC" sortKey="taxId" sort={sort} onSort={toggle} />
-                  <SortableHeader label="Plazo de pago" sortKey="term" sort={sort} onSort={toggle} />
+                  <SortableHeader label="Plazo de pago" sortKey="term" sort={sort} onSort={toggle} className="whitespace-nowrap" />
+                  <SortableHeader label="Tipo" sortKey="type" sort={sort} onSort={toggle} />
                   <SortableHeader label="Estado" sortKey="status" sort={sort} onSort={toggle} />
                   <th className="px-4 py-3 text-right">
                     <span className="sr-only">Acciones</span>
@@ -138,32 +143,20 @@ export default function SuppliersPage() {
                     onClick={() => openCatalog(supplier)}
                     className="cursor-pointer transition-colors hover:bg-muted/20"
                   >
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium text-foreground">{supplier.name}</span>
-                        {supplier.isImporter && <Badge variant="secondary">Importador</Badge>}
-                      </div>
-                      {supplier.address && (
-                        <p className="mt-0.5 text-xs text-muted-foreground">{supplier.address}</p>
-                      )}
+                    <td className="px-4 py-3 font-medium text-foreground">{supplier.name}</td>
+                    <td className="px-4 py-3 text-foreground">{supplier.contactName ?? EMPTY}</td>
+                    <td className="px-4 py-3 text-foreground">{supplier.email ?? EMPTY}</td>
+                    <td className="px-4 py-3 whitespace-nowrap text-foreground">
+                      {supplier.phone ?? EMPTY}
                     </td>
-                    <td className="px-4 py-3">
-                      {supplier.contactName || supplier.email || supplier.phone ? (
-                        <>
-                          <p className="text-foreground">{supplier.contactName ?? '—'}</p>
-                          <p className="mt-0.5 text-xs text-muted-foreground">
-                            {[supplier.email, supplier.phone].filter(Boolean).join(' · ')}
-                          </p>
-                        </>
-                      ) : (
-                        <span className="text-muted-foreground">—</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 tabular-nums text-foreground">
-                      {supplier.taxId ?? <span className="text-muted-foreground">—</span>}
+                    <td className="px-4 py-3 whitespace-nowrap tabular-nums text-foreground">
+                      {supplier.taxId ?? EMPTY}
                     </td>
                     <td className="px-4 py-3 text-foreground">
                       {paymentTermLabel(supplier.paymentTermDays)}
+                    </td>
+                    <td className="px-4 py-3 text-foreground">
+                      {supplier.isImporter ? 'Importador' : 'Local'}
                     </td>
                     <td className="px-4 py-3">
                       <Badge variant={supplier.isActive ? 'secondary' : 'outline'}>

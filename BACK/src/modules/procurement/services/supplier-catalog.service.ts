@@ -6,6 +6,7 @@ import {
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Prisma } from '@prisma/client';
 import { normalizePriceTiers } from '../commercial-terms.util';
+import { productTokens, rankLinkSuggestions } from '../link-suggestions.util';
 import {
   SupplierCatalogRepository,
   type CatalogFilters,
@@ -51,6 +52,34 @@ export class SupplierCatalogService {
   ) {
     await this.getSupplierOrFail(tenantId, supplierId);
     return this.repository.findBySupplier(tenantId, supplierId, filters);
+  }
+
+  findOffers(tenantId: string, productIds: string[]) {
+    return this.repository.findOffers(tenantId, productIds);
+  }
+
+  // Para cada producto, ítems sin vincular de otros catálogos que parecen ser
+  // ese mismo producto. Solo propone: vincular sigue siendo una decisión de
+  // quien usa el comparador.
+  async findLinkSuggestions(tenantId: string, productIds: string[]) {
+    const products = await this.repository.findProductsForMatching(
+      tenantId,
+      productIds,
+    );
+    const words = [...new Set(products.flatMap((p) => productTokens(p)))];
+    if (words.length === 0) return [];
+
+    const candidates = await this.repository.findUnlinkedMatching(
+      tenantId,
+      words,
+    );
+    return products.flatMap((product) =>
+      rankLinkSuggestions(product, candidates).map(({ item, score }) => ({
+        productId: product.id,
+        score,
+        item,
+      })),
+    );
   }
 
   async importFile(
