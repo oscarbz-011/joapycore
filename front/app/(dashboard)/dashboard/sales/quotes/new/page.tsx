@@ -261,7 +261,8 @@ export default function NewQuotePage() {
         className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]"
       >
         <div className="min-w-0 space-y-6">
-        <Card className="gap-4 p-5">
+        {/* overflow-visible: la lista del buscador se despliega por fuera de la tarjeta. */}
+        <Card className="gap-4 overflow-visible p-5">
           <h2 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Para quién es</h2>
           <Tabs value={partyMode} onValueChange={(v) => setPartyMode(v as 'customer' | 'prospect')}>
             <TabsList className="w-full sm:w-auto">
@@ -347,7 +348,7 @@ export default function NewQuotePage() {
 
         </Card>
 
-        <Card className="gap-4 p-5">
+        <Card className="gap-4 overflow-visible p-5">
           <div>
             <h2 className="mb-3 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Ítems</h2>
             <div className="space-y-2">
