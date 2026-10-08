@@ -246,6 +246,11 @@ const STATIC_GROUPS: SidebarGroup[] = [
         permission: "logistics:read",
       },
       {
+        label: "Rutas de entrega",
+        href: "/dashboard/logistics/routes",
+        permission: "logistics:read",
+      },
+      {
         label: "Mis entregas",
         href: "/dashboard/logistics/mine",
         permission: "logistics:track",
