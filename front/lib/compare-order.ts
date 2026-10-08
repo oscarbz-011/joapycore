@@ -118,7 +118,8 @@ export function orderPayload(
     productId: string;
     quantity: number;
     unitCost: number;
-  }[],
+  }[],  /** Entrega esperada (AAAA-MM-DD), si el proveedor informó un plazo. */
+  expectedDate = '',
 ): CreatePurchaseOrderPayload {
   // Dos filas pueden haber terminado en el mismo producto, y la orden no
   // admite un producto repetido: se suman en una sola línea.
@@ -135,5 +136,10 @@ export function orderPayload(
       });
     }
   }
-  return { supplierId, purchaseType: 'LOCAL', items };
+  return {
+    supplierId,
+    purchaseType: 'LOCAL',
+    ...(expectedDate && { expectedDate }),
+    items,
+  };
 }

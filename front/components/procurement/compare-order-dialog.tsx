@@ -29,6 +29,8 @@ import {
   staysDraft,
   type NewProductForm,
 } from '@/lib/compare-order';
+import { localISODate } from '@/lib/date';
+import { expectedDeliveryDay } from '@/lib/purchase-order-status';
 import type { SupplierQuote } from '@/lib/supplier-comparison';
 
 const NUM_CLS =
@@ -118,6 +120,9 @@ export function CompareOrderDialog({
             quantity: line.quantity,
             unitCost: line.unitCost,
           })),
+          // Propuesta con el plazo de entrega del proveedor; se puede cambiar
+          // después desde la orden.
+          expectedDeliveryDay(localISODate(new Date()), quote.supplier.leadTimeDays),
         ),
       );
     },

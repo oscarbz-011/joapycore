@@ -125,3 +125,22 @@ export function changedDeliveryError(
   if (!expectedDate) return 'Elegí la fecha de entrega';
   return confirmDeliveryError(expectedDate, orderDate);
 }
+
+/**
+ * Entrega esperada de una orden creada el día `orderDay` (AAAA-MM-DD), según
+ * el plazo de entrega del proveedor. Vacío si el proveedor no informó plazo.
+ */
+export function expectedDeliveryDay(
+  orderDay: string,
+  leadTimeDays: number | null | undefined,
+): string {
+  if (leadTimeDays === null || leadTimeDays === undefined || leadTimeDays < 0) {
+    return '';
+  }
+  const [year, month, day] = orderDay.split('-').map(Number);
+  if (!year || !month || !day) return '';
+  // Días de calendario en UTC: sin corrimientos por zona horaria.
+  return new Date(Date.UTC(year, month - 1, day + leadTimeDays))
+    .toISOString()
+    .slice(0, 10);
+}

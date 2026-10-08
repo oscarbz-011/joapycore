@@ -219,3 +219,19 @@ describe('orderPlan — buying a look-alike of an existing product', () => {
     expect(plan.lines[0].productId).toBe('prod-1');
   });
 });
+
+describe('orderPayload — expected delivery', () => {
+  const lines = [
+    { itemId: 'a-1', productId: 'prod-1', quantity: 1, unitCost: 10_000 },
+  ];
+
+  it('carries the date proposed from the lead time of the supplier', () => {
+    expect(orderPayload('sup-a', lines, '2026-10-14').expectedDate).toBe(
+      '2026-10-14',
+    );
+  });
+
+  it('leaves it out when the supplier gave no lead time', () => {
+    expect(orderPayload('sup-a', lines)).not.toHaveProperty('expectedDate');
+  });
+});

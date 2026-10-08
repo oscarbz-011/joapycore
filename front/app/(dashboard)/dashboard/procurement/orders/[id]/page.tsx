@@ -37,6 +37,7 @@ import {
   orderActions,
   orderEmailError,
 } from '@/lib/purchase-order-status';
+import { paymentConditionLabel } from '@/lib/suppliers';
 import { cn } from '@/lib/utils';
 
 // 'delivery' no cambia el estado: solo la entrega estimada.
@@ -304,7 +305,7 @@ export default function PurchaseOrderDetailPage() {
         <div className="min-w-0 space-y-6">
           <Card className="gap-4 p-5">
             <SectionTitle>Datos de la orden</SectionTitle>
-            <dl className="grid gap-x-6 gap-y-4 sm:grid-cols-2 xl:grid-cols-4">
+            <dl className="grid gap-x-6 gap-y-4 sm:grid-cols-2 xl:grid-cols-5">
               <Fact label="Proveedor">
                 <Link
                   href={`/dashboard/procurement/suppliers/${order.supplier.id}`}
@@ -319,6 +320,9 @@ export default function PurchaseOrderDetailPage() {
                 )}
               </Fact>
               <Fact label="Fecha de la orden">{formatDatePY(order.orderDate, 'utc')}</Fact>
+              <Fact label="Condición de pago">
+                {paymentConditionLabel(order.paymentTermDays)}
+              </Fact>
               <Fact
                 label="Entrega estimada (interno)"
                 className={cn(

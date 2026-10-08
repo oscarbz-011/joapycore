@@ -6,6 +6,7 @@ import {
   orderEmailError,
   changedDeliveryError,
   confirmDeliveryError,
+  expectedDeliveryDay,
   deliveryPrompt,
   orderCalendarDay,
 } from './purchase-order-status';
@@ -161,5 +162,23 @@ describe('asking about the delivery date when confirming', () => {
     expect(changedDeliveryError('', ORDER_DATE)).toBe('Elegí la fecha de entrega');
     expect(changedDeliveryError('2026-10-05', ORDER_DATE)).toMatch(/anterior/);
     expect(changedDeliveryError('2026-10-12', ORDER_DATE)).toBeNull();
+  });
+});
+
+// La fecha esperada de entrega se propone con el plazo del proveedor.
+describe('expectedDeliveryDay', () => {
+  it('adds the lead time of the supplier to the day of the order', () => {
+    expect(expectedDeliveryDay('2026-10-07', 7)).toBe('2026-10-14');
+    expect(expectedDeliveryDay('2026-10-07', 0)).toBe('2026-10-07');
+  });
+
+  it('rolls over months and years', () => {
+    expect(expectedDeliveryDay('2026-10-28', 7)).toBe('2026-11-04');
+    expect(expectedDeliveryDay('2026-12-28', 7)).toBe('2027-01-04');
+  });
+
+  it('proposes nothing when the supplier gave no lead time', () => {
+    expect(expectedDeliveryDay('2026-10-07', null)).toBe('');
+    expect(expectedDeliveryDay('2026-10-07', undefined)).toBe('');
   });
 });

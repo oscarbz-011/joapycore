@@ -217,6 +217,8 @@ export interface PurchaseOrder {
   items: PurchaseOrderItem[];
   /** Solo viene al pedir una orden puntual, no en el listado. */
   statusChanges?: PurchaseOrderStatusChange[];
+  /** Condición de pago pactada en la orden, en días (0 = contado). */
+  paymentTermDays: number;
   /** Anticipo que pide la orden antes de despachar (0 = ninguno). */
   advanceAmount: number;
   /** Saldo del anticipo y sus movimientos; solo en la orden puntual. */
