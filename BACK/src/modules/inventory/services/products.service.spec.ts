@@ -782,7 +782,7 @@ describe('ProductsService', () => {
 
     it('passes the filters and the search on to the query', async () => {
       await service.pageMovements('tenant-1', {
-        reason: 'PURCHASE' as never,
+        reason: 'PURCHASE',
         warehouseId: 'wh-1',
         q: 'heladera samsung',
         sortBy: 'quantity',
