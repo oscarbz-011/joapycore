@@ -1,27 +1,9 @@
-// Cuánto recorre y cuánto tarda una ruta de entrega, para decidir si entra en
-// su turno o si conviene sumarle, sacarle o pasarle entregas a otra.
+// Cuánto recorre y cuánto tarda una ruta de entrega, para decidir en qué
+// orden conviene hacerla y cuánto le suma una entrega más.
 //
 // Es una estimación: la distancia sale de las ubicaciones guardadas de los
 // clientes, en línea recta y corregida por un factor de calle. No consulta
 // ningún servicio de mapas ni conoce el tránsito.
-
-import { parseISODate, toISODate } from './date';
-
-export type DeliveryShift = 'MORNING' | 'AFTERNOON';
-
-export interface ShiftWindow {
-  label: string;
-  /** "07:00 – 12:00" */
-  hours: string;
-  minutes: number;
-}
-
-export const SHIFTS: Record<DeliveryShift, ShiftWindow> = {
-  MORNING: { label: 'Mañana', hours: '07:00 – 12:00', minutes: 5 * 60 },
-  AFTERNOON: { label: 'Tarde', hours: '13:00 – 18:00', minutes: 5 * 60 },
-};
-
-export const SHIFT_ORDER: DeliveryShift[] = ['MORNING', 'AFTERNOON'];
 
 /** Supuestos de la estimación. */
 export const ROUTE_ASSUMPTIONS = {
@@ -31,8 +13,6 @@ export const ROUTE_ASSUMPTIONS = {
   speedKmh: 25,
   /** Estacionar, bajar el pedido, firmar. */
   minutesPerStop: 15,
-  /** Con menos margen que este, la ruta queda "justa". */
-  tightMarginMinutes: 30,
 };
 
 export interface Point {
@@ -42,7 +22,7 @@ export interface Point {
 
 type Located = { latitude: number; longitude: number };
 
-const isLocated = (point: Point): point is Located =>
+export const isLocated = (point: Point): point is Located =>
   point.latitude !== null && point.longitude !== null;
 
 const EARTH_RADIUS_KM = 6371;
@@ -71,8 +51,6 @@ function pathKm(points: Point[]): number {
   return km;
 }
 
-export type RouteLoad = 'fits' | 'tight' | 'over';
-
 export interface RouteEstimate {
   stops: number;
   /** Paradas sin ubicación: no suman distancia y la estimación queda corta. */
@@ -81,15 +59,11 @@ export interface RouteEstimate {
   travelMinutes: number;
   stopMinutes: number;
   totalMinutes: number;
-  shiftMinutes: number;
-  /** Negativo cuando la ruta no entra en el turno. */
-  spareMinutes: number;
-  load: RouteLoad;
   /** Km desde la parada ubicada anterior; null en la primera o sin ubicación. */
   legs: (number | null)[];
 }
 
-export function routeEstimate(points: Point[], shift: DeliveryShift): RouteEstimate {
+export function routeEstimate(points: Point[]): RouteEstimate {
   const legs: (number | null)[] = [];
   let previous: Located | null = null;
   for (const point of points) {
@@ -104,9 +78,6 @@ export function routeEstimate(points: Point[], shift: DeliveryShift): RouteEstim
   const km = legs.reduce<number>((sum, leg) => sum + (leg ?? 0), 0);
   const travelMinutes = Math.round((km / ROUTE_ASSUMPTIONS.speedKmh) * 60);
   const stopMinutes = points.length * ROUTE_ASSUMPTIONS.minutesPerStop;
-  const totalMinutes = travelMinutes + stopMinutes;
-  const shiftMinutes = SHIFTS[shift].minutes;
-  const spareMinutes = shiftMinutes - totalMinutes;
 
   return {
     stops: points.length,
@@ -114,15 +85,7 @@ export function routeEstimate(points: Point[], shift: DeliveryShift): RouteEstim
     km,
     travelMinutes,
     stopMinutes,
-    totalMinutes,
-    shiftMinutes,
-    spareMinutes,
-    load:
-      spareMinutes < 0
-        ? 'over'
-        : spareMinutes < ROUTE_ASSUMPTIONS.tightMarginMinutes
-          ? 'tight'
-          : 'fits',
+    totalMinutes: travelMinutes + stopMinutes,
     legs,
   };
 }
@@ -132,20 +95,13 @@ export interface Insertion {
   position: number;
   extraKm: number;
   extraMinutes: number;
-  /** Cómo queda la ruta con la entrega sumada. */
-  load: RouteLoad;
-  spareMinutes: number;
 }
 
 /**
  * Qué le cuesta a una ruta sumar una entrega, poniéndola donde menos desvía.
  * Una entrega sin ubicación va al final y solo suma el tiempo de la parada.
  */
-export function bestInsertion(
-  points: Point[],
-  candidate: Point,
-  shift: DeliveryShift,
-): Insertion {
+export function bestInsertion(points: Point[], candidate: Point): Insertion {
   let position = points.length;
   let extraKm = 0;
 
@@ -163,17 +119,11 @@ export function bestInsertion(
     extraKm = Math.max(0, best - baseKm);
   }
 
-  const after = routeEstimate(
-    [...points.slice(0, position), candidate, ...points.slice(position)],
-    shift,
-  );
-  const before = routeEstimate(points, shift);
   return {
     position,
     extraKm,
-    extraMinutes: after.totalMinutes - before.totalMinutes,
-    load: after.load,
-    spareMinutes: after.spareMinutes,
+    extraMinutes:
+      Math.round((extraKm / ROUTE_ASSUMPTIONS.speedKmh) * 60) + ROUTE_ASSUMPTIONS.minutesPerStop,
   };
 }
 
@@ -227,62 +177,4 @@ export function formatKm(km: number): string {
     minimumFractionDigits: 1,
     maximumFractionDigits: 1,
   }).format(rounded)} km`;
-}
-
-/** "Sobran 40 min", "Justa: sobran 10 min", "Se pasa 25 min". */
-export function loadSummary(estimate: Pick<RouteEstimate, 'load' | 'spareMinutes'>): string {
-  const spare = formatMinutes(Math.abs(estimate.spareMinutes));
-  if (estimate.load === 'over') return `Se pasa ${spare} del turno`;
-  if (estimate.load === 'tight') return `Justa: sobran ${spare}`;
-  return `Sobran ${spare}`;
-}
-
-/** El día de calendario que queda `days` después (o antes, en negativo). */
-export function shiftDay(day: string, days: number): string {
-  const date = parseISODate(day);
-  if (!date) return day;
-  date.setUTCDate(date.getUTCDate() + days);
-  return toISODate(date);
-}
-
-const WEEKDAYS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
-
-/** "jueves" para el día de calendario dado. */
-export function weekdayName(day: string): string {
-  const date = parseISODate(day);
-  return date ? WEEKDAYS[date.getUTCDay()] : '';
-}
-
-/** Cómo se nombra una ruta en pantalla: su nombre, o quién la hace. */
-export function routeTitle(route: {
-  name: string | null;
-  driver: { firstName: string; lastName: string } | null;
-}): string {
-  if (route.name) return route.name;
-  if (route.driver) return `${route.driver.firstName} ${route.driver.lastName}`;
-  return 'Ruta sin repartidor';
-}
-
-export interface UnplannedGroups<T> {
-  /** Programadas para el día que se está planificando. */
-  forDay: T[];
-  /** Programadas para un día anterior y todavía sin entregar. */
-  overdue: T[];
-  undated: T[];
-  later: T[];
-}
-
-/** Las entregas sin ruta, según para cuándo están programadas respecto del día. */
-export function groupUnplanned<T extends { scheduledDate: string | null }>(
-  stops: T[],
-  day: string,
-): UnplannedGroups<T> {
-  const groups: UnplannedGroups<T> = { forDay: [], overdue: [], undated: [], later: [] };
-  for (const stop of stops) {
-    if (!stop.scheduledDate) groups.undated.push(stop);
-    else if (stop.scheduledDate === day) groups.forDay.push(stop);
-    else if (stop.scheduledDate < day) groups.overdue.push(stop);
-    else groups.later.push(stop);
-  }
-  return groups;
 }

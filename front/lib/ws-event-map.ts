@@ -34,7 +34,7 @@ export const WS_EVENT_MAP: Record<string, string[][]> = {
   'delivery.note.delivered':  [['logistics-deliveries'], ['order-delivery'], ['logistics-routes']],
   // Planificación de rutas: cambia qué entregas van en cada ruta y, con
   // eso, las que cada repartidor tiene asignadas.
-  'delivery.route.changed':   [['logistics-routes'], ['logistics-deliveries'], ['logistics-mine']],
+  'delivery.route.changed':   [['logistics-routes'], ['logistics-route'], ['logistics-my-routes'], ['logistics-unplanned'], ['logistics-deliveries'], ['logistics-mine']],
   // 'order-delivery': la entrega vista desde la venta (el vendedor ve la
   // autorización del supervisor sin recargar).
   'delivery.assigned':        [['logistics-deliveries'], ['order-delivery']],

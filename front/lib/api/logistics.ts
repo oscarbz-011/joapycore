@@ -49,6 +49,8 @@ export interface DeliveryNote {
   assignmentMode: DeliveryAssignmentMode | null;
   assignedEmployee: AssignedEmployee | null;
   externalTrackingRef: string | null;
+  /** La ruta de reparto en la que sale, si ya tiene una. */
+  route: { id: string; code: string; status: string; routeDate: string } | null;
   /** Cómo llega el pedido al cliente. */
   method: DeliveryMethod;
   // Retiro en sucursal: quién se lo llevó.
@@ -96,6 +98,8 @@ export interface AssignDeliveryPayload {
   assignedEmployeeId?: string;
   carrier?: string;
   externalTrackingRef?: string;
+  /** Día en que sale con el repartidor (AAAA-MM-DD). Sin valor es hoy. */
+  routeDate?: string;
 }
 
 export interface RecordTrackingEventPayload {

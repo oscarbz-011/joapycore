@@ -21,6 +21,7 @@ import {
 import type { Customer as DeliveryCustomer } from '../../../../../lib/api/sales';
 import { formatDatePY } from '../../../../../lib/date';
 import { DeliverModal } from '../../../../../components/logistics/deliver-modal';
+import { MyRoutes } from '../../../../../components/logistics/my-routes';
 import { cn } from '@/lib/utils';
 
 // Compartido con mine/[id]/page.tsx — la dirección estructurada del cliente,
@@ -99,7 +100,11 @@ function MyDeliveryRow({ note }: { note: DeliveryNote }) {
           </p>
         </div>
 
-        {note.status === 'PENDING' && (
+        {note.status === 'PENDING' && note.route && (
+          <span className="shrink-0 text-xs text-muted-foreground">Sale con la ruta {note.route.code}</span>
+        )}
+
+        {note.status === 'PENDING' && !note.route && (
           <div className="shrink-0" onClick={(e) => e.stopPropagation()}>
             <button
               type="button"
@@ -165,6 +170,8 @@ export default function MyDeliveriesPage() {
         <h1 className="text-2xl font-semibold text-foreground">Mis entregas</h1>
         <p className="text-sm text-muted-foreground mt-0.5">Entregas asignadas a vos</p>
       </div>
+
+      <MyRoutes />
 
       <div className="flex gap-1 border-b border-border">
         {TABS.map((t) => (

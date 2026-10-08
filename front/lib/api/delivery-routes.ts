@@ -1,19 +1,40 @@
 import { apiClient } from './client';
 import type { DeliveryNoteStatus } from './logistics';
-import type { DeliveryShift } from '../route-plan';
 
-/** Una entrega tal como la ve la planificación de rutas. */
+export type DeliveryRouteStatus = 'OPEN' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED';
+
+export type RouteEventType =
+  | 'CREATED'
+  | 'STOP_ADDED'
+  | 'STOP_REMOVED'
+  | 'REORDERED'
+  | 'DRIVER_CHANGED'
+  | 'DATE_CHANGED'
+  | 'STARTED'
+  | 'STOP_DELIVERED'
+  | 'STOP_FAILED'
+  | 'COMPLETED'
+  | 'CANCELLED';
+
+export type FailureReason = 'ABSENT' | 'WRONG_ADDRESS' | 'REJECTED' | 'OTHER';
+
+interface Person {
+  id: string;
+  firstName: string;
+  lastName: string;
+}
+
+/** Una entrega vista como parada de una ruta. */
 export interface RouteStop {
   id: string;
   noteNumber: string | null;
   status: DeliveryNoteStatus;
   routeId: string | null;
-  /** Día para el que está programada (AAAA-MM-DD), si tiene. */
-  scheduledDate: string | null;
-  scheduledShift: DeliveryShift | null;
+  deliveredAt: string | null;
   saleOrderId: string;
   /** Unidades del pedido, sumando todos sus productos. */
   units: number;
+  items: { name: string; quantity: number }[];
   customer: {
     id: string;
     name: string;
@@ -25,62 +46,105 @@ export interface RouteStop {
   };
 }
 
-export interface DeliveryRoute {
+export interface RouteSummary {
   id: string;
+  /** RUT-26-000001 */
+  code: string;
+  /** Día de salida (AAAA-MM-DD). */
   date: string;
-  shift: DeliveryShift;
-  name: string | null;
+  status: DeliveryRouteStatus;
   vehicle: string | null;
-  driver: { id: string; firstName: string; lastName: string } | null;
+  driver: Person | null;
+  startedAt: string | null;
+  finishedAt: string | null;
+  createdAt: string;
+}
+
+export interface RouteListItem extends RouteSummary {
+  stops: number;
+  delivered: number;
+}
+
+export interface DeliveryRoute extends RouteSummary {
   stops: RouteStop[];
 }
 
-export interface RouteBoard {
-  date: string;
-  routes: DeliveryRoute[];
-  /** Entregas a domicilio pendientes que no están en ninguna ruta. */
-  unplanned: RouteStop[];
+export interface RouteEvent {
+  id: string;
+  type: RouteEventType;
+  detail: string | null;
+  reason: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  createdAt: string;
+  user: Person | null;
 }
 
-export interface CreateRoutePayload {
-  date: string;
-  shift: DeliveryShift;
+export interface DeliveryRouteDetail extends DeliveryRoute {
+  events: RouteEvent[];
+}
+
+export interface RoutePage {
+  items: RouteListItem[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
+export interface RouteListQuery {
+  status?: DeliveryRouteStatus;
   driverEmployeeId?: string;
-  vehicle?: string;
-  name?: string;
+  from?: string;
+  to?: string;
+  page?: number;
+  limit?: number;
+}
+
+export interface FailDeliveryPayload {
+  reason: FailureReason;
+  note?: string;
+  latitude?: number;
+  longitude?: number;
 }
 
 const BASE = '/logistics/delivery-routes';
 
 export const deliveryRoutesApi = {
-  board: (date: string): Promise<RouteBoard> =>
-    apiClient.get(`${BASE}/board`, { params: { date } }).then((r) => r.data),
+  list: (query: RouteListQuery): Promise<RoutePage> =>
+    apiClient.get(BASE, { params: query }).then((r) => r.data),
 
-  create: (dto: CreateRoutePayload): Promise<DeliveryRoute> =>
-    apiClient.post(BASE, dto).then((r) => r.data),
+  get: (id: string): Promise<DeliveryRouteDetail> =>
+    apiClient.get(`${BASE}/${id}`).then((r) => r.data),
+
+  /** Las rutas del repartidor que todavía no terminaron. */
+  mine: (): Promise<DeliveryRoute[]> => apiClient.get(`${BASE}/mine`).then((r) => r.data),
+
+  /** Entregas a domicilio pendientes que no están en ninguna ruta. */
+  unplanned: (): Promise<RouteStop[]> => apiClient.get(`${BASE}/unplanned`).then((r) => r.data),
 
   update: (
     id: string,
-    dto: { driverEmployeeId?: string | null; vehicle?: string; name?: string },
-  ): Promise<DeliveryRoute> => apiClient.patch(`${BASE}/${id}`, dto).then((r) => r.data),
+    dto: { driverEmployeeId?: string; vehicle?: string; date?: string },
+  ): Promise<DeliveryRouteDetail> => apiClient.patch(`${BASE}/${id}`, dto).then((r) => r.data),
 
-  remove: (id: string): Promise<{ id: string }> =>
-    apiClient.delete(`${BASE}/${id}`).then((r) => r.data),
+  start: (id: string, vehicle?: string): Promise<DeliveryRouteDetail> =>
+    apiClient.post(`${BASE}/${id}/start`, { vehicle }).then((r) => r.data),
+
+  cancel: (id: string): Promise<DeliveryRouteDetail> =>
+    apiClient.post(`${BASE}/${id}/cancel`, {}).then((r) => r.data),
 
   /** Suma la entrega a la ruta (o la trae de otra) en el lugar indicado. */
-  addStop: (id: string, deliveryNoteId: string, position?: number): Promise<DeliveryRoute> =>
+  addStop: (id: string, deliveryNoteId: string, position?: number): Promise<DeliveryRouteDetail> =>
     apiClient.post(`${BASE}/${id}/stops`, { deliveryNoteId, position }).then((r) => r.data),
 
-  reorder: (id: string, deliveryNoteIds: string[]): Promise<DeliveryRoute> =>
+  reorder: (id: string, deliveryNoteIds: string[]): Promise<DeliveryRouteDetail> =>
     apiClient.post(`${BASE}/${id}/order`, { deliveryNoteIds }).then((r) => r.data),
 
   removeStop: (noteId: string): Promise<{ id: string }> =>
     apiClient.post(`${BASE}/stops/${noteId}/unassign`, {}).then((r) => r.data),
 
-  /** Programa la entrega para otro día o turno; si estaba en una ruta, sale. */
-  schedule: (
-    noteId: string,
-    dto: { date: string | null; shift?: DeliveryShift | null },
-  ): Promise<{ id: string }> =>
-    apiClient.post(`${BASE}/stops/${noteId}/schedule`, dto).then((r) => r.data),
+  /** No se pudo entregar: la entrega vuelve a pendiente, sin ruta. */
+  failStop: (noteId: string, dto: FailDeliveryPayload): Promise<{ id: string }> =>
+    apiClient.post(`${BASE}/stops/${noteId}/fail`, dto).then((r) => r.data),
 };

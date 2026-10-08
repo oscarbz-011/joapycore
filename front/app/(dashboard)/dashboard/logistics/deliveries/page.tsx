@@ -5,6 +5,7 @@ import { usePermission } from '@/lib/permissions';
 import { apiErrorMessage } from '@/lib/api/api-error';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Package, Truck, CheckCircle2, Clock, ChevronDown, ChevronRight, MapPin, Phone, UserCog, X } from 'lucide-react';
 import {
@@ -18,7 +19,7 @@ import {
   STATUS_LABELS,
 } from '../../../../../lib/api/logistics';
 import type { Customer as DeliveryCustomer } from '../../../../../lib/api/sales';
-import { formatDatePY } from '../../../../../lib/date';
+import { formatDatePY, todayISODate } from '../../../../../lib/date';
 import { DeliveryMap } from '../../../../../components/logistics/delivery-map';
 import { CheckpointTimeline } from '../../../../../components/logistics/checkpoint-timeline';
 import {
@@ -26,6 +27,8 @@ import {
   DeliveryMethodPanel,
 } from '@/components/logistics/delivery-method-panel';
 import { usesCourier } from '@/lib/delivery-method';
+import { OpenInMaps } from '@/components/logistics/open-in-maps';
+import { DatePicker } from '@/components/ui/date-picker';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -167,6 +170,8 @@ function AssignModal({ note, onClose }: { note: DeliveryNote; onClose: () => voi
   const [employeeId, setEmployeeId] = useState(note.assignedEmployee?.id ?? '');
   const [carrier, setCarrier] = useState(note.assignmentMode === 'EXTERNAL_COMPANY' ? (note.carrier ?? '') : '');
   const [externalTrackingRef, setExternalTrackingRef] = useState(note.externalTrackingRef ?? '');
+  // Día en que sale: la entrega entra en la ruta del repartidor para ese día.
+  const [routeDate, setRouteDate] = useState(note.route?.routeDate.slice(0, 10) ?? todayISODate());
   const [error, setError] = useState('');
 
   const { data: couriers = [] } = useQuery({
@@ -182,11 +187,13 @@ function AssignModal({ note, onClose }: { note: DeliveryNote; onClose: () => voi
         assignedEmployeeId: mode !== 'EXTERNAL_COMPANY' ? employeeId || undefined : undefined,
         carrier: mode === 'EXTERNAL_COMPANY' ? carrier || undefined : undefined,
         externalTrackingRef: externalTrackingRef || undefined,
+        routeDate: mode !== 'EXTERNAL_COMPANY' ? routeDate : undefined,
       };
       return logisticsApi.assign(note.id, dto);
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['logistics-deliveries'] });
+      void queryClient.invalidateQueries({ queryKey: ['logistics-routes'] });
       onClose();
     },
     onError: (err: Error) => {
@@ -278,6 +285,16 @@ function AssignModal({ note, onClose }: { note: DeliveryNote; onClose: () => voi
           )}
         </div>
 
+        {mode !== 'EXTERNAL_COMPANY' && (
+          <div className="space-y-1.5 mt-4">
+            <Label htmlFor="assign-route-date">Sale el</Label>
+            <DatePicker id="assign-route-date" value={routeDate} onChange={(value) => value && setRouteDate(value)} />
+            <p className="text-[11px] text-muted-foreground/70">
+              La entrega entra en la ruta del repartidor para ese día. Si todavía no tiene una, se crea sola.
+            </p>
+          </div>
+        )}
+
         {error && <p className="text-destructive text-xs mt-3">{error}</p>}
 
         <div className="flex justify-end gap-2 mt-5">
@@ -359,7 +376,8 @@ function DeliveryCard({ note }: { note: DeliveryNote }) {
                     Reasignar
                   </Button>
                 )}
-                {canDispatch && (
+                {/* Las entregas de una ruta salen juntas, al iniciar la ruta. */}
+                {canDispatch && !note.route && (
                   <Button size="sm" onClick={() => setDispatching(true)}>
                     Despachar
                   </Button>
@@ -413,6 +431,14 @@ function DeliveryCard({ note }: { note: DeliveryNote }) {
                   {note.assignmentMode === 'EXTERNAL_COMPANY' ? note.carrier : note.assignedEmployee ? `${note.assignedEmployee.firstName} ${note.assignedEmployee.lastName}` : note.carrier}
                 </span>
                 {note.vehicle && <span><span className="font-medium">Vehículo:</span> {note.vehicle}</span>}
+                {note.route && (
+                  <span>
+                    <span className="font-medium">Ruta:</span>{' '}
+                    <Link href={`/dashboard/logistics/routes/${note.route.id}`} className="underline underline-offset-4">
+                      {note.route.code}
+                    </Link>
+                  </span>
+                )}
                 {note.externalTrackingRef && <span><span className="font-medium">Guía:</span> {note.externalTrackingRef}</span>}
               </div>
             )}
@@ -440,6 +466,13 @@ function DeliveryCard({ note }: { note: DeliveryNote }) {
                     Sin ubicación del cliente registrada — se completa cuando el repartidor confirma o corrige la ubicación al entregar.
                   </p>
                 )}
+                <OpenInMaps
+                  destination={{
+                    latitude: customer.latitude ?? null,
+                    longitude: customer.longitude ?? null,
+                    address: address ?? null,
+                  }}
+                />
               </>
             )}
 
