@@ -8,6 +8,9 @@ import { DeliveryNotesController } from './controllers/delivery-notes.controller
 import { DeliveryTrackingController } from './controllers/delivery-tracking.controller';
 import { DeliveryMethodsController } from './controllers/delivery-methods.controller';
 import { DeliveryMethodsService } from './services/delivery-methods.service';
+import { DeliveryRoutesController } from './controllers/delivery-routes.controller';
+import { DeliveryRoutesRepository } from './repositories/delivery-routes.repository';
+import { DeliveryRoutesService } from './services/delivery-routes.service';
 import { LogisticsOnSaleCompletedListener } from './events/logistics-on-sale-completed.listener';
 
 // Orden de controllers importa: DeliveryTrackingController declara rutas
@@ -23,12 +26,15 @@ import { LogisticsOnSaleCompletedListener } from './events/logistics-on-sale-com
     DeliveryTrackingController,
     DeliveryMethodsController,
     DeliveryNotesController,
+    DeliveryRoutesController,
   ],
   providers: [
     DeliveryNotesService,
     DeliveryTrackingService,
     DeliveryMethodsService,
+    DeliveryRoutesService,
     DeliveryNotesRepository,
+    DeliveryRoutesRepository,
     DeliveryTrackingEventsRepository,
     LogisticsSourcesRepository,
     LogisticsOnSaleCompletedListener,

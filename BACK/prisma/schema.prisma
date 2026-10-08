@@ -143,6 +143,12 @@ enum SellerDeliveryRequestStatus {
   REJECTED
 }
 
+// Franja del día en la que se programa una entrega a domicilio.
+enum DeliveryShift {
+  MORNING
+  AFTERNOON
+}
+
 enum DeliveryNoteStatus {
   PENDING
   DISPATCHED
@@ -515,6 +521,7 @@ model Tenant {
   downPayments               DownPayment[]
   salePayments               SalePayment[]
   deliveryNotes              DeliveryNote[]
+  deliveryRoutes             DeliveryRoute[]
   deliveryTrackingEvents     DeliveryTrackingEvent[]
   collectionRoutes           CollectionRoute[]
   collectionVisits           CollectionVisit[]
@@ -695,6 +702,7 @@ model User {
   supplierInvoicesReviewed       SupplierInvoice[]           @relation("SupplierInvoiceReviewedBy")
   deliverySellerRequests         DeliveryNote[]              @relation("DeliverySellerRequester")
   deliverySellerDecisions        DeliveryNote[]              @relation("DeliverySellerDecider")
+  createdDeliveryRoutes          DeliveryRoute[]             @relation("DeliveryRouteCreatedBy")
 
   @@index([tenantId])
   @@map("users")
@@ -1497,6 +1505,12 @@ model DeliveryNote {
   sellerDecidedById   String?                      @map("seller_decided_by_id")
   sellerDecidedAt     DateTime?                    @map("seller_decided_at")
   sellerDecisionNote  String?                      @map("seller_decision_note")
+  // Planificación: para cuándo está programada y en qué ruta va. Una entrega
+  // puede tener fecha y turno sin estar todavía en ninguna ruta.
+  scheduledDate       DateTime?                    @map("scheduled_date") @db.Date
+  scheduledShift      DeliveryShift?               @map("scheduled_shift")
+  routeId             String?                      @map("route_id")
+  routeOrder          Int?                         @map("route_order")
   issuedAt            DateTime?                    @map("issued_at")
   deliveredAt         DateTime?                    @map("delivered_at")
   notes               String?
@@ -1508,10 +1522,37 @@ model DeliveryNote {
   assignedEmployee  Employee?               @relation(fields: [assignedEmployeeId], references: [id])
   sellerRequestedBy User?                   @relation("DeliverySellerRequester", fields: [sellerRequestedById], references: [id])
   sellerDecidedBy   User?                   @relation("DeliverySellerDecider", fields: [sellerDecidedById], references: [id])
+  route             DeliveryRoute?          @relation(fields: [routeId], references: [id], onDelete: SetNull)
   trackingEvents    DeliveryTrackingEvent[]
 
   @@index([tenantId, status])
+  @@index([tenantId, scheduledDate])
+  @@index([routeId])
   @@map("delivery_notes")
+}
+
+// Una salida de reparto: un día, un turno, un repartidor y sus paradas en
+// orden. El avance no se guarda acá: sale del estado de cada entrega.
+model DeliveryRoute {
+  id               String        @id @default(uuid())
+  tenantId         String        @map("tenant_id")
+  routeDate        DateTime      @map("route_date") @db.Date
+  shift            DeliveryShift
+  name             String?
+  driverEmployeeId String?       @map("driver_employee_id")
+  vehicle          String?
+  notes            String?
+  createdById      String?       @map("created_by_id")
+  createdAt        DateTime      @default(now()) @map("created_at")
+  updatedAt        DateTime      @updatedAt @map("updated_at")
+
+  tenant     Tenant         @relation(fields: [tenantId], references: [id])
+  driver     Employee?      @relation(fields: [driverEmployeeId], references: [id], onDelete: SetNull)
+  createdBy  User?          @relation("DeliveryRouteCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  deliveries DeliveryNote[]
+
+  @@index([tenantId, routeDate])
+  @@map("delivery_routes")
 }
 
 // Checkpoints manuales del recorrido (salió del depósito → en camino →
@@ -2008,6 +2049,7 @@ model Employee {
   payrollItems       PayrollRecordItem[]
   approvedLeaves     Leave[]             @relation("LeaveApprover")
   assignedDeliveries DeliveryNote[]
+  deliveryRoutes     DeliveryRoute[]
 
   @@unique([tenantId, employeeNumber])
   @@unique([tenantId, documentType, documentNumber])
