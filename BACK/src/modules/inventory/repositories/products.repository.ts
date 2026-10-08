@@ -8,7 +8,10 @@ import {
   StockMovementType,
 } from '@prisma/client';
 import { randomUUID } from 'crypto';
-import { accentVariants } from '../../../common/pagination/pagination';
+import {
+  accentVariants,
+  normalizeSearch,
+} from '../../../common/pagination/pagination';
 import { PrismaService } from '../../../prisma/prisma.service';
 
 export interface ProductFilters {
@@ -224,10 +227,18 @@ export class ProductsRepository {
       ...(query.reason && { reason: query.reason }),
       AND: query.words.map((word) => ({
         product: {
-          OR: accentVariants(word).flatMap((variant) => [
-            { name: { contains: variant, mode: 'insensitive' as const } },
-            { model: { contains: variant, mode: 'insensitive' as const } },
-          ]),
+          OR: [
+            // Sin distinguir acentos, contra el texto que mantiene la base.
+            { searchText: { contains: normalizeSearch(word) } },
+            // Base creada sin migraciones: no tiene ese texto.
+            {
+              searchText: null,
+              OR: accentVariants(word).flatMap((variant) => [
+                { name: { contains: variant, mode: 'insensitive' as const } },
+                { model: { contains: variant, mode: 'insensitive' as const } },
+              ]),
+            },
+          ],
         },
       })),
     };

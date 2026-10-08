@@ -1,5 +1,6 @@
 import {
   accentVariants,
+  normalizeSearch,
   orderByFrom,
   pageWindow,
   paginated,
@@ -102,5 +103,14 @@ describe('accentVariants', () => {
 
   it('searches a plain word once', () => {
     expect(accentVariants('benitez')).toEqual(['benitez']);
+  });
+});
+
+describe('normalizeSearch', () => {
+  // Lo que se tipea se compara contra un texto en minúsculas y sin acentos.
+  it('makes accents and capitals irrelevant', () => {
+    expect(normalizeSearch('BENÍTEZ')).toBe('benitez');
+    expect(normalizeSearch('benitez')).toBe('benitez');
+    expect(normalizeSearch('Ñandú')).toBe('nandu');
   });
 });

@@ -88,3 +88,14 @@ export function accentVariants(word: string): string[] {
   const plain = word.normalize('NFD').replace(/[̀-ͯ]/g, '');
   return plain === word ? [word] : [word, plain];
 }
+
+/**
+ * La palabra tal como queda en las columnas `search_text`: en minúsculas y
+ * sin acentos. Así "BENÍTEZ", "benitez" y "Benítez" son la misma búsqueda.
+ */
+export function normalizeSearch(word: string): string {
+  return word
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+}

@@ -1,6 +1,9 @@
 import type { DocumentType, Prisma } from '@prisma/client';
 import { Injectable } from '@nestjs/common';
-import { accentVariants } from '../../../common/pagination/pagination';
+import {
+  accentVariants,
+  normalizeSearch,
+} from '../../../common/pagination/pagination';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { PrismaClientOrTx } from '../../../prisma/types';
 import { CreateCustomerDto } from '../dto/create-customer.dto';
@@ -43,11 +46,20 @@ export class CustomersRepository {
       tenantId,
       deletedAt: null,
       AND: query.words.map((word) => ({
-        OR: SEARCHED.flatMap((field) =>
-          accentVariants(word).map((variant) => ({
-            [field]: { contains: variant, mode: 'insensitive' as const },
-          })),
-        ),
+        OR: [
+          // Sin distinguir acentos, contra el texto que mantiene la base.
+          { searchText: { contains: normalizeSearch(word) } },
+          // Base creada sin migraciones: no tiene ese texto. Se busca campo
+          // por campo, que sí distingue acentos.
+          {
+            searchText: null,
+            OR: SEARCHED.flatMap((field) =>
+              accentVariants(word).map((variant) => ({
+                [field]: { contains: variant, mode: 'insensitive' as const },
+              })),
+            ),
+          },
+        ],
       })),
     };
     const [items, total] = await this.prisma.$transaction([

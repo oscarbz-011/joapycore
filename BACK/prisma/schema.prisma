@@ -795,6 +795,10 @@ model Product {
   model                  String?
   name                   String
   description            String?
+  // Texto de búsqueda: en minúsculas y sin acentos. Lo calcula la base
+  // (columna generada con unaccent, ver la migración); la aplicación solo
+  // lo lee. Es null en una base creada sin migraciones (`db push`).
+  searchText             String?        @map("search_text")
   isSerialized           Boolean        @default(false) @map("is_serialized")
   usesLots               Boolean        @default(false) @map("uses_lots")
   // Naturaleza del producto — ver enum ProductKind. Define de dónde entra su
@@ -1283,6 +1287,10 @@ model Customer {
   monthlyIncome   Decimal?      @map("monthly_income") @db.Decimal(12, 2)
   creditLimit     Decimal?      @map("credit_limit") @db.Decimal(12, 2)
   notes           String?
+  // Texto de búsqueda: en minúsculas y sin acentos. Lo calcula la base
+  // (columna generada con unaccent, ver la migración); la aplicación solo
+  // lo lee. Es null en una base creada sin migraciones (`db push`).
+  searchText      String?       @map("search_text")
 
   // Marca manual de incobrable/judicial (calificación 6). Quién la puso o la
   // quitó queda en el log de auditoría.
