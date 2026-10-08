@@ -15,6 +15,7 @@ function makeNote(overrides = {}) {
     assignmentMode: null as string | null,
     assignedEmployeeId: null as string | null,
     carrier: null as string | null,
+    route: null as { id: string; code: string } | null,
     saleOrder: { id: 'order-1', customerId: 'cust-1' },
     ...overrides,
   };
@@ -41,6 +42,10 @@ describe('DeliveryTrackingService', () => {
   };
   let deliveryNotesService: { markDelivered: jest.Mock };
   let eventEmitter: { emit: jest.Mock };
+  let deliveryRoutesService: {
+    assignToDriver: jest.Mock;
+    removeDelivery: jest.Mock;
+  };
 
   beforeEach(() => {
     prisma = {
@@ -62,6 +67,12 @@ describe('DeliveryTrackingService', () => {
     };
     deliveryNotesService = { markDelivered: jest.fn() };
     eventEmitter = { emit: jest.fn() };
+    deliveryRoutesService = {
+      assignToDriver: jest
+        .fn()
+        .mockResolvedValue({ id: 'route-1', code: 'RUT-26-000001' }),
+      removeDelivery: jest.fn(),
+    };
 
     service = new DeliveryTrackingService(
       new LogisticsSourcesRepository(prisma as any),
@@ -69,10 +80,73 @@ describe('DeliveryTrackingService', () => {
       trackingEventsRepository as any,
       deliveryNotesService as any,
       eventEmitter as any,
+      deliveryRoutesService as any,
     );
   });
 
   describe('assign', () => {
+    const courier = { id: 'emp-1', firstName: 'Juan', lastName: 'Pérez' };
+
+    // Asignar a un repartidor es ponerla en su ruta de ese día.
+    it('puts a pending delivery in the route of the driver', async () => {
+      deliveryNotesRepository.findById.mockResolvedValue(makeNote());
+      prisma.employee.findFirst.mockResolvedValue(courier);
+
+      await service.assign(
+        'tenant-1',
+        'note-1',
+        {
+          assignmentMode: 'INTERNAL_EMPLOYEE',
+          assignedEmployeeId: 'emp-1',
+          routeDate: '2099-03-10',
+        } as any,
+        'user-1',
+      );
+
+      expect(deliveryRoutesService.assignToDriver).toHaveBeenCalledWith(
+        'tenant-1',
+        'note-1',
+        courier,
+        { date: '2099-03-10', userId: 'user-1' },
+      );
+    });
+
+    it('takes it out of its route when it goes to an outside courier', async () => {
+      deliveryNotesRepository.findById.mockResolvedValue(
+        makeNote({ route: { id: 'route-1', code: 'RUT-26-000001' } }),
+      );
+
+      await service.assign('tenant-1', 'note-1', {
+        assignmentMode: 'EXTERNAL_COMPANY',
+        carrier: 'Courier SA',
+      } as any);
+
+      expect(deliveryRoutesService.removeDelivery).toHaveBeenCalledWith(
+        'tenant-1',
+        'note-1',
+        undefined,
+      );
+      expect(deliveryRoutesService.assignToDriver).not.toHaveBeenCalled();
+    });
+
+    it('does not reassign a delivery that already left with its route', async () => {
+      deliveryNotesRepository.findById.mockResolvedValue(
+        makeNote({
+          status: 'DISPATCHED',
+          route: { id: 'route-1', code: 'RUT-26-000001' },
+        }),
+      );
+      prisma.employee.findFirst.mockResolvedValue(courier);
+
+      await expect(
+        service.assign('tenant-1', 'note-1', {
+          assignmentMode: 'INTERNAL_EMPLOYEE',
+          assignedEmployeeId: 'emp-1',
+        } as any),
+      ).rejects.toThrow(/RUT-26-000001/);
+      expect(deliveryNotesRepository.assign).not.toHaveBeenCalled();
+    });
+
     it('throws NotFoundException when the note does not exist', async () => {
       deliveryNotesRepository.findById.mockResolvedValue(null);
 

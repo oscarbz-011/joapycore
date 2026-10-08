@@ -83,6 +83,12 @@ export class DeliveryNotesService {
         'Debe asignar la entrega antes de despacharla',
       );
     }
+    // Las entregas de una ruta salen todas juntas, cuando la ruta se inicia.
+    if (note.route) {
+      throw new UnprocessableEntityException(
+        `Esta entrega sale con la ruta ${note.route.code}: iniciá la ruta para despacharla`,
+      );
+    }
     await this.repo.update(tenantId, id, {
       status: 'DISPATCHED',
       carrier: dto.carrier,

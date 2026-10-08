@@ -1,9 +1,16 @@
 import { Injectable } from '@nestjs/common';
-import { DeliveryShift, Prisma } from '@prisma/client';
+import {
+  DeliveryRouteEventType,
+  DeliveryRouteStatus,
+  Prisma,
+} from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
+import { nextRouteCode } from '../delivery-route.util';
 
-// Lo que la planificación necesita de cada entrega: a quién, dónde y en qué
-// lugar del recorrido.
+const PERSON = { id: true, firstName: true, lastName: true } as const;
+
+// Lo que una ruta necesita de cada entrega: a quién, dónde, qué lleva y en
+// qué lugar del recorrido.
 const stop = {
   id: true,
   noteNumber: true,
@@ -11,9 +18,8 @@ const stop = {
   method: true,
   routeId: true,
   routeOrder: true,
-  scheduledDate: true,
-  scheduledShift: true,
   assignedEmployeeId: true,
+  deliveredAt: true,
   createdAt: true,
   saleOrder: {
     select: {
@@ -33,65 +39,206 @@ const stop = {
           longitude: true,
         },
       },
-      items: { select: { quantity: true } },
+      items: {
+        select: { quantity: true, product: { select: { name: true } } },
+      },
     },
   },
 } satisfies Prisma.DeliveryNoteSelect;
 
-const route = {
+const summary = {
   id: true,
+  code: true,
   routeDate: true,
-  shift: true,
-  name: true,
+  status: true,
   vehicle: true,
-  notes: true,
   driverEmployeeId: true,
-  driver: { select: { id: true, firstName: true, lastName: true } },
+  startedAt: true,
+  finishedAt: true,
+  createdAt: true,
+  driver: { select: PERSON },
+} satisfies Prisma.DeliveryRouteSelect;
+
+const listed = {
+  ...summary,
+  deliveries: { select: { status: true } },
+} satisfies Prisma.DeliveryRouteSelect;
+
+const withStops = {
+  ...summary,
   deliveries: {
     select: stop,
     orderBy: [{ routeOrder: 'asc' }, { createdAt: 'asc' }],
   },
 } satisfies Prisma.DeliveryRouteSelect;
 
+const detailed = {
+  ...withStops,
+  events: {
+    select: {
+      id: true,
+      type: true,
+      detail: true,
+      reason: true,
+      latitude: true,
+      longitude: true,
+      createdAt: true,
+      user: { select: PERSON },
+    },
+    orderBy: { createdAt: 'asc' },
+  },
+} satisfies Prisma.DeliveryRouteSelect;
+
+const stopWithRoute = {
+  ...stop,
+  route: {
+    select: {
+      id: true,
+      code: true,
+      status: true,
+      routeDate: true,
+      driverEmployeeId: true,
+    },
+  },
+} satisfies Prisma.DeliveryNoteSelect;
+
 export type RouteStopRow = Prisma.DeliveryNoteGetPayload<{
   select: typeof stop;
 }>;
-export type RouteRow = Prisma.DeliveryRouteGetPayload<{ select: typeof route }>;
+export type StopWithRouteRow = Prisma.DeliveryNoteGetPayload<{
+  select: typeof stopWithRoute;
+}>;
+export type RouteListRow = Prisma.DeliveryRouteGetPayload<{
+  select: typeof listed;
+}>;
+export type RouteRow = Prisma.DeliveryRouteGetPayload<{
+  select: typeof withStops;
+}>;
+export type RouteDetailRow = Prisma.DeliveryRouteGetPayload<{
+  select: typeof detailed;
+}>;
 
 /** Qué cambia en una entrega al entrar o salir de una ruta. */
 export type StopChange = Pick<
   Prisma.DeliveryNoteUncheckedUpdateManyInput,
+  | 'status'
   | 'routeId'
   | 'routeOrder'
-  | 'scheduledDate'
-  | 'scheduledShift'
   | 'assignmentMode'
   | 'assignedEmployeeId'
   | 'carrier'
+  | 'vehicle'
 >;
 
-// Solo se planifica lo que todavía no salió y va a domicilio.
+/** Un renglón del historial de una ruta. */
+export interface RouteEventInput {
+  routeId: string;
+  type: DeliveryRouteEventType;
+  deliveryNoteId?: string;
+  detail?: string;
+  reason?: string;
+  latitude?: number;
+  longitude?: number;
+  userId?: string;
+}
+
+export interface RouteFilter {
+  status?: DeliveryRouteStatus;
+  driverEmployeeId?: string;
+  from?: Date;
+  to?: Date;
+}
+
+// Solo entra en una ruta lo que todavía no salió y va a domicilio.
 const PLANNABLE = { status: 'PENDING', method: 'HOME_DELIVERY' } as const;
 
-// Tope de entregas sin ruta que se muestran para planificar.
+// Tope de entregas sin ruta que se ofrecen para sumar.
 const UNPLANNED_LIMIT = 300;
+
+// Dos rutas creadas a la vez piden el mismo código: se reintenta con el siguiente.
+const CODE_ATTEMPTS = 5;
+
+const isDuplicate = (error: unknown) =>
+  error instanceof Prisma.PrismaClientKnownRequestError &&
+  error.code === 'P2002';
 
 @Injectable()
 export class DeliveryRoutesRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  findForDay(tenantId: string, routeDate: Date) {
-    return this.prisma.deliveryRoute.findMany({
-      where: { tenantId, routeDate },
-      select: route,
-      orderBy: [{ shift: 'asc' }, { createdAt: 'asc' }],
-    });
+  async findPage(
+    tenantId: string,
+    filter: RouteFilter,
+    window: { skip: number; take: number },
+  ): Promise<[RouteListRow[], number]> {
+    const where: Prisma.DeliveryRouteWhereInput = {
+      tenantId,
+      ...(filter.status && { status: filter.status }),
+      ...(filter.driverEmployeeId && {
+        driverEmployeeId: filter.driverEmployeeId,
+      }),
+      ...((filter.from || filter.to) && {
+        routeDate: { gte: filter.from, lte: filter.to },
+      }),
+    };
+    return this.prisma.$transaction([
+      this.prisma.deliveryRoute.findMany({
+        where,
+        select: listed,
+        // El id desempata: el orden de las páginas no puede cambiar entre pedidos.
+        orderBy: [{ routeDate: 'desc' }, { createdAt: 'desc' }, { id: 'asc' }],
+        skip: window.skip,
+        take: window.take,
+      }),
+      this.prisma.deliveryRoute.count({ where }),
+    ]);
   }
 
   findById(tenantId: string, id: string) {
     return this.prisma.deliveryRoute.findFirst({
       where: { id, tenantId },
-      select: route,
+      select: withStops,
+    });
+  }
+
+  findDetail(tenantId: string, id: string) {
+    return this.prisma.deliveryRoute.findFirst({
+      where: { id, tenantId },
+      select: detailed,
+    });
+  }
+
+  /** Las rutas que el repartidor tiene por hacer o está haciendo. */
+  findActiveForDriver(tenantId: string, driverEmployeeId: string) {
+    return this.prisma.deliveryRoute.findMany({
+      where: {
+        tenantId,
+        driverEmployeeId,
+        status: { in: ['OPEN', 'IN_PROGRESS'] },
+      },
+      select: withStops,
+      orderBy: [{ routeDate: 'asc' }, { createdAt: 'asc' }],
+    });
+  }
+
+  /**
+   * La ruta del repartidor para ese día a la que se puede sumar una entrega:
+   * la que todavía no salió y, si no hay, la que está en la calle.
+   */
+  findJoinable(tenantId: string, driverEmployeeId: string, routeDate: Date) {
+    return this.prisma.deliveryRoute.findFirst({
+      where: {
+        tenantId,
+        driverEmployeeId,
+        routeDate,
+        status: { in: ['OPEN', 'IN_PROGRESS'] },
+      },
+      select: withStops,
+      // OPEN antes que IN_PROGRESS.
+      orderBy: [
+        { startedAt: { sort: 'asc', nulls: 'first' } },
+        { createdAt: 'asc' },
+      ],
     });
   }
 
@@ -100,10 +247,7 @@ export class DeliveryRoutesRepository {
     return this.prisma.deliveryNote.findMany({
       where: { tenantId, routeId: null, ...PLANNABLE },
       select: stop,
-      orderBy: [
-        { scheduledDate: { sort: 'asc', nulls: 'last' } },
-        { createdAt: 'asc' },
-      ],
+      orderBy: { createdAt: 'asc' },
       take: UNPLANNED_LIMIT,
     });
   }
@@ -111,53 +255,48 @@ export class DeliveryRoutesRepository {
   findStop(tenantId: string, id: string) {
     return this.prisma.deliveryNote.findFirst({
       where: { id, tenantId },
-      select: stop,
+      select: stopWithRoute,
     });
   }
 
-  create(data: {
+  /** Crea la ruta con el código que sigue y deja asentado quién la creó. */
+  async create(data: {
     tenantId: string;
     routeDate: Date;
-    shift: DeliveryShift;
-    driverEmployeeId?: string;
-    vehicle?: string;
-    name?: string;
+    driverEmployeeId: string;
     createdById?: string;
-  }) {
-    return this.prisma.deliveryRoute.create({ data, select: { id: true } });
-  }
-
-  /**
-   * Cambia los datos de la ruta y, si cambió el repartidor, se lo pasa a las
-   * entregas que todavía no salieron.
-   */
-  update(
-    tenantId: string,
-    id: string,
-    data: Pick<
-      Prisma.DeliveryRouteUncheckedUpdateManyInput,
-      'driverEmployeeId' | 'vehicle' | 'name'
-    >,
-    pendingStops?: StopChange,
-  ) {
-    return this.prisma.$transaction(async (tx) => {
-      const { count } = await tx.deliveryRoute.updateMany({
-        where: { id, tenantId },
-        data,
+  }): Promise<RouteRow> {
+    for (let attempt = 1; ; attempt += 1) {
+      const last = await this.prisma.deliveryRoute.findFirst({
+        where: { tenantId: data.tenantId, code: { startsWith: 'RUT-' } },
+        // El correlativo no se reinicia con el año: manda el número, no el prefijo.
+        orderBy: { createdAt: 'desc' },
+        select: { code: true },
       });
-      if (count === 1 && pendingStops) {
-        await tx.deliveryNote.updateMany({
-          where: { tenantId, routeId: id, status: 'PENDING' },
-          data: pendingStops,
+      try {
+        return await this.prisma.deliveryRoute.create({
+          data: {
+            ...data,
+            code: nextRouteCode(last?.code ?? null, new Date()),
+            events: {
+              create: {
+                tenantId: data.tenantId,
+                type: 'CREATED',
+                userId: data.createdById,
+              },
+            },
+          },
+          select: withStops,
         });
+      } catch (error) {
+        if (!isDuplicate(error) || attempt >= CODE_ATTEMPTS) throw error;
       }
-      return count;
-    });
+    }
   }
 
   /**
    * Pone una entrega en la ruta y renumera el recorrido. Devuelve false, sin
-   * tocar nada, si la entrega dejó de ser planificable entre la lectura y la
+   * tocar nada, si la entrega dejó de estar pendiente entre la lectura y la
    * escritura (la despacharon o pasó a retiro en sucursal).
    */
   placeStop(
@@ -166,6 +305,7 @@ export class DeliveryRoutesRepository {
     noteId: string,
     change: StopChange,
     orderedIds: string[],
+    events: RouteEventInput[],
   ): Promise<boolean> {
     return this.prisma.$transaction(async (tx) => {
       const { count } = await tx.deliveryNote.updateMany({
@@ -174,14 +314,171 @@ export class DeliveryRoutesRepository {
       });
       if (count !== 1) return false;
       await this.renumber(tx, tenantId, routeId, orderedIds);
+      await this.record(tx, tenantId, events);
       return true;
     });
   }
 
-  reorder(tenantId: string, routeId: string, orderedIds: string[]) {
-    return this.prisma.$transaction((tx) =>
-      this.renumber(tx, tenantId, routeId, orderedIds),
-    );
+  reorder(
+    tenantId: string,
+    routeId: string,
+    orderedIds: string[],
+    events: RouteEventInput[],
+  ) {
+    return this.prisma.$transaction(async (tx) => {
+      await this.renumber(tx, tenantId, routeId, orderedIds);
+      await this.record(tx, tenantId, events);
+    });
+  }
+
+  /**
+   * Saca una entrega de su ruta mientras siga en el estado esperado. False si
+   * otro la cambió antes.
+   */
+  releaseStop(
+    tenantId: string,
+    noteId: string,
+    whileIs: { status: 'PENDING' | 'DISPATCHED'; routeId: string },
+    change: StopChange,
+    events: RouteEventInput[],
+  ): Promise<boolean> {
+    return this.prisma.$transaction(async (tx) => {
+      const { count } = await tx.deliveryNote.updateMany({
+        where: { id: noteId, tenantId, ...whileIs },
+        data: change,
+      });
+      if (count !== 1) return false;
+      await this.record(tx, tenantId, events);
+      return true;
+    });
+  }
+
+  /**
+   * Cambia datos de una ruta que sigue en uno de los estados dados y, si hace
+   * falta, se los pasa a las entregas que todavía no salieron.
+   */
+  update(
+    tenantId: string,
+    id: string,
+    whileIn: DeliveryRouteStatus[],
+    data: Pick<
+      Prisma.DeliveryRouteUncheckedUpdateManyInput,
+      'driverEmployeeId' | 'vehicle' | 'routeDate'
+    >,
+    pendingStops: StopChange | undefined,
+    events: RouteEventInput[],
+  ): Promise<boolean> {
+    return this.prisma.$transaction(async (tx) => {
+      const { count } = await tx.deliveryRoute.updateMany({
+        where: { id, tenantId, status: { in: whileIn } },
+        data,
+      });
+      if (count !== 1) return false;
+      if (pendingStops) {
+        await tx.deliveryNote.updateMany({
+          where: { tenantId, routeId: id, status: 'PENDING' },
+          data: pendingStops,
+        });
+      }
+      await this.record(tx, tenantId, events);
+      return true;
+    });
+  }
+
+  /**
+   * La ruta sale: pasa a "en curso" y todas sus entregas pendientes quedan
+   * despachadas. Devuelve las entregas que salieron, o null si la ruta ya no
+   * estaba abierta.
+   */
+  start(
+    tenantId: string,
+    id: string,
+    stops: StopChange,
+    route: Pick<Prisma.DeliveryRouteUncheckedUpdateManyInput, 'vehicle'>,
+    events: RouteEventInput[],
+  ): Promise<{ id: string; saleOrderId: string }[] | null> {
+    return this.prisma.$transaction(async (tx) => {
+      const { count } = await tx.deliveryRoute.updateMany({
+        where: { id, tenantId, status: 'OPEN' },
+        data: { ...route, status: 'IN_PROGRESS', startedAt: new Date() },
+      });
+      if (count !== 1) return null;
+      const leaving = await tx.deliveryNote.findMany({
+        where: { tenantId, routeId: id, status: 'PENDING' },
+        select: { id: true, saleOrderId: true },
+      });
+      await tx.deliveryNote.updateMany({
+        where: { tenantId, routeId: id, status: 'PENDING' },
+        data: stops,
+      });
+      await this.record(tx, tenantId, events);
+      return leaving;
+    });
+  }
+
+  /** Cancela una ruta que no salió y deja sus entregas sin ruta. */
+  cancel(
+    tenantId: string,
+    id: string,
+    release: StopChange,
+    events: RouteEventInput[],
+  ): Promise<boolean> {
+    return this.prisma.$transaction(async (tx) => {
+      const { count } = await tx.deliveryRoute.updateMany({
+        where: { id, tenantId, status: 'OPEN' },
+        data: { status: 'CANCELLED', finishedAt: new Date() },
+      });
+      if (count !== 1) return false;
+      await tx.deliveryNote.updateMany({
+        where: { tenantId, routeId: id },
+        data: release,
+      });
+      await this.record(tx, tenantId, events);
+      return true;
+    });
+  }
+
+  /**
+   * Cierra una ruta en curso si ya no le queda ninguna parada por resolver.
+   * True si la cerró.
+   */
+  completeIfDone(
+    tenantId: string,
+    id: string,
+    events: RouteEventInput[],
+  ): Promise<boolean> {
+    return this.prisma.$transaction(async (tx) => {
+      const open = await tx.deliveryNote.count({
+        where: {
+          tenantId,
+          routeId: id,
+          status: { in: ['PENDING', 'DISPATCHED'] },
+        },
+      });
+      if (open > 0) return false;
+      const { count } = await tx.deliveryRoute.updateMany({
+        where: { id, tenantId, status: 'IN_PROGRESS' },
+        data: { status: 'COMPLETED', finishedAt: new Date() },
+      });
+      if (count !== 1) return false;
+      await this.record(tx, tenantId, events);
+      return true;
+    });
+  }
+
+  addEvents(tenantId: string, events: RouteEventInput[]) {
+    return this.record(this.prisma, tenantId, events);
+  }
+
+  private async record(
+    client: Prisma.TransactionClient,
+    tenantId: string,
+    events: RouteEventInput[],
+  ) {
+    if (events.length === 0) return;
+    await client.deliveryRouteEvent.createMany({
+      data: events.map((event) => ({ ...event, tenantId })),
+    });
   }
 
   private async renumber(
@@ -196,37 +493,5 @@ export class DeliveryRoutesRepository {
         data: { routeOrder: index },
       });
     }
-  }
-
-  /** Saca una entrega pendiente de su ruta o le cambia la programación. */
-  async changePendingStop(
-    tenantId: string,
-    noteId: string,
-    change: StopChange,
-  ): Promise<boolean> {
-    const { count } = await this.prisma.deliveryNote.updateMany({
-      where: { id: noteId, tenantId, ...PLANNABLE },
-      data: change,
-    });
-    return count === 1;
-  }
-
-  /**
-   * Borra la ruta y deja sus entregas sin ruta (y sin el repartidor que les
-   * había dado la ruta). Devuelve false si alguna ya salió.
-   */
-  remove(tenantId: string, id: string, release: StopChange): Promise<boolean> {
-    return this.prisma.$transaction(async (tx) => {
-      const started = await tx.deliveryNote.count({
-        where: { tenantId, routeId: id, status: { not: 'PENDING' } },
-      });
-      if (started > 0) return false;
-      await tx.deliveryNote.updateMany({
-        where: { tenantId, routeId: id },
-        data: release,
-      });
-      await tx.deliveryRoute.deleteMany({ where: { id, tenantId } });
-      return true;
-    });
   }
 }

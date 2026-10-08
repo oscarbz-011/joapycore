@@ -1,7 +1,6 @@
 import {
   Body,
   Controller,
-  Delete,
   Get,
   HttpCode,
   HttpStatus,
@@ -18,14 +17,23 @@ import { RequiredModule } from '../../../common/decorators/required-module.decor
 import type { JwtPayload } from '../../../common/types/jwt-payload.interface';
 import {
   AddRouteDeliveryDto,
-  CreateDeliveryRouteDto,
+  FailDeliveryDto,
+  ListDeliveryRoutesDto,
   ReorderRouteDto,
-  RouteBoardQueryDto,
-  ScheduleDeliveryDto,
+  StartRouteDto,
   UpdateDeliveryRouteDto,
 } from '../dto/delivery-route.dto';
 import { DeliveryRoutesService } from '../services/delivery-routes.service';
 
+const actorOf = (user: JwtPayload) => ({
+  userId: user.sub,
+  permissions: user.permissions,
+});
+
+// Iniciar la ruta y registrar una entrega no realizada van sin
+// @Permissions(): los hace logística O el repartidor de la ruta, y
+// PermissionsGuard solo sabe exigir todos los permisos a la vez. La
+// verificación vive en DeliveryRoutesService.
 @ApiTags('Logistics')
 @ApiBearerAuth()
 @RequiredModule('logistics')
@@ -33,31 +41,41 @@ import { DeliveryRoutesService } from '../services/delivery-routes.service';
 export class DeliveryRoutesController {
   constructor(private readonly service: DeliveryRoutesService) {}
 
-  @Get('board')
+  @Get()
   @Permissions('logistics:read')
   @ApiOperation({
-    summary: 'Rutas de un día y entregas a domicilio que esperan una ruta',
+    summary: 'Rutas de entrega, de la más reciente a la más vieja',
   })
-  board(@CurrentTenant() tenantId: string, @Query() query: RouteBoardQueryDto) {
-    return this.service.board(tenantId, query.date);
-  }
-
-  @Post()
-  @Permissions('logistics:assign')
-  @ApiOperation({ summary: 'Crear una ruta para un día y un turno' })
-  create(
+  list(
     @CurrentTenant() tenantId: string,
-    @CurrentUser() user: JwtPayload,
-    @Body() dto: CreateDeliveryRouteDto,
+    @Query() query: ListDeliveryRoutesDto,
   ) {
-    return this.service.create(tenantId, dto, user.sub);
+    return this.service.list(tenantId, query);
   }
 
-  // Antes de las rutas con :id — "stops" no es el id de una ruta.
+  // Las rutas literales van antes de las de :id.
+  @Get('mine')
+  @Permissions('logistics:track')
+  @ApiOperation({ summary: 'Rutas del repartidor que todavía no terminaron' })
+  findMine(@CurrentTenant() tenantId: string, @CurrentUser() user: JwtPayload) {
+    return this.service.findMine(tenantId, user.sub);
+  }
+
+  @Get('unplanned')
+  @Permissions('logistics:read')
+  @ApiOperation({
+    summary: 'Entregas a domicilio pendientes que no están en ninguna ruta',
+  })
+  findUnplanned(@CurrentTenant() tenantId: string) {
+    return this.service.findUnplanned(tenantId);
+  }
+
   @Post('stops/:noteId/unassign')
   @HttpCode(HttpStatus.OK)
   @Permissions('logistics:assign')
-  @ApiOperation({ summary: 'Sacar una entrega de su ruta' })
+  @ApiOperation({
+    summary: 'Sacar de su ruta una entrega que todavía no salió',
+  })
   removeDelivery(
     @CurrentTenant() tenantId: string,
     @CurrentUser() user: JwtPayload,
@@ -66,24 +84,31 @@ export class DeliveryRoutesController {
     return this.service.removeDelivery(tenantId, noteId, user.sub);
   }
 
-  @Post('stops/:noteId/schedule')
+  @Post('stops/:noteId/fail')
   @HttpCode(HttpStatus.OK)
-  @Permissions('logistics:assign')
   @ApiOperation({
-    summary: 'Programar una entrega para otro día o turno, o dejarla sin fecha',
+    summary:
+      'Registrar que no se pudo entregar (logística o el repartidor de la ruta)',
   })
-  schedule(
+  failDelivery(
     @CurrentTenant() tenantId: string,
     @CurrentUser() user: JwtPayload,
     @Param('noteId') noteId: string,
-    @Body() dto: ScheduleDeliveryDto,
+    @Body() dto: FailDeliveryDto,
   ) {
-    return this.service.schedule(tenantId, noteId, dto, user.sub);
+    return this.service.failDelivery(tenantId, noteId, dto, actorOf(user));
+  }
+
+  @Get(':id')
+  @Permissions('logistics:read')
+  @ApiOperation({ summary: 'Una ruta con sus paradas y su historial' })
+  findOne(@CurrentTenant() tenantId: string, @Param('id') id: string) {
+    return this.service.findOne(tenantId, id);
   }
 
   @Patch(':id')
   @Permissions('logistics:assign')
-  @ApiOperation({ summary: 'Cambiar repartidor, vehículo o nombre de la ruta' })
+  @ApiOperation({ summary: 'Cambiar repartidor, vehículo o fecha de la ruta' })
   update(
     @CurrentTenant() tenantId: string,
     @CurrentUser() user: JwtPayload,
@@ -93,18 +118,32 @@ export class DeliveryRoutesController {
     return this.service.update(tenantId, id, dto, user.sub);
   }
 
-  @Delete(':id')
+  @Post(':id/start')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Iniciar la ruta (logística o el repartidor de la ruta)',
+  })
+  start(
+    @CurrentTenant() tenantId: string,
+    @CurrentUser() user: JwtPayload,
+    @Param('id') id: string,
+    @Body() dto: StartRouteDto,
+  ) {
+    return this.service.start(tenantId, id, dto, actorOf(user));
+  }
+
+  @Post(':id/cancel')
+  @HttpCode(HttpStatus.OK)
   @Permissions('logistics:assign')
   @ApiOperation({
-    summary:
-      'Borrar una ruta que todavía no salió; sus entregas quedan sin ruta',
+    summary: 'Cancelar una ruta que no salió; sus entregas quedan sin ruta',
   })
-  remove(
+  cancel(
     @CurrentTenant() tenantId: string,
     @CurrentUser() user: JwtPayload,
     @Param('id') id: string,
   ) {
-    return this.service.remove(tenantId, id, user.sub);
+    return this.service.cancel(tenantId, id, user.sub);
   }
 
   @Post(':id/stops')

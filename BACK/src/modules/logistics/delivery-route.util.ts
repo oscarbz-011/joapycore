@@ -46,3 +46,26 @@ export function isSameStops(current: string[], proposed: string[]): boolean {
   const seen = new Set(proposed);
   return seen.size === proposed.length && current.every((id) => seen.has(id));
 }
+
+const ROUTE_CODE = /^RUT-\d{2}-(\d+)$/;
+
+/**
+ * El código de la ruta siguiente: "RUT-26-000001", correlativo por empresa.
+ * El número no se reinicia con el año, igual que el código de cliente.
+ */
+export function nextRouteCode(lastCode: string | null, now: Date): string {
+  const year = String(now.getUTCFullYear()).slice(-2);
+  const last = lastCode ? ROUTE_CODE.exec(lastCode) : null;
+  const next = last ? Number(last[1]) + 1 : 1;
+  return `RUT-${year}-${String(next).padStart(6, '0')}`;
+}
+
+/** Por qué no se pudo entregar una parada. */
+export const FAILURE_REASONS = {
+  ABSENT: 'No había nadie para recibir',
+  WRONG_ADDRESS: 'La dirección es incorrecta',
+  REJECTED: 'El cliente rechazó el pedido',
+  OTHER: 'Otro motivo',
+} as const;
+
+export type FailureReason = keyof typeof FAILURE_REASONS;

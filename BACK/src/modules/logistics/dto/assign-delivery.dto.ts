@@ -5,6 +5,7 @@ import {
   IsOptional,
   IsString,
   IsUUID,
+  Matches,
   ValidateIf,
 } from 'class-validator';
 
@@ -40,4 +41,15 @@ export class AssignDeliveryDto {
   @IsOptional()
   @IsString()
   externalTrackingRef?: string;
+
+  @ApiPropertyOptional({
+    example: '2026-10-09',
+    description:
+      'Día en que sale con el repartidor. Sin valor es hoy. La entrega entra en la ruta del repartidor para ese día',
+  })
+  @IsOptional()
+  @Matches(/^\d{4}-\d{2}-\d{2}$/, {
+    message: 'La fecha tiene que ser un día (AAAA-MM-DD)',
+  })
+  routeDate?: string;
 }
