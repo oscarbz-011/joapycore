@@ -32,6 +32,7 @@ export function DeliverModal({ note, onClose }: { note: DeliveryNote; onClose: (
       }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['logistics-mine'] });
+      void queryClient.invalidateQueries({ queryKey: ['logistics-my-routes'] });
       onClose();
     },
     onError: (err: Error) => {

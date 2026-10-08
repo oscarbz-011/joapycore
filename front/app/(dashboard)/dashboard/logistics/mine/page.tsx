@@ -1,219 +1,368 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Navigation, Play, Truck } from 'lucide-react';
+import { apiErrorMessage } from '@/lib/api/api-error';
+import { deliveryRoutesApi } from '@/lib/api/delivery-routes';
+import { logisticsApi, type DeliveryNote } from '@/lib/api/logistics';
+import { formatDatePY, todayISODate } from '@/lib/date';
+import { progressLabel, routeActions, routeMapLink, routeProgress } from '@/lib/delivery-route';
 import {
-  CheckCircle2,
-  ChevronRight,
-  MapPin,
-  Truck,
-  Warehouse,
-} from 'lucide-react';
+  cardFromNote,
+  cardFromStop,
+  organizeMyWork,
+  type MyRouteGroup,
+} from '@/lib/my-deliveries';
+import { DeliverModal } from '@/components/logistics/deliver-modal';
 import {
-  logisticsApi,
-  CHECKPOINT_LABELS,
-  STATUS_LABELS,
-  type DeliveryCheckpoint,
-  type DeliveryNote,
-  type DeliveryNoteStatus,
-} from '../../../../../lib/api/logistics';
-import type { Customer as DeliveryCustomer } from '../../../../../lib/api/sales';
-import { formatDatePY } from '../../../../../lib/date';
-import { DeliverModal } from '../../../../../components/logistics/deliver-modal';
-import { MyRoutes } from '../../../../../components/logistics/my-routes';
+  MyDeliveryCard,
+  type DeliveryCardActions,
+} from '@/components/logistics/my-delivery-card';
+import { RouteStatusBadge } from '@/components/logistics/route-status-badge';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
-// Compartido con mine/[id]/page.tsx — la dirección estructurada del cliente,
-// mismo criterio que ya usa deliveries/page.tsx (saleOrder.deliveryAddress
-// nunca existió en el schema).
-export function formatDeliveryAddress(customer: DeliveryCustomer): string | null {
-  const houseParts = [customer.homeStreet, customer.homeNeighborhood].filter(Boolean);
-  const aptParts = [customer.aptBuilding, customer.aptFloor, customer.aptNumber].filter(Boolean);
-  const structured = [...houseParts, ...aptParts].join(', ');
-  if (structured) return structured;
-  if (customer.address) return [customer.address, customer.city].filter(Boolean).join(', ');
-  return null;
-}
+type Tab = 'todo' | 'done';
 
-export const CHECKPOINT_ORDER: DeliveryCheckpoint[] = ['LEFT_WAREHOUSE', 'IN_TRANSIT', 'ARRIVED'];
+// Cuántas entregas hechas se ven antes de pedir más.
+const DONE_PAGE = 15;
 
-const CHECKPOINT_ICON: Record<DeliveryCheckpoint, React.ElementType> = {
-  LEFT_WAREHOUSE: Warehouse,
-  IN_TRANSIT: Truck,
-  ARRIVED: MapPin,
-  DELIVERED: CheckCircle2,
-};
-
-const STATUS_BADGE: Record<DeliveryNoteStatus, string> = {
-  PENDING:    'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300',
-  DISPATCHED: 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300',
-  DELIVERED:  'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300',
-  CANCELLED:  'bg-muted/30 text-muted-foreground',
-};
-
-// ── MyDeliveryRow — fila compacta, navega a la página de detalle ───────────────
-
-function MyDeliveryRow({ note }: { note: DeliveryNote }) {
-  const router = useRouter();
-  const queryClient = useQueryClient();
-  const [delivering, setDelivering] = useState(false);
-  const customer = note.saleOrder.customer;
-  const fullName = `${customer.firstName} ${customer.lastName}`;
-  const completed = new Set(note.trackingEvents.map((e) => e.checkpoint));
-  const nextCheckpoint = CHECKPOINT_ORDER.find((c) => !completed.has(c));
-
-  const checkpointMutation = useMutation({
-    mutationFn: (checkpoint: DeliveryCheckpoint) => logisticsApi.recordTrackingEvent(note.id, { checkpoint }),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['logistics-mine'] });
-    },
-  });
-
-  // El repartidor asignado despacha su propia entrega (empieza el viaje)
-  // sin depender de que un admin/despachador lo haga desde "Entregas" —
-  // mismo endpoint que usa esa pantalla, el backend ahora acepta
-  // logistics:manage (admin) O logistics:track + ser el asignado.
-  const dispatchMutation = useMutation({
-    mutationFn: () => logisticsApi.dispatch(note.id, {}),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['logistics-mine'] });
-    },
-  });
-
-  return (
-    <>
-      {delivering && <DeliverModal note={note} onClose={() => setDelivering(false)} />}
-
-      <div
-        onClick={() => router.push(`/dashboard/logistics/mine/${note.id}`)}
-        className="flex items-center gap-3 bg-card border border-border rounded-xl px-4 py-3 cursor-pointer hover:bg-muted/20 transition-colors"
-      >
-        <span className={cn('shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold', STATUS_BADGE[note.status])}>
-          {STATUS_LABELS[note.status]}
-        </span>
-
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold text-foreground truncate">{fullName}</p>
-          <p className="text-xs text-muted-foreground/60">
-            #{note.saleOrder.id.slice(0, 8).toUpperCase()} · {formatDatePY(note.issuedAt, 'local')}
-          </p>
-        </div>
-
-        {note.status === 'PENDING' && note.route && (
-          <span className="shrink-0 text-xs text-muted-foreground">Sale con la ruta {note.route.code}</span>
-        )}
-
-        {note.status === 'PENDING' && !note.route && (
-          <div className="shrink-0" onClick={(e) => e.stopPropagation()}>
-            <button
-              type="button"
-              onClick={() => dispatchMutation.mutate()}
-              disabled={dispatchMutation.isPending}
-              className="inline-flex items-center gap-1.5 rounded-xl bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50"
-            >
-              <Truck size={13} />
-              {dispatchMutation.isPending ? 'Despachando…' : 'Despachar'}
-            </button>
-          </div>
-        )}
-
-        {note.status === 'DISPATCHED' && (
-          <div className="flex flex-wrap items-center gap-2 shrink-0" onClick={(e) => e.stopPropagation()}>
-            {nextCheckpoint && (
-              <button
-                type="button"
-                onClick={() => checkpointMutation.mutate(nextCheckpoint)}
-                disabled={checkpointMutation.isPending}
-                className="inline-flex items-center gap-1.5 rounded-xl border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground hover:border-foreground/20 hover:text-foreground transition-colors disabled:opacity-50"
-              >
-                {(() => { const Icon = CHECKPOINT_ICON[nextCheckpoint]; return <Icon size={13} />; })()}
-                {CHECKPOINT_LABELS[nextCheckpoint]}
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={() => setDelivering(true)}
-              className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 px-3 py-1.5 text-xs font-medium text-white transition-colors"
-            >
-              <CheckCircle2 size={13} />
-              Confirmar y entregar
-            </button>
-          </div>
-        )}
-
-        <ChevronRight size={15} className="text-muted-foreground/40 shrink-0" />
-      </div>
-    </>
-  );
-}
-
-// ── Page ───────────────────────────────────────────────────────────────────────
-
-const TABS: { value: DeliveryNoteStatus; label: string }[] = [
-  { value: 'PENDING',    label: 'Asignados' },
-  { value: 'DISPATCHED', label: 'En curso' },
-  { value: 'DELIVERED',  label: 'Entregados' },
-];
+const PANEL = 'rounded-3xl bg-card p-5 shadow-sm ring-1 ring-foreground/5';
 
 export default function MyDeliveriesPage() {
-  const [tab, setTab] = useState<DeliveryNoteStatus>('PENDING');
+  const queryClient = useQueryClient();
+  const [tab, setTab] = useState<Tab>('todo');
+  const [error, setError] = useState<string | null>(null);
+  const [failingId, setFailingId] = useState<string | null>(null);
+  const [delivering, setDelivering] = useState<DeliveryNote | null>(null);
 
-  const { data: notes = [], isLoading, isError } = useQuery({
-    queryKey: ['logistics-mine', tab],
-    queryFn: () => logisticsApi.listMine(tab),
+  const routes = useQuery({ queryKey: ['logistics-my-routes'], queryFn: deliveryRoutesApi.mine });
+  const pending = useQuery({
+    queryKey: ['logistics-mine', 'PENDING'],
+    queryFn: () => logisticsApi.listMine('PENDING'),
   });
+  const dispatched = useQuery({
+    queryKey: ['logistics-mine', 'DISPATCHED'],
+    queryFn: () => logisticsApi.listMine('DISPATCHED'),
+  });
+  const queries = [routes, pending, dispatched];
+  const loading = queries.some((query) => query.isPending);
+  const failed = queries.find((query) => query.isError);
+
+  const change = useMutation({
+    mutationFn: (run: () => Promise<unknown>) => run(),
+    onMutate: () => setError(null),
+    onSuccess: () => setFailingId(null),
+    onError: (err) => setError(apiErrorMessage(err, 'No se pudo guardar el cambio.')),
+    // También ante un error: lo más probable es que la lista haya cambiado.
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: ['logistics-my-routes'] });
+      void queryClient.invalidateQueries({ queryKey: ['logistics-mine'] });
+    },
+  });
+  const busy = change.isPending;
+
+  const actions: DeliveryCardActions = {
+    deliver: setDelivering,
+    checkpoint: (noteId, checkpoint) =>
+      change.mutate(() => logisticsApi.recordTrackingEvent(noteId, { checkpoint })),
+    dispatch: (noteId) => change.mutate(() => logisticsApi.dispatch(noteId, {})),
+    fail: (noteId, dto) => change.mutate(() => deliveryRoutesApi.failStop(noteId, dto)),
+  };
+
+  const work = organizeMyWork(routes.data ?? [], [
+    ...(dispatched.data ?? []),
+    ...(pending.data ?? []),
+  ]);
 
   return (
     <div className="space-y-6">
-      <div>
+      {delivering && <DeliverModal note={delivering} onClose={() => setDelivering(null)} />}
+
+      <header>
         <h1 className="text-2xl font-semibold text-foreground">Mis entregas</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">Entregas asignadas a vos</p>
-      </div>
+        <p className="mt-0.5 text-sm text-muted-foreground">
+          {loading || failed
+            ? 'Lo que tenés asignado para repartir.'
+            : work.todo === 0
+              ? 'No tenés entregas por hacer.'
+              : work.todo === 1
+                ? 'Tenés 1 entrega por hacer.'
+                : `Tenés ${work.todo} entregas por hacer.`}
+        </p>
+      </header>
 
-      <MyRoutes />
-
-      <div className="flex gap-1 border-b border-border">
-        {TABS.map((t) => (
+      <div role="tablist" aria-label="Entregas" className="flex gap-1 border-b border-border">
+        {(
+          [
+            ['todo', 'Por hacer'],
+            ['done', 'Entregadas'],
+          ] as const
+        ).map(([value, label]) => (
           <button
-            key={t.value}
-            onClick={() => setTab(t.value)}
+            key={value}
+            type="button"
+            role="tab"
+            aria-selected={tab === value}
+            onClick={() => setTab(value)}
             className={cn(
-              'px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors',
-              tab === t.value
+              '-mb-px border-b-2 px-3 py-2 text-sm font-medium transition-colors',
+              tab === value
                 ? 'border-primary text-foreground'
                 : 'border-transparent text-muted-foreground hover:text-foreground',
             )}
           >
-            {t.label}
+            {label}
           </button>
         ))}
       </div>
 
-      {isLoading && (
-        <div className="flex items-center justify-center py-16 text-muted-foreground/60 text-sm">
-          Cargando entregas…
-        </div>
+      {error && (
+        <p role="alert" className="rounded-2xl bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          {error}
+        </p>
       )}
 
-      {isError && (
-        <div className="flex items-center justify-center py-16 text-destructive text-sm">
-          Error al cargar tus entregas.
+      {tab === 'done' ? (
+        <Delivered />
+      ) : loading ? (
+        <p className="py-16 text-center text-sm text-muted-foreground">Cargando tus entregas…</p>
+      ) : failed ? (
+        <div className="py-16 text-center">
+          <p className="text-sm text-muted-foreground">
+            {apiErrorMessage(failed.error, 'No se pudieron cargar tus entregas.')}
+          </p>
+          <Button
+            variant="outline"
+            size="sm"
+            className="mt-3"
+            onClick={() => queries.forEach((query) => void query.refetch())}
+          >
+            Reintentar
+          </Button>
         </div>
-      )}
-
-      {!isLoading && !isError && notes.length === 0 && (
-        <div className="flex flex-col items-center justify-center py-20 text-muted-foreground/60 gap-2">
-          <Truck size={36} className="opacity-30" />
-          <p className="text-sm">No tenés entregas en estado &quot;{TABS.find((t) => t.value === tab)?.label}&quot;.</p>
+      ) : work.routes.length === 0 && work.loose.length === 0 ? (
+        <div className="flex flex-col items-center gap-2 py-20 text-muted-foreground">
+          <Truck size={36} className="opacity-30" aria-hidden />
+          <p className="text-sm">No tenés entregas asignadas por ahora.</p>
         </div>
-      )}
+      ) : (
+        <div className="space-y-6">
+          {work.routes.map((group) => (
+            <RouteSection
+              key={group.route.id}
+              group={group}
+              busy={busy}
+              failingId={failingId}
+              onFailing={setFailingId}
+              onStart={() => change.mutate(() => deliveryRoutesApi.start(group.route.id))}
+              actions={actions}
+            />
+          ))}
 
-      {!isLoading && !isError && notes.length > 0 && (
-        <div className="space-y-2">
-          {notes.map((note) => <MyDeliveryRow key={note.id} note={note} />)}
+          {work.loose.length > 0 && (
+            <section aria-label="Entregas sin ruta" className={PANEL}>
+              <h2 className="text-base font-semibold">Entregas sin ruta</h2>
+              <p className="mt-0.5 text-sm text-muted-foreground">
+                Te las asignaron por separado: cada una se despacha y se entrega por su cuenta.
+              </p>
+              <ul className="mt-4 space-y-3">
+                {work.loose.map((note) => (
+                  <MyDeliveryCard
+                    key={note.id}
+                    data={cardFromNote(note)}
+                    note={note}
+                    inRoute={false}
+                    canFail={false}
+                    busy={busy}
+                    failing={false}
+                    onFailing={() => undefined}
+                    actions={actions}
+                  />
+                ))}
+              </ul>
+            </section>
+          )}
         </div>
       )}
     </div>
+  );
+}
+
+/** Una ruta del repartidor con sus paradas en el orden del recorrido. */
+function RouteSection({
+  group,
+  busy,
+  failingId,
+  onFailing,
+  onStart,
+  actions,
+}: {
+  group: MyRouteGroup;
+  busy: boolean;
+  failingId: string | null;
+  onFailing: (noteId: string | null) => void;
+  onStart: () => void;
+  actions: DeliveryCardActions;
+}) {
+  const { route, stops } = group;
+  const progress = routeProgress(route.stops);
+  const can = routeActions(
+    { status: route.status, date: route.date, stops: route.stops.length, hasDriver: true },
+    { canPlan: false, canManage: false, isDriver: true },
+    todayISODate(),
+  );
+  const mapLink = routeMapLink(
+    route.stops.filter((stop) => stop.status !== 'DELIVERED').map((stop) => stop.customer),
+  );
+  const percent = progress.total === 0 ? 0 : Math.round((progress.delivered / progress.total) * 100);
+
+  return (
+    <section aria-label={`Ruta ${route.code}`} className={PANEL}>
+      <header className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <div className="flex flex-wrap items-center gap-2">
+            <h2 className="text-base font-semibold tabular-nums">Ruta {route.code}</h2>
+            <RouteStatusBadge status={route.status} />
+          </div>
+          <p className="mt-0.5 text-sm text-muted-foreground">
+            {formatDatePY(route.date)}
+            {route.vehicle ? ` · ${route.vehicle}` : ''}
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          {mapLink && (
+            <a
+              href={mapLink.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={buttonVariants({ variant: 'outline' })}
+            >
+              <Navigation aria-hidden />
+              Ver recorrido en Google Maps
+            </a>
+          )}
+          {can.start && (
+            <Button disabled={busy} onClick={onStart}>
+              <Play aria-hidden />
+              Iniciar ruta
+            </Button>
+          )}
+        </div>
+      </header>
+
+      {can.startBlocked && (
+        <p className="mt-2 text-sm text-muted-foreground">Todavía no se puede iniciar: {can.startBlocked}</p>
+      )}
+
+      <div className="mt-4">
+        <p className="text-sm tabular-nums">{progressLabel(progress)}</p>
+        <div
+          role="progressbar"
+          aria-label="Avance de la ruta"
+          aria-valuemin={0}
+          aria-valuemax={progress.total}
+          aria-valuenow={progress.delivered}
+          className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-muted"
+        >
+          <div className="h-full rounded-full bg-primary transition-[width]" style={{ width: `${percent}%` }} />
+        </div>
+      </div>
+
+      <ol className="mt-4 space-y-3">
+        {stops.map(({ stop, note }, index) => (
+          <MyDeliveryCard
+            key={stop.id}
+            data={note ? cardFromNote(note) : cardFromStop(stop)}
+            note={note}
+            position={index + 1}
+            inRoute
+            canFail={can.failStops}
+            busy={busy}
+            failing={failingId === stop.id}
+            onFailing={(failing) => onFailing(failing ? stop.id : null)}
+            actions={actions}
+          />
+        ))}
+      </ol>
+    </section>
+  );
+}
+
+/** Lo que el repartidor ya entregó, de lo más reciente a lo más viejo. */
+function Delivered() {
+  const [visible, setVisible] = useState(DONE_PAGE);
+  const delivered = useQuery({
+    queryKey: ['logistics-mine', 'DELIVERED'],
+    queryFn: () => logisticsApi.listMine('DELIVERED'),
+  });
+
+  if (delivered.isPending) {
+    return <p className="py-16 text-center text-sm text-muted-foreground">Cargando entregas…</p>;
+  }
+  if (delivered.isError) {
+    return (
+      <div className="py-16 text-center">
+        <p className="text-sm text-muted-foreground">
+          {apiErrorMessage(delivered.error, 'No se pudieron cargar tus entregas.')}
+        </p>
+        <Button variant="outline" size="sm" className="mt-3" onClick={() => void delivered.refetch()}>
+          Reintentar
+        </Button>
+      </div>
+    );
+  }
+
+  const notes = [...delivered.data].sort((a, b) =>
+    (b.deliveredAt ?? '').localeCompare(a.deliveredAt ?? ''),
+  );
+  if (notes.length === 0) {
+    return (
+      <div className="flex flex-col items-center gap-2 py-20 text-muted-foreground">
+        <Truck size={36} className="opacity-30" aria-hidden />
+        <p className="text-sm">Todavía no entregaste ningún pedido.</p>
+      </div>
+    );
+  }
+
+  return (
+    <section aria-label="Entregadas" className={PANEL}>
+      <ul className="divide-y divide-border">
+        {notes.slice(0, visible).map((note) => {
+          const card = cardFromNote(note);
+          return (
+            <li key={note.id}>
+              <Link
+                href={`/dashboard/logistics/mine/${note.id}`}
+                className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 py-3 hover:bg-muted/30"
+              >
+                <span className="min-w-0">
+                  <span className="block font-medium">{card.customerName}</span>
+                  <span className="block text-sm text-muted-foreground">
+                    {card.address ?? 'Sin dirección cargada'}
+                  </span>
+                </span>
+                <span className="text-sm text-muted-foreground tabular-nums">
+                  {note.route ? `${note.route.code} · ` : ''}
+                  {formatDatePY(note.deliveredAt, 'local')}
+                </span>
+              </Link>
+            </li>
+          );
+        })}
+      </ul>
+      {notes.length > visible && (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="mt-2 w-full"
+          onClick={() => setVisible((current) => current + DONE_PAGE)}
+        >
+          Ver más ({notes.length - visible} restantes)
+        </Button>
+      )}
+    </section>
   );
 }

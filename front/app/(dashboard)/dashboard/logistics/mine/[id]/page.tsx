@@ -24,7 +24,7 @@ import { DeliveryMap } from '../../../../../../components/logistics/delivery-map
 import { CheckpointTimeline } from '../../../../../../components/logistics/checkpoint-timeline';
 import { DeliverModal } from '../../../../../../components/logistics/deliver-modal';
 import { OpenInMaps } from '../../../../../../components/logistics/open-in-maps';
-import { formatDeliveryAddress, CHECKPOINT_ORDER } from '../page';
+import { formatDeliveryAddress, CHECKPOINT_ORDER } from '@/lib/my-deliveries';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
