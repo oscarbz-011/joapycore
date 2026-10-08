@@ -1,101 +1,129 @@
-// Menú de Finanzas del sidebar. Los destinos se agrupan en secciones
-// (Créditos y Cobranzas, Tesorería, Contabilidad); Facturas y Reportes quedan
-// sueltos, arriba y abajo.
+// Lo que antes era el menú "Finanzas" del sidebar son ahora cinco entradas de
+// primer nivel: Facturas, Créditos y Cobranzas, Tesorería, Contabilidad y
+// Reportes. Facturas y Reportes son un enlace directo; las otras tres se
+// despliegan.
 
-export interface SectionedNavItem {
+export interface FinanceNavItem {
   label: string;
   href: string;
   permission?: string;
   module?: string;
   /** Todavía sin pantalla: se muestra apagado. */
   stub?: boolean;
-  /** Título bajo el que se agrupa; sin sección, el ítem va suelto. */
-  section?: string;
-  badge?: number;
 }
 
-const CREDIT = 'Créditos y Cobranzas';
-const TREASURY = 'Tesorería';
-const ACCOUNTING = 'Contabilidad';
+export interface FinanceNavGroup {
+  id: string;
+  label: string;
+  items: FinanceNavItem[];
+  /** Enlace directo, sin desplegable. */
+  flat?: boolean;
+  /** Se muestra si la empresa tiene alguno de estos módulos. */
+  modules?: string[];
+  /** Se muestra si la persona tiene alguno de estos permisos. */
+  anyPermission?: string[];
+}
 
-export const FINANCE_NAV_ITEMS: SectionedNavItem[] = [
+export const FINANCE_NAV_GROUPS: FinanceNavGroup[] = [
   {
+    id: 'facturas',
     label: 'Facturas',
-    href: '/dashboard/billing',
-    permission: 'billing:read',
-    module: 'billing',
-  },
-
-  {
-    section: CREDIT,
-    label: 'Evaluación de crédito',
-    href: '/dashboard/billing/approvals',
-    permission: 'sales:credit:evaluate',
-    module: 'finance',
-  },
-  {
-    section: CREDIT,
-    label: 'Financiamiento',
-    href: '/dashboard/finance',
-    permission: 'finance:read',
-    module: 'finance',
+    flat: true,
+    modules: ['billing'],
+    anyPermission: ['billing:read'],
+    items: [
+      {
+        label: 'Facturas',
+        href: '/dashboard/billing',
+        permission: 'billing:read',
+        module: 'billing',
+      },
+    ],
   },
   {
-    section: CREDIT,
-    label: 'Cuentas por cobrar',
-    href: '/dashboard/payments',
-    permission: 'payments:read',
-    module: 'payments',
+    id: 'creditos-cobranzas',
+    label: 'Créditos y Cobranzas',
+    modules: ['finance', 'payments', 'collections'],
+    anyPermission: [
+      'sales:credit:evaluate',
+      'finance:read',
+      'payments:read',
+      'collections:read',
+    ],
+    items: [
+      {
+        label: 'Evaluación de crédito',
+        href: '/dashboard/billing/approvals',
+        permission: 'sales:credit:evaluate',
+        module: 'finance',
+      },
+      {
+        label: 'Financiamiento',
+        href: '/dashboard/finance',
+        permission: 'finance:read',
+        module: 'finance',
+      },
+      {
+        label: 'Cuentas por cobrar',
+        href: '/dashboard/payments',
+        permission: 'payments:read',
+        module: 'payments',
+      },
+      {
+        label: 'Cobranzas',
+        href: '/dashboard/cobranzas',
+        permission: 'collections:read',
+        module: 'collections',
+      },
+    ],
   },
   {
-    section: CREDIT,
-    label: 'Cobranzas',
-    href: '/dashboard/cobranzas',
-    permission: 'collections:read',
-    module: 'collections',
+    id: 'tesoreria',
+    label: 'Tesorería',
+    // Hoy lo único que existe acá es Cuentas por pagar: sin ese acceso no
+    // tiene sentido mostrar una entrada con todo apagado.
+    modules: ['procurement'],
+    anyPermission: ['procurement:payables:read'],
+    items: [
+      { label: 'Caja', href: '#', stub: true },
+      { label: 'Bancos', href: '#', stub: true },
+      {
+        label: 'Cuentas por pagar',
+        href: '/dashboard/procurement/payables',
+        permission: 'procurement:payables:read',
+        module: 'procurement',
+      },
+    ],
   },
-
-  { section: TREASURY, label: 'Caja', href: '#', stub: true },
-  { section: TREASURY, label: 'Bancos', href: '#', stub: true },
   {
-    section: TREASURY,
-    label: 'Cuentas por pagar',
-    href: '/dashboard/procurement/payables',
-    permission: 'procurement:payables:read',
-    module: 'procurement',
+    id: 'contabilidad',
+    label: 'Contabilidad',
+    // Todavía sin pantallas: la ve quien ya veía el área financiera.
+    modules: ['billing', 'payments', 'finance', 'collections', 'procurement'],
+    anyPermission: [
+      'billing:read',
+      'payments:read',
+      'finance:read',
+      'collections:read',
+      'procurement:payables:read',
+    ],
+    items: [
+      { label: 'Contabilidad', href: '#', stub: true },
+      { label: 'Impuestos', href: '#', stub: true },
+      { label: 'Presupuesto', href: '#', stub: true },
+    ],
   },
-
-  { section: ACCOUNTING, label: 'Contabilidad', href: '#', stub: true },
-  { section: ACCOUNTING, label: 'Impuestos', href: '#', stub: true },
-  { section: ACCOUNTING, label: 'Presupuesto', href: '#', stub: true },
-
   {
+    id: 'reportes',
     label: 'Reportes',
-    href: '/dashboard/settings/reports',
-    permission: 'reports:read',
+    flat: true,
+    anyPermission: ['reports:read'],
+    items: [
+      {
+        label: 'Reportes',
+        href: '/dashboard/settings/reports',
+        permission: 'reports:read',
+      },
+    ],
   },
 ];
-
-export interface NavSection<T> {
-  /** null = ítems sueltos, sin título. */
-  title: string | null;
-  items: T[];
-}
-
-/**
- * Agrupa ítems consecutivos de la misma sección, respetando el orden. Se le
- * pasan los ítems ya filtrados por permisos: una sección de la que no queda
- * nada visible no aparece, ni siquiera su título.
- */
-export function groupBySection<T extends { section?: string }>(
-  items: readonly T[],
-): NavSection<T>[] {
-  const sections: NavSection<T>[] = [];
-  for (const item of items) {
-    const title = item.section ?? null;
-    const last = sections[sections.length - 1];
-    if (last && last.title === title) last.items.push(item);
-    else sections.push({ title, items: [item] });
-  }
-  return sections;
-}

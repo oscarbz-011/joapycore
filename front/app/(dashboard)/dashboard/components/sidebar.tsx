@@ -10,6 +10,10 @@ import {
   ShoppingCart,
   Truck,
   Landmark,
+  ReceiptText,
+  HandCoins,
+  Calculator,
+  ChartColumn,
   Hammer,
   Route,
   Users,
@@ -34,7 +38,7 @@ import {
   INVENTORY_NAV_ITEMS,
   isInventoryItemActive,
 } from "../../../../lib/inventory-navigation";
-import { FINANCE_NAV_ITEMS, groupBySection } from "@/lib/finance-navigation";
+import { FINANCE_NAV_GROUPS } from "@/lib/finance-navigation";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -45,8 +49,6 @@ interface SubItem {
   module?: string;
   stub?: boolean;
   badge?: number;
-  // Título bajo el que se agrupa dentro del menú (ver groupBySection).
-  section?: string;
 }
 
 interface SidebarGroup {
@@ -64,6 +66,14 @@ interface SidebarGroup {
 }
 
 // ── Group definitions ─────────────────────────────────────────────────────────
+
+const FINANCE_ICONS: Record<string, React.ElementType> = {
+  facturas: ReceiptText,
+  "creditos-cobranzas": HandCoins,
+  tesoreria: Landmark,
+  contabilidad: Calculator,
+  reportes: ChartColumn,
+};
 
 const STATIC_GROUPS: SidebarGroup[] = [
   {
@@ -168,22 +178,12 @@ const STATIC_GROUPS: SidebarGroup[] = [
       },
     ],
   },
-  {
-    id: "finanzas",
-    label: "Finanzas",
-    icon: Landmark,
-    modules: ["billing", "payments", "finance", "collections", "procurement"],
-    anyPermission: [
-      "billing:read",
-      "billing:issue",
-      "payments:read",
-      "finance:read",
-      "collections:read",
-      "sales:credit:evaluate",
-      "procurement:payables:read",
-    ],
-    items: [...FINANCE_NAV_ITEMS],
-  },
+  // Lo que era el menú "Finanzas": cinco entradas de primer nivel (ver
+  // lib/finance-navigation.ts).
+  ...FINANCE_NAV_GROUPS.map((group) => ({
+    ...group,
+    icon: FINANCE_ICONS[group.id] ?? Landmark,
+  })),
   {
     id: "logistics",
     label: "Logística",
@@ -496,6 +496,11 @@ function ModuleGroup({
       >
         <Icon size={15} className="shrink-0 opacity-75" />
         <span className="flex-1 text-left">{group.label}</span>
+        {!!item.badge && (
+          <span className="rounded-full bg-red-500/20 px-1.5 py-px text-[11px] font-bold leading-none text-red-400">
+            {item.badge}
+          </span>
+        )}
       </Link>
     );
   }
@@ -524,27 +529,7 @@ function ModuleGroup({
 
       {open && (
         <div className="mt-px flex flex-col gap-px pl-2.5">
-          {groupBySection(visibleItems).map((section, index) => (
-            <div
-              key={section.title ?? `loose-${index}`}
-              role={section.title ? "group" : undefined}
-              aria-label={section.title ?? undefined}
-              className="flex flex-col gap-px"
-            >
-              {section.title && (
-                <p className="mt-2 px-3 pb-0.5 text-[11px] font-semibold uppercase tracking-wider text-sidebar-foreground/40">
-                  {section.title}
-                </p>
-              )}
-              <div
-                className={cn(
-                  "flex flex-col gap-px",
-                  section.title && "ml-3 border-l border-sidebar-foreground/10 pl-1",
-                  // Un ítem suelto después de una sección no se pega a ella.
-                  !section.title && index > 0 && "mt-2",
-                )}
-              >
-          {section.items.map((item) => {
+          {visibleItems.map((item) => {
             const isActive =
               !item.stub &&
               item.href !== "#" &&
@@ -592,9 +577,6 @@ function ModuleGroup({
               </Link>
             );
           })}
-              </div>
-            </div>
-          ))}
         </div>
       )}
     </div>
