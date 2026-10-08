@@ -11,6 +11,7 @@ function makeOrder(
     orderNumber: 'OC-26-000007',
     orderDate: new Date('2026-10-06T00:00:00.000Z'),
     notes: 'Entregar por la mañana',
+    paymentTermDays: 30,
     tenant: {
       name: 'Mi Empresa',
       razonSocial: 'Mi Empresa S.A.',
@@ -28,7 +29,6 @@ function makeOrder(
       contactName: 'Roman Benitez',
       phone: '071 000 000',
       email: 'roman@mail.com',
-      paymentTermDays: 30,
     },
     items: [
       {
@@ -73,13 +73,13 @@ describe('buildPurchaseOrderVariables', () => {
     expect(variables['orden.fecha']).toBe('06/10/2026');
   });
 
-  it('describes the payment terms agreed with the supplier', () => {
+  it('describes the payment terms agreed on the order', () => {
     expect(
       buildPurchaseOrderVariables(makeOrder()).variables['orden.condicionPago'],
     ).toBe('Crédito a 30 días');
 
-    const cash = makeOrder();
-    cash.supplier.paymentTermDays = 0;
+    // El plazo es el de la orden: no cambia si el proveedor cambia el suyo.
+    const cash = makeOrder({ paymentTermDays: 0 });
     expect(
       buildPurchaseOrderVariables(cash).variables['orden.condicionPago'],
     ).toBe('Contado');

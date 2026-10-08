@@ -66,7 +66,8 @@ export class ProcurementOnReceiptListener {
       (sum, item) => sum + item.quantity * Number(item.unitCost),
       0,
     );
-    const termDays = receipt.purchaseOrder.supplier.paymentTermDays ?? 0;
+    // El plazo pactado en la orden, no el que el proveedor tenga hoy.
+    const termDays = receipt.purchaseOrder.paymentTermDays;
     const dueDate = new Date(receipt.receivedAt.getTime() + termDays * DAY_MS);
 
     // El anticipo pagado por la orden se descuenta de la cuenta que nace:

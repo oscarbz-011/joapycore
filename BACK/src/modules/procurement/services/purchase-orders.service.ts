@@ -155,11 +155,10 @@ export class PurchaseOrdersService {
 
     // Anticipo: el monto que venga en la orden o, si no, el porcentaje que
     // pide habitualmente el proveedor. Nunca más que el total.
-    const supplier =
-      await this.purchaseOrdersRepository.findSupplierAdvancePercent(
-        tenantId,
-        dto.supplierId,
-      );
+    const supplier = await this.purchaseOrdersRepository.findSupplierTerms(
+      tenantId,
+      dto.supplierId,
+    );
     const orderTotal = dto.items.reduce(
       (sum, item) => sum + item.quantity * item.unitCost,
       0,
@@ -203,6 +202,7 @@ export class PurchaseOrdersService {
             customsRef: dto.customsRef,
             notes: dto.notes,
             advanceAmount,
+            paymentTermDays: supplier?.paymentTermDays ?? 0,
           },
           tx,
         );

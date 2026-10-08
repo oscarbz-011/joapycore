@@ -13,6 +13,13 @@ const INVOICE_SUMMARY = {
   estimatedTotal: true,
 } as const;
 
+// Lo que la cuenta muestra de su orden: número y condición de pago.
+const ORDER_SUMMARY = {
+  id: true,
+  orderNumber: true,
+  paymentTermDays: true,
+} as const;
+
 @Injectable()
 export class AccountsPayableRepository {
   constructor(private readonly prisma: PrismaService) {}
@@ -23,7 +30,7 @@ export class AccountsPayableRepository {
       include: {
         supplier: true,
         purchaseReceipt: {
-          include: { purchaseOrder: { select: { id: true } } },
+          include: { purchaseOrder: { select: ORDER_SUMMARY } },
         },
         supplierPayments: { orderBy: { createdAt: 'asc' } },
         supplierInvoice: { select: INVOICE_SUMMARY },
@@ -42,7 +49,7 @@ export class AccountsPayableRepository {
       include: {
         supplier: true,
         purchaseReceipt: {
-          include: { purchaseOrder: { select: { id: true } } },
+          include: { purchaseOrder: { select: ORDER_SUMMARY } },
         },
         supplierPayments: { orderBy: { createdAt: 'asc' } },
         supplierInvoice: { select: INVOICE_SUMMARY },

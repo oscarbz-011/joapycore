@@ -124,10 +124,11 @@ export class PurchaseOrdersRepository {
     });
   }
 
-  findSupplierAdvancePercent(tenantId: string, supplierId: string) {
+  // Condiciones del proveedor que la orden copia al crearse.
+  findSupplierTerms(tenantId: string, supplierId: string) {
     return this.prisma.supplier.findFirst({
       where: { tenantId, id: supplierId, deletedAt: null },
-      select: { advancePercent: true },
+      select: { advancePercent: true, paymentTermDays: true },
     });
   }
 

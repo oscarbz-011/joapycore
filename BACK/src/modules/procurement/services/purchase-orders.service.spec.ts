@@ -41,7 +41,7 @@ describe('PurchaseOrdersService', () => {
     setExpectedDate: jest.Mock;
     recordStatusChange: jest.Mock;
     advanceApplied: jest.Mock;
-    findSupplierAdvancePercent: jest.Mock;
+    findSupplierTerms: jest.Mock;
   };
   let eventEmitter: { emit: jest.Mock };
   let prisma: { $transaction: jest.Mock };
@@ -71,9 +71,7 @@ describe('PurchaseOrdersService', () => {
       setExpectedDate: jest.fn().mockResolvedValue({ count: 1 }),
       recordStatusChange: jest.fn(),
       advanceApplied: jest.fn().mockResolvedValue(0),
-      findSupplierAdvancePercent: jest
-        .fn()
-        .mockResolvedValue({ advancePercent: null }),
+      findSupplierTerms: jest.fn().mockResolvedValue({ advancePercent: null }),
     };
     eventEmitter = { emit: jest.fn() };
 
@@ -165,20 +163,21 @@ describe('PurchaseOrdersService', () => {
     });
 
     it('starts from the percentage the supplier usually asks for', async () => {
-      purchaseOrdersRepository.findSupplierAdvancePercent.mockResolvedValue({
+      purchaseOrdersRepository.findSupplierTerms.mockResolvedValue({
         advancePercent: '30.00',
       });
 
       await service.create('tenant-1', 'user-1', dto);
 
-      expect(
-        purchaseOrdersRepository.findSupplierAdvancePercent,
-      ).toHaveBeenCalledWith('tenant-1', 'sup-1');
+      expect(purchaseOrdersRepository.findSupplierTerms).toHaveBeenCalledWith(
+        'tenant-1',
+        'sup-1',
+      );
       expect(createdWith().advanceAmount).toBe(3_000_000);
     });
 
     it('lets the order set its own amount, even none', async () => {
-      purchaseOrdersRepository.findSupplierAdvancePercent.mockResolvedValue({
+      purchaseOrdersRepository.findSupplierTerms.mockResolvedValue({
         advancePercent: '30.00',
       });
 
@@ -366,6 +365,41 @@ describe('PurchaseOrdersService', () => {
         expectedDate: '2026-10-07',
       });
       expect(purchaseOrdersRepository.create).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  // La condición de pago queda en la orden, copiada del proveedor.
+  describe('payment term', () => {
+    const dto = {
+      supplierId: 'sup-1',
+      purchaseType: 'LOCAL' as const,
+      items: [{ productId: 'prod-1', quantity: 2, unitCost: 100 }],
+    };
+    const createdWith = () =>
+      purchaseOrdersRepository.create.mock.calls[0][1] as {
+        paymentTermDays: number;
+      };
+
+    it('keeps the term the supplier gives: credit at 30 days', async () => {
+      purchaseOrdersRepository.findSupplierTerms.mockResolvedValue({
+        advancePercent: null,
+        paymentTermDays: 30,
+      });
+
+      await service.create('tenant-1', 'user-1', dto);
+
+      expect(createdWith().paymentTermDays).toBe(30);
+    });
+
+    it('is cash when the supplier gives no term', async () => {
+      purchaseOrdersRepository.findSupplierTerms.mockResolvedValue({
+        advancePercent: null,
+        paymentTermDays: null,
+      });
+
+      await service.create('tenant-1', 'user-1', dto);
+
+      expect(createdWith().paymentTermDays).toBe(0);
     });
   });
 
