@@ -6,8 +6,8 @@ import { apiErrorMessage } from '@/lib/api/api-error';
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeftRight, Plus, X } from 'lucide-react';
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { ArrowLeftRight, Plus, Search, X } from 'lucide-react';
 import { NumericInput } from '../../../../../components/numeric-input';
 import {
   inventoryApi,
@@ -20,11 +20,12 @@ import {
 } from '../../../../../lib/inventory-movement';
 import { StockTransferDialog } from '@/components/inventory/stock-transfer-dialog';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
 import { TablePagination } from '@/components/table-pagination';
-import { usePagination } from '@/lib/use-pagination';
+import { useServerList } from '@/lib/use-server-list';
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
@@ -310,11 +311,17 @@ export default function MovementsPage() {
   const [showTransfer, setShowTransfer] = useState(false);
   const [reasonFilter, setReasonFilter] = useState<MovementReason | ''>('');
 
-  const { data: movements = [], isLoading } = useQuery({
-    queryKey: ['inventory-movements', reasonFilter],
-    queryFn: () => inventoryApi.listMovements({ reason: reasonFilter || undefined, take: 100 }),
+  // El servidor filtra, busca y pagina: así se llega a todo el historial y no
+  // solo a los últimos movimientos.
+  const list = useServerList();
+  const query = { ...list.query, reason: reasonFilter || undefined };
+  const { data, isLoading, isFetching } = useQuery({
+    queryKey: ['inventory-movements', query],
+    queryFn: () => inventoryApi.pageMovements(query),
+    placeholderData: keepPreviousData,
   });
-  const pagination = usePagination(movements);
+  const movements = data?.items ?? [];
+  const filtering = !!reasonFilter || !!list.query.q;
 
   return (
     <div>
@@ -338,8 +345,28 @@ export default function MovementsPage() {
       </div>
 
       {/* Filters */}
-      <div className="mb-4">
-        <Select value={reasonFilter || 'all'} onValueChange={(v) => setReasonFilter(v === 'all' ? '' : v as MovementReason)}>
+      <div className="mb-4 flex flex-wrap items-center gap-3">
+        <div className="relative min-w-0 flex-1 sm:max-w-sm">
+          <Search
+            size={14}
+            aria-hidden
+            className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground/50"
+          />
+          <Input
+            className="pl-8"
+            aria-label="Buscar por producto"
+            placeholder="Buscar por producto o modelo..."
+            value={list.search}
+            onChange={(e) => list.setSearch(e.target.value)}
+          />
+        </div>
+        <Select
+          value={reasonFilter || 'all'}
+          onValueChange={(v) => {
+            setReasonFilter(v === 'all' ? '' : (v as MovementReason));
+            list.resetPage();
+          }}
+        >
           <SelectTrigger className="w-56">
             <span className="min-w-0 flex-1 truncate text-left text-sm">{reasonFilter ? REASON_LABELS[reasonFilter as MovementReason] : 'Todos los motivos'}</span>
           </SelectTrigger>
@@ -355,6 +382,12 @@ export default function MovementsPage() {
       {/* Table */}
       {isLoading ? (
         <div className="py-16 text-center text-sm text-muted-foreground/60">Cargando movimientos...</div>
+      ) : movements.length === 0 && filtering ? (
+        <div className="py-16 text-center">
+          <p className="text-sm text-muted-foreground/60">
+            Ningún movimiento coincide con lo que buscás.
+          </p>
+        </div>
       ) : movements.length === 0 ? (
         <div className="py-16 text-center">
           <p className="text-sm text-muted-foreground/60">No hay movimientos registrados.</p>
@@ -370,7 +403,10 @@ export default function MovementsPage() {
       ) : (
         <div className="overflow-hidden rounded-xl border border-border bg-card">
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table
+              className={cn('w-full text-sm transition-opacity', isFetching && 'opacity-60')}
+              aria-busy={isFetching}
+            >
               <thead>
                 <tr className="border-b border-border bg-muted/30">
                   <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground/60">Fecha</th>
@@ -382,7 +418,7 @@ export default function MovementsPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {pagination.items.map((m) => (
+                {movements.map((m) => (
                   <tr key={m.id} className="hover:bg-muted/20 transition-colors">
                     <td className="px-4 py-3 text-xs text-muted-foreground tabular-nums whitespace-nowrap">
                       {fmtDate(m.createdAt)}
@@ -414,7 +450,7 @@ export default function MovementsPage() {
             </table>
           </div>
           <TablePagination
-            {...pagination.controls}
+            {...list.controls(data?.total)}
             label="movimientos"
             className="border-t border-border px-4 py-3"
           />

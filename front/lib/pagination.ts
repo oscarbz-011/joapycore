@@ -57,3 +57,63 @@ export function pageSummary(
 export function needsPagination(total: number): boolean {
   return total > PAGE_SIZES[0];
 }
+
+// ── Listas paginadas en el servidor ─────────────────────────────────────────
+// El servidor busca, ordena y cuenta; la pantalla pide de a una página.
+
+/** Una página tal como la devuelve la API. */
+export interface Paginated<T> {
+  items: T[];
+  /** Registros que cumplen el filtro, en todas las páginas. */
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
+/** Lo que se le pide al servidor para una página de una lista. */
+export interface ListQuery {
+  page: number;
+  limit: number;
+  q?: string;
+  sortBy?: string;
+  sortDir?: 'asc' | 'desc';
+}
+
+export function listQuery(state: {
+  page: number;
+  pageSize: number;
+  search?: string;
+  sort?: { key: string; direction: 'asc' | 'desc' } | null;
+}): ListQuery {
+  const q = state.search?.trim();
+  return {
+    page: state.page,
+    limit: state.pageSize,
+    ...(q && { q }),
+    ...(state.sort && { sortBy: state.sort.key, sortDir: state.sort.direction }),
+  };
+}
+
+/**
+ * Los números del pie de una lista paginada en el servidor. `total` todavía
+ * desconocido (primera carga) cuenta como cero.
+ */
+export function serverPage(
+  page: number,
+  pageSize: number,
+  total: number | undefined,
+): Omit<Page<never>, 'items'> {
+  const count = total ?? 0;
+  const pageCount = Math.max(1, Math.ceil(count / pageSize));
+  const current = Math.min(Math.max(1, page), pageCount);
+  const from = count === 0 ? 0 : (current - 1) * pageSize + 1;
+  return {
+    page: current,
+    pageCount,
+    pageSize,
+    total: count,
+    from,
+    to: Math.min(current * pageSize, count),
+  };
+}

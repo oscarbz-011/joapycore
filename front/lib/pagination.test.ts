@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { needsPagination, pageSummary, paginate } from './pagination';
+import {
+  listQuery,
+  needsPagination,
+  pageSummary,
+  paginate,
+  serverPage,
+} from './pagination';
 
 const rows = Array.from({ length: 143 }, (_, index) => index + 1);
 
@@ -81,5 +87,54 @@ describe('needsPagination', () => {
   it('leaves short lists alone', () => {
     expect(needsPagination(10)).toBe(false);
     expect(needsPagination(11)).toBe(true);
+  });
+});
+
+describe('listQuery', () => {
+  it('asks for the page and its size', () => {
+    expect(listQuery({ page: 2, pageSize: 25 })).toEqual({ page: 2, limit: 25 });
+  });
+
+  it('sends the search and the sort only when there are any', () => {
+    expect(
+      listQuery({
+        page: 1,
+        pageSize: 50,
+        search: '  benitez ',
+        sort: { key: 'city', direction: 'desc' },
+      }),
+    ).toEqual({ page: 1, limit: 50, q: 'benitez', sortBy: 'city', sortDir: 'desc' });
+    expect(listQuery({ page: 1, pageSize: 50, search: '   ', sort: null })).toEqual({
+      page: 1,
+      limit: 50,
+    });
+  });
+});
+
+describe('serverPage', () => {
+  it('describes the rows of the page the server returned', () => {
+    expect(serverPage(2, 25, 143)).toEqual({
+      page: 2,
+      pageCount: 6,
+      pageSize: 25,
+      total: 143,
+      from: 26,
+      to: 50,
+    });
+    expect(serverPage(6, 25, 143)).toMatchObject({ from: 126, to: 143 });
+  });
+
+  it('is empty until the first answer arrives', () => {
+    expect(serverPage(1, 25, undefined)).toMatchObject({
+      total: 0,
+      from: 0,
+      to: 0,
+      pageCount: 1,
+    });
+  });
+
+  // Se borraron registros y la página pedida ya no existe.
+  it('shows the last page that exists', () => {
+    expect(serverPage(9, 25, 30)).toMatchObject({ page: 2, from: 26, to: 30 });
   });
 });

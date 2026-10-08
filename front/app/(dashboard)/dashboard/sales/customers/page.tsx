@@ -1,39 +1,42 @@
 'use client';
 
-import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { Plus, Search, RotateCw } from 'lucide-react';
 import { SortableHeader } from '@/components/sortable-header';
+import { TablePagination } from '@/components/table-pagination';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import {
-  CUSTOMER_SORT,
   customerFullName,
   documentTypeLabel,
-  filterCustomers,
+  type CustomerSortKey,
 } from '@/lib/customers';
-import { useTableSort } from '@/lib/use-table-sort';
+import { useServerList } from '@/lib/use-server-list';
+import { cn } from '@/lib/utils';
 import { salesApi } from '../../../../../lib/api/sales';
-import { TablePagination } from '@/components/table-pagination';
-import { usePagination } from '@/lib/use-pagination';
 
 const EMPTY = <span className="text-muted-foreground">—</span>;
 
 export default function CustomersPage() {
   const router = useRouter();
-  const [search, setSearch] = useState('');
+  // El servidor busca, ordena y pagina: acá solo se guarda qué se pidió.
+  const list = useServerList<CustomerSortKey>();
 
-  const { data: customers = [], isLoading, isError, error, refetch, isFetching } = useQuery({
-    queryKey: ['sale-customers'],
-    queryFn: salesApi.listCustomers,
+  const { data, isLoading, isError, error, refetch, isFetching } = useQuery({
+    queryKey: ['sale-customers', 'page', list.query],
+    queryFn: () => salesApi.pageCustomers(list.query),
+    // Al cambiar de página se sigue viendo la anterior hasta que llega la nueva.
+    placeholderData: keepPreviousData,
   });
 
-  const filtered = filterCustomers(customers, search);
-  const { sorted, sort, toggle } = useTableSort(filtered, CUSTOMER_SORT);
-  const pagination = usePagination(sorted);
+  const customers = data?.items ?? [];
+  const total = data?.total ?? 0;
+  const searched = !!list.query.q;
+  const controls = list.controls(data?.total);
+  const { sort, toggleSort: toggle } = list;
 
   const newCustomer = () => router.push('/dashboard/sales/customers/new');
 
@@ -61,13 +64,15 @@ export default function CustomersPage() {
             className="pl-8"
             aria-label="Buscar cliente"
             placeholder="Buscar por nombre, documento, código, email o teléfono..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            value={list.search}
+            onChange={(e) => list.setSearch(e.target.value)}
           />
         </div>
         {!isLoading && !isError && (
-          <p className="text-sm text-muted-foreground">
-            {filtered.length} {filtered.length === 1 ? 'cliente' : 'clientes'}
+          <p className="text-sm text-muted-foreground" aria-live="polite">
+            {list.searching || isFetching
+              ? 'Buscando...'
+              : `${new Intl.NumberFormat('es-PY').format(total)} ${total === 1 ? 'cliente' : 'clientes'}`}
           </p>
         )}
       </div>
@@ -88,7 +93,7 @@ export default function CustomersPage() {
             {isFetching ? 'Reintentando...' : 'Reintentar'}
           </Button>
         </div>
-      ) : customers.length === 0 ? (
+      ) : total === 0 && !searched ? (
         <div className="py-16 text-center">
           <p className="text-sm text-muted-foreground">Todavía no hay clientes cargados.</p>
           <Button variant="outline" className="mt-4" onClick={newCustomer}>
@@ -96,19 +101,22 @@ export default function CustomersPage() {
             Crear el primero
           </Button>
         </div>
-      ) : filtered.length === 0 ? (
+      ) : total === 0 ? (
         <div className="py-16 text-center">
           <p className="text-sm text-muted-foreground">
-            Ningún cliente coincide con &ldquo;{search.trim()}&rdquo;.
+            Ningún cliente coincide con &ldquo;{list.query.q}&rdquo;.
           </p>
-          <Button variant="outline" size="sm" className="mt-3" onClick={() => setSearch('')}>
+          <Button variant="outline" size="sm" className="mt-3" onClick={() => list.setSearch('')}>
             Limpiar búsqueda
           </Button>
         </div>
       ) : (
         <Card className="overflow-hidden p-0">
           <div className="overflow-x-auto">
-            <table className="w-full text-[13.5px]">
+            <table
+              className={cn('w-full text-[13.5px] transition-opacity', isFetching && 'opacity-60')}
+              aria-busy={isFetching}
+            >
               <thead>
                 <tr className="border-b border-border bg-muted/30 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
                   <SortableHeader label="Código" sortKey="code" sort={sort} onSort={toggle} />
@@ -122,7 +130,7 @@ export default function CustomersPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {pagination.items.map((customer) => {
+                {customers.map((customer) => {
                   const open = () => router.push(`/dashboard/sales/customers/${customer.id}/edit`);
                   return (
                     <tr
@@ -163,7 +171,7 @@ export default function CustomersPage() {
             </table>
           </div>
           <TablePagination
-            {...pagination.controls}
+            {...controls}
             label="clientes"
             className="border-t border-border px-4 py-3"
           />
