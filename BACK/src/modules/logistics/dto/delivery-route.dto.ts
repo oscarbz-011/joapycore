@@ -112,6 +112,16 @@ export class StartRouteDto {
   vehicle?: string;
 }
 
+// Llegar y entregar son de cada parada: no se marcan para toda la ruta.
+export const ROUTE_CHECKPOINTS = ['LEFT_WAREHOUSE', 'IN_TRANSIT'] as const;
+export type RouteCheckpoint = (typeof ROUTE_CHECKPOINTS)[number];
+
+export class RouteCheckpointDto {
+  @ApiProperty({ enum: ROUTE_CHECKPOINTS })
+  @IsIn(ROUTE_CHECKPOINTS)
+  checkpoint: RouteCheckpoint;
+}
+
 export class FailDeliveryDto {
   @ApiProperty({ enum: Object.keys(FAILURE_REASONS) })
   @IsIn(Object.keys(FAILURE_REASONS))

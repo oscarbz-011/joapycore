@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import {
+  DeliveryCheckpoint,
   DeliveryRouteEventType,
   DeliveryRouteStatus,
   Prisma,
@@ -396,6 +397,7 @@ export class DeliveryRoutesRepository {
     stops: StopChange,
     route: Pick<Prisma.DeliveryRouteUncheckedUpdateManyInput, 'vehicle'>,
     events: RouteEventInput[],
+    userId?: string,
   ): Promise<{ id: string; saleOrderId: string }[] | null> {
     return this.prisma.$transaction(async (tx) => {
       const { count } = await tx.deliveryRoute.updateMany({
@@ -411,8 +413,55 @@ export class DeliveryRoutesRepository {
         where: { tenantId, routeId: id, status: 'PENDING' },
         data: stops,
       });
+      // Iniciar la ruta es salir del depósito: queda en el recorrido de
+      // cada entrega sin que el repartidor lo marque una por una.
+      await tx.deliveryTrackingEvent.createMany({
+        data: leaving.map((note) => ({
+          tenantId,
+          deliveryNoteId: note.id,
+          source: 'MANUAL' as const,
+          checkpoint: 'LEFT_WAREHOUSE' as const,
+          recordedById: userId,
+        })),
+      });
       await this.record(tx, tenantId, events);
       return leaving;
+    });
+  }
+
+  /**
+   * Marca un hito en todas las entregas de la ruta que están en camino y
+   * todavía no lo tienen. Devuelve a cuántas se lo marcó.
+   */
+  markCheckpoint(
+    tenantId: string,
+    id: string,
+    checkpoint: DeliveryCheckpoint,
+    userId: string | undefined,
+    events: RouteEventInput[],
+  ): Promise<number> {
+    return this.prisma.$transaction(async (tx) => {
+      const missing = await tx.deliveryNote.findMany({
+        where: {
+          tenantId,
+          routeId: id,
+          status: 'DISPATCHED',
+          trackingEvents: { none: { checkpoint } },
+        },
+        select: { id: true },
+      });
+      if (missing.length === 0) return 0;
+      await tx.deliveryTrackingEvent.createMany({
+        data: missing.map((note) => ({
+          tenantId,
+          deliveryNoteId: note.id,
+          source: 'MANUAL' as const,
+          checkpoint,
+          recordedById: userId,
+        })),
+      });
+      await this.record(tx, tenantId, events);
+      return missing.length;
     });
   }
 

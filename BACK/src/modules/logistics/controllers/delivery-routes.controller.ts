@@ -20,6 +20,7 @@ import {
   FailDeliveryDto,
   ListDeliveryRoutesDto,
   ReorderRouteDto,
+  RouteCheckpointDto,
   StartRouteDto,
   UpdateDeliveryRouteDto,
 } from '../dto/delivery-route.dto';
@@ -130,6 +131,21 @@ export class DeliveryRoutesController {
     @Body() dto: StartRouteDto,
   ) {
     return this.service.start(tenantId, id, dto, actorOf(user));
+  }
+
+  @Post(':id/checkpoint')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      'Marcar un hito para todas las entregas en camino de la ruta (logística o su repartidor)',
+  })
+  markCheckpoint(
+    @CurrentTenant() tenantId: string,
+    @CurrentUser() user: JwtPayload,
+    @Param('id') id: string,
+    @Body() dto: RouteCheckpointDto,
+  ) {
+    return this.service.markCheckpoint(tenantId, id, dto, actorOf(user));
   }
 
   @Post(':id/cancel')

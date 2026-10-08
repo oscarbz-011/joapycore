@@ -20,6 +20,7 @@ import {
   FailDeliveryDto,
   ListDeliveryRoutesDto,
   ReorderRouteDto,
+  RouteCheckpointDto,
   StartRouteDto,
   UpdateDeliveryRouteDto,
 } from '../dto/delivery-route.dto';
@@ -45,6 +46,11 @@ export interface RouteActor {
 }
 
 const DEFAULT_PAGE_LIMIT = 25;
+
+const ROUTE_CHECKPOINT_LABELS = {
+  LEFT_WAREHOUSE: 'Salió del depósito',
+  IN_TRANSIT: 'En camino',
+} as const;
 
 const fullName = (person: { firstName: string; lastName: string }) =>
   `${person.firstName} ${person.lastName}`.trim();
@@ -500,6 +506,7 @@ export class DeliveryRoutesService {
       { status: 'DISPATCHED', vehicle },
       { vehicle },
       [{ routeId: id, type: 'STARTED', userId: actor.userId }],
+      actor.userId,
     );
     if (!leaving) {
       throw new ConflictException(
@@ -516,6 +523,46 @@ export class DeliveryRoutesService {
     }
     this.changed(tenantId, actor.userId, 'delivery.route.started', id);
     return this.findOne(tenantId, id);
+  }
+
+  /**
+   * Marca un hito para todas las entregas en camino de la ruta de una vez.
+   * Las que ya lo tienen se dejan como están.
+   */
+  async markCheckpoint(
+    tenantId: string,
+    id: string,
+    dto: RouteCheckpointDto,
+    actor: RouteActor,
+  ) {
+    const route = await this.routeOf(tenantId, id);
+    await this.assertDriverOrManager(tenantId, route.driverEmployeeId, actor);
+    if (route.status !== 'IN_PROGRESS') {
+      throw new UnprocessableEntityException(
+        'Solo se actualiza el estado de una ruta que está en curso',
+      );
+    }
+    const marked = await this.routes.markCheckpoint(
+      tenantId,
+      id,
+      dto.checkpoint,
+      actor.userId,
+      [
+        {
+          routeId: id,
+          type: 'CHECKPOINT',
+          detail: ROUTE_CHECKPOINT_LABELS[dto.checkpoint],
+          userId: actor.userId,
+        },
+      ],
+    );
+    if (marked === 0) {
+      throw new UnprocessableEntityException(
+        'Todas las entregas en camino de la ruta ya tienen ese estado',
+      );
+    }
+    this.changed(tenantId, actor.userId, 'delivery.route.checkpoint', id);
+    return { id, marked };
   }
 
   /** Cancela una ruta que no salió; sus entregas quedan sin ruta. */

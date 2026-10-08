@@ -121,6 +121,7 @@ describe('DeliveryRoutesService', () => {
       update: jest.fn().mockResolvedValue(true),
       start: jest.fn().mockResolvedValue([{ id: 'a', saleOrderId: 'order-a' }]),
       cancel: jest.fn().mockResolvedValue(true),
+      markCheckpoint: jest.fn().mockResolvedValue(3),
       completeIfDone: jest.fn().mockResolvedValue(false),
       addEvents: jest.fn().mockResolvedValue(undefined),
     };
@@ -502,6 +503,7 @@ describe('DeliveryRoutesService', () => {
         { status: 'DISPATCHED', vehicle: 'Camión 2' },
         { vehicle: 'Camión 2' },
         [{ routeId: 'route-1', type: 'STARTED', userId: 'user-driver' }],
+        'user-driver',
       );
       // Cada entrega que salió avisa, como cuando se despacha suelta.
       expect(emitted('delivery.dispatched')).toEqual([
@@ -565,6 +567,91 @@ describe('DeliveryRoutesService', () => {
       await expect(
         service.start('tenant-1', 'route-1', {}, dispatcher),
       ).rejects.toBeInstanceOf(ConflictException);
+    });
+  });
+
+  describe('markCheckpoint', () => {
+    beforeEach(() => {
+      routes.findById.mockResolvedValue(makeRoute({ status: 'IN_PROGRESS' }));
+    });
+
+    it('marks every delivery on the way at once and writes it in the route', async () => {
+      const result = await service.markCheckpoint(
+        'tenant-1',
+        'route-1',
+        { checkpoint: 'IN_TRANSIT' },
+        driverUser,
+      );
+
+      expect(routes.markCheckpoint).toHaveBeenCalledWith(
+        'tenant-1',
+        'route-1',
+        'IN_TRANSIT',
+        'user-driver',
+        [
+          {
+            routeId: 'route-1',
+            type: 'CHECKPOINT',
+            detail: 'En camino',
+            userId: 'user-driver',
+          },
+        ],
+      );
+      expect(result).toEqual({ id: 'route-1', marked: 3 });
+    });
+
+    it('is not for another driver', async () => {
+      sources.findEmployeeByUser.mockResolvedValue({ id: 'emp-9' });
+
+      await expect(
+        service.markCheckpoint(
+          'tenant-1',
+          'route-1',
+          { checkpoint: 'IN_TRANSIT' },
+          driverUser,
+        ),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+      expect(routes.markCheckpoint).not.toHaveBeenCalled();
+    });
+
+    it('needs the route to be on the road', async () => {
+      routes.findById.mockResolvedValue(makeRoute());
+
+      await expect(
+        service.markCheckpoint(
+          'tenant-1',
+          'route-1',
+          { checkpoint: 'IN_TRANSIT' },
+          dispatcher,
+        ),
+      ).rejects.toThrow(/en curso/);
+    });
+
+    it('says so when there was nothing left to mark', async () => {
+      routes.markCheckpoint.mockResolvedValue(0);
+
+      await expect(
+        service.markCheckpoint(
+          'tenant-1',
+          'route-1',
+          { checkpoint: 'IN_TRANSIT' },
+          dispatcher,
+        ),
+      ).rejects.toThrow(/ya tienen ese estado/);
+    });
+
+    it('does not touch a route of another tenant', async () => {
+      routes.findById.mockResolvedValue(null);
+
+      await expect(
+        service.markCheckpoint(
+          'tenant-2',
+          'route-1',
+          { checkpoint: 'IN_TRANSIT' },
+          dispatcher,
+        ),
+      ).rejects.toBeInstanceOf(NotFoundException);
+      expect(routes.markCheckpoint).not.toHaveBeenCalled();
     });
   });
 
