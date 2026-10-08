@@ -1,8 +1,21 @@
-import type { DocumentType } from '@prisma/client';
+import type { DocumentType, Prisma } from '@prisma/client';
 import { Injectable } from '@nestjs/common';
+import { accentVariants } from '../../../common/pagination/pagination';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { PrismaClientOrTx } from '../../../prisma/types';
 import { CreateCustomerDto } from '../dto/create-customer.dto';
+
+// Datos del cliente en los que busca el listado.
+const SEARCHED = [
+  'firstName',
+  'secondFirstName',
+  'lastName',
+  'secondLastName',
+  'documentNumber',
+  'customerCode',
+  'email',
+  'phone',
+] as const;
 
 @Injectable()
 export class CustomersRepository {
@@ -13,6 +26,40 @@ export class CustomersRepository {
       where: { tenantId, deletedAt: null },
       orderBy: { lastName: 'asc' },
     });
+  }
+
+  // Una página de clientes, con el total de los que cumplen la búsqueda.
+  // Cada palabra tiene que aparecer en alguno de los datos del cliente.
+  async findPage(
+    tenantId: string,
+    query: {
+      words: string[];
+      orderBy: Prisma.CustomerOrderByWithRelationInput[];
+      skip: number;
+      take: number;
+    },
+  ) {
+    const where: Prisma.CustomerWhereInput = {
+      tenantId,
+      deletedAt: null,
+      AND: query.words.map((word) => ({
+        OR: SEARCHED.flatMap((field) =>
+          accentVariants(word).map((variant) => ({
+            [field]: { contains: variant, mode: 'insensitive' as const },
+          })),
+        ),
+      })),
+    };
+    const [items, total] = await this.prisma.$transaction([
+      this.prisma.customer.findMany({
+        where,
+        orderBy: query.orderBy,
+        skip: query.skip,
+        take: query.take,
+      }),
+      this.prisma.customer.count({ where }),
+    ]);
+    return { items, total };
   }
 
   // Cliente genérico "Consumidor Final" del tenant (ventas de mostrador).
