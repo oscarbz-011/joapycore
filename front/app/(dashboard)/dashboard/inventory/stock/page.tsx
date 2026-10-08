@@ -33,6 +33,8 @@ import {
   SelectTrigger,
 } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
+import { TablePagination } from '@/components/table-pagination';
+import { usePagination } from '@/lib/use-pagination';
 
 const EMPTY_STOCK: StockResult = { warehouses: [], items: [] };
 
@@ -88,6 +90,7 @@ export default function StockPage() {
     [data],
   );
   const rows = onlyRestock ? data.items.filter(needsRestock) : data.items;
+  const pagination = usePagination(rows);
 
   return (
     <div>
@@ -261,7 +264,7 @@ export default function StockPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {rows.map((row) => {
+                {pagination.items.map((row) => {
                   const level = stockLevel(
                     row.totalStock,
                     row.product.reorderPoint,
@@ -359,6 +362,11 @@ export default function StockPage() {
               </tbody>
             </table>
           </div>
+          <TablePagination
+            {...pagination.controls}
+            label="productos"
+            className="border-t border-border px-4 py-3"
+          />
         </Card>
       )}
     </div>

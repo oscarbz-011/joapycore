@@ -17,6 +17,8 @@ import {
 } from '@/lib/customers';
 import { useTableSort } from '@/lib/use-table-sort';
 import { salesApi } from '../../../../../lib/api/sales';
+import { TablePagination } from '@/components/table-pagination';
+import { usePagination } from '@/lib/use-pagination';
 
 const EMPTY = <span className="text-muted-foreground">—</span>;
 
@@ -31,6 +33,7 @@ export default function CustomersPage() {
 
   const filtered = filterCustomers(customers, search);
   const { sorted, sort, toggle } = useTableSort(filtered, CUSTOMER_SORT);
+  const pagination = usePagination(sorted);
 
   const newCustomer = () => router.push('/dashboard/sales/customers/new');
 
@@ -119,7 +122,7 @@ export default function CustomersPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {sorted.map((customer) => {
+                {pagination.items.map((customer) => {
                   const open = () => router.push(`/dashboard/sales/customers/${customer.id}/edit`);
                   return (
                     <tr
@@ -159,6 +162,11 @@ export default function CustomersPage() {
               </tbody>
             </table>
           </div>
+          <TablePagination
+            {...pagination.controls}
+            label="clientes"
+            className="border-t border-border px-4 py-3"
+          />
         </Card>
       )}
     </div>

@@ -22,6 +22,8 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { HrNav } from '../_nav';
+import { TablePagination } from '@/components/table-pagination';
+import { usePagination } from '@/lib/use-pagination';
 
 const TYPE_LABEL: Record<LeaveType, string> = {
   VACATION: 'Vacaciones',
@@ -75,6 +77,7 @@ export default function LeavesPage() {
         ...(employeeId !== ALL ? { employeeId } : {}),
       }),
   });
+  const pagination = usePagination(leaves);
 
   const invalidate = () => {
     void qc.invalidateQueries({ queryKey: ['hr-leaves'] });
@@ -190,7 +193,7 @@ export default function LeavesPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {leaves.map((leave) => (
+                {pagination.items.map((leave) => (
                   <LeaveRow
                     key={leave.id}
                     leave={leave}
@@ -202,6 +205,11 @@ export default function LeavesPage() {
               </tbody>
             </table>
           </div>
+          <TablePagination
+            {...pagination.controls}
+            label="permisos"
+            className="border-t border-border px-4 py-3"
+          />
         </Card>
       )}
 

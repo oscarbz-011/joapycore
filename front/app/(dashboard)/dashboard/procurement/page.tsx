@@ -60,6 +60,8 @@ import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
+import { TablePagination } from '@/components/table-pagination';
+import { usePagination } from '@/lib/use-pagination';
 
 // Una columna por dato; fuera del componente para no reordenar en cada render.
 type OrderSortKey =
@@ -475,6 +477,7 @@ export default function ProcurementPage() {
 
   const filtered = statusFilter ? orders.filter((o) => o.status === statusFilter) : orders;
   const { sorted, sort, toggle } = useTableSort(filtered, ORDER_SORT);
+  const pagination = usePagination(sorted);
 
   return (
     <div>
@@ -541,7 +544,7 @@ export default function ProcurementPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {sorted.map((order) => {
+                {pagination.items.map((order) => {
                   const deliveryOverdueDays = deliveryDaysOverdue(order);
                   const accent = deliveryAccentFor(order);
                   return (
@@ -584,6 +587,11 @@ export default function ProcurementPage() {
               </tbody>
             </table>
           </div>
+          <TablePagination
+            {...pagination.controls}
+            label="órdenes"
+            className="border-t border-border px-4 py-3"
+          />
         </Card>
       )}
 

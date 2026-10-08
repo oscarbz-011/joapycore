@@ -26,6 +26,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
+import { TablePagination } from '@/components/table-pagination';
+import { usePagination } from '@/lib/use-pagination';
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
@@ -498,6 +500,7 @@ export default function DeliveriesPage() {
     queryKey: ['logistics-deliveries', statusFilter],
     queryFn: () => logisticsApi.listDeliveries(statusFilter || undefined),
   });
+  const pagination = usePagination(notes);
 
   const counts: Record<string, number> = {
     PENDING:    notes.filter((n) => n.status === 'PENDING').length,
@@ -561,9 +564,13 @@ export default function DeliveriesPage() {
 
       {!isLoading && !isError && notes.length > 0 && (
         <div className="space-y-3">
-          {notes.map((note) => (
+          {pagination.items.map((note) => (
             <DeliveryCard key={note.id} note={note} />
           ))}
+        <TablePagination
+          {...pagination.controls}
+          label="entregas"
+        />
         </div>
       )}
     </div>

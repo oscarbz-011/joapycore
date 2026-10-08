@@ -21,6 +21,8 @@ import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
+import { TablePagination } from '@/components/table-pagination';
+import { usePagination } from '@/lib/use-pagination';
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -79,6 +81,7 @@ const CREDIT_NOTE_SORT = {
 function CreditNotesTab() {
   const { data: notes = [], isLoading } = useQuery({ queryKey: ['credit-notes'], queryFn: billingApi.listCreditNotes });
   const { sorted, sort, toggle } = useTableSort(notes, CREDIT_NOTE_SORT);
+  const pagination = usePagination(sorted);
   if (isLoading) return <div className="py-16 text-center text-sm text-muted-foreground">Cargando...</div>;
   if (notes.length === 0) return <div className="py-16 text-center"><p className="text-sm text-muted-foreground">No hay notas de crédito emitidas.</p></div>;
 
@@ -96,7 +99,7 @@ function CreditNotesTab() {
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
-            {sorted.map((note: CreditNote) => (
+            {pagination.items.map((note: CreditNote) => (
               <tr key={note.id} className="hover:bg-muted/20 transition-colors">
                 <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{note.number ?? `NC-${note.id.slice(0, 6).toUpperCase()}`}</td>
                 <td className="px-4 py-3">
@@ -111,6 +114,11 @@ function CreditNotesTab() {
           </tbody>
         </table>
       </div>
+      <TablePagination
+        {...pagination.controls}
+        label="notas de crédito"
+        className="border-t border-border px-4 py-3"
+      />
     </Card>
   );
 }
@@ -139,6 +147,7 @@ export default function BillingPage() {
   const filtered = filterInvoiceRows(rows, { search, status: statusFilter, kind: kindFilter });
   // Sin columna elegida, orden fiscal (por número de factura).
   const { sorted, sort, toggle } = useTableSort(filtered, INVOICE_SORT, compareFiscalOrder);
+  const pagination = usePagination(sorted);
 
   async function openRow(row: InvoiceRow) {
     setOpenError('');
@@ -256,7 +265,7 @@ export default function BillingPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border">
-                    {sorted.map((row) => (
+                    {pagination.items.map((row) => (
                       <tr
                         key={row.id}
                         onClick={() => void openRow(row)}
@@ -276,6 +285,11 @@ export default function BillingPage() {
                   </tbody>
                 </table>
               </div>
+              <TablePagination
+                {...pagination.controls}
+                label="facturas"
+                className="border-t border-border px-4 py-3"
+              />
             </Card>
           )}
         </>

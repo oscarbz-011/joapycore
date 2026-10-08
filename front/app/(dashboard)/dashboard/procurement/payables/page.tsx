@@ -41,6 +41,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { TablePagination } from '@/components/table-pagination';
+import { usePagination } from '@/lib/use-pagination';
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
@@ -421,6 +423,7 @@ export default function PayablesPage() {
   });
 
   const filtered = apList.filter((ap) => !statusFilter || ap.status === statusFilter);
+  const pagination = usePagination(filtered);
 
   function openPanel(ap: AccountsPayable) { setPanelAP(ap); setPanelOpen(true); }
 
@@ -487,7 +490,7 @@ export default function PayablesPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {filtered.map((ap) => {
+                {pagination.items.map((ap) => {
                   const urgency = apUrgency(ap);
                   const accent = accentFor(urgency.level);
                   const pending = Number(ap.amount) - Number(ap.paidAmount);
@@ -527,6 +530,11 @@ export default function PayablesPage() {
               </tbody>
             </table>
           </div>
+          <TablePagination
+            {...pagination.controls}
+            label="cuentas"
+            className="border-t border-border px-4 py-3"
+          />
         </Card>
       )}
 

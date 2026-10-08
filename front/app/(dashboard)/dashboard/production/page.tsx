@@ -26,6 +26,8 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
+import { TablePagination } from '@/components/table-pagination';
+import { usePagination } from '@/lib/use-pagination';
 
 const NUM_CLS =
   'h-9 w-full min-w-0 rounded-3xl border border-transparent bg-input/50 px-3 text-sm outline-none transition-[color,box-shadow,background-color] focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30';
@@ -407,6 +409,7 @@ export default function ProductionPage() {
     queryKey: ['production-orders', statusFilter],
     queryFn: () => productionApi.listOrders(statusFilter || undefined),
   });
+  const pagination = usePagination(orders);
 
   return (
     <div>
@@ -460,9 +463,13 @@ export default function ProductionPage() {
         </div>
       ) : (
         <div className="space-y-3">
-          {orders.map((order) => (
+          {pagination.items.map((order) => (
             <OrderCard key={order.id} order={order} canManage={canManage} />
           ))}
+          <TablePagination
+            {...pagination.controls}
+            label="órdenes de producción"
+          />
         </div>
       )}
 

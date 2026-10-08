@@ -11,6 +11,8 @@ import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
+import { TablePagination } from '@/components/table-pagination';
+import { usePagination } from '@/lib/use-pagination';
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -62,6 +64,7 @@ export default function BatchesPage() {
   });
 
   const { sorted, sort, toggle } = useTableSort(batches, BATCH_SORT);
+  const pagination = usePagination(sorted);
 
   const lotManagedProducts = products.filter((p) => p.usesLots);
 
@@ -125,7 +128,7 @@ export default function BatchesPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {sorted.map((batch) => {
+                {pagination.items.map((batch) => {
                   const expired = isExpired(batch.expiresAt);
                   const expiringSoon = !expired && isExpiringSoon(batch.expiresAt);
                   const depleted = batch.remainingQty <= 0;
@@ -170,6 +173,11 @@ export default function BatchesPage() {
               </tbody>
             </table>
           </div>
+          <TablePagination
+            {...pagination.controls}
+            label="lotes"
+            className="border-t border-border px-4 py-3"
+          />
         </Card>
       )}
     </div>

@@ -23,6 +23,8 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
+import { TablePagination } from '@/components/table-pagination';
+import { usePagination } from '@/lib/use-pagination';
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
@@ -312,6 +314,7 @@ export default function MovementsPage() {
     queryKey: ['inventory-movements', reasonFilter],
     queryFn: () => inventoryApi.listMovements({ reason: reasonFilter || undefined, take: 100 }),
   });
+  const pagination = usePagination(movements);
 
   return (
     <div>
@@ -379,7 +382,7 @@ export default function MovementsPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {movements.map((m) => (
+                {pagination.items.map((m) => (
                   <tr key={m.id} className="hover:bg-muted/20 transition-colors">
                     <td className="px-4 py-3 text-xs text-muted-foreground tabular-nums whitespace-nowrap">
                       {fmtDate(m.createdAt)}
@@ -410,6 +413,11 @@ export default function MovementsPage() {
               </tbody>
             </table>
           </div>
+          <TablePagination
+            {...pagination.controls}
+            label="movimientos"
+            className="border-t border-border px-4 py-3"
+          />
         </div>
       )}
 
