@@ -153,6 +153,7 @@ describe('routeEventText', () => {
     expect(text('STARTED')).toBe('La ruta salió');
     expect(text('COMPLETED')).toBe('La ruta finalizó');
     expect(text('CANCELLED')).toBe('Se canceló la ruta');
+    expect(text('CHECKPOINT', 'En camino')).toBe('Toda la ruta: en camino');
     expect(text('DRIVER_CHANGED', 'De Luis Rojas a Ana Vera')).toBe(
       'Cambió el repartidor: de Luis Rojas a Ana Vera',
     );

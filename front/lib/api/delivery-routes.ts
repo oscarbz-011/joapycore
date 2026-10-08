@@ -14,7 +14,8 @@ export type RouteEventType =
   | 'STOP_DELIVERED'
   | 'STOP_FAILED'
   | 'COMPLETED'
-  | 'CANCELLED';
+  | 'CANCELLED'
+  | 'CHECKPOINT';
 
 export type FailureReason = 'ABSENT' | 'WRONG_ADDRESS' | 'REJECTED' | 'OTHER';
 
@@ -130,6 +131,13 @@ export const deliveryRoutesApi = {
 
   start: (id: string, vehicle?: string): Promise<DeliveryRouteDetail> =>
     apiClient.post(`${BASE}/${id}/start`, { vehicle }).then((r) => r.data),
+
+  /** Marca un hito para todas las entregas en camino de la ruta. */
+  checkpoint: (
+    id: string,
+    checkpoint: 'LEFT_WAREHOUSE' | 'IN_TRANSIT',
+  ): Promise<{ id: string; marked: number }> =>
+    apiClient.post(`${BASE}/${id}/checkpoint`, { checkpoint }).then((r) => r.data),
 
   cancel: (id: string): Promise<DeliveryRouteDetail> =>
     apiClient.post(`${BASE}/${id}/cancel`, {}).then((r) => r.data),

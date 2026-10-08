@@ -136,6 +136,10 @@ export function routeEventText(event: {
       return 'La ruta finalizó';
     case 'CANCELLED':
       return 'Se canceló la ruta';
+    case 'CHECKPOINT':
+      return event.detail
+        ? `Toda la ruta: ${lowerFirst(event.detail)}`
+        : 'Se actualizó el estado de toda la ruta';
   }
 }
 

@@ -144,3 +144,52 @@ export function organizeMyWork(routes: DeliveryRoute[], openNotes: DeliveryNote[
 
   return { routes: groups, loose, todo: openInRoutes + loose.length };
 }
+
+// ── Pestañas de la pantalla ─────────────────────────────────────────────────
+
+/** "Asignadas" es lo que todavía no salió; "En curso", lo que está en la calle. */
+export type MyTab = 'assigned' | 'inProgress';
+
+export interface MyTabWork {
+  routes: MyRouteGroup[];
+  loose: DeliveryNote[];
+  /** Entregas por hacer en la pestaña. */
+  count: number;
+}
+
+/**
+ * Reparte el trabajo en las dos pestañas. Una ruta va entera a una sola: la
+ * que no salió, a "Asignadas"; la que está en la calle, a "En curso", con sus
+ * paradas ya entregadas a la vista.
+ */
+export function splitMyWork(work: MyWork): Record<MyTab, MyTabWork> {
+  const tab = (routeStatus: DeliveryRoute['status'], noteStatus: DeliveryNoteStatus): MyTabWork => {
+    const routes = work.routes.filter(({ route }) => route.status === routeStatus);
+    const loose = work.loose.filter((note) => note.status === noteStatus);
+    const inRoutes = routes
+      .flatMap((group) => group.stops)
+      .filter(({ stop }) => stop.status === noteStatus).length;
+    return { routes, loose, count: inRoutes + loose.length };
+  };
+  return { assigned: tab('OPEN', 'PENDING'), inProgress: tab('IN_PROGRESS', 'DISPATCHED') };
+}
+
+/** Los hitos que se pueden marcar para toda la ruta de una vez. */
+export const ROUTE_CHECKPOINTS = ['LEFT_WAREHOUSE', 'IN_TRANSIT'] as const;
+export type RouteCheckpoint = (typeof ROUTE_CHECKPOINTS)[number];
+
+/**
+ * El hito que toca marcar para toda la ruta: el primero que le falta a alguna
+ * entrega en camino. Null cuando no queda ninguno (llegar y entregar son de
+ * cada parada).
+ */
+export function routeCheckpointToMark(group: MyRouteGroup): RouteCheckpoint | null {
+  const onTheWay = group.stops.flatMap(({ note }) =>
+    note && note.status === 'DISPATCHED' ? [note] : [],
+  );
+  return (
+    ROUTE_CHECKPOINTS.find((checkpoint) =>
+      onTheWay.some((note) => !note.trackingEvents.some((event) => event.checkpoint === checkpoint)),
+    ) ?? null
+  );
+}

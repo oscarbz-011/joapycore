@@ -8,6 +8,8 @@ import {
   formatDeliveryAddress,
   nextCheckpoint,
   organizeMyWork,
+  routeCheckpointToMark,
+  splitMyWork,
 } from './my-deliveries';
 
 const stop = (id: string, status: RouteStop['status'] = 'DISPATCHED'): RouteStop => ({
@@ -195,5 +197,64 @@ describe('formatDeliveryAddress', () => {
       'Calle 1, Encarnación',
     );
     expect(formatDeliveryAddress(blank)).toBeNull();
+  });
+});
+
+describe('splitMyWork', () => {
+  const work = organizeMyWork(
+    [
+      route('1', { stops: [stop('a', 'PENDING'), stop('b', 'PENDING')] }),
+      route('2', { status: 'IN_PROGRESS', stops: [stop('c', 'DELIVERED'), stop('d')] }),
+    ],
+    [note('a', 'PENDING'), note('b', 'PENDING'), note('d'), note('x', 'PENDING'), note('y')],
+  );
+  const tabs = splitMyWork(work);
+
+  it('puts what has not left under assigned', () => {
+    expect(tabs.assigned.routes.map(({ route: r }) => r.id)).toEqual(['1']);
+    expect(tabs.assigned.loose.map((n) => n.id)).toEqual(['x']);
+    expect(tabs.assigned.count).toBe(3);
+  });
+
+  // La ruta en curso va entera, con lo ya entregado a la vista, pero cuenta
+  // solo lo que falta.
+  it('puts what is on the road under in progress', () => {
+    expect(tabs.inProgress.routes.map(({ route: r }) => r.id)).toEqual(['2']);
+    expect(tabs.inProgress.routes[0].stops).toHaveLength(2);
+    expect(tabs.inProgress.loose.map((n) => n.id)).toEqual(['y']);
+    expect(tabs.inProgress.count).toBe(2);
+  });
+});
+
+describe('routeCheckpointToMark', () => {
+  const group = (notes: DeliveryNote[]) =>
+    organizeMyWork(
+      [route('1', { status: 'IN_PROGRESS', stops: notes.map((n) => stop(n.id)) })],
+      notes,
+    ).routes[0];
+
+  it('offers the first checkpoint some delivery on the way is missing', () => {
+    expect(routeCheckpointToMark(group([note('a'), note('b', 'DISPATCHED', ['LEFT_WAREHOUSE'])]))).toBe(
+      'LEFT_WAREHOUSE',
+    );
+    expect(
+      routeCheckpointToMark(
+        group([
+          note('a', 'DISPATCHED', ['LEFT_WAREHOUSE']),
+          note('b', 'DISPATCHED', ['LEFT_WAREHOUSE', 'IN_TRANSIT']),
+        ]),
+      ),
+    ).toBe('IN_TRANSIT');
+  });
+
+  // Llegar y entregar se marcan en cada parada.
+  it('has nothing to offer once every delivery is in transit', () => {
+    expect(
+      routeCheckpointToMark(group([note('a', 'DISPATCHED', ['LEFT_WAREHOUSE', 'IN_TRANSIT'])])),
+    ).toBeNull();
+  });
+
+  it('ignores a route with nothing on the way', () => {
+    expect(routeCheckpointToMark(group([]))).toBeNull();
   });
 });
