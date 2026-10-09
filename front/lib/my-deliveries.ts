@@ -193,3 +193,85 @@ export function routeCheckpointToMark(group: MyRouteGroup): RouteCheckpoint | nu
     ) ?? null
   );
 }
+
+// ── La parada de un cliente ─────────────────────────────────────────────────
+// Varios pedidos del mismo cliente en una ruta son una sola parada: el
+// repartidor llega una vez, entrega todo junto y confirma una vez.
+
+export interface MyStopGroup {
+  customerId: string;
+  /** Todos los pedidos del cliente en la ruta, en el orden del recorrido. */
+  stops: MyRouteStop[];
+  /** Los que siguen por hacer, con su recorrido. */
+  notes: DeliveryNote[];
+  /** Lo que se muestra: el cliente una vez y los productos de todos sus pedidos. */
+  card: DeliveryCardData;
+}
+
+function mergeItems(lists: DeliveryCardData['items'][]): DeliveryCardData['items'] {
+  const merged = new Map<string, number>();
+  for (const item of lists.flat()) {
+    merged.set(item.name, (merged.get(item.name) ?? 0) + item.quantity);
+  }
+  return [...merged].map(([name, quantity]) => ({ name, quantity }));
+}
+
+/**
+ * Junta las paradas de una ruta por cliente, en el lugar de su primer pedido.
+ * La parada está "en camino" mientras le quede algún pedido en camino, y
+ * recién queda entregada cuando se entregaron todos.
+ */
+export function groupStopsByCustomer(stops: MyRouteStop[]): MyStopGroup[] {
+  const byCustomer = new Map<string, MyRouteStop[]>();
+  for (const stop of stops) {
+    const key = stop.stop.customer.id;
+    byCustomer.set(key, [...(byCustomer.get(key) ?? []), stop]);
+  }
+
+  return [...byCustomer].map(([customerId, group]) => {
+    const cards = group.map(({ stop, note }) => (note ? cardFromNote(note) : cardFromStop(stop)));
+    const open = cards.filter((card) => card.status === 'PENDING' || card.status === 'DISPATCHED');
+    const status: DeliveryNoteStatus = open.some((card) => card.status === 'DISPATCHED')
+      ? 'DISPATCHED'
+      : open.length > 0
+        ? 'PENDING'
+        : 'DELIVERED';
+    return {
+      customerId,
+      stops: group,
+      notes: group.flatMap(({ note }) => (note ? [note] : [])),
+      card: {
+        ...cards[0],
+        status,
+        // Lo que falta entregar; si ya se entregó todo, todo lo que se llevó.
+        items: mergeItems((open.length > 0 ? open : cards).map((card) => card.items)),
+      },
+    };
+  });
+}
+
+const onTheWay = (notes: DeliveryNote[]) => notes.filter((note) => note.status === 'DISPATCHED');
+
+/** El próximo hito de la parada: el primero que le falta a alguno de sus pedidos. */
+export function stopNextCheckpoint(notes: DeliveryNote[]): DeliveryCheckpoint | null {
+  const moving = onTheWay(notes);
+  return (
+    CHECKPOINT_ORDER.find((checkpoint) =>
+      moving.some((note) => !note.trackingEvents.some((event) => event.checkpoint === checkpoint)),
+    ) ?? null
+  );
+}
+
+/** En qué anda la parada: manda el pedido que va más atrás. */
+export function stopStage(status: DeliveryNoteStatus, notes: DeliveryNote[]): string {
+  if (status !== 'DISPATCHED') return deliveryStage({ status });
+  const moving = onTheWay(notes);
+  const reached = [...CHECKPOINT_ORDER]
+    .reverse()
+    .find(
+      (checkpoint) =>
+        moving.length > 0 &&
+        moving.every((note) => note.trackingEvents.some((event) => event.checkpoint === checkpoint)),
+    );
+  return reached ? CHECKPOINT_LABELS[reached] : 'En camino';
+}

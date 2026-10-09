@@ -5,6 +5,7 @@ import {
   ArrayMaxSize,
   ArrayUnique,
   IsArray,
+  IsBoolean,
   IsEnum,
   IsIn,
   IsInt,
@@ -120,6 +121,40 @@ export class RouteCheckpointDto {
   @ApiProperty({ enum: ROUTE_CHECKPOINTS })
   @IsIn(ROUTE_CHECKPOINTS)
   checkpoint: RouteCheckpoint;
+}
+
+// Lo que el repartidor marca en la parada de un cliente, para todos sus
+// pedidos de la ruta a la vez.
+export const CUSTOMER_CHECKPOINTS = [
+  'LEFT_WAREHOUSE',
+  'IN_TRANSIT',
+  'ARRIVED',
+] as const;
+
+export class CustomerCheckpointDto {
+  @ApiProperty({ enum: CUSTOMER_CHECKPOINTS })
+  @IsIn(CUSTOMER_CHECKPOINTS)
+  checkpoint: (typeof CUSTOMER_CHECKPOINTS)[number];
+}
+
+export class DeliverCustomerStopDto {
+  @ApiPropertyOptional({ description: 'Dónde se entregó' })
+  @IsOptional()
+  @IsLatitude()
+  latitude?: number;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsLongitude()
+  longitude?: number;
+
+  @ApiPropertyOptional({
+    description:
+      'true = la ubicación registrada era correcta; false = se corrigió',
+  })
+  @IsOptional()
+  @IsBoolean()
+  locationConfirmed?: boolean;
 }
 
 export class FailDeliveryDto {

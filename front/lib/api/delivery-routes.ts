@@ -139,6 +139,30 @@ export const deliveryRoutesApi = {
   ): Promise<{ id: string; marked: number }> =>
     apiClient.post(`${BASE}/${id}/checkpoint`, { checkpoint }).then((r) => r.data),
 
+  // La parada de un cliente: todos sus pedidos de la ruta a la vez.
+  deliverCustomer: (
+    id: string,
+    customerId: string,
+    dto: { latitude?: number; longitude?: number; locationConfirmed?: boolean },
+  ): Promise<{ delivered: number }> =>
+    apiClient.post(`${BASE}/${id}/customers/${customerId}/deliver`, dto).then((r) => r.data),
+
+  checkpointCustomer: (
+    id: string,
+    customerId: string,
+    checkpoint: 'LEFT_WAREHOUSE' | 'IN_TRANSIT' | 'ARRIVED',
+  ): Promise<{ marked: number }> =>
+    apiClient
+      .post(`${BASE}/${id}/customers/${customerId}/checkpoint`, { checkpoint })
+      .then((r) => r.data),
+
+  failCustomer: (
+    id: string,
+    customerId: string,
+    dto: FailDeliveryPayload,
+  ): Promise<{ failed: number }> =>
+    apiClient.post(`${BASE}/${id}/customers/${customerId}/fail`, dto).then((r) => r.data),
+
   cancel: (id: string): Promise<DeliveryRouteDetail> =>
     apiClient.post(`${BASE}/${id}/cancel`, {}).then((r) => r.data),
 

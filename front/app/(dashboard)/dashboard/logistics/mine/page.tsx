@@ -11,7 +11,7 @@ import { formatDatePY, todayISODate } from '@/lib/date';
 import { progressLabel, routeActions, routeMapLink, routeProgress } from '@/lib/delivery-route';
 import {
   cardFromNote,
-  cardFromStop,
+  groupStopsByCustomer,
   organizeMyWork,
   routeCheckpointToMark,
   splitMyWork,
@@ -20,7 +20,7 @@ import {
   type MyTabWork,
   type RouteCheckpoint,
 } from '@/lib/my-deliveries';
-import { DeliverModal } from '@/components/logistics/deliver-modal';
+import { DeliverModal, type DeliveryConfirmation } from '@/components/logistics/deliver-modal';
 import {
   MyDeliveryCard,
   type DeliveryCardActions,
@@ -54,7 +54,10 @@ export default function MyDeliveriesPage() {
   const [chosenTab, setChosenTab] = useState<Tab | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [failingId, setFailingId] = useState<string | null>(null);
-  const [delivering, setDelivering] = useState<DeliveryNote | null>(null);
+  const [delivering, setDelivering] = useState<{
+    notes: DeliveryNote[];
+    deliver?: (confirmation: DeliveryConfirmation) => Promise<unknown>;
+  } | null>(null);
 
   const routes = useQuery({ queryKey: ['logistics-my-routes'], queryFn: deliveryRoutesApi.mine });
   const pending = useQuery({
@@ -82,12 +85,35 @@ export default function MyDeliveriesPage() {
   });
   const busy = change.isPending;
 
-  const actions: DeliveryCardActions = {
-    deliver: setDelivering,
-    checkpoint: (noteId, checkpoint) =>
-      change.mutate(() => logisticsApi.recordTrackingEvent(noteId, { checkpoint })),
+  // Una entrega suelta: un solo pedido, por su cuenta.
+  const looseActions: DeliveryCardActions = {
+    deliver: (notes) => setDelivering({ notes }),
+    checkpoint: (notes, checkpoint) =>
+      change.mutate(() => logisticsApi.recordTrackingEvent(notes[0].id, { checkpoint })),
     dispatch: (noteId) => change.mutate(() => logisticsApi.dispatch(noteId, {})),
-    fail: (noteId, dto) => change.mutate(() => deliveryRoutesApi.failStop(noteId, dto)),
+    fail: () => undefined,
+  };
+  // La parada de un cliente en una ruta: lo que se hace vale para todos sus
+  // pedidos de esa ruta.
+  const stopActions = (routeId: string): DeliveryCardActions => {
+    const customerOf = (notes: DeliveryNote[]) => notes[0].saleOrder.customer.id;
+    return {
+      deliver: (notes) =>
+        setDelivering({
+          notes,
+          deliver: (confirmation) =>
+            deliveryRoutesApi.deliverCustomer(routeId, customerOf(notes), confirmation),
+        }),
+      checkpoint: (notes, checkpoint) =>
+        change.mutate(() =>
+          checkpoint === 'DELIVERED'
+            ? Promise.resolve()
+            : deliveryRoutesApi.checkpointCustomer(routeId, customerOf(notes), checkpoint),
+        ),
+      dispatch: () => undefined,
+      fail: (notes, dto) =>
+        change.mutate(() => deliveryRoutesApi.failCustomer(routeId, customerOf(notes), dto)),
+    };
   };
 
   const work = organizeMyWork(routes.data ?? [], [
@@ -104,7 +130,14 @@ export default function MyDeliveriesPage() {
 
   return (
     <div className="space-y-6">
-      {delivering && <DeliverModal note={delivering} onClose={() => setDelivering(null)} />}
+      {delivering && (
+        <DeliverModal
+          note={delivering.notes[0]}
+          orders={delivering.notes.length}
+          deliver={delivering.deliver}
+          onClose={() => setDelivering(null)}
+        />
+      )}
 
       <header>
         <h1 className="text-2xl font-semibold text-foreground">Mis entregas</h1>
@@ -178,7 +211,8 @@ export default function MyDeliveriesPage() {
           onCheckpoint={(routeId, checkpoint) =>
             change.mutate(() => deliveryRoutesApi.checkpoint(routeId, checkpoint))
           }
-          actions={actions}
+          looseActions={looseActions}
+          routeActions={stopActions}
         />
       )}
     </div>
@@ -193,7 +227,8 @@ function TabContent({
   onFailing,
   onStart,
   onCheckpoint,
-  actions,
+  looseActions,
+  routeActions,
 }: {
   work: MyTabWork;
   emptyText: string;
@@ -202,7 +237,8 @@ function TabContent({
   onFailing: (noteId: string | null) => void;
   onStart: (routeId: string) => void;
   onCheckpoint: (routeId: string, checkpoint: RouteCheckpoint) => void;
-  actions: DeliveryCardActions;
+  looseActions: DeliveryCardActions;
+  routeActions: (routeId: string) => DeliveryCardActions;
 }) {
   if (work.routes.length === 0 && work.loose.length === 0) {
     return (
@@ -226,7 +262,7 @@ function TabContent({
           onFailing={onFailing}
           onStart={() => onStart(group.route.id)}
           onCheckpoint={(checkpoint) => onCheckpoint(group.route.id, checkpoint)}
-          actions={actions}
+          actions={routeActions(group.route.id)}
         />
       ))}
 
@@ -241,13 +277,13 @@ function TabContent({
               <MyDeliveryCard
                 key={note.id}
                 data={cardFromNote(note)}
-                note={note}
+                notes={[note]}
                 inRoute={false}
                 canFail={false}
                 busy={busy}
                 failing={false}
                 onFailing={() => undefined}
-                actions={actions}
+                actions={looseActions}
               />
             ))}
           </ul>
@@ -281,7 +317,8 @@ function RouteSection({
   actions: DeliveryCardActions;
 }) {
   const [open, setOpen] = useState(defaultOpen);
-  const { route, stops } = group;
+  const { route } = group;
+  const customerStops = groupStopsByCustomer(group.stops);
   const stopsId = `route-stops-${route.id}`;
   const progress = routeProgress(route.stops);
   const can = routeActions(
@@ -289,8 +326,9 @@ function RouteSection({
     { canPlan: false, canManage: false, isDriver: true },
     todayISODate(),
   );
+  // Una parada por cliente: el recorrido no repite la misma dirección.
   const mapLink = routeMapLink(
-    route.stops.filter((stop) => stop.status !== 'DELIVERED').map((stop) => stop.customer),
+    customerStops.filter(({ card }) => card.status !== 'DELIVERED').map(({ card }) => card),
   );
   const checkpoint = route.status === 'IN_PROGRESS' ? routeCheckpointToMark(group) : null;
   const percent = progress.total === 0 ? 0 : Math.round((progress.delivered / progress.total) * 100);
@@ -311,7 +349,9 @@ function RouteSection({
           </span>
           <span className="mt-0.5 block text-sm text-muted-foreground tabular-nums">
             {formatDatePY(route.date)}
-            {route.vehicle ? ` · ${route.vehicle}` : ''} · {progressLabel(progress)}
+            {route.vehicle ? ` · ${route.vehicle}` : ''} ·{' '}
+            {customerStops.length === 1 ? '1 parada' : `${customerStops.length} paradas`} ·{' '}
+            {progressLabel(progress)}
           </span>
           <span
             role="progressbar"
@@ -368,17 +408,17 @@ function RouteSection({
 
       {open && (
         <ol id={stopsId} className="space-y-3 border-t border-border p-5">
-          {stops.map(({ stop, note }, index) => (
+          {customerStops.map(({ customerId, card, notes }, index) => (
             <MyDeliveryCard
-              key={stop.id}
-              data={note ? cardFromNote(note) : cardFromStop(stop)}
-              note={note}
+              key={customerId}
+              data={card}
+              notes={notes}
               position={index + 1}
               inRoute
               canFail={can.failStops}
               busy={busy}
-              failing={failingId === stop.id}
-              onFailing={(failing) => onFailing(failing ? stop.id : null)}
+              failing={failingId === customerId}
+              onFailing={(failing) => onFailing(failing ? customerId : null)}
               actions={actions}
             />
           ))}

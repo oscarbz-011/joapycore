@@ -8,8 +8,11 @@ import {
   formatDeliveryAddress,
   nextCheckpoint,
   organizeMyWork,
+  groupStopsByCustomer,
   routeCheckpointToMark,
   splitMyWork,
+  stopNextCheckpoint,
+  stopStage,
 } from './my-deliveries';
 
 const stop = (id: string, status: RouteStop['status'] = 'DISPATCHED'): RouteStop => ({
@@ -256,5 +259,92 @@ describe('routeCheckpointToMark', () => {
 
   it('ignores a route with nothing on the way', () => {
     expect(routeCheckpointToMark(group([]))).toBeNull();
+  });
+});
+
+// Dos pedidos distintos del mismo cliente en la misma ruta.
+describe('groupStopsByCustomer', () => {
+  const sameCustomer = (id: string, status: RouteStop['status'], item: string): RouteStop => ({
+    ...stop(id, status),
+    customer: { ...stop(id).customer, id: 'cust-jorge', name: 'Jorge Britez' },
+    items: [{ name: item, quantity: 1 }],
+  });
+  const routed = (stops: RouteStop[], notes: DeliveryNote[] = []) =>
+    organizeMyWork([route('1', { status: 'IN_PROGRESS', stops })], notes).routes[0].stops;
+
+  it('makes one stop out of the orders of the same customer', () => {
+    const groups = groupStopsByCustomer(
+      routed([
+        sameCustomer('a', 'DISPATCHED', 'Ventilador'),
+        stop('other'),
+        sameCustomer('b', 'DISPATCHED', 'TV Smart 43"'),
+      ]),
+    );
+
+    // Queda en el lugar de su primer pedido.
+    expect(groups.map((group) => group.customerId)).toEqual(['cust-jorge', 'cust-other']);
+    expect(groups[0].stops.map(({ stop: s }) => s.id)).toEqual(['a', 'b']);
+    expect(groups[0].card).toMatchObject({
+      customerName: 'Jorge Britez',
+      status: 'DISPATCHED',
+      items: [
+        { name: 'Ventilador', quantity: 1 },
+        { name: 'TV Smart 43"', quantity: 1 },
+      ],
+    });
+  });
+
+  it('adds up the same product across orders', () => {
+    const [group] = groupStopsByCustomer(
+      routed([sameCustomer('a', 'PENDING', 'Ventilador'), sameCustomer('b', 'PENDING', 'Ventilador')]),
+    );
+
+    expect(group.card.items).toEqual([{ name: 'Ventilador', quantity: 2 }]);
+    expect(group.card.status).toBe('PENDING');
+  });
+
+  // Mientras quede un pedido en camino, la parada sigue abierta y muestra lo que falta.
+  it('stays open until every order is delivered', () => {
+    const half = groupStopsByCustomer(
+      routed([sameCustomer('a', 'DELIVERED', 'Ventilador'), sameCustomer('b', 'DISPATCHED', 'TV Smart 43"')]),
+    )[0];
+    expect(half.card.status).toBe('DISPATCHED');
+    expect(half.card.items).toEqual([{ name: 'TV Smart 43"', quantity: 1 }]);
+
+    const done = groupStopsByCustomer(
+      routed([sameCustomer('a', 'DELIVERED', 'Ventilador'), sameCustomer('b', 'DELIVERED', 'TV Smart 43"')]),
+    )[0];
+    expect(done.card.status).toBe('DELIVERED');
+    expect(done.card.items).toHaveLength(2);
+  });
+
+  it('keeps the open deliveries of the stop, to act on all of them', () => {
+    const [group] = groupStopsByCustomer(
+      routed(
+        [sameCustomer('a', 'DISPATCHED', 'Ventilador'), sameCustomer('b', 'DISPATCHED', 'TV Smart 43"')],
+        [note('a'), note('b')],
+      ),
+    );
+
+    expect(group.notes.map((n) => n.id)).toEqual(['a', 'b']);
+  });
+});
+
+describe('the state of a stop with several orders', () => {
+  const ahead = note('a', 'DISPATCHED', ['LEFT_WAREHOUSE', 'IN_TRANSIT']);
+  const behind = note('b', 'DISPATCHED', ['LEFT_WAREHOUSE']);
+
+  it('offers the checkpoint the order behind is missing', () => {
+    expect(stopNextCheckpoint([ahead, behind])).toBe('IN_TRANSIT');
+    expect(stopNextCheckpoint([ahead])).toBe('ARRIVED');
+    expect(stopNextCheckpoint([])).toBeNull();
+  });
+
+  it('is where the order behind is', () => {
+    expect(stopStage('DISPATCHED', [ahead, behind])).toBe('Salió del depósito');
+    expect(stopStage('DISPATCHED', [ahead])).toBe('En camino');
+    expect(stopStage('DISPATCHED', [note('c')])).toBe('En camino');
+    expect(stopStage('PENDING', [])).toBe('Por salir');
+    expect(stopStage('DELIVERED', [])).toBe('Entregado');
   });
 });

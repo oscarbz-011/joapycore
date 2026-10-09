@@ -17,6 +17,8 @@ import { RequiredModule } from '../../../common/decorators/required-module.decor
 import type { JwtPayload } from '../../../common/types/jwt-payload.interface';
 import {
   AddRouteDeliveryDto,
+  CustomerCheckpointDto,
+  DeliverCustomerStopDto,
   FailDeliveryDto,
   ListDeliveryRoutesDto,
   ReorderRouteDto,
@@ -24,6 +26,7 @@ import {
   StartRouteDto,
   UpdateDeliveryRouteDto,
 } from '../dto/delivery-route.dto';
+import { DeliveryRouteCustomerStopsService } from '../services/delivery-route-customer-stops.service';
 import { DeliveryRoutesService } from '../services/delivery-routes.service';
 
 const actorOf = (user: JwtPayload) => ({
@@ -40,7 +43,10 @@ const actorOf = (user: JwtPayload) => ({
 @RequiredModule('logistics')
 @Controller('logistics/delivery-routes')
 export class DeliveryRoutesController {
-  constructor(private readonly service: DeliveryRoutesService) {}
+  constructor(
+    private readonly service: DeliveryRoutesService,
+    private readonly customerStops: DeliveryRouteCustomerStopsService,
+  ) {}
 
   @Get()
   @Permissions('logistics:read')
@@ -146,6 +152,72 @@ export class DeliveryRoutesController {
     @Body() dto: RouteCheckpointDto,
   ) {
     return this.service.markCheckpoint(tenantId, id, dto, actorOf(user));
+  }
+
+  // La parada de un cliente: todos sus pedidos de la ruta a la vez. Sin
+  // @Permissions() por lo mismo que iniciar la ruta: logística o su repartidor.
+  @Post(':id/customers/:customerId/deliver')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Entregar todos los pedidos en camino de un cliente en la ruta',
+  })
+  deliverCustomer(
+    @CurrentTenant() tenantId: string,
+    @CurrentUser() user: JwtPayload,
+    @Param('id') id: string,
+    @Param('customerId') customerId: string,
+    @Body() dto: DeliverCustomerStopDto,
+  ) {
+    return this.customerStops.deliver(
+      tenantId,
+      id,
+      customerId,
+      dto,
+      actorOf(user),
+    );
+  }
+
+  @Post(':id/customers/:customerId/checkpoint')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Marcar un hito en todos los pedidos de un cliente en la ruta',
+  })
+  checkpointCustomer(
+    @CurrentTenant() tenantId: string,
+    @CurrentUser() user: JwtPayload,
+    @Param('id') id: string,
+    @Param('customerId') customerId: string,
+    @Body() dto: CustomerCheckpointDto,
+  ) {
+    return this.customerStops.markCheckpoint(
+      tenantId,
+      id,
+      customerId,
+      dto,
+      actorOf(user),
+    );
+  }
+
+  @Post(':id/customers/:customerId/fail')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      'Registrar que no se pudo entregar ningún pedido de un cliente en la ruta',
+  })
+  failCustomer(
+    @CurrentTenant() tenantId: string,
+    @CurrentUser() user: JwtPayload,
+    @Param('id') id: string,
+    @Param('customerId') customerId: string,
+    @Body() dto: FailDeliveryDto,
+  ) {
+    return this.customerStops.fail(
+      tenantId,
+      id,
+      customerId,
+      dto,
+      actorOf(user),
+    );
   }
 
   @Post(':id/cancel')

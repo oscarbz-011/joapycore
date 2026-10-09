@@ -11,6 +11,7 @@ import { DeliveryMethodsService } from './services/delivery-methods.service';
 import { DeliveryRoutesController } from './controllers/delivery-routes.controller';
 import { DeliveryRoutesRepository } from './repositories/delivery-routes.repository';
 import { DeliveryRoutesService } from './services/delivery-routes.service';
+import { DeliveryRouteCustomerStopsService } from './services/delivery-route-customer-stops.service';
 import { LogisticsOnSaleCompletedListener } from './events/logistics-on-sale-completed.listener';
 import { LogisticsRouteProgressListener } from './events/logistics-route-progress.listener';
 
@@ -34,6 +35,7 @@ import { LogisticsRouteProgressListener } from './events/logistics-route-progres
     DeliveryTrackingService,
     DeliveryMethodsService,
     DeliveryRoutesService,
+    DeliveryRouteCustomerStopsService,
     DeliveryNotesRepository,
     DeliveryRoutesRepository,
     DeliveryTrackingEventsRepository,

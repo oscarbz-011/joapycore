@@ -253,6 +253,27 @@ export class DeliveryRoutesRepository {
     });
   }
 
+  /** Los pedidos de un cliente que están en camino en la ruta. */
+  findCustomerStopsOnTheWay(
+    tenantId: string,
+    routeId: string,
+    customerId: string,
+  ) {
+    return this.prisma.deliveryNote.findMany({
+      where: {
+        tenantId,
+        routeId,
+        status: 'DISPATCHED',
+        saleOrder: { customerId },
+      },
+      select: {
+        id: true,
+        trackingEvents: { select: { checkpoint: true } },
+      },
+      orderBy: [{ routeOrder: 'asc' }, { createdAt: 'asc' }],
+    });
+  }
+
   findStop(tenantId: string, id: string) {
     return this.prisma.deliveryNote.findFirst({
       where: { id, tenantId },
