@@ -11,6 +11,7 @@ function makeNote(overrides = {}) {
     id: 'note-1',
     tenantId: 'tenant-1',
     status: 'PENDING' as const,
+    method: 'HOME_DELIVERY' as string,
     assignmentMode: null as string | null,
     assignedEmployeeId: null as string | null,
     carrier: null as string | null,
@@ -135,6 +136,25 @@ describe('DeliveryTrackingService', () => {
         }),
       );
     });
+
+    // Sin repartidor: un retiro en sucursal o una entrega que pidió llevar
+    // el vendedor no se asignan desde acá.
+    it.each(['PICKUP', 'SELLER'])(
+      'refuses to assign a courier to a %s delivery',
+      async (method) => {
+        deliveryNotesRepository.findById.mockResolvedValue(
+          makeNote({ method }),
+        );
+
+        await expect(
+          service.assign('tenant-1', 'note-1', {
+            assignmentMode: 'INTERNAL_EMPLOYEE',
+            assignedEmployeeId: 'emp-1',
+          } as any),
+        ).rejects.toThrow(/envío a domicilio/);
+        expect(deliveryNotesRepository.assign).not.toHaveBeenCalled();
+      },
+    );
 
     it('throws NotFoundException when the employee does not belong to the tenant', async () => {
       deliveryNotesRepository.findById.mockResolvedValue(makeNote());

@@ -239,6 +239,10 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
       { key: "logistics:manage", label: "Gestionar remitos y entregas" },
       { key: "logistics:assign", label: "Asignar entregas a repartidores" },
       {
+        key: "logistics:authorize",
+        label: "Autorizar que un vendedor lleve un pedido (supervisor)",
+      },
+      {
         key: "logistics:track",
         label: "Ver y actualizar mis entregas asignadas (repartidor)",
       },

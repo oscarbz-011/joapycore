@@ -129,6 +129,20 @@ enum CreditBureauCheckResult {
   FLAGGED
 }
 
+// Cómo se entrega una venta lista para entregar.
+enum DeliveryMethod {
+  HOME_DELIVERY // La empresa la lleva a la dirección del cliente (repartidor o courier)
+  PICKUP // El cliente la retira en la sucursal
+  SELLER // Caso excepcional: el vendedor la lleva en persona, con autorización
+}
+
+// Pedido del vendedor para llevar el pedido en persona.
+enum SellerDeliveryRequestStatus {
+  PENDING // Espera la decisión de un supervisor
+  AUTHORIZED
+  REJECTED
+}
+
 enum DeliveryNoteStatus {
   PENDING
   DISPATCHED
@@ -679,6 +693,8 @@ model User {
   sentAppEmailMessages           AppEmailMessage[]           @relation("AppEmailSender")
   supplierInvoicesCreated        SupplierInvoice[]           @relation("SupplierInvoiceCreatedBy")
   supplierInvoicesReviewed       SupplierInvoice[]           @relation("SupplierInvoiceReviewedBy")
+  deliverySellerRequests         DeliveryNote[]              @relation("DeliverySellerRequester")
+  deliverySellerDecisions        DeliveryNote[]              @relation("DeliverySellerDecider")
 
   @@index([tenantId])
   @@map("users")
@@ -1472,26 +1488,40 @@ model SalePayment {
 }
 
 model DeliveryNote {
-  id                  String                  @id @default(uuid())
-  tenantId            String                  @map("tenant_id")
-  saleOrderId         String                  @unique @map("sale_order_id")
-  noteNumber          String?                 @map("note_number")
+  id                  String                       @id @default(uuid())
+  tenantId            String                       @map("tenant_id")
+  saleOrderId         String                       @unique @map("sale_order_id")
+  noteNumber          String?                      @map("note_number")
   carrier             String?
   vehicle             String?
-  status              DeliveryNoteStatus      @default(PENDING)
-  assignmentMode      DeliveryAssignmentMode? @map("assignment_mode")
-  assignedEmployeeId  String?                 @map("assigned_employee_id")
-  externalTrackingRef String?                 @map("external_tracking_ref")
-  issuedAt            DateTime?               @map("issued_at")
-  deliveredAt         DateTime?               @map("delivered_at")
+  status              DeliveryNoteStatus           @default(PENDING)
+  assignmentMode      DeliveryAssignmentMode?      @map("assignment_mode")
+  assignedEmployeeId  String?                      @map("assigned_employee_id")
+  externalTrackingRef String?                      @map("external_tracking_ref")
+  method              DeliveryMethod               @default(HOME_DELIVERY)
+  // Retiro en sucursal: quién se llevó el pedido.
+  pickedUpByName      String?                      @map("picked_up_by_name")
+  pickedUpByDocument  String?                      @map("picked_up_by_document")
+  // Entrega a cargo del vendedor: quién la pidió y quién la decidió.
+  sellerRequestStatus SellerDeliveryRequestStatus? @map("seller_request_status")
+  sellerRequestNote   String?                      @map("seller_request_note")
+  sellerRequestedById String?                      @map("seller_requested_by_id")
+  sellerRequestedAt   DateTime?                    @map("seller_requested_at")
+  sellerDecidedById   String?                      @map("seller_decided_by_id")
+  sellerDecidedAt     DateTime?                    @map("seller_decided_at")
+  sellerDecisionNote  String?                      @map("seller_decision_note")
+  issuedAt            DateTime?                    @map("issued_at")
+  deliveredAt         DateTime?                    @map("delivered_at")
   notes               String?
-  createdAt           DateTime                @default(now()) @map("created_at")
-  updatedAt           DateTime                @updatedAt @map("updated_at")
+  createdAt           DateTime                     @default(now()) @map("created_at")
+  updatedAt           DateTime                     @updatedAt @map("updated_at")
 
-  tenant           Tenant                  @relation(fields: [tenantId], references: [id])
-  saleOrder        SaleOrder               @relation(fields: [saleOrderId], references: [id])
-  assignedEmployee Employee?               @relation(fields: [assignedEmployeeId], references: [id])
-  trackingEvents   DeliveryTrackingEvent[]
+  tenant            Tenant                  @relation(fields: [tenantId], references: [id])
+  saleOrder         SaleOrder               @relation(fields: [saleOrderId], references: [id])
+  assignedEmployee  Employee?               @relation(fields: [assignedEmployeeId], references: [id])
+  sellerRequestedBy User?                   @relation("DeliverySellerRequester", fields: [sellerRequestedById], references: [id])
+  sellerDecidedBy   User?                   @relation("DeliverySellerDecider", fields: [sellerDecidedById], references: [id])
+  trackingEvents    DeliveryTrackingEvent[]
 
   @@index([tenantId, status])
   @@map("delivery_notes")

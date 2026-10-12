@@ -1,6 +1,12 @@
 import { Injectable } from '@nestjs/common';
-import { DeliveryAssignmentMode, DeliveryNoteStatus } from '@prisma/client';
+import {
+  DeliveryAssignmentMode,
+  DeliveryNoteStatus,
+  Prisma,
+} from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
+
+const PERSON = { id: true, firstName: true, lastName: true } as const;
 
 const include = {
   saleOrder: {
@@ -24,6 +30,8 @@ const include = {
       contractType: true,
     },
   },
+  sellerRequestedBy: { select: PERSON },
+  sellerDecidedBy: { select: PERSON },
   trackingEvents: {
     orderBy: { recordedAt: 'asc' as const },
     include: {
@@ -72,6 +80,30 @@ export class DeliveryNotesRepository {
     return this.prisma.deliveryNote.findFirst({
       where: { id, tenantId },
       include,
+    });
+  }
+
+  findBySaleOrder(tenantId: string, saleOrderId: string) {
+    return this.prisma.deliveryNote.findFirst({
+      where: { tenantId, saleOrderId },
+      include,
+    });
+  }
+
+  // Escribe solo si la nota sigue cumpliendo `whileIs`: quien llama comprueba
+  // el conteo para detectar que otro la cambió entre la lectura y la escritura.
+  patch(
+    tenantId: string,
+    id: string,
+    whileIs: Pick<
+      Prisma.DeliveryNoteWhereInput,
+      'status' | 'method' | 'sellerRequestStatus'
+    >,
+    data: Prisma.DeliveryNoteUncheckedUpdateManyInput,
+  ) {
+    return this.prisma.deliveryNote.updateMany({
+      where: { ...whileIs, id, tenantId },
+      data,
     });
   }
 

@@ -1,5 +1,6 @@
 import { apiClient } from './client';
 import type { Customer } from './sales';
+import type { DeliveryMethod, SellerRequestStatus } from '../delivery-method';
 
 export type DeliveryNoteStatus = 'PENDING' | 'DISPATCHED' | 'DELIVERED' | 'CANCELLED';
 export type DeliveryAssignmentMode = 'INTERNAL_EMPLOYEE' | 'EXTERNAL_COURIER_USER' | 'EXTERNAL_COMPANY';
@@ -37,6 +38,8 @@ export interface DeliveryTrackingEvent {
   recordedBy: { id: string; firstName: string; lastName: string } | null;
 }
 
+type Person = { id: string; firstName: string; lastName: string };
+
 export interface DeliveryNote {
   id: string;
   status: DeliveryNoteStatus;
@@ -46,6 +49,19 @@ export interface DeliveryNote {
   assignmentMode: DeliveryAssignmentMode | null;
   assignedEmployee: AssignedEmployee | null;
   externalTrackingRef: string | null;
+  /** Cómo llega el pedido al cliente. */
+  method: DeliveryMethod;
+  // Retiro en sucursal: quién se lo llevó.
+  pickedUpByName: string | null;
+  pickedUpByDocument: string | null;
+  // Entrega a cargo del vendedor: quién la pidió y quién la decidió.
+  sellerRequestStatus: SellerRequestStatus | null;
+  sellerRequestNote: string | null;
+  sellerRequestedAt: string | null;
+  sellerRequestedBy: Person | null;
+  sellerDecidedAt: string | null;
+  sellerDecidedBy: Person | null;
+  sellerDecisionNote: string | null;
   issuedAt: string;
   deliveredAt: string | null;
   createdAt: string;
@@ -124,6 +140,36 @@ export const logisticsApi = {
 
   markDelivered: (id: string): Promise<DeliveryNote> =>
     apiClient.patch(`/logistics/deliveries/${id}/deliver`, {}).then((r) => r.data),
+
+  // Cómo se entrega: envío, retiro en sucursal o a cargo del vendedor
+  /** La entrega de un pedido; la ve logística o el vendedor del pedido. */
+  getForOrder: (saleOrderId: string): Promise<DeliveryNote> =>
+    apiClient.get(`/logistics/deliveries/by-order/${saleOrderId}`).then((r) => r.data),
+
+  setDeliveryMethod: (id: string, method: 'HOME_DELIVERY' | 'PICKUP'): Promise<DeliveryNote> =>
+    apiClient.post(`/logistics/deliveries/${id}/method`, { method }).then((r) => r.data),
+
+  /** Confirma que el cliente de la venta retiró el pedido. */
+  registerPickup: (id: string): Promise<DeliveryNote> =>
+    apiClient.post(`/logistics/deliveries/${id}/pickup`, {}).then((r) => r.data),
+
+  requestSellerDelivery: (id: string, note?: string): Promise<DeliveryNote> =>
+    apiClient
+      .post(`/logistics/deliveries/${id}/seller-request`, note ? { note } : {})
+      .then((r) => r.data),
+
+  authorizeSellerDelivery: (id: string, note?: string): Promise<DeliveryNote> =>
+    apiClient
+      .post(`/logistics/deliveries/${id}/seller-request/authorize`, note ? { note } : {})
+      .then((r) => r.data),
+
+  rejectSellerDelivery: (id: string, note: string): Promise<DeliveryNote> =>
+    apiClient
+      .post(`/logistics/deliveries/${id}/seller-request/reject`, { note })
+      .then((r) => r.data),
+
+  sellerDelivered: (id: string): Promise<DeliveryNote> =>
+    apiClient.post(`/logistics/deliveries/${id}/seller-delivered`, {}).then((r) => r.data),
 
   // Asignación
   listCouriers: (): Promise<CourierOption[]> =>

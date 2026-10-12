@@ -73,6 +73,11 @@ export class DeliveryNotesService {
         'Solo se puede despachar una entrega en estado pendiente',
       );
     }
+    if (note.method === 'PICKUP') {
+      throw new UnprocessableEntityException(
+        'Este pedido lo retira el cliente en la sucursal: no se despacha',
+      );
+    }
     if (!note.assignmentMode) {
       throw new UnprocessableEntityException(
         'Debe asignar la entrega antes de despacharla',
@@ -101,11 +106,38 @@ export class DeliveryNotesService {
 
   async markDelivered(tenantId: string, id: string, userId?: string) {
     const note = await this.findOne(tenantId, id);
+    if (note.method === 'PICKUP') {
+      throw new UnprocessableEntityException(
+        'Este pedido lo retira el cliente: registrá el retiro con quién se lo llevó',
+      );
+    }
     if (note.status !== 'DISPATCHED') {
       throw new UnprocessableEntityException(
         'Solo se puede marcar como entregada una nota en estado despachada',
       );
     }
+    return this.finish(tenantId, note, userId);
+  }
+
+  /**
+   * Cierra la entrega. El retiro en sucursal y la entrega a cargo del
+   * vendedor no pasan por "despachada": se cierran desde pendiente. Quien
+   * llama ya validó que corresponde.
+   */
+  async complete(tenantId: string, id: string, userId?: string) {
+    const note = await this.findOne(tenantId, id);
+    if (note.status !== 'PENDING' && note.status !== 'DISPATCHED') {
+      throw new UnprocessableEntityException('Esta entrega ya fue cerrada');
+    }
+    return this.finish(tenantId, note, userId);
+  }
+
+  private async finish(
+    tenantId: string,
+    note: { id: string; saleOrder: { id: string } },
+    userId?: string,
+  ) {
+    const id = note.id;
     await this.repo.update(tenantId, id, {
       status: 'DELIVERED',
       deliveredAt: new Date(),
