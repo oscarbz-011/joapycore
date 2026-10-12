@@ -1,4 +1,6 @@
 import { createTransport } from 'nodemailer';
+import { PlatformEmailLimitError } from '../platform-email/platform-email.service';
+import { ResendDeliveryError } from '../platform-email/resend.client';
 import { IntegrationsService } from '../integrations/integrations.service';
 import { resolvePublicNetworkDestination } from '../integrations/network-destination.policy';
 import {
@@ -33,10 +35,12 @@ describe('Tenant SMTP adapter', () => {
     close: jest.fn(),
   };
   const integrations = { getEnabledSmtpConfig: jest.fn() };
+  const platformEmail = { isConfigured: jest.fn(), sendForTenant: jest.fn() };
   let provider: CommunicationsEmailProvider;
 
   beforeEach(() => {
     jest.clearAllMocks();
+    platformEmail.isConfigured.mockReturnValue(false);
     integrations.getEnabledSmtpConfig.mockResolvedValue({
       host: 'smtp.example.test',
       port: 587,
@@ -58,6 +62,7 @@ describe('Tenant SMTP adapter', () => {
     });
     provider = new CommunicationsEmailProvider(
       integrations as unknown as IntegrationsService,
+      platformEmail as never,
     );
   });
 
@@ -101,6 +106,57 @@ describe('Tenant SMTP adapter', () => {
       ambiguous: false,
     });
     expect(createTransport).not.toHaveBeenCalled();
+  });
+
+  describe('a tenant without its own SMTP, with the platform sender on', () => {
+    beforeEach(() => {
+      integrations.getEnabledSmtpConfig.mockResolvedValue(null);
+      platformEmail.isConfigured.mockReturnValue(true);
+      platformEmail.sendForTenant.mockResolvedValue({
+        messageId: 'resend-1',
+        from: 'mi-empresa@correo.joapycore.com',
+      });
+    });
+
+    it('sends the invoice through the platform, replies to the identity', async () => {
+      await expect(provider.send(input)).resolves.toEqual({
+        messageId: 'resend-1',
+      });
+
+      expect(platformEmail.sendForTenant).toHaveBeenCalledWith({
+        tenantId: input.tenantId,
+        purpose: 'invoice',
+        to: input.recipient,
+        subject: input.subject,
+        text: input.bodyText,
+        attachment: input.attachment,
+        replyTo: input.replyTo ?? input.fromEmail,
+        idempotencyKey: `communication-${input.messageId}`,
+      });
+      expect(createTransport).not.toHaveBeenCalled();
+    });
+
+    it('keeps the outcome unknown when the provider never answered', async () => {
+      platformEmail.sendForTenant.mockRejectedValue(
+        new ResendDeliveryError('PROVIDER_UNREACHABLE', true, true, 'x'),
+      );
+
+      await expect(provider.send(input)).rejects.toMatchObject({
+        code: 'PROVIDER_UNREACHABLE',
+        ambiguous: true,
+      });
+    });
+
+    it('reports the daily limit as a definite failure', async () => {
+      platformEmail.sendForTenant.mockRejectedValue(
+        new PlatformEmailLimitError(200),
+      );
+
+      await expect(provider.send(input)).rejects.toMatchObject({
+        code: 'PLATFORM_DAILY_LIMIT',
+        ambiguous: false,
+      });
+    });
   });
 
   it('rejects an identity if the tenant SMTP sender changed', async () => {

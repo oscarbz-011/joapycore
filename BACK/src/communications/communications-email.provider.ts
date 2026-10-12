@@ -2,6 +2,11 @@ import { Injectable } from '@nestjs/common';
 import { createTransport } from 'nodemailer';
 import { IntegrationsService } from '../integrations/integrations.service';
 import { resolvePublicNetworkDestination } from '../integrations/network-destination.policy';
+import {
+  PlatformEmailLimitError,
+  PlatformEmailService,
+} from '../platform-email/platform-email.service';
+import { ResendDeliveryError } from '../platform-email/resend.client';
 
 export interface TransactionalEmail {
   tenantId: string;
@@ -53,10 +58,18 @@ export function classifySmtpFailure(
 /** The encrypted, tenant-specific SMTP integration is the first provider bridge. */
 @Injectable()
 export class CommunicationsEmailProvider {
-  constructor(private readonly integrations: IntegrationsService) {}
+  constructor(
+    private readonly integrations: IntegrationsService,
+    private readonly platformEmail: PlatformEmailService,
+  ) {}
 
   async send(input: TransactionalEmail): Promise<{ messageId: string }> {
     const config = await this.integrations.getEnabledSmtpConfig(input.tenantId);
+    // Sin correo propio conectado, la factura sale por el remitente de la
+    // plataforma; las respuestas van a la dirección de la identidad.
+    if (!config && this.platformEmail.isConfigured()) {
+      return this.sendViaPlatform(input);
+    }
     if (!config) {
       throw new CommunicationDeliveryError(
         'SMTP_NOT_CONFIGURED',
@@ -131,6 +144,41 @@ export class CommunicationsEmailProvider {
       throw classifySmtpFailure(error, sending);
     } finally {
       transporter.close();
+    }
+  }
+
+  private async sendViaPlatform(
+    input: TransactionalEmail,
+  ): Promise<{ messageId: string }> {
+    try {
+      const sent = await this.platformEmail.sendForTenant({
+        tenantId: input.tenantId,
+        purpose: 'invoice',
+        to: input.recipient,
+        subject: input.subject,
+        text: input.bodyText,
+        attachment: input.attachment,
+        replyTo: input.replyTo ?? input.fromEmail,
+        // El mismo mensaje reintentado no sale dos veces.
+        idempotencyKey: `communication-${input.messageId}`,
+      });
+      return { messageId: sent.messageId };
+    } catch (error) {
+      if (error instanceof ResendDeliveryError) {
+        throw new CommunicationDeliveryError(
+          error.code,
+          error.ambiguous,
+          error.message,
+        );
+      }
+      if (error instanceof PlatformEmailLimitError) {
+        throw new CommunicationDeliveryError(
+          'PLATFORM_DAILY_LIMIT',
+          false,
+          error.message,
+        );
+      }
+      throw error;
     }
   }
 }

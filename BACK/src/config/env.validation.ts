@@ -37,6 +37,16 @@ export function validateEnv(
     errors.push('CORS_ORIGINS es obligatoria en producción');
   }
 
+  // El remitente de la plataforma necesita las dos: con una sola no envía y
+  // el error aparecería recién al primer correo.
+  const hasKey = Boolean(config['RESEND_API_KEY']);
+  const hasDomain = Boolean(config['PLATFORM_EMAIL_DOMAIN']);
+  if (hasKey !== hasDomain) {
+    errors.push(
+      'RESEND_API_KEY y PLATFORM_EMAIL_DOMAIN van juntas: definí las dos o ninguna',
+    );
+  }
+
   if (errors.length > 0) {
     throw new Error(`Configuración inválida:\n- ${errors.join('\n- ')}`);
   }
