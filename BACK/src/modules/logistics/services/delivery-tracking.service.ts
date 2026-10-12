@@ -10,6 +10,7 @@ import { LogisticsSourcesRepository } from '../repositories/logistics-sources.re
 import { DeliveryNotesRepository } from '../repositories/delivery-notes.repository';
 import { DeliveryTrackingEventsRepository } from '../repositories/delivery-tracking-events.repository';
 import { DeliveryNotesService } from './delivery-notes.service';
+import { DeliveryRoutesService } from './delivery-routes.service';
 import { AssignDeliveryDto } from '../dto/assign-delivery.dto';
 import { RecordTrackingEventDto } from '../dto/record-tracking-event.dto';
 import type { AuditLogEvent } from '../../../audit/audit-log.event';
@@ -29,6 +30,7 @@ export class DeliveryTrackingService {
     private readonly trackingEventsRepository: DeliveryTrackingEventsRepository,
     private readonly deliveryNotesService: DeliveryNotesService,
     private readonly eventEmitter: EventEmitter2,
+    private readonly deliveryRoutesService: DeliveryRoutesService,
   ) {}
 
   // Lectura cross-módulo vía repositorio (no importa ninguna clase de hr).
@@ -74,6 +76,32 @@ export class DeliveryTrackingService {
 
     const isExternalCompany =
       dto.assignmentMode === DeliveryAssignmentMode.EXTERNAL_COMPANY;
+
+    // Una entrega que ya salió con su ruta no cambia de manos: si no se
+    // pudo entregar, se registra como no realizada y vuelve a pendiente.
+    if (note.status === 'DISPATCHED' && note.route) {
+      throw new UnprocessableEntityException(
+        `Esta entrega ya salió con la ruta ${note.route.code}. Si no se pudo entregar, registralo en la ruta.`,
+      );
+    }
+    // Asignar a un repartidor pone la entrega en su ruta de ese día (o la
+    // crea). Un courier externo no recorre una ruta nuestra.
+    if (note.status === 'PENDING') {
+      if (employee && !isExternalCompany) {
+        await this.deliveryRoutesService.assignToDriver(
+          tenantId,
+          deliveryNoteId,
+          employee,
+          { date: dto.routeDate, userId },
+        );
+      } else if (note.route) {
+        await this.deliveryRoutesService.removeDelivery(
+          tenantId,
+          deliveryNoteId,
+          userId,
+        );
+      }
+    }
     const carrier = isExternalCompany
       ? dto.carrier
       : employee

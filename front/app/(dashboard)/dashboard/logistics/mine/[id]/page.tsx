@@ -23,7 +23,8 @@ import { formatDatePY } from '../../../../../../lib/date';
 import { DeliveryMap } from '../../../../../../components/logistics/delivery-map';
 import { CheckpointTimeline } from '../../../../../../components/logistics/checkpoint-timeline';
 import { DeliverModal } from '../../../../../../components/logistics/deliver-modal';
-import { formatDeliveryAddress, CHECKPOINT_ORDER } from '../page';
+import { OpenInMaps } from '../../../../../../components/logistics/open-in-maps';
+import { formatDeliveryAddress, CHECKPOINT_ORDER } from '@/lib/my-deliveries';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
@@ -155,6 +156,14 @@ export default function MyDeliveryDetailPage() {
             </Card>
           )}
 
+          <OpenInMaps
+            destination={{
+              latitude: customer.latitude ?? null,
+              longitude: customer.longitude ?? null,
+              address: address ?? null,
+            }}
+          />
+
           <Card className="p-4 space-y-2">
             <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/60">Productos</p>
             {note.saleOrder.items.map((item) => (
@@ -173,7 +182,14 @@ export default function MyDeliveryDetailPage() {
         </div>
 
         <div className="space-y-4">
-          {note.status === 'PENDING' && (
+          {note.status === 'PENDING' && note.route && (
+            <Card className="p-4">
+              <p className="text-sm text-muted-foreground">
+                Sale con la ruta {note.route.code}: iniciá la ruta desde Mis entregas.
+              </p>
+            </Card>
+          )}
+          {note.status === 'PENDING' && !note.route && (
             <Card className="p-4 space-y-2">
               <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/60">Acciones</p>
               <Button

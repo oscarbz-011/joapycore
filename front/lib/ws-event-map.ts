@@ -29,9 +29,12 @@ export const WS_EVENT_MAP: Record<string, string[][]> = {
   // Entra a CONFIRMED — mueve el badge "Compras" (entregas pendientes/vencidas).
   'purchase.order.confirmed': [['purchase-orders']],
   // Nota de entrega nueva en PENDING — mueve el badge "Entregas" de Logística.
-  'delivery.note.created':    [['logistics-deliveries']],
-  'delivery.dispatched':      [['logistics-deliveries']],
-  'delivery.note.delivered':  [['logistics-deliveries'], ['order-delivery']],
+  'delivery.note.created':    [['logistics-deliveries'], ['logistics-routes']],
+  'delivery.dispatched':      [['logistics-deliveries'], ['logistics-routes']],
+  'delivery.note.delivered':  [['logistics-deliveries'], ['order-delivery'], ['logistics-routes']],
+  // Planificación de rutas: cambia qué entregas van en cada ruta y, con
+  // eso, las que cada repartidor tiene asignadas.
+  'delivery.route.changed':   [['logistics-routes'], ['logistics-route'], ['logistics-my-routes'], ['logistics-unplanned'], ['logistics-deliveries'], ['logistics-mine']],
   // 'order-delivery': la entrega vista desde la venta (el vendedor ve la
   // autorización del supervisor sin recargar).
   'delivery.assigned':        [['logistics-deliveries'], ['order-delivery']],

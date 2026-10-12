@@ -31,6 +31,8 @@ const include = {
     },
   },
   sellerRequestedBy: { select: PERSON },
+  // La ruta de reparto en la que sale, si ya tiene una.
+  route: { select: { id: true, code: true, status: true, routeDate: true } },
   sellerDecidedBy: { select: PERSON },
   trackingEvents: {
     orderBy: { recordedAt: 'asc' as const },

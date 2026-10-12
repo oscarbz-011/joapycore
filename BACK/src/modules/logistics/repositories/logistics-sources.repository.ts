@@ -33,6 +33,20 @@ export class LogisticsSourcesRepository {
     });
   }
 
+  /** Un empleado activo habilitado como repartidor. */
+  findActiveCourier(tenantId: string, employeeId: string) {
+    return this.prisma.employee.findFirst({
+      where: {
+        id: employeeId,
+        tenantId,
+        isActive: true,
+        deletedAt: null,
+        isCourier: true,
+      },
+      select: { id: true, firstName: true, lastName: true },
+    });
+  }
+
   // userId es único en employees; un empleado de otro tenant cuenta como
   // inexistente.
   async findEmployeeByUser(tenantId: string, userId: string) {

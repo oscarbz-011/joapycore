@@ -14,7 +14,25 @@ const DEFAULT_CENTER: [number, number] = [-25.2637, -57.5759]; // Asunción
 
 // Confirmar/corregir ubicación al entregar — compartido entre la fila de
 // "Mis entregas" (acción rápida) y su página de detalle.
-export function DeliverModal({ note, onClose }: { note: DeliveryNote; onClose: () => void }) {
+export interface DeliveryConfirmation {
+  latitude: number;
+  longitude: number;
+  locationConfirmed: boolean;
+}
+
+export function DeliverModal({
+  note,
+  onClose,
+  deliver,
+  orders = 1,
+}: {
+  note: DeliveryNote;
+  onClose: () => void;
+  /** Cómo se entrega; por defecto, este pedido solo. */
+  deliver?: (confirmation: DeliveryConfirmation) => Promise<unknown>;
+  /** Cuántos pedidos del cliente se entregan con esta confirmación. */
+  orders?: number;
+}) {
   const queryClient = useQueryClient();
   const customer = note.saleOrder.customer;
   const [locationConfirmed, setLocationConfirmed] = useState<boolean | null>(null);
@@ -23,15 +41,19 @@ export function DeliverModal({ note, onClose }: { note: DeliveryNote; onClose: (
   const [error, setError] = useState('');
 
   const mutation = useMutation({
-    mutationFn: () =>
-      logisticsApi.recordTrackingEvent(note.id, {
-        checkpoint: 'DELIVERED',
+    mutationFn: () => {
+      const confirmation = {
         latitude: lat,
         longitude: lng,
         locationConfirmed: locationConfirmed ?? true,
-      }),
+      };
+      return deliver
+        ? deliver(confirmation)
+        : logisticsApi.recordTrackingEvent(note.id, { checkpoint: 'DELIVERED', ...confirmation });
+    },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['logistics-mine'] });
+      void queryClient.invalidateQueries({ queryKey: ['logistics-my-routes'] });
       onClose();
     },
     onError: (err: Error) => {
@@ -51,6 +73,13 @@ export function DeliverModal({ note, onClose }: { note: DeliveryNote; onClose: (
             <X size={16} />
           </Button>
         </div>
+
+        {orders > 1 && (
+          <p className="mb-3 rounded-xl bg-muted/50 px-3 py-2 text-xs text-foreground">
+            Se entregan los {orders} pedidos de {customer.firstName} {customer.lastName} con esta
+            confirmación.
+          </p>
+        )}
 
         <p className="text-xs text-muted-foreground mb-3">
           {customer.latitude != null

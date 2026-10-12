@@ -143,6 +143,31 @@ enum SellerDeliveryRequestStatus {
   REJECTED
 }
 
+// Una ruta se arma (OPEN), el repartidor la inicia (IN_PROGRESS) y se cierra
+// sola cuando todas sus paradas quedaron resueltas (COMPLETED).
+enum DeliveryRouteStatus {
+  OPEN
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum DeliveryRouteEventType {
+  CREATED
+  STOP_ADDED
+  STOP_REMOVED
+  REORDERED
+  DRIVER_CHANGED
+  DATE_CHANGED
+  STARTED
+  STOP_DELIVERED
+  STOP_FAILED
+  COMPLETED
+  CANCELLED
+  // Un hito marcado para toda la ruta de una vez.
+  CHECKPOINT
+}
+
 enum DeliveryNoteStatus {
   PENDING
   DISPATCHED
@@ -515,6 +540,8 @@ model Tenant {
   downPayments               DownPayment[]
   salePayments               SalePayment[]
   deliveryNotes              DeliveryNote[]
+  deliveryRoutes             DeliveryRoute[]
+  deliveryRouteEvents        DeliveryRouteEvent[]
   deliveryTrackingEvents     DeliveryTrackingEvent[]
   collectionRoutes           CollectionRoute[]
   collectionVisits           CollectionVisit[]
@@ -695,6 +722,8 @@ model User {
   supplierInvoicesReviewed       SupplierInvoice[]           @relation("SupplierInvoiceReviewedBy")
   deliverySellerRequests         DeliveryNote[]              @relation("DeliverySellerRequester")
   deliverySellerDecisions        DeliveryNote[]              @relation("DeliverySellerDecider")
+  createdDeliveryRoutes          DeliveryRoute[]             @relation("DeliveryRouteCreatedBy")
+  deliveryRouteEvents            DeliveryRouteEvent[]        @relation("DeliveryRouteEventUser")
 
   @@index([tenantId])
   @@map("users")
@@ -1518,6 +1547,9 @@ model DeliveryNote {
   sellerDecidedById   String?                      @map("seller_decided_by_id")
   sellerDecidedAt     DateTime?                    @map("seller_decided_at")
   sellerDecisionNote  String?                      @map("seller_decision_note")
+  // En qué ruta de reparto va y en qué lugar del recorrido.
+  routeId             String?                      @map("route_id")
+  routeOrder          Int?                         @map("route_order")
   issuedAt            DateTime?                    @map("issued_at")
   deliveredAt         DateTime?                    @map("delivered_at")
   notes               String?
@@ -1529,10 +1561,69 @@ model DeliveryNote {
   assignedEmployee  Employee?               @relation(fields: [assignedEmployeeId], references: [id])
   sellerRequestedBy User?                   @relation("DeliverySellerRequester", fields: [sellerRequestedById], references: [id])
   sellerDecidedBy   User?                   @relation("DeliverySellerDecider", fields: [sellerDecidedById], references: [id])
+  route             DeliveryRoute?          @relation(fields: [routeId], references: [id], onDelete: SetNull)
   trackingEvents    DeliveryTrackingEvent[]
+  routeEvents       DeliveryRouteEvent[]
 
   @@index([tenantId, status])
+  @@index([routeId])
   @@map("delivery_notes")
+}
+
+// Una salida de reparto: un repartidor, un día y sus paradas en orden. Nace
+// sola cuando se le asigna la primera entrega del día al repartidor.
+model DeliveryRoute {
+  id               String              @id @default(uuid())
+  tenantId         String              @map("tenant_id")
+  // RUT-26-000001: correlativo por empresa, como el código de cliente.
+  code             String
+  routeDate        DateTime            @map("route_date") @db.Date
+  status           DeliveryRouteStatus @default(OPEN)
+  driverEmployeeId String?             @map("driver_employee_id")
+  vehicle          String?
+  notes            String?
+  startedAt        DateTime?           @map("started_at")
+  finishedAt       DateTime?           @map("finished_at")
+  createdById      String?             @map("created_by_id")
+  createdAt        DateTime            @default(now()) @map("created_at")
+  updatedAt        DateTime            @updatedAt @map("updated_at")
+
+  tenant     Tenant               @relation(fields: [tenantId], references: [id])
+  driver     Employee?            @relation(fields: [driverEmployeeId], references: [id], onDelete: SetNull)
+  createdBy  User?                @relation("DeliveryRouteCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  deliveries DeliveryNote[]
+  events     DeliveryRouteEvent[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId, routeDate])
+  @@index([tenantId, status])
+  @@index([tenantId, driverEmployeeId, status])
+  @@map("delivery_routes")
+}
+
+// Historial de la ruta. `detail` guarda el dato legible (el cliente de la
+// parada, el repartidor anterior) porque una entrega que sale de la ruta deja
+// de estar vinculada a ella.
+model DeliveryRouteEvent {
+  id             String                 @id @default(uuid())
+  tenantId       String                 @map("tenant_id")
+  routeId        String                 @map("route_id")
+  type           DeliveryRouteEventType
+  deliveryNoteId String?                @map("delivery_note_id")
+  detail         String?
+  reason         String?
+  latitude       Decimal?               @db.Decimal(9, 6)
+  longitude      Decimal?               @db.Decimal(9, 6)
+  userId         String?                @map("user_id")
+  createdAt      DateTime               @default(now()) @map("created_at")
+
+  tenant       Tenant        @relation(fields: [tenantId], references: [id])
+  route        DeliveryRoute @relation(fields: [routeId], references: [id], onDelete: Cascade)
+  deliveryNote DeliveryNote? @relation(fields: [deliveryNoteId], references: [id], onDelete: SetNull)
+  user         User?         @relation("DeliveryRouteEventUser", fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, routeId, createdAt])
+  @@map("delivery_route_events")
 }
 
 // Checkpoints manuales del recorrido (salió del depósito → en camino →
@@ -2029,6 +2120,7 @@ model Employee {
   payrollItems       PayrollRecordItem[]
   approvedLeaves     Leave[]             @relation("LeaveApprover")
   assignedDeliveries DeliveryNote[]
+  deliveryRoutes     DeliveryRoute[]
 
   @@unique([tenantId, employeeNumber])
   @@unique([tenantId, documentType, documentNumber])
