@@ -1,16 +1,36 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { CustomerForm } from '../_form';
 import type { Customer } from '../../../../../../lib/api/sales';
+import { CUSTOMER_PREFILL_KEY, keepFirstRead, type CustomerPrefill } from '@/lib/quote-party';
 
 export default function NewCustomerPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const returnTo = searchParams.get('returnTo');
   const back = () => router.push('/dashboard/sales/customers');
+
+  // Datos que deja quien pidió el alta (un presupuesto sin cliente
+  // registrado). undefined = todavía no se leyó; el formulario espera.
+  const [prefill, setPrefill] = useState<CustomerPrefill | null | undefined>(undefined);
+  useEffect(() => {
+    const raw = sessionStorage.getItem(CUSTOMER_PREFILL_KEY);
+    sessionStorage.removeItem(CUSTOMER_PREFILL_KEY);
+    let parsed: CustomerPrefill | null = null;
+    try {
+      parsed = raw ? (JSON.parse(raw) as CustomerPrefill) : null;
+    } catch {
+      // Dato corrupto: se arranca en blanco.
+    }
+    // Lectura de sessionStorage al montar: es sincronizar con un sistema
+    // externo (no derivable en el render, que también corre en el servidor).
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setPrefill((current) => keepFirstRead(current, parsed));
+  }, []);
 
   function handleDone(customer?: Customer) {
     if (returnTo && customer) {
@@ -33,7 +53,7 @@ export default function NewCustomerPage() {
         </div>
       </div>
 
-      <CustomerForm onDone={handleDone} />
+      {prefill !== undefined && <CustomerForm prefill={prefill ?? undefined} onDone={handleDone} />}
     </div>
   );
 }

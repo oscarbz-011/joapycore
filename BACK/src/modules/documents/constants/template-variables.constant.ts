@@ -478,11 +478,6 @@ export const TEMPLATE_KIND_DEFS: Record<TemplateKind, TemplateKindDef> = {
       },
       { key: 'orden.fecha', label: 'Fecha de la orden', type: 'text' },
       {
-        key: 'orden.entregaEstimada',
-        label: 'Fecha estimada de entrega',
-        type: 'text',
-      },
-      {
         key: 'orden.lugarEntrega',
         label: 'Lugar de entrega (sucursal o empresa)',
         type: 'text',

@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { TablePagination } from '@/components/table-pagination';
 import { usePagination } from '@/lib/use-pagination';
+import { isProspectOrder, orderPartyName } from '@/lib/quote-party';
 
 function formatPrice(n: number) {
   return new Intl.NumberFormat('es-PY', { style: 'currency', currency: 'PYG', maximumFractionDigits: 0 }).format(n);
@@ -82,7 +83,10 @@ export default function QuotesPage() {
             >
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-foreground font-mono">{q.quoteNumber ?? '—'}</p>
-                <p className="text-xs text-muted-foreground/60 mt-0.5">{q.customer.firstName} {q.customer.lastName} · {formatDatePY(q.orderDate, 'local')}</p>
+                <p className="text-xs text-muted-foreground/60 mt-0.5">
+                  {orderPartyName(q)}
+                  {isProspectOrder(q) && ' (sin registrar)'} · {formatDatePY(q.orderDate, 'local')}
+                </p>
               </div>
               <Badge variant="outline" className={q.status === 'CANCELLED' ? '' : 'bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-950 dark:text-violet-300 dark:border-violet-800'}>
                 {STATUS_LABEL[q.status] ?? q.status}

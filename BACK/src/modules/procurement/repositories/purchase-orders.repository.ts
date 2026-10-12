@@ -103,6 +103,20 @@ export class PurchaseOrdersRepository {
     return Number(result._sum.advanceApplied ?? 0);
   }
 
+  // Solo mientras la orden siga en uno de esos estados: una orden recibida o
+  // cancelada ya no espera ninguna entrega.
+  setExpectedDate(
+    tenantId: string,
+    id: string,
+    expectedDate: Date | null,
+    whileIn: PurchaseOrderStatus[],
+  ) {
+    return this.prisma.purchaseOrder.updateMany({
+      where: { tenantId, id, status: { in: whileIn } },
+      data: { expectedDate },
+    });
+  }
+
   setAdvanceAmount(tenantId: string, id: string, advanceAmount: number) {
     return this.prisma.purchaseOrder.updateMany({
       where: { tenantId, id },
@@ -110,10 +124,11 @@ export class PurchaseOrdersRepository {
     });
   }
 
-  findSupplierAdvancePercent(tenantId: string, supplierId: string) {
+  // Condiciones del proveedor que la orden copia al crearse.
+  findSupplierTerms(tenantId: string, supplierId: string) {
     return this.prisma.supplier.findFirst({
       where: { tenantId, id: supplierId, deletedAt: null },
-      select: { advancePercent: true },
+      select: { advancePercent: true, paymentTermDays: true },
     });
   }
 
@@ -125,10 +140,13 @@ export class PurchaseOrdersRepository {
     from: PurchaseOrderStatus[],
     to: PurchaseOrderStatus,
     client: PrismaClientOrTx = this.prisma,
+    // Datos que cambian junto con el estado (ej. la entrega que confirma el
+    // proveedor): misma escritura, misma condición.
+    extra: { expectedDate?: Date } = {},
   ) {
     return client.purchaseOrder.updateMany({
       where: { tenantId, id, status: { in: from } },
-      data: { status: to },
+      data: { status: to, ...extra },
     });
   }
 

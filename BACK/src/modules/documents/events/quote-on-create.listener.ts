@@ -9,6 +9,7 @@ import type { PdfTableVariable } from '../../../files/pdf/tiptap-to-html.convert
 import { PdfService } from '../../../files/pdf/pdf.service';
 import { DocumentSourcesRepository } from '../repositories/document-sources.repository';
 import { DEFAULT_QUOTE_TEMPLATE } from '../constants/default-templates.constant';
+import { quoteAddressee } from '../builders/quote-addressee';
 import { DocumentsRepository } from '../repositories/documents.repository';
 
 interface SaleOrderQuotedEvent {
@@ -78,17 +79,8 @@ export class QuoteOnCreateListener {
     );
     if (!order || order.quotePdfFileId) return;
 
-    const customerName = [
-      order.customer.firstName,
-      order.customer.secondFirstName,
-      order.customer.lastName,
-      order.customer.secondLastName,
-    ]
-      .filter(Boolean)
-      .join(' ');
-    const customerDoc = order.customer.documentNumber
-      ? `${order.customer.documentType ?? 'CI'}: ${order.customer.documentNumber}`
-      : '—';
+    // Datos cargados a mano si el presupuesto es para alguien sin registrar.
+    const addressee = quoteAddressee(order);
 
     const total = Number(order.total ?? 0);
     const rows = order.items.map((item) => {
@@ -112,9 +104,9 @@ export class QuoteOnCreateListener {
       'tenant.telefono': order.tenant.phone ?? '',
       'presupuesto.numero': order.quoteNumber ?? '—',
       'presupuesto.fecha': formatDateLocal(order.orderDate),
-      'cliente.nombre': customerName,
-      'cliente.documento': customerDoc,
-      'cliente.direccion': order.customer.address ?? '',
+      'cliente.nombre': addressee.name,
+      'cliente.documento': addressee.document,
+      'cliente.direccion': addressee.address,
       'presupuesto.total': formatMoney(total),
       'presupuesto.totalEnLetras': numberToWordsEs(total),
     };

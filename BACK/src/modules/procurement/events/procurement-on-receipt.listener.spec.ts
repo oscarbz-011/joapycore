@@ -13,7 +13,7 @@ function makeReceipt(overrides = {}) {
     purchaseOrder: {
       id: 'po-1',
       supplierId: 'supplier-1',
-      supplier: { paymentTermDays: 30 },
+      paymentTermDays: 30,
     },
     ...overrides,
   };
@@ -178,12 +178,13 @@ describe('ProcurementOnReceiptListener', () => {
     });
   });
 
-  it('defaults to paymentTermDays=0 (contado) when the supplier has none set', async () => {
+  it('is due on the day of receipt when the order is cash (term 0)', async () => {
     prisma.purchaseReceipt.findFirst.mockResolvedValue(
       makeReceipt({
         purchaseOrder: {
+          id: 'po-1',
           supplierId: 'supplier-1',
-          supplier: { paymentTermDays: null },
+          paymentTermDays: 0,
         },
       }),
     );

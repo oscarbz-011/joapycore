@@ -1714,4 +1714,183 @@ describe('SaleOrdersService', () => {
       expect(result?.status).toBe('CREDIT_REJECTED');
     });
   });
+
+  // ── presupuesto para alguien que todavía no es cliente ─────────────────────
+
+  describe('quote for someone who is not a customer yet', () => {
+    const items = [
+      {
+        productId: 'prod-1',
+        warehouseId: 'wh-1',
+        quantity: 2,
+        unitPrice: 2_500_000,
+      },
+    ];
+    const prospect = {
+      name: 'Ferretería El Tornillo SRL',
+      document: '80012345-6',
+      phone: '0981 123 456',
+    };
+    const QUOTES = ['sales:quotes:manage'];
+    const createdWith = () =>
+      tx.saleOrder.create.mock.calls[0][0].data as Record<string, unknown>;
+
+    beforeEach(() => {
+      productsRepository.findManyByIds.mockResolvedValue([makeProduct()]);
+    });
+
+    it('keeps the data typed by hand on the quote', async () => {
+      await service.create(
+        'tenant-1',
+        { orderType: 'QUOTE', prospect, items },
+        'user-1',
+        false,
+        QUOTES,
+      );
+
+      expect(createdWith()).toMatchObject({
+        tenantId: 'tenant-1',
+        status: 'QUOTED',
+        // Cuelga del cliente genérico hasta que se convierte en pedido.
+        customerId: 'cust-walkin',
+        prospectName: 'Ferretería El Tornillo SRL',
+        prospectDocument: '80012345-6',
+        prospectPhone: '0981 123 456',
+        prospectEmail: null,
+        prospectAddress: null,
+      });
+    });
+
+    it('leaves a quote for a registered customer as it was', async () => {
+      await service.create(
+        'tenant-1',
+        { orderType: 'QUOTE', customerId: 'cust-1', items },
+        'user-1',
+        false,
+        QUOTES,
+      );
+
+      expect(createdWith().customerId).toBe('cust-1');
+      expect(createdWith().prospectName).toBeUndefined();
+    });
+
+    // Un pedido real termina en factura y cuenta por cobrar.
+    it('refuses a real order without a registered customer', async () => {
+      await expect(
+        service.create('tenant-1', { prospect, items }, 'user-1', false, [
+          'sales:create',
+        ]),
+      ).rejects.toThrow(/Solo un presupuesto/);
+      expect(tx.saleOrder.create).not.toHaveBeenCalled();
+    });
+
+    it('refuses a quote with neither a customer nor typed data', async () => {
+      await expect(
+        service.create(
+          'tenant-1',
+          { orderType: 'QUOTE', items },
+          'user-1',
+          false,
+          QUOTES,
+        ),
+      ).rejects.toBeInstanceOf(UnprocessableEntityException);
+    });
+
+    // El id del cliente llega del navegador: tiene que ser de este tenant.
+    it('refuses a customer that does not belong to the tenant', async () => {
+      prisma.customer.findFirst.mockResolvedValue(null);
+
+      await expect(
+        service.create(
+          'tenant-1',
+          { orderType: 'QUOTE', customerId: 'cust-otro-tenant', items },
+          'user-1',
+          false,
+          QUOTES,
+        ),
+      ).rejects.toBeInstanceOf(NotFoundException);
+      expect(prisma.customer.findFirst).toHaveBeenCalledWith({
+        where: {
+          id: 'cust-otro-tenant',
+          tenantId: 'tenant-1',
+          deletedAt: null,
+        },
+      });
+      expect(tx.saleOrder.create).not.toHaveBeenCalled();
+    });
+
+    describe('converting it into an order', () => {
+      const quote = (overrides = {}) =>
+        makeOrder({
+          status: 'QUOTED',
+          orderType: 'QUOTE',
+          saleType: 'CASH',
+          customerId: 'cust-walkin',
+          prospectName: 'Ferretería El Tornillo SRL',
+          ...overrides,
+        });
+
+      it('asks to register the customer first', async () => {
+        saleOrdersRepository.findById.mockResolvedValue(quote());
+
+        await expect(
+          service.convertQuoteToOrder('tenant-1', 'order-1', 'user-1'),
+        ).rejects.toThrow(/todavía no es cliente/);
+        expect(prisma.saleOrder.update).not.toHaveBeenCalled();
+      });
+
+      it('moves the order to the chosen customer and drops the typed data', async () => {
+        saleOrdersRepository.findById.mockResolvedValue(quote());
+
+        await service.convertQuoteToOrder(
+          'tenant-1',
+          'order-1',
+          'user-1',
+          'cust-1',
+        );
+
+        expect(prisma.saleOrder.update).toHaveBeenCalledWith({
+          where: { id: 'order-1' },
+          data: {
+            status: 'PENDING',
+            orderType: 'STANDARD',
+            customerId: 'cust-1',
+            prospectName: null,
+            prospectDocument: null,
+            prospectPhone: null,
+            prospectEmail: null,
+            prospectAddress: null,
+          },
+        });
+      });
+
+      it('refuses a customer of another tenant', async () => {
+        saleOrdersRepository.findById.mockResolvedValue(quote());
+        prisma.customer.findFirst.mockResolvedValue(null);
+
+        await expect(
+          service.convertQuoteToOrder(
+            'tenant-1',
+            'order-1',
+            'user-1',
+            'cust-otro-tenant',
+          ),
+        ).rejects.toBeInstanceOf(NotFoundException);
+        expect(prisma.saleOrder.update).not.toHaveBeenCalled();
+      });
+
+      it('converts a quote of a registered customer without asking for one', async () => {
+        saleOrdersRepository.findById.mockResolvedValue(
+          quote({ customerId: 'cust-1', prospectName: null }),
+        );
+
+        await service.convertQuoteToOrder('tenant-1', 'order-1', 'user-1');
+
+        expect(prisma.saleOrder.update).toHaveBeenCalledWith({
+          where: { id: 'order-1' },
+          data: { status: 'PENDING', orderType: 'STANDARD' },
+        });
+      });
+    });
+  });
 });

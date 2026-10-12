@@ -1,8 +1,9 @@
 import axios from 'axios';
 import { tokenStore } from '../token-store';
 import type { AuthTokens } from '../../types/auth';
+import { apiBase } from './api-base';
 
-export const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000';
+export const API_BASE = apiBase(process.env.NEXT_PUBLIC_API_URL);
 
 const LOCK_NAME = 'joapy-auth-refresh';
 

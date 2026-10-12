@@ -3,8 +3,10 @@ import type { CatalogOffer, OfferSupplier } from './api/procurement';
 import {
   bestQuoteId,
   compareSuppliers,
+  pickCandidate,
   priceGapLabel,
   priceGaps,
+  type Need,
 } from './supplier-comparison';
 
 const TODAY = '2026-10-06';
@@ -49,7 +51,7 @@ function offer(overrides: Partial<CatalogOffer> = {}): CatalogOffer {
 }
 
 const need = (quantity: number, productId = 'prod-1') => ({ productId, quantity });
-const only = (needs: ReturnType<typeof need>[], offers: CatalogOffer[]) =>
+const only = (needs: Need[], offers: CatalogOffer[]) =>
   compareSuppliers(needs, offers, TODAY)[0];
 
 describe('compareSuppliers — one line', () => {
@@ -466,5 +468,89 @@ describe('priceGaps', () => {
     expect(priceGapLabel({ kind: 'cheaper', percent: 33.3 })).toBe('33,3% más barato');
     expect(priceGapLabel({ kind: 'highest', percent: 0 })).toBe('El más caro');
     expect(priceGapLabel({ kind: 'same', percent: 0 })).toBe('Mismo precio');
+  });
+});
+
+// Comparar antes de vincular: en una fila de producto interno, los ítems sin
+// vincular que parecen ser ese producto cotizan igual.
+describe('compareSuppliers — look-alike items not linked yet', () => {
+  const central = supplier({ id: 'sup-c', name: 'Importadora Central' });
+  const linked = offer({ price: 126_000 });
+  const lookAlike = offer({
+    id: 'item-c',
+    supplierId: 'sup-c',
+    supplierSku: '164512',
+    price: 124_000,
+    productId: null,
+    product: null,
+    supplier: central,
+  });
+
+  it('quotes the look-alike next to the supplier that has it linked', () => {
+    const quotes = compareSuppliers(
+      [{ productId: 'prod-1', quantity: 1, candidateItemIds: ['item-c'] }],
+      [linked, lookAlike],
+      TODAY,
+    );
+
+    expect(quotes.map((q) => [q.supplier.name, q.total])).toEqual([
+      ['Importadora A', 126_000],
+      ['Importadora Central', 124_000],
+    ]);
+    // Dice que todavía no está vinculado y a qué producto correspondería.
+    expect(quotes[1].lines[0]).toMatchObject({
+      itemId: 'item-c',
+      linkedProductId: null,
+      needProductId: 'prod-1',
+    });
+    expect(quotes[0].lines[0]).toMatchObject({
+      linkedProductId: 'prod-1',
+      needProductId: 'prod-1',
+    });
+  });
+
+  it('does not quote a look-alike that was not chosen for the row', () => {
+    const quotes = compareSuppliers([need(1)], [linked, lookAlike], TODAY);
+
+    expect(quotes).toHaveLength(1);
+    expect(quotes[0].supplier.name).toBe('Importadora A');
+  });
+
+  // Lo vinculado manda: un parecido no reemplaza al ítem ya vinculado.
+  it('prefers what the supplier already has linked', () => {
+    const cheaperLookAlike = offer({
+      id: 'item-a2',
+      price: 1_000,
+      productId: null,
+      product: null,
+    });
+
+    const quote = only(
+      [{ productId: 'prod-1', quantity: 1, candidateItemIds: ['item-a2'] }],
+      [linked, cheaperLookAlike],
+    );
+
+    expect(quote.lines[0].itemId).toBe('item-1');
+  });
+});
+
+describe('pickCandidate', () => {
+  const NONE = '__none__';
+  const list = [
+    { score: 0.6, item: { id: 'a' } },
+    { score: 0.9, item: { id: 'b' } },
+  ];
+
+  it('compares the most similar item by default', () => {
+    expect(pickCandidate(list, undefined, NONE)?.item.id).toBe('b');
+  });
+
+  it('respects the one chosen by hand', () => {
+    expect(pickCandidate(list, 'a', NONE)?.item.id).toBe('a');
+  });
+
+  it('compares none when told none of them is the product', () => {
+    expect(pickCandidate(list, NONE, NONE)).toBeNull();
+    expect(pickCandidate([], undefined, NONE)).toBeNull();
   });
 });

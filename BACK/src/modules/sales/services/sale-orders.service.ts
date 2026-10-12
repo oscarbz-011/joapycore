@@ -26,6 +26,7 @@ import { RegisterDownPaymentDto } from '../dto/register-down-payment.dto';
 import { RequestAdjustmentDto } from '../dto/request-adjustment.dto';
 import { CreditSourcesRepository } from '../repositories/credit-sources.repository';
 import { CustomersRepository } from '../repositories/customers.repository';
+import { NO_PROSPECT, resolveOrderParty } from '../quote-party.util';
 import { GuarantorsRepository } from '../repositories/guarantors.repository';
 import { SaleOrdersRepository } from '../repositories/sale-orders.repository';
 import { SalesSourcesRepository } from '../repositories/sales-sources.repository';
@@ -954,6 +955,20 @@ export class SaleOrdersService implements SalesGateway {
     const isQuote = dto.orderType === 'QUOTE';
     const isCreditSale = dto.saleType === 'CREDIT';
 
+    // A quién va: un cliente registrado o, solo en un presupuesto, los datos
+    // cargados a mano de alguien que todavía no es cliente.
+    const party = resolveOrderParty({
+      customerId: dto.customerId,
+      prospect: dto.prospect,
+      isQuote,
+    });
+    if (party.kind === 'invalid') {
+      throw new UnprocessableEntityException(party.reason);
+    }
+    if (party.kind === 'customer') {
+      await this.assertCustomer(tenantId, party.customerId);
+    }
+
     // Batch-fetch all products in a single query — avoids N+1 inside the loop.
     const productIds = dto.items
       .map((i) => i.productId)
@@ -1019,7 +1034,13 @@ export class SaleOrdersService implements SalesGateway {
       const order = await this.saleOrdersRepository.createBare(
         {
           tenantId,
-          customerId: dto.customerId,
+          // Sin cliente registrado el presupuesto cuelga del cliente genérico
+          // hasta que se convierte en pedido.
+          customerId:
+            party.kind === 'customer'
+              ? party.customerId
+              : await this.resolveWalkInCustomerId(tx, tenantId),
+          ...(party.kind === 'prospect' ? party.fields : {}),
           branchId,
           createdById: userId ?? null,
           sellerId: effectiveSellerId,
@@ -1094,7 +1115,22 @@ export class SaleOrdersService implements SalesGateway {
     return created;
   }
 
-  async convertQuoteToOrder(tenantId: string, id: string, userId?: string) {
+  // El cliente tiene que existir y ser de este tenant: el id llega del
+  // cliente HTTP y por sí solo no prueba nada.
+  private async assertCustomer(tenantId: string, customerId: string) {
+    const customer = await this.customersRepository.findById(
+      tenantId,
+      customerId,
+    );
+    if (!customer) throw new NotFoundException('Cliente no encontrado');
+  }
+
+  async convertQuoteToOrder(
+    tenantId: string,
+    id: string,
+    userId?: string,
+    customerId?: string,
+  ) {
     // Quotes become real orders: QUOTED → PENDING (cash) or PENDING_CREDIT_APPROVAL (credit)
     const order = await this.findOne(tenantId, id);
     if (order.status !== 'QUOTED') {
@@ -1102,12 +1138,24 @@ export class SaleOrdersService implements SalesGateway {
         'Solo los presupuestos en estado QUOTED pueden convertirse en pedido',
       );
     }
+    // Un pedido real termina en factura y cuenta por cobrar: quien pidió el
+    // presupuesto sin ser cliente tiene que estar registrado para seguir.
+    if (order.prospectName && !customerId) {
+      throw new UnprocessableEntityException(
+        `Este presupuesto se hizo para ${order.prospectName}, que todavía no es cliente. Registralo o elegí un cliente existente para convertirlo en pedido.`,
+      );
+    }
+    if (customerId) await this.assertCustomer(tenantId, customerId);
+
     const isCreditSale = order.saleType === 'CREDIT';
     const nextStatus = isCreditSale ? 'PENDING_CREDIT_APPROVAL' : 'PENDING';
 
     const updated = await this.saleOrdersRepository.updateById(id, {
       status: nextStatus,
       orderType: 'STANDARD',
+      // Con cliente real, los datos cargados a mano ya no describen el pedido
+      // (quedan en el log de auditoría).
+      ...(customerId ? { customerId, ...NO_PROSPECT } : {}),
     });
     if (isCreditSale) {
       this.eventEmitter.emit('sale.credit.requested', {
@@ -1121,6 +1169,12 @@ export class SaleOrdersService implements SalesGateway {
       module: 'sales',
       action: 'sale.quote.converted',
       resourceId: id,
+      ...(order.prospectName
+        ? {
+            before: { prospectName: order.prospectName },
+            after: { customerId },
+          }
+        : {}),
     } satisfies AuditLogEvent);
     return updated;
   }

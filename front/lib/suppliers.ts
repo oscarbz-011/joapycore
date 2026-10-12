@@ -154,6 +154,17 @@ export function paymentTermLabel(days: number | null): string {
   return `${days} ${days === 1 ? 'día' : 'días'}`;
 }
 
+/** Si una compra es al contado o a crédito, según su plazo de pago. */
+export function paymentKind(days: number | null | undefined): 'Contado' | 'Crédito' {
+  return days ? 'Crédito' : 'Contado';
+}
+
+/** "Contado" o "Crédito a 30 días": la condición de pago de una compra. */
+export function paymentConditionLabel(days: number | null | undefined): string {
+  if (!days) return 'Contado';
+  return `Crédito a ${days} ${days === 1 ? 'día' : 'días'}`;
+}
+
 /** Iniciales para el distintivo del proveedor (no hay logo cargado). */
 export function supplierInitials(name: string): string {
   const words = name

@@ -29,7 +29,8 @@ import {
   staysDraft,
   type NewProductForm,
 } from '@/lib/compare-order';
-import { todayISODate } from '@/lib/date';
+import { localISODate } from '@/lib/date';
+import { expectedDeliveryDay } from '@/lib/purchase-order-status';
 import type { SupplierQuote } from '@/lib/supplier-comparison';
 
 const NUM_CLS =
@@ -113,13 +114,15 @@ export function CompareOrderDialog({
       return procurementApi.createOrder(
         orderPayload(
           quote.supplier.id,
-          todayISODate(),
           plan.lines.map((line) => ({
             itemId: line.itemId,
             productId: line.productId ?? productOf[line.itemId],
             quantity: line.quantity,
             unitCost: line.unitCost,
           })),
+          // Propuesta con el plazo de entrega del proveedor; se puede cambiar
+          // después desde la orden.
+          expectedDeliveryDay(localISODate(new Date()), quote.supplier.leadTimeDays),
         ),
       );
     },

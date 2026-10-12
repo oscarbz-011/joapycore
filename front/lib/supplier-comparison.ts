@@ -13,6 +13,13 @@ export interface Need {
   quantity: number;
   /** Ítems de catálogo elegidos para esta fila, uno por proveedor. */
   itemIds?: readonly string[];
+  /**
+   * Fila de producto interno: ítems todavía sin vincular que parecen ser ese
+   * producto. Se comparan igual, para poder decidir a quién comprarle antes
+   * de vincular nada. Solo cuentan para el proveedor que no tiene ya un ítem
+   * vinculado al producto.
+   */
+  candidateItemIds?: readonly string[];
 }
 
 export interface QuoteLine {
@@ -21,6 +28,11 @@ export interface QuoteLine {
   itemId: string;
   /** Producto interno del ítem; null si todavía no está vinculado. */
   linkedProductId: string | null;
+  /**
+   * Producto interno que se quiere comprar, cuando la fila es de un producto.
+   * Con un ítem sin vincular dice a qué producto habría que vincularlo.
+   */
+  needProductId: string | null;
   description: string;
   supplierSku: string;
   /** Cuánto se le pide al proveedor, en su unidad (cajas, bultos...). */
@@ -87,6 +99,7 @@ function quoteLine(
     productId: need.productId,
     itemId: item.id,
     linkedProductId: item.productId,
+    needProductId: need.itemIds ? null : need.productId,
     description: item.description,
     supplierSku: item.supplierSku,
     supplierQuantity,
@@ -114,14 +127,25 @@ function supplierQuote(
   for (const need of needs) {
     // Un proveedor puede tener el mismo producto en dos presentaciones: se
     // toma la que sale más barata para esa cantidad.
-    const candidates = items
-      .filter((item) =>
+    const quotedFrom = (matching: readonly CatalogOffer[]) =>
+      matching
+        .flatMap((item) => quoteLine(need, item, todayISO) ?? [])
+        .sort((a, b) => a.subtotal - b.subtotal);
+    const linked = quotedFrom(
+      items.filter((item) =>
         need.itemIds
           ? need.itemIds.includes(item.id)
           : item.productId === need.productId,
-      )
-      .flatMap((item) => quoteLine(need, item, todayISO) ?? [])
-      .sort((a, b) => a.subtotal - b.subtotal);
+      ),
+    );
+    // Lo ya vinculado manda: los parecidos sin vincular solo cotizan cuando
+    // el proveedor todavía no tiene el producto vinculado.
+    const candidates =
+      linked.length > 0
+        ? linked
+        : quotedFrom(
+            items.filter((item) => need.candidateItemIds?.includes(item.id)),
+          );
     if (candidates[0]) lines.push(candidates[0]);
     else missingProductIds.push(need.productId);
   }
@@ -280,4 +304,20 @@ export function priceGapLabel(gap: PriceGap): string {
     gap.percent,
   );
   return `${percent}% más barato`;
+}
+
+/**
+ * De los ítems sin vincular que parecen ser un producto, el que se compara
+ * por defecto para un proveedor: el más parecido, salvo que se haya elegido
+ * otro a mano. `excluded` = se dijo que ninguno es.
+ */
+export function pickCandidate<T extends { score: number; item: { id: string } }>(
+  suggestions: readonly T[],
+  byHand: string | undefined,
+  excluded: string,
+): T | null {
+  if (byHand === excluded || suggestions.length === 0) return null;
+  const chosen = suggestions.find((s) => s.item.id === byHand);
+  if (chosen) return chosen;
+  return suggestions.reduce((best, s) => (s.score > best.score ? s : best));
 }

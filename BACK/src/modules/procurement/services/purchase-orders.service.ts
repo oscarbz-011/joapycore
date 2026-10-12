@@ -14,6 +14,7 @@ import {
 } from '../repositories/purchase-orders.repository';
 import { CreatePurchaseOrderDto } from '../dto/create-purchase-order.dto';
 import type { AuditLogEvent } from '../../../audit/audit-log.event';
+import { startOfBusinessDay } from '../../../common/utils/business-date.util';
 import { advanceBalance, requiredAdvance } from '../advance.util';
 
 const PRODUCT_STATUS_LABEL: Record<ProductStatus, string> = {
@@ -33,6 +34,20 @@ const STATUS_LABEL: Record<PurchaseOrderStatus, string> = {
   RECEIVED: 'recibida',
   CANCELLED: 'cancelada',
 };
+
+// Las fechas de la orden son días de calendario guardados a medianoche UTC.
+const startOfUtcDay = (date: Date) =>
+  new Date(
+    Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()),
+  );
+
+// Estados en los que la orden todavía espera mercadería.
+const AWAITING_DELIVERY: PurchaseOrderStatus[] = [
+  'PENDING',
+  'SENT',
+  'CONFIRMED',
+  'PARTIALLY_RECEIVED',
+];
 
 @Injectable()
 export class PurchaseOrdersService {
@@ -140,11 +155,10 @@ export class PurchaseOrdersService {
 
     // Anticipo: el monto que venga en la orden o, si no, el porcentaje que
     // pide habitualmente el proveedor. Nunca más que el total.
-    const supplier =
-      await this.purchaseOrdersRepository.findSupplierAdvancePercent(
-        tenantId,
-        dto.supplierId,
-      );
+    const supplier = await this.purchaseOrdersRepository.findSupplierTerms(
+      tenantId,
+      dto.supplierId,
+    );
     const orderTotal = dto.items.reduce(
       (sum, item) => sum + item.quantity * item.unitCost,
       0,
@@ -162,6 +176,13 @@ export class PurchaseOrdersService {
       );
     }
 
+    const orderDate = startOfBusinessDay();
+    if (dto.expectedDate && new Date(dto.expectedDate) < orderDate) {
+      throw new UnprocessableEntityException(
+        'La fecha de entrega no puede ser anterior a la fecha de la orden',
+      );
+    }
+
     const createOrder = () =>
       this.prisma.$transaction(async (tx) => {
         const order = await this.purchaseOrdersRepository.create(
@@ -171,7 +192,8 @@ export class PurchaseOrdersService {
             supplierId: dto.supplierId,
             purchaseType: dto.purchaseType,
             status: 'PENDING',
-            orderDate: new Date(dto.orderDate),
+            // La fecha de la orden es el día en que se crea: no se elige.
+            orderDate,
             expectedDate: dto.expectedDate
               ? new Date(dto.expectedDate)
               : undefined,
@@ -180,6 +202,7 @@ export class PurchaseOrdersService {
             customsRef: dto.customsRef,
             notes: dto.notes,
             advanceAmount,
+            paymentTermDays: supplier?.paymentTermDays ?? 0,
           },
           tx,
         );
@@ -266,19 +289,80 @@ export class PurchaseOrdersService {
 
   // También desde borrador: el proveedor puede confirmar por teléfono sin que
   // la orden se haya enviado desde el sistema.
-  async confirm(tenantId: string, id: string, userId?: string) {
+  //
+  // `expectedDate` es la entrega que el proveedor confirma en ese momento:
+  // un dato de control interno, que no figura en el PDF de la orden.
+  async confirm(
+    tenantId: string,
+    id: string,
+    userId?: string,
+    expectedDate?: string,
+  ) {
+    const confirmedDate = expectedDate ? new Date(expectedDate) : undefined;
+    if (confirmedDate) {
+      const current = await this.findOne(tenantId, id);
+      if (confirmedDate < startOfUtcDay(current.orderDate)) {
+        throw new UnprocessableEntityException(
+          'La fecha de entrega no puede ser anterior a la fecha de la orden',
+        );
+      }
+    }
     const order = await this.changeStatus(tenantId, id, {
       from: ['PENDING', 'SENT'],
       to: 'CONFIRMED',
       userId,
       action: 'purchase.order.confirmed',
       refusal: 'Solo se puede confirmar una orden en borrador o enviada',
+      extra: confirmedDate ? { expectedDate: confirmedDate } : undefined,
     });
     this.eventEmitter.emit('purchase.order.confirmed', {
       tenantId,
       purchaseOrderId: id,
     });
     return order;
+  }
+
+  // El proveedor puede reprogramar una entrega ya confirmada. Es un dato de
+  // control interno: no cambia el estado ni figura en el PDF de la orden.
+  async setExpectedDate(
+    tenantId: string,
+    id: string,
+    expectedDate: string | null,
+    userId?: string,
+  ) {
+    const order = await this.findOne(tenantId, id);
+    if (!AWAITING_DELIVERY.includes(order.status)) {
+      throw new UnprocessableEntityException(
+        `No se puede cambiar la entrega estimada: esta orden está ${STATUS_LABEL[order.status]}`,
+      );
+    }
+    const date = expectedDate ? new Date(expectedDate) : null;
+    if (date && date < startOfUtcDay(order.orderDate)) {
+      throw new UnprocessableEntityException(
+        'La fecha de entrega no puede ser anterior a la fecha de la orden',
+      );
+    }
+    const { count } = await this.purchaseOrdersRepository.setExpectedDate(
+      tenantId,
+      id,
+      date,
+      AWAITING_DELIVERY,
+    );
+    if (count === 0) {
+      throw new ConflictException(
+        'La orden cambió de estado mientras tanto. Volvé a cargarla.',
+      );
+    }
+    this.eventEmitter.emit('audit.log', {
+      tenantId,
+      userId,
+      module: 'procurement',
+      action: 'purchase.order.expected_date.changed',
+      resourceId: id,
+      before: { expectedDate: order.expectedDate },
+      after: { expectedDate: date },
+    } satisfies AuditLogEvent);
+    return this.findOne(tenantId, id);
   }
 
   // Con mercadería recibida ya hay stock y una cuenta por pagar que dependen
@@ -312,6 +396,7 @@ export class PurchaseOrdersService {
       reason?: string;
       action: string;
       refusal: string;
+      extra?: { expectedDate?: Date };
     },
   ) {
     const order = await this.findOne(tenantId, id);
@@ -328,6 +413,7 @@ export class PurchaseOrdersService {
         change.from,
         change.to,
         tx,
+        ...(change.extra ? [change.extra] : []),
       );
       if (count === 0) {
         throw new ConflictException(
@@ -354,7 +440,13 @@ export class PurchaseOrdersService {
       action: change.action,
       resourceId: id,
       before: { status: order.status },
-      after: { status: change.to, reason: change.reason },
+      after: {
+        status: change.to,
+        reason: change.reason,
+        ...(change.extra?.expectedDate
+          ? { expectedDate: change.extra.expectedDate }
+          : {}),
+      },
     } satisfies AuditLogEvent);
     return this.findOne(tenantId, id);
   }
