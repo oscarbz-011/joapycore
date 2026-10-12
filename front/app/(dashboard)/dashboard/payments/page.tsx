@@ -77,6 +77,8 @@ import {
   SelectTrigger,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { TablePagination } from "@/components/table-pagination";
+import { usePagination } from "@/lib/use-pagination";
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
@@ -1784,6 +1786,7 @@ export default function PaymentsPage() {
     groupsByCustomer.set(key, [...(groupsByCustomer.get(key) ?? []), ar]);
   }
   const groups = Array.from(groupsByCustomer.values());
+  const pagination = usePagination(groups);
 
   function toggleExpanded(customerId: string) {
     setExpandedCustomers((prev) => {
@@ -1958,7 +1961,7 @@ export default function PaymentsPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {groups.map((group) => {
+                {pagination.items.map((group) => {
                   if (group.length === 1) {
                     const ar = group[0];
                     return (
@@ -2077,6 +2080,11 @@ export default function PaymentsPage() {
               </tbody>
             </table>
           </div>
+          <TablePagination
+            {...pagination.controls}
+            label="clientes"
+            className="border-t border-border px-4 py-3"
+          />
         </Card>
       )}
 

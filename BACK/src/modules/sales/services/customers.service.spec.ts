@@ -27,6 +27,7 @@ describe('CustomersService', () => {
   let service: CustomersService;
   let customersRepository: {
     findAll: jest.Mock;
+    findPage?: jest.Mock;
     findById: jest.Mock;
     findLastCode: jest.Mock;
     findByEmail: jest.Mock;
@@ -69,6 +70,80 @@ describe('CustomersService', () => {
   });
 
   // ── findOne ────────────────────────────────────────────────────────────────
+
+  // ── findPage ───────────────────────────────────────────────────────────────
+
+  describe('findPage', () => {
+    beforeEach(() => {
+      customersRepository.findPage = jest
+        .fn()
+        .mockResolvedValue({ items: [makeCustomer()], total: 143 });
+    });
+
+    it('serves one page with the total of the whole list', async () => {
+      const result = await service.findPage('tenant-1', { page: 2, limit: 25 });
+
+      expect(customersRepository.findPage).toHaveBeenCalledWith(
+        'tenant-1',
+        expect.objectContaining({ skip: 25, take: 25, words: [] }),
+      );
+      expect(result).toMatchObject({
+        total: 143,
+        page: 2,
+        limit: 25,
+        totalPages: 6,
+      });
+      expect(result.items).toHaveLength(1);
+    });
+
+    it('searches every word and sorts by the column asked for', async () => {
+      await service.findPage('tenant-1', {
+        q: ' maria  gonzalez ',
+        sortBy: 'city',
+        sortDir: 'desc',
+      });
+
+      expect(customersRepository.findPage).toHaveBeenCalledWith(
+        'tenant-1',
+        expect.objectContaining({
+          words: ['maria', 'gonzalez'],
+          orderBy: [{ city: { sort: 'desc', nulls: 'last' } }, { id: 'asc' }],
+        }),
+      );
+    });
+
+    // Por apellido, y con desempate para que las páginas no se pisen.
+    it('sorts by last name by default, with a stable tie-break', async () => {
+      await service.findPage('tenant-1', {});
+
+      expect(customersRepository.findPage).toHaveBeenCalledWith(
+        'tenant-1',
+        expect.objectContaining({
+          orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }, { id: 'asc' }],
+        }),
+      );
+    });
+
+    it('ignores a sort column that is not offered', async () => {
+      await service.findPage('tenant-1', { sortBy: 'creditLimit' });
+
+      expect(customersRepository.findPage).toHaveBeenCalledWith(
+        'tenant-1',
+        expect.objectContaining({
+          orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }, { id: 'asc' }],
+        }),
+      );
+    });
+
+    it('never serves more than 100 customers at once', async () => {
+      await service.findPage('tenant-1', { limit: 5000 });
+
+      expect(customersRepository.findPage).toHaveBeenCalledWith(
+        'tenant-1',
+        expect.objectContaining({ take: 100 }),
+      );
+    });
+  });
 
   describe('findOne', () => {
     it('returns customer when found', async () => {

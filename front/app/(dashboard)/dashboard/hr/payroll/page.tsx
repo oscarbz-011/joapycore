@@ -14,6 +14,8 @@ import { NumericInput } from '../../../../../components/numeric-input';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
+import { TablePagination } from '@/components/table-pagination';
+import { usePagination } from '@/lib/use-pagination';
 
 const NUM_CLS = 'h-9 w-full min-w-0 rounded-3xl border border-transparent bg-input/50 px-3 text-sm outline-none transition-[color,box-shadow,background-color] focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30';
 
@@ -206,6 +208,7 @@ export default function HrPayrollPage() {
     queryKey: ['hr-payroll-records'],
     queryFn: hrApi.listPayrollRecords,
   });
+  const pagination = usePagination(records);
 
   const runMutation = useMutation({
     mutationFn: () => hrApi.runPayroll(period),
@@ -277,7 +280,7 @@ export default function HrPayrollPage() {
         <div className="py-10 text-center text-sm text-muted-foreground/60">No hay liquidaciones generadas.</div>
       ) : (
         <div className="space-y-3">
-          {records.map((rec: PayrollRecord) => (
+          {pagination.items.map((rec: PayrollRecord) => (
             <div key={rec.id} className="rounded-xl border border-border bg-card">
               <button
                 type="button"
@@ -310,6 +313,10 @@ export default function HrPayrollPage() {
               )}
             </div>
           ))}
+        <TablePagination
+          {...pagination.controls}
+          label="liquidaciones"
+        />
         </div>
       )}
     </div>

@@ -37,10 +37,42 @@ import { UpdateProductSupplierDto } from '../dto/update-product-supplier.dto';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { WarehousesRepository } from '../../warehouses/repositories/warehouses.repository';
 import { StockMovementsRepository } from '../repositories/stock-movements.repository';
+import type { Prisma } from '@prisma/client';
+import {
+  orderByFrom,
+  pageWindow,
+  paginated,
+  searchWords,
+} from '../../../common/pagination/pagination';
+import { PageStockMovementsDto } from '../dto/page-stock-movements.dto';
 import {
   aggregateDemands,
   assertDemandsCovered,
 } from '../../../common/utils/stock-availability.util';
+
+type MovementOrder = Prisma.StockMovementOrderByWithRelationInput[];
+type Direction = 'asc' | 'desc';
+
+// `id` al final deja el orden estable entre páginas cuando hay empates.
+const DEFAULT_MOVEMENT_ORDER: MovementOrder = [
+  { createdAt: 'desc' },
+  { id: 'desc' },
+];
+const MOVEMENT_ORDER: Record<string, (direction: Direction) => MovementOrder> =
+  {
+    date: (direction) => [{ createdAt: direction }, { id: direction }],
+    product: (direction) => [
+      { product: { name: direction } },
+      { createdAt: 'desc' },
+      { id: 'desc' },
+    ],
+    quantity: (direction) => [{ quantity: direction }, { id: 'desc' }],
+    reason: (direction) => [
+      { reason: direction },
+      { createdAt: 'desc' },
+      { id: 'desc' },
+    ],
+  };
 
 @Injectable()
 export class ProductsService {
@@ -217,6 +249,24 @@ export class ProductsService {
 
   listMovements(tenantId: string, filters: FilterStockMovementDto) {
     return this.productsRepository.findMovements(tenantId, filters);
+  }
+
+  /** Una página del historial de movimientos, filtrada y ordenada en la base. */
+  async pageMovements(tenantId: string, query: PageStockMovementsDto) {
+    const window = pageWindow(query);
+    const { items, total } = await this.productsRepository.findMovementsPage(
+      tenantId,
+      {
+        productId: query.productId,
+        warehouseId: query.warehouseId,
+        reason: query.reason,
+        words: searchWords(query.q),
+        orderBy: orderByFrom(query, MOVEMENT_ORDER, DEFAULT_MOVEMENT_ORDER),
+        skip: window.skip,
+        take: window.take,
+      },
+    );
+    return paginated(items, total, window);
   }
 
   async addStockMovement(

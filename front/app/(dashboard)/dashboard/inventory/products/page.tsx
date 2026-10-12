@@ -53,6 +53,8 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
+import { TablePagination } from '@/components/table-pagination';
+import { usePagination } from '@/lib/use-pagination';
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -693,6 +695,7 @@ export default function InventoryPage() {
 
   const kpis = useMemo(() => catalogKpis(products), [products]);
   const { sorted, sort, toggle } = useTableSort(products, PRODUCT_SORT);
+  const pagination = usePagination(sorted);
 
   return (
     <div>
@@ -838,7 +841,7 @@ export default function InventoryPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {sorted.map((product) => {
+                {pagination.items.map((product) => {
                   const m = markup(product);
                   return (
                     <tr
@@ -901,6 +904,11 @@ export default function InventoryPage() {
               </tbody>
             </table>
           </div>
+          <TablePagination
+            {...pagination.controls}
+            label="productos"
+            className="border-t border-border px-4 py-3"
+          />
         </Card>
       )}
 

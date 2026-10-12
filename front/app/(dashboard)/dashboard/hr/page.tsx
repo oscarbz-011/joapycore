@@ -11,6 +11,8 @@ import { hrApi, type Employee } from '../../../../lib/api/hr';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { TablePagination } from '@/components/table-pagination';
+import { usePagination } from '@/lib/use-pagination';
 
 // ── Label helpers ──────────────────────────────────────────────────────────────
 
@@ -51,6 +53,7 @@ export default function HrEmployeesPage() {
     queryKey: ['hr-employees'],
     queryFn: hrApi.listEmployees,
   });
+  const pagination = usePagination(employees);
 
   function formatSalary(n: number) {
     return new Intl.NumberFormat('es-PY', { style: 'currency', currency: 'PYG', maximumFractionDigits: 0 }).format(n);
@@ -107,7 +110,7 @@ export default function HrEmployeesPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {employees.map((emp: Employee) => (
+                {pagination.items.map((emp: Employee) => (
                   <tr key={emp.id} className="hover:bg-muted/20 transition-colors">
                     <td className="px-4 py-3 font-mono text-xs text-muted-foreground">
                       #{String(emp.employeeNumber).padStart(4, '0')}
@@ -157,6 +160,11 @@ export default function HrEmployeesPage() {
               </tbody>
             </table>
           </div>
+          <TablePagination
+            {...pagination.controls}
+            label="empleados"
+            className="border-t border-border px-4 py-3"
+          />
         </Card>
       )}
     </div>

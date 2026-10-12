@@ -8,6 +8,44 @@ import { CustomersRepository } from '../repositories/customers.repository';
 import { CreateCustomerDto } from '../dto/create-customer.dto';
 import { toTitleCase } from '../../../common/utils/normalize.util';
 import type { AuditLogEvent } from '../../../audit/audit-log.event';
+import type { Prisma } from '@prisma/client';
+import {
+  orderByFrom,
+  pageWindow,
+  paginated,
+  searchWords,
+} from '../../../common/pagination/pagination';
+import { PageCustomersDto } from '../dto/page-customers.dto';
+
+type CustomerOrder = Prisma.CustomerOrderByWithRelationInput[];
+type Direction = 'asc' | 'desc';
+
+// Por apellido primero, como se busca a una persona en una lista. `id` al
+// final deja el orden estable entre páginas cuando hay empates.
+const byName = (direction: Direction): CustomerOrder => [
+  { lastName: direction },
+  { firstName: direction },
+  { id: 'asc' },
+];
+const by =
+  (field: keyof Prisma.CustomerOrderByWithRelationInput) =>
+  (direction: Direction): CustomerOrder => [
+    { [field]: { sort: direction, nulls: 'last' } },
+    { id: 'asc' },
+  ];
+
+const DEFAULT_CUSTOMER_ORDER = byName('asc');
+const CUSTOMER_ORDER: Record<string, (direction: Direction) => CustomerOrder> =
+  {
+    name: byName,
+    code: by('customerCode'),
+    documentType: by('documentType'),
+    document: by('documentNumber'),
+    phone: by('phone'),
+    email: by('email'),
+    city: by('city'),
+    status: (direction) => [{ isActive: direction }, { id: 'asc' }],
+  };
 
 @Injectable()
 export class CustomersService {
@@ -18,6 +56,18 @@ export class CustomersService {
 
   findAll(tenantId: string) {
     return this.customersRepository.findAll(tenantId);
+  }
+
+  /** Una página del listado, buscada y ordenada en la base. */
+  async findPage(tenantId: string, query: PageCustomersDto) {
+    const window = pageWindow(query);
+    const { items, total } = await this.customersRepository.findPage(tenantId, {
+      words: searchWords(query.q),
+      orderBy: orderByFrom(query, CUSTOMER_ORDER, DEFAULT_CUSTOMER_ORDER),
+      skip: window.skip,
+      take: window.take,
+    });
+    return paginated(items, total, window);
   }
 
   async findOne(tenantId: string, id: string) {

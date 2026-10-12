@@ -8,6 +8,8 @@ import { Plus, Shield, ShieldCheck, Trash2, ChevronDown, ChevronRight } from 'lu
 import { rolesApi, type RoleResponse } from '../../../../../lib/api/roles';
 import { PERMISSION_GROUPS, getPermissionLabel } from '../../../../../lib/permissions';
 import { Button } from '@/components/ui/button';
+import { TablePagination } from '@/components/table-pagination';
+import { usePagination } from '@/lib/use-pagination';
 
 function CreateRoleModal({ onClose }: { onClose: () => void }) {
   const [name, setName] = useState('');
@@ -219,6 +221,7 @@ export default function RolesPage() {
     queryKey: ['roles'],
     queryFn: rolesApi.list,
   });
+  const pagination = usePagination(roles);
 
   return (
     <>
@@ -260,7 +263,7 @@ export default function RolesPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {roles.map((role) => {
+              {pagination.items.map((role) => {
                 const permCount = role.rolePermissions.length;
                 return (
                   <tr
@@ -315,6 +318,11 @@ export default function RolesPage() {
             </tbody>
           </table>
         )}
+        <TablePagination
+          {...pagination.controls}
+          label="roles"
+          className="border-t border-border px-4 py-3"
+        />
       </div>
 
       {showCreateModal && <CreateRoleModal onClose={() => setShowCreateModal(false)} />}

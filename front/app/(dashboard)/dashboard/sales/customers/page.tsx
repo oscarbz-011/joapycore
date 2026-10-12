@@ -1,54 +1,80 @@
 'use client';
 
-import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { Plus, Search, RotateCw } from 'lucide-react';
-import { salesApi, type Customer, type DocumentType } from '../../../../../lib/api/sales';
+import { SortableHeader } from '@/components/sortable-header';
+import { TablePagination } from '@/components/table-pagination';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import {
+  customerFullName,
+  documentTypeLabel,
+  type CustomerSortKey,
+} from '@/lib/customers';
+import { useServerList } from '@/lib/use-server-list';
+import { cn } from '@/lib/utils';
+import { salesApi } from '../../../../../lib/api/sales';
 
-function docLabel(type: DocumentType): string {
-  return type === 'CI' ? 'C.I.' : type === 'RUC' ? 'RUC' : 'Pasaporte';
-}
+const EMPTY = <span className="text-muted-foreground">—</span>;
 
 export default function CustomersPage() {
   const router = useRouter();
-  const [search, setSearch] = useState('');
+  // El servidor busca, ordena y pagina: acá solo se guarda qué se pidió.
+  const list = useServerList<CustomerSortKey>();
 
-  const { data: customers = [], isLoading, isError, error, refetch, isFetching } = useQuery({
-    queryKey: ['sale-customers'],
-    queryFn: salesApi.listCustomers,
+  const { data, isLoading, isError, error, refetch, isFetching } = useQuery({
+    queryKey: ['sale-customers', 'page', list.query],
+    queryFn: () => salesApi.pageCustomers(list.query),
+    // Al cambiar de página se sigue viendo la anterior hasta que llega la nueva.
+    placeholderData: keepPreviousData,
   });
 
-  const filtered = customers.filter((c: Customer) => {
-    const haystack =
-      `${c.firstName} ${c.lastName} ${c.email ?? ''} ${c.documentNumber ?? ''} ${c.customerCode ?? ''}`.toLowerCase();
-    return !search || haystack.includes(search.toLowerCase());
-  });
+  const customers = data?.items ?? [];
+  const total = data?.total ?? 0;
+  const searched = !!list.query.q;
+  const controls = list.controls(data?.total);
+  const { sort, toggleSort: toggle } = list;
+
+  const newCustomer = () => router.push('/dashboard/sales/customers/new');
 
   return (
     <div>
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold text-foreground">Clientes</h1>
           <p className="mt-1 text-sm text-muted-foreground">Gestión de clientes</p>
         </div>
-        <Button onClick={() => router.push('/dashboard/sales/customers/new')}>
+        <Button onClick={newCustomer}>
           <Plus size={16} />
           Nuevo cliente
         </Button>
       </div>
 
-      <div className="relative mb-4">
-        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground/50" />
-        <Input
-          className="pl-8"
-          placeholder="Buscar por nombre, documento o código..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
+      <div className="mb-4 flex flex-wrap items-center gap-3">
+        <div className="relative min-w-0 flex-1 sm:max-w-md">
+          <Search
+            size={14}
+            aria-hidden
+            className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground/50"
+          />
+          <Input
+            className="pl-8"
+            aria-label="Buscar cliente"
+            placeholder="Buscar por nombre, documento, código, email o teléfono..."
+            value={list.search}
+            onChange={(e) => list.setSearch(e.target.value)}
+          />
+        </div>
+        {!isLoading && !isError && (
+          <p className="text-sm text-muted-foreground" aria-live="polite">
+            {list.searching || isFetching
+              ? 'Buscando...'
+              : `${new Intl.NumberFormat('es-PY').format(total)} ${total === 1 ? 'cliente' : 'clientes'}`}
+          </p>
+        )}
       </div>
 
       {isLoading ? (
@@ -67,61 +93,89 @@ export default function CustomersPage() {
             {isFetching ? 'Reintentando...' : 'Reintentar'}
           </Button>
         </div>
-      ) : filtered.length === 0 ? (
+      ) : total === 0 && !searched ? (
         <div className="py-16 text-center">
-          <p className="text-sm text-muted-foreground/60">No se encontraron clientes.</p>
-          <button
-            type="button"
-            onClick={() => router.push('/dashboard/sales/customers/new')}
-            className="mt-3 text-sm font-medium text-foreground underline underline-offset-2"
-          >
+          <p className="text-sm text-muted-foreground">Todavía no hay clientes cargados.</p>
+          <Button variant="outline" className="mt-4" onClick={newCustomer}>
+            <Plus size={15} />
             Crear el primero
-          </button>
+          </Button>
+        </div>
+      ) : total === 0 ? (
+        <div className="py-16 text-center">
+          <p className="text-sm text-muted-foreground">
+            Ningún cliente coincide con &ldquo;{list.query.q}&rdquo;.
+          </p>
+          <Button variant="outline" size="sm" className="mt-3" onClick={() => list.setSearch('')}>
+            Limpiar búsqueda
+          </Button>
         </div>
       ) : (
-        <div className="overflow-hidden rounded-xl border border-border bg-card">
-          <ul className="divide-y divide-border">
-            {filtered.map((customer: Customer) => (
-              <li
-                key={customer.id}
-                onClick={() => router.push(`/dashboard/sales/customers/${customer.id}/edit`)}
-                className="flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-muted/20 transition-colors"
-              >
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <p className="font-medium text-foreground truncate">
-                      {customer.firstName}
-                      {customer.secondFirstName ? ` ${customer.secondFirstName}` : ''}{' '}
-                      {customer.lastName}
-                      {customer.secondLastName ? ` ${customer.secondLastName}` : ''}
-                    </p>
-                    {customer.customerCode && (
-                      <span className="shrink-0 text-xs text-muted-foreground/60 font-mono">
-                        {customer.customerCode}
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-xs text-muted-foreground/60 truncate">
-                    {[
-                      customer.documentType && customer.documentNumber
-                        ? `${docLabel(customer.documentType)}: ${customer.documentNumber}`
-                        : null,
-                      customer.phone,
-                      customer.email,
-                    ]
-                      .filter(Boolean)
-                      .join(' · ')}
-                  </p>
-                </div>
-                {!customer.isActive && (
-                  <Badge variant="outline" className="ml-3 bg-muted/30 text-muted-foreground border-border shrink-0">
-                    Inactivo
-                  </Badge>
-                )}
-              </li>
-            ))}
-          </ul>
-        </div>
+        <Card className="overflow-hidden p-0">
+          <div className="overflow-x-auto">
+            <table
+              className={cn('w-full text-[13.5px] transition-opacity', isFetching && 'opacity-60')}
+              aria-busy={isFetching}
+            >
+              <thead>
+                <tr className="border-b border-border bg-muted/30 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                  <SortableHeader label="Código" sortKey="code" sort={sort} onSort={toggle} />
+                  <SortableHeader label="Cliente" sortKey="name" sort={sort} onSort={toggle} />
+                  <SortableHeader label="Tipo de doc." sortKey="documentType" sort={sort} onSort={toggle} className="whitespace-nowrap" />
+                  <SortableHeader label="Documento" sortKey="document" sort={sort} onSort={toggle} />
+                  <SortableHeader label="Teléfono" sortKey="phone" sort={sort} onSort={toggle} />
+                  <SortableHeader label="Email" sortKey="email" sort={sort} onSort={toggle} />
+                  <SortableHeader label="Ciudad" sortKey="city" sort={sort} onSort={toggle} />
+                  <SortableHeader label="Estado" sortKey="status" sort={sort} onSort={toggle} />
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {customers.map((customer) => {
+                  const open = () => router.push(`/dashboard/sales/customers/${customer.id}/edit`);
+                  return (
+                    <tr
+                      key={customer.id}
+                      tabIndex={0}
+                      onClick={open}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') open();
+                      }}
+                      className="cursor-pointer transition-colors hover:bg-muted/20 focus-visible:bg-muted/20 focus-visible:outline-none"
+                    >
+                      <td className="px-4 py-3 font-mono text-xs whitespace-nowrap text-muted-foreground">
+                        {customer.customerCode ?? EMPTY}
+                      </td>
+                      <td className="px-4 py-3 font-medium text-foreground">
+                        {customerFullName(customer)}
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap text-foreground">
+                        {documentTypeLabel(customer.documentType) ?? EMPTY}
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap tabular-nums text-foreground">
+                        {customer.documentNumber ?? EMPTY}
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap text-foreground">
+                        {customer.phone ?? EMPTY}
+                      </td>
+                      <td className="px-4 py-3 text-foreground">{customer.email ?? EMPTY}</td>
+                      <td className="px-4 py-3 text-foreground">{customer.city ?? EMPTY}</td>
+                      <td className="px-4 py-3">
+                        <Badge variant={customer.isActive ? 'secondary' : 'outline'}>
+                          {customer.isActive ? 'Activo' : 'Inactivo'}
+                        </Badge>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          <TablePagination
+            {...controls}
+            label="clientes"
+            className="border-t border-border px-4 py-3"
+          />
+        </Card>
       )}
     </div>
   );

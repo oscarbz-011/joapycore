@@ -8,6 +8,8 @@ import { useTableSort } from '../../../../../lib/use-table-sort';
 import { SortableHeader } from '@/components/sortable-header';
 import { Card } from '@/components/ui/card';
 import { DatePicker } from '@/components/ui/date-picker';
+import { TablePagination } from '@/components/table-pagination';
+import { usePagination } from '@/lib/use-pagination';
 
 const PAYMENT_METHOD_LABELS: Record<PosPaymentMethod, string> = {
   CASH: 'Efectivo',
@@ -64,6 +66,7 @@ export default function PosHistoryPage() {
   });
 
   const { sorted, sort, toggle } = useTableSort(sales, POS_SALE_SORT);
+  const pagination = usePagination(sorted);
 
   const total = sales.reduce(
     (sum, s) => sum + s.items.reduce((iSum, i) => iSum + i.quantity * i.unitPrice, 0),
@@ -119,7 +122,7 @@ export default function PosHistoryPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {sorted.map((sale) => (
+                {pagination.items.map((sale) => (
                   <tr key={sale.id} className="transition-colors hover:bg-muted/20">
                     <td className="px-4 py-3 text-muted-foreground">{formatDateTime(sale.orderDate)}</td>
                     <td className="px-4 py-3 font-medium text-foreground">
@@ -139,6 +142,11 @@ export default function PosHistoryPage() {
               </tbody>
             </table>
           </div>
+          <TablePagination
+            {...pagination.controls}
+            label="ventas"
+            className="border-t border-border px-4 py-3"
+          />
         </Card>
       )}
     </div>

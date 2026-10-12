@@ -18,6 +18,8 @@ import {
 } from '@/lib/suppliers';
 import { useTableSort } from '@/lib/use-table-sort';
 import { procurementApi, type Supplier } from '../../../../../lib/api/procurement';
+import { TablePagination } from '@/components/table-pagination';
+import { usePagination } from '@/lib/use-pagination';
 
 const EMPTY = <span className="text-muted-foreground">—</span>;
 
@@ -40,6 +42,7 @@ export default function SuppliersPage() {
 
   const filtered = filterSuppliers(suppliers, search);
   const { sorted, sort, toggle } = useTableSort(filtered, SUPPLIER_SORT);
+  const pagination = usePagination(sorted);
 
   const openCatalog = (supplier: Supplier) =>
     router.push(`/dashboard/procurement/suppliers/${supplier.id}`);
@@ -133,7 +136,7 @@ export default function SuppliersPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {sorted.map((supplier) => (
+                {pagination.items.map((supplier) => (
                   <tr
                     key={supplier.id}
                     onClick={() => openCatalog(supplier)}
@@ -190,6 +193,11 @@ export default function SuppliersPage() {
               </tbody>
             </table>
           </div>
+          <TablePagination
+            {...pagination.controls}
+            label="proveedores"
+            className="border-t border-border px-4 py-3"
+          />
         </Card>
       )}
     </div>
