@@ -89,16 +89,18 @@ const SECTION_LABEL = 'text-xs font-semibold uppercase tracking-wider text-muted
 
 interface Props {
   initial?: Customer;
+  /** Datos para arrancar un alta (ej. los de un presupuesto sin cliente). */
+  prefill?: Partial<CreateCustomerPayload>;
   onDone: (customer?: Customer) => void;
 }
 
-export function CustomerForm({ initial, onDone }: Props) {
+export function CustomerForm({ initial, prefill, onDone }: Props) {
   const canCreate = usePermission('customers:create');
   const canUpdate = usePermission('customers:update');
   const canSave = initial ? canUpdate : canCreate;
   const queryClient = useQueryClient();
   const [form, setForm] = useState<CreateCustomerPayload>(
-    initial ? fromCustomer(initial) : EMPTY_FORM,
+    initial ? fromCustomer(initial) : { ...EMPTY_FORM, ...prefill },
   );
   const [error, setError] = useState('');
   const [confirmDelete, setConfirmDelete] = useState(false);

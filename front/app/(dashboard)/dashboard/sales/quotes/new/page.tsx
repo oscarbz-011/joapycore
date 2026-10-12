@@ -15,9 +15,18 @@ import { useAuth } from '../../../../../../lib/auth-context';
 import { NumericInput } from '../../../../../../components/numeric-input';
 import { SearchSelect } from '../../../components/search-select';
 import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+  NEW_CUSTOMER_ID_KEY,
+  emptyProspect,
+  prospectError,
+  toProspectPayload,
+  type ProspectForm,
+} from '@/lib/quote-party';
 import { cn } from '@/lib/utils';
 
 const NUM_CLS = 'h-9 w-full min-w-0 rounded-3xl border border-transparent bg-input/50 px-3 text-sm outline-none transition-[color,box-shadow,background-color] focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30';
@@ -37,7 +46,9 @@ function emptyLine(): QuoteLine {
 }
 
 const DRAFT_KEY = 'sales:new-quote-draft';
-const DRAFT_CUSTOMER_KEY = 'sales:new-quote-draft-customer-id';
+// La clave que escribe el alta de cliente al volver (antes se leía otra y
+// el presupuesto en curso se perdía).
+const DRAFT_CUSTOMER_KEY = NEW_CUSTOMER_ID_KEY;
 
 interface QuoteDraft {
   lines: Omit<QuoteLine, 'product'>[];
@@ -134,6 +145,9 @@ export default function NewQuotePage() {
   const canManage = jwtPayload?.permissions.includes('sales:quotes:manage') ?? false;
 
   const [customerId, setCustomerId] = useState('');
+  // A quién va: un cliente registrado o datos cargados a mano.
+  const [partyMode, setPartyMode] = useState<'customer' | 'prospect'>('customer');
+  const [prospect, setProspect] = useState<ProspectForm>(emptyProspect());
   const [lines, setLines] = useState<QuoteLine[]>([emptyLine()]);
   const [notes, setNotes] = useState('');
   const [error, setError] = useState('');
@@ -185,7 +199,9 @@ export default function NewQuotePage() {
   const mutation = useMutation({
     mutationFn: () => {
       const dto: Parameters<typeof salesApi.createOrder>[0] = {
-        customerId,
+        ...(partyMode === 'customer'
+          ? { customerId }
+          : { prospect: toProspectPayload(prospect) }),
         orderType: 'QUOTE',
         notes: notes.trim() || undefined,
         items: lines.map((l): CreateSaleOrderItem => ({
@@ -220,7 +236,7 @@ export default function NewQuotePage() {
   }
 
   return (
-    <div className="mx-auto max-w-2xl">
+    <div>
       <div className="mb-6 flex items-center gap-3">
         <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => router.push('/dashboard/sales/quotes')}>
           <ArrowLeft size={18} />
@@ -234,14 +250,85 @@ export default function NewQuotePage() {
       <form
         onSubmit={(e) => {
           e.preventDefault(); setError('');
-          if (!customerId) { setError('Seleccioná un cliente'); return; }
+          const partyProblem =
+            partyMode === 'customer'
+              ? customerId ? null : 'Seleccioná un cliente'
+              : prospectError(prospect);
+          if (partyProblem) { setError(partyProblem); return; }
           if (lines.length === 0) { setError('Agregá al menos un ítem'); return; }
           mutation.mutate();
         }}
-        className="space-y-5"
+        className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]"
       >
-        <div className="rounded-xl border border-border bg-card p-5 space-y-5">
-          <div>
+        <div className="min-w-0 space-y-6">
+        {/* overflow-visible: la lista del buscador se despliega por fuera de la tarjeta. */}
+        <Card className="gap-4 overflow-visible p-5">
+          <h2 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Para quién es</h2>
+          <Tabs value={partyMode} onValueChange={(v) => setPartyMode(v as 'customer' | 'prospect')}>
+            <TabsList className="w-full sm:w-auto">
+              <TabsTrigger value="customer" className="flex-1">Cliente registrado</TabsTrigger>
+              <TabsTrigger value="prospect" className="flex-1">Persona o empresa sin registrar</TabsTrigger>
+            </TabsList>
+          </Tabs>
+
+          {partyMode === 'prospect' && (
+            <fieldset className="space-y-3">
+              <legend className="mb-2 text-xs text-muted-foreground">
+                Cargá los datos a mano. No se crea un cliente: recién hay que registrarlo si acepta el presupuesto y se convierte en pedido.
+              </legend>
+              <div>
+                <Label htmlFor="prospect-name" className="mb-1 text-xs">Nombre o razón social *</Label>
+                <Input
+                  id="prospect-name"
+                  value={prospect.name}
+                  maxLength={150}
+                  onChange={(e) => setProspect((p) => ({ ...p, name: e.target.value }))}
+                />
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                <div>
+                  <Label htmlFor="prospect-document" className="mb-1 text-xs">CI o RUC</Label>
+                  <Input
+                    id="prospect-document"
+                    value={prospect.document}
+                    maxLength={30}
+                    onChange={(e) => setProspect((p) => ({ ...p, document: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="prospect-phone" className="mb-1 text-xs">Teléfono</Label>
+                  <Input
+                    id="prospect-phone"
+                    type="tel"
+                    value={prospect.phone}
+                    maxLength={40}
+                    onChange={(e) => setProspect((p) => ({ ...p, phone: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="prospect-email" className="mb-1 text-xs">Email</Label>
+                  <Input
+                    id="prospect-email"
+                    type="email"
+                    value={prospect.email}
+                    maxLength={150}
+                    onChange={(e) => setProspect((p) => ({ ...p, email: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="prospect-address" className="mb-1 text-xs">Dirección</Label>
+                  <Input
+                    id="prospect-address"
+                    value={prospect.address}
+                    maxLength={250}
+                    onChange={(e) => setProspect((p) => ({ ...p, address: e.target.value }))}
+                  />
+                </div>
+              </div>
+            </fieldset>
+          )}
+
+          <div className={partyMode === 'customer' ? undefined : 'hidden'}>
             <Label className="mb-1 text-xs">Cliente *</Label>
             <SearchSelect<Customer>
               items={customers}
@@ -255,14 +342,15 @@ export default function NewQuotePage() {
               emptyMessage="No se encontró. Podés crear uno abajo."
               onCreate={goToNewCustomer}
               createLabel=" Crear cliente nuevo"
-              required
+              required={partyMode === 'customer'}
             />
           </div>
 
+        </Card>
+
+        <Card className="gap-4 overflow-visible p-5">
           <div>
-            <div className="mb-2 flex items-center justify-between">
-              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/60">Ítems</p>
-            </div>
+            <h2 className="mb-3 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Ítems</h2>
             <div className="space-y-2">
               {lines.map((line, idx) => (
                 <QuoteLineRow
@@ -283,22 +371,45 @@ export default function NewQuotePage() {
             </button>
           </div>
 
-          <div className="flex items-center justify-between border-t border-border pt-4">
-            <span className="text-sm font-medium text-muted-foreground">Total estimado</span>
-            <span className="text-lg font-semibold text-foreground">{formatPrice(total)}</span>
-          </div>
+        </Card>
 
-          <div>
-            <Label className="mb-1 text-xs">Notas (opcional)</Label>
-            <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Observaciones para el cliente..." rows={2} />
-          </div>
+        <Card className="gap-3 p-5">
+          <h2 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Notas</h2>
+          <Textarea
+            aria-label="Notas para el cliente"
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            placeholder="Observaciones para el cliente (opcional)..."
+            rows={3}
+          />
+        </Card>
         </div>
 
-        {error && <p className="text-sm text-destructive">{error}</p>}
-
-        <div className="flex gap-2 justify-end">
-          <Button type="button" variant="outline" onClick={() => router.push('/dashboard/sales/quotes')}>Cancelar</Button>
-          <Button type="submit" disabled={mutation.isPending}>{mutation.isPending ? 'Guardando...' : 'Crear presupuesto'}</Button>
+        {/* Resumen y acciones, siempre a la vista */}
+        <div className="lg:sticky lg:top-6 lg:self-start">
+          <Card className="gap-3 p-5">
+            <h2 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Resumen</h2>
+            <dl className="space-y-1.5 text-sm">
+              <div className="flex justify-between gap-3">
+                <dt className="text-muted-foreground">Ítems</dt>
+                <dd className="tabular-nums text-foreground">{lines.length}</dd>
+              </div>
+              <div className="flex items-baseline justify-between gap-3 border-t border-border pt-2">
+                <dt className="font-semibold text-foreground">Total estimado</dt>
+                <dd className="font-mono text-lg font-bold tabular-nums text-foreground">{formatPrice(total)}</dd>
+              </div>
+            </dl>
+            <p className="text-xs text-muted-foreground">
+              No compromete stock. Al guardarlo se genera el PDF del presupuesto.
+            </p>
+            {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
+            <Button type="submit" className="w-full" disabled={mutation.isPending}>
+              {mutation.isPending ? 'Guardando...' : 'Crear presupuesto'}
+            </Button>
+            <Button type="button" variant="outline" className="w-full" onClick={() => router.push('/dashboard/sales/quotes')}>
+              Cancelar
+            </Button>
+          </Card>
         </div>
       </form>
     </div>

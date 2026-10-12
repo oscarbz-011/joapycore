@@ -4,6 +4,8 @@ import {
   emptySupplierForm,
   filterSuppliers,
   leadTimeLabel,
+  paymentConditionLabel,
+  paymentKind,
   paymentTermLabel,
   supplierTermsError,
   supplierFormFrom,
@@ -280,5 +282,20 @@ describe('discounts by quantity of a supplier', () => {
         quantityDiscounts: [{ from: '5', value: '' }],
       }),
     ).toContain('incompleto');
+  });
+});
+
+describe('payment condition of a purchase', () => {
+  it('is cash without a term', () => {
+    expect(paymentConditionLabel(0)).toBe('Contado');
+    expect(paymentConditionLabel(null)).toBe('Contado');
+    expect(paymentKind(0)).toBe('Contado');
+    expect(paymentKind(undefined)).toBe('Contado');
+  });
+
+  it('is credit with the days of the term', () => {
+    expect(paymentConditionLabel(30)).toBe('Crédito a 30 días');
+    expect(paymentConditionLabel(1)).toBe('Crédito a 1 día');
+    expect(paymentKind(30)).toBe('Crédito');
   });
 });

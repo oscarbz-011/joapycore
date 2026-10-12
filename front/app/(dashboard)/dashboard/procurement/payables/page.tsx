@@ -25,6 +25,7 @@ import {
   payableInvoiceState,
   type PayableInvoiceState,
 } from '@/lib/supplier-invoice';
+import { paymentConditionLabel, paymentKind, paymentTermLabel } from '@/lib/suppliers';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -275,6 +276,9 @@ function APDetailPanel({
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-semibold text-foreground">{receiptRef(ap.purchaseReceipt)}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {paymentConditionLabel(ap.purchaseReceipt.purchaseOrder.paymentTermDays)}
+                  </p>
                   <p className="text-xs text-muted-foreground/60 mt-0.5">{formatDatePY(ap.purchaseReceipt.receivedAt, 'local')}</p>
                 </div>
                 <Link
@@ -478,6 +482,8 @@ export default function PayablesPage() {
                 <tr>
                   <th className="px-4 py-3 text-left">Proveedor</th>
                   <th className="px-4 py-3 text-left">Recepción</th>
+                  <th className="px-4 py-3 text-left">Tipo</th>
+                  <th className="px-4 py-3 text-left">Plazo</th>
                   <th className="px-4 py-3 text-left">Vencimiento</th>
                   <th className="px-4 py-3 text-left">Estado</th>
                   <th className="px-4 py-3 text-left">Factura</th>
@@ -502,6 +508,12 @@ export default function PayablesPage() {
                       </td>
                       <td className="px-4 py-3">
                         <span className="font-mono text-xs text-muted-foreground">{receiptRef(ap.purchaseReceipt)}</span>
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap text-foreground">
+                        {paymentKind(ap.purchaseReceipt.purchaseOrder.paymentTermDays)}
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap text-muted-foreground">
+                        {paymentTermLabel(ap.purchaseReceipt.purchaseOrder.paymentTermDays)}
                       </td>
                       <td className={cn('px-4 py-3', accent === 'destructive' ? 'font-medium text-destructive' : 'text-muted-foreground')}>
                         {formatDatePY(ap.dueDate, 'utc')}

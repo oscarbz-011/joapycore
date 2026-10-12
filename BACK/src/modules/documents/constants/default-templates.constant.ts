@@ -297,7 +297,6 @@ export const DEFAULT_PURCHASE_ORDER_TEMPLATE = `<!DOCTYPE html>
       <div class="doc-number">NRO.: {{orden.numero}}</div>
       <div class="doc-meta">
         <div><strong>Fecha:</strong> {{orden.fecha}}</div>
-        <div><strong>Entrega estimada:</strong> {{orden.entregaEstimada}}</div>
       </div>
     </div>
   </div>

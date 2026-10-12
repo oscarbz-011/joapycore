@@ -38,9 +38,10 @@ describe('PurchaseOrdersService', () => {
     findLastOrderNumber: jest.Mock;
     findCatalogItems: jest.Mock;
     transition: jest.Mock;
+    setExpectedDate: jest.Mock;
     recordStatusChange: jest.Mock;
     advanceApplied: jest.Mock;
-    findSupplierAdvancePercent: jest.Mock;
+    findSupplierTerms: jest.Mock;
   };
   let eventEmitter: { emit: jest.Mock };
   let prisma: { $transaction: jest.Mock };
@@ -67,11 +68,10 @@ describe('PurchaseOrdersService', () => {
       findLastOrderNumber: jest.fn().mockResolvedValue(null),
       findCatalogItems: jest.fn().mockResolvedValue([]),
       transition: jest.fn().mockResolvedValue({ count: 1 }),
+      setExpectedDate: jest.fn().mockResolvedValue({ count: 1 }),
       recordStatusChange: jest.fn(),
       advanceApplied: jest.fn().mockResolvedValue(0),
-      findSupplierAdvancePercent: jest
-        .fn()
-        .mockResolvedValue({ advancePercent: null }),
+      findSupplierTerms: jest.fn().mockResolvedValue({ advancePercent: null }),
     };
     eventEmitter = { emit: jest.fn() };
 
@@ -149,7 +149,6 @@ describe('PurchaseOrdersService', () => {
     const dto = {
       supplierId: 'sup-1',
       purchaseType: 'LOCAL' as const,
-      orderDate: '2026-10-07',
       items: [{ productId: 'prod-1', quantity: 5, unitCost: 2_000_000 }],
     };
     const createdWith = () =>
@@ -164,20 +163,21 @@ describe('PurchaseOrdersService', () => {
     });
 
     it('starts from the percentage the supplier usually asks for', async () => {
-      purchaseOrdersRepository.findSupplierAdvancePercent.mockResolvedValue({
+      purchaseOrdersRepository.findSupplierTerms.mockResolvedValue({
         advancePercent: '30.00',
       });
 
       await service.create('tenant-1', 'user-1', dto);
 
-      expect(
-        purchaseOrdersRepository.findSupplierAdvancePercent,
-      ).toHaveBeenCalledWith('tenant-1', 'sup-1');
+      expect(purchaseOrdersRepository.findSupplierTerms).toHaveBeenCalledWith(
+        'tenant-1',
+        'sup-1',
+      );
       expect(createdWith().advanceAmount).toBe(3_000_000);
     });
 
     it('lets the order set its own amount, even none', async () => {
-      purchaseOrdersRepository.findSupplierAdvancePercent.mockResolvedValue({
+      purchaseOrdersRepository.findSupplierTerms.mockResolvedValue({
         advancePercent: '30.00',
       });
 
@@ -212,7 +212,6 @@ describe('PurchaseOrdersService', () => {
     const dto = {
       supplierId: 'sup-1',
       purchaseType: 'LOCAL' as const,
-      orderDate: '2026-06-21',
       items: [{ productId: 'prod-1', quantity: 5, unitCost: 2_000_000 }],
     };
 
@@ -296,7 +295,6 @@ describe('PurchaseOrdersService', () => {
     const dto = {
       supplierId: 'sup-1',
       purchaseType: 'LOCAL' as const,
-      orderDate: '2026-10-06',
       items: [{ productId: 'prod-1', quantity: 2, unitCost: 100 }],
     };
     const withStatus = (status: string) =>
@@ -327,11 +325,88 @@ describe('PurchaseOrdersService', () => {
     );
   });
 
+  // La fecha de la orden es el día en que se crea, en la zona del negocio.
+  describe('order date', () => {
+    const dto = {
+      supplierId: 'sup-1',
+      purchaseType: 'LOCAL' as const,
+      items: [{ productId: 'prod-1', quantity: 2, unitCost: 100 }],
+    };
+
+    beforeEach(() => {
+      // 21:30 del 7 de octubre en Paraguay (ya es 8 en UTC).
+      jest.useFakeTimers().setSystemTime(new Date('2026-10-08T00:30:00.000Z'));
+    });
+    afterEach(() => jest.useRealTimers());
+
+    it('is today, set by the system', async () => {
+      await service.create('tenant-1', 'user-1', dto);
+
+      expect(purchaseOrdersRepository.create).toHaveBeenCalledWith(
+        'tenant-1',
+        expect.objectContaining({
+          orderDate: new Date('2026-10-07T00:00:00.000Z'),
+        }),
+        expect.anything(),
+      );
+    });
+
+    it('does not accept a delivery before the order', async () => {
+      await expect(
+        service.create('tenant-1', 'user-1', {
+          ...dto,
+          expectedDate: '2026-10-06',
+        }),
+      ).rejects.toThrow(/anterior a la fecha de la orden/);
+      expect(purchaseOrdersRepository.create).not.toHaveBeenCalled();
+
+      await service.create('tenant-1', 'user-1', {
+        ...dto,
+        expectedDate: '2026-10-07',
+      });
+      expect(purchaseOrdersRepository.create).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  // La condición de pago queda en la orden, copiada del proveedor.
+  describe('payment term', () => {
+    const dto = {
+      supplierId: 'sup-1',
+      purchaseType: 'LOCAL' as const,
+      items: [{ productId: 'prod-1', quantity: 2, unitCost: 100 }],
+    };
+    const createdWith = () =>
+      purchaseOrdersRepository.create.mock.calls[0][1] as {
+        paymentTermDays: number;
+      };
+
+    it('keeps the term the supplier gives: credit at 30 days', async () => {
+      purchaseOrdersRepository.findSupplierTerms.mockResolvedValue({
+        advancePercent: null,
+        paymentTermDays: 30,
+      });
+
+      await service.create('tenant-1', 'user-1', dto);
+
+      expect(createdWith().paymentTermDays).toBe(30);
+    });
+
+    it('is cash when the supplier gives no term', async () => {
+      purchaseOrdersRepository.findSupplierTerms.mockResolvedValue({
+        advancePercent: null,
+        paymentTermDays: null,
+      });
+
+      await service.create('tenant-1', 'user-1', dto);
+
+      expect(createdWith().paymentTermDays).toBe(0);
+    });
+  });
+
   describe('order number', () => {
     const dto = {
       supplierId: 'sup-1',
       purchaseType: 'LOCAL' as const,
-      orderDate: '2026-10-06',
       items: [{ productId: 'prod-1', quantity: 2, unitCost: 100 }],
     };
     const year = String(new Date().getFullYear()).slice(-2);
@@ -369,7 +444,6 @@ describe('PurchaseOrdersService', () => {
     const dto = {
       supplierId: 'sup-1',
       purchaseType: 'LOCAL' as const,
-      orderDate: '2026-10-06',
       items: [{ productId: 'prod-1', quantity: 2, unitCost: 100 }],
     };
     const duplicated = Object.assign(new Error('unique'), { code: 'P2002' });
@@ -418,7 +492,6 @@ describe('PurchaseOrdersService', () => {
     const dto = {
       supplierId: 'sup-1',
       purchaseType: 'LOCAL' as const,
-      orderDate: '2026-10-06',
       items: [
         {
           productId: 'prod-1',
@@ -502,6 +575,102 @@ describe('PurchaseOrdersService', () => {
     });
   });
 
+  // El proveedor reprograma una entrega ya confirmada.
+  describe('expected delivery date', () => {
+    const awaiting = (status: string) =>
+      makeOrder({
+        status,
+        orderDate: new Date('2026-10-06T00:00:00.000Z'),
+        expectedDate: new Date('2026-10-10T00:00:00.000Z'),
+      });
+
+    it.each(['PENDING', 'SENT', 'CONFIRMED', 'PARTIALLY_RECEIVED'])(
+      'can be changed while the order is %s',
+      async (status) => {
+        purchaseOrdersRepository.findById.mockResolvedValue(awaiting(status));
+
+        await service.setExpectedDate(
+          'tenant-1',
+          'po-1',
+          '2026-10-15',
+          'user-1',
+        );
+
+        expect(purchaseOrdersRepository.setExpectedDate).toHaveBeenCalledWith(
+          'tenant-1',
+          'po-1',
+          new Date('2026-10-15T00:00:00.000Z'),
+          ['PENDING', 'SENT', 'CONFIRMED', 'PARTIALLY_RECEIVED'],
+        );
+        expect(eventEmitter.emit).toHaveBeenCalledWith(
+          'audit.log',
+          expect.objectContaining({
+            action: 'purchase.order.expected_date.changed',
+            before: { expectedDate: new Date('2026-10-10T00:00:00.000Z') },
+            after: { expectedDate: new Date('2026-10-15T00:00:00.000Z') },
+          }),
+        );
+      },
+    );
+
+    it('can be cleared, leaving the delivery to be agreed', async () => {
+      purchaseOrdersRepository.findById.mockResolvedValue(
+        awaiting('CONFIRMED'),
+      );
+
+      await service.setExpectedDate('tenant-1', 'po-1', null, 'user-1');
+
+      expect(purchaseOrdersRepository.setExpectedDate).toHaveBeenCalledWith(
+        'tenant-1',
+        'po-1',
+        null,
+        expect.anything(),
+      );
+    });
+
+    it.each(['RECEIVED', 'CANCELLED'])(
+      'cannot be changed once the order is %s',
+      async (status) => {
+        purchaseOrdersRepository.findById.mockResolvedValue(awaiting(status));
+
+        await expect(
+          service.setExpectedDate('tenant-1', 'po-1', '2026-10-15', 'user-1'),
+        ).rejects.toBeInstanceOf(UnprocessableEntityException);
+        expect(purchaseOrdersRepository.setExpectedDate).not.toHaveBeenCalled();
+      },
+    );
+
+    it('cannot be before the order date', async () => {
+      purchaseOrdersRepository.findById.mockResolvedValue(
+        awaiting('CONFIRMED'),
+      );
+
+      await expect(
+        service.setExpectedDate('tenant-1', 'po-1', '2026-10-05', 'user-1'),
+      ).rejects.toThrow(/anterior a la fecha de la orden/);
+    });
+
+    it('reports a conflict when the order changed in the meantime', async () => {
+      purchaseOrdersRepository.findById.mockResolvedValue(
+        awaiting('CONFIRMED'),
+      );
+      purchaseOrdersRepository.setExpectedDate.mockResolvedValue({ count: 0 });
+
+      await expect(
+        service.setExpectedDate('tenant-1', 'po-1', '2026-10-15', 'user-1'),
+      ).rejects.toBeInstanceOf(ConflictException);
+    });
+
+    it('does not reveal an order of another tenant', async () => {
+      purchaseOrdersRepository.findById.mockResolvedValue(null);
+
+      await expect(
+        service.setExpectedDate('tenant-2', 'po-1', '2026-10-15', 'user-1'),
+      ).rejects.toBeInstanceOf(NotFoundException);
+      expect(purchaseOrdersRepository.setExpectedDate).not.toHaveBeenCalled();
+    });
+  });
+
   describe('status changes', () => {
     const order = (status: string, items: unknown[] = []) =>
       makeOrder({ status, items });
@@ -510,7 +679,6 @@ describe('PurchaseOrdersService', () => {
       await service.create('tenant-1', 'user-1', {
         supplierId: 'sup-1',
         purchaseType: 'LOCAL' as const,
-        orderDate: '2026-10-06',
         items: [{ productId: 'prod-1', quantity: 1, unitCost: 100 }],
       });
 
@@ -594,6 +762,44 @@ describe('PurchaseOrdersService', () => {
         );
       },
     );
+
+    // La entrega que confirma el proveedor: control interno, no va al PDF.
+    it('records the delivery date the supplier confirms', async () => {
+      purchaseOrdersRepository.findById.mockResolvedValue(
+        makeOrder({
+          status: 'SENT',
+          orderDate: new Date('2026-10-06T00:00:00.000Z'),
+        }),
+      );
+
+      await service.confirm('tenant-1', 'po-1', 'user-1', '2026-10-20');
+
+      expect(purchaseOrdersRepository.transition).toHaveBeenCalledWith(
+        'tenant-1',
+        'po-1',
+        ['PENDING', 'SENT'],
+        'CONFIRMED',
+        expect.anything(),
+        { expectedDate: new Date('2026-10-20T00:00:00.000Z') },
+      );
+    });
+
+    it('accepts a delivery on the day of the order but not before it', async () => {
+      purchaseOrdersRepository.findById.mockResolvedValue(
+        makeOrder({
+          status: 'SENT',
+          orderDate: new Date('2026-10-06T00:00:00.000Z'),
+        }),
+      );
+
+      await service.confirm('tenant-1', 'po-1', 'user-1', '2026-10-06');
+      expect(purchaseOrdersRepository.transition).toHaveBeenCalledTimes(1);
+
+      await expect(
+        service.confirm('tenant-1', 'po-1', 'user-1', '2026-10-05'),
+      ).rejects.toThrow(/anterior a la fecha de la orden/);
+      expect(purchaseOrdersRepository.transition).toHaveBeenCalledTimes(1);
+    });
 
     it('does not confirm an order already confirmed', async () => {
       purchaseOrdersRepository.findById.mockResolvedValue(order('CONFIRMED'));

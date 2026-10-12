@@ -12,6 +12,7 @@ function line(overrides: Partial<QuoteLine> = {}): QuoteLine {
     productId: 'row-1',
     itemId: 'a-1',
     linkedProductId: null,
+    needProductId: null,
     description: 'ABRIDOR DE VINO',
     supplierSku: 'A-1',
     supplierQuantity: 3,
@@ -169,13 +170,12 @@ describe('new product from the comparison', () => {
 describe('orderPayload', () => {
   it('builds the purchase order with each line tied to its catalog item', () => {
     expect(
-      orderPayload('sup-a', '2026-10-06', [
+      orderPayload('sup-a', [
         { itemId: 'a-1', productId: 'prod-1', quantity: 36, unitCost: 10_000 },
       ]),
     ).toEqual({
       supplierId: 'sup-a',
       purchaseType: 'LOCAL',
-      orderDate: '2026-10-06',
       items: [
         {
           productId: 'prod-1',
@@ -188,7 +188,7 @@ describe('orderPayload', () => {
   });
 
   it('joins two lines that ended up on the same product', () => {
-    const payload = orderPayload('sup-a', '2026-10-06', [
+    const payload = orderPayload('sup-a', [
       { itemId: 'a-1', productId: 'prod-1', quantity: 10, unitCost: 10_000 },
       { itemId: 'a-2', productId: 'prod-1', quantity: 5, unitCost: 10_000 },
     ]);
@@ -201,5 +201,37 @@ describe('orderPayload', () => {
         catalogItemId: 'a-1',
       },
     ]);
+  });
+});
+
+// Se comparó un producto interno contra un ítem todavía sin vincular y se
+// decidió comprarle a ese proveedor: el producto ya existe, solo se vincula.
+describe('orderPlan — buying a look-alike of an existing product', () => {
+  it('links the item to the product instead of creating a new one', () => {
+    const chosen = quote('sup-c', [
+      line({ productId: 'prod-1', itemId: 'c-1', needProductId: 'prod-1' }),
+    ]);
+
+    const plan = orderPlan(chosen, [chosen]);
+
+    expect(plan.newProducts).toEqual([]);
+    expect(plan.links).toEqual([{ itemId: 'c-1', productId: 'prod-1' }]);
+    expect(plan.lines[0].productId).toBe('prod-1');
+  });
+});
+
+describe('orderPayload — expected delivery', () => {
+  const lines = [
+    { itemId: 'a-1', productId: 'prod-1', quantity: 1, unitCost: 10_000 },
+  ];
+
+  it('carries the date proposed from the lead time of the supplier', () => {
+    expect(orderPayload('sup-a', lines, '2026-10-14').expectedDate).toBe(
+      '2026-10-14',
+    );
+  });
+
+  it('leaves it out when the supplier gave no lead time', () => {
+    expect(orderPayload('sup-a', lines)).not.toHaveProperty('expectedDate');
   });
 });

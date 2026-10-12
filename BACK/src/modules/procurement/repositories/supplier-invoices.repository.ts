@@ -183,6 +183,10 @@ export class SupplierInvoicesRepository {
         estimatedAmount: true,
         paidAmount: true,
         advanceApplied: true,
+        // El plazo de pago es el de la orden de cada recepción.
+        purchaseReceipt: {
+          select: { purchaseOrder: { select: { paymentTermDays: true } } },
+        },
       },
     });
   }
