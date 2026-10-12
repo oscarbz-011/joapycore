@@ -31,8 +31,11 @@ export const WS_EVENT_MAP: Record<string, string[][]> = {
   // Nota de entrega nueva en PENDING — mueve el badge "Entregas" de Logística.
   'delivery.note.created':    [['logistics-deliveries']],
   'delivery.dispatched':      [['logistics-deliveries']],
-  'delivery.note.delivered':  [['logistics-deliveries']],
-  'delivery.assigned':        [['logistics-deliveries']],
+  'delivery.note.delivered':  [['logistics-deliveries'], ['order-delivery']],
+  // 'order-delivery': la entrega vista desde la venta (el vendedor ve la
+  // autorización del supervisor sin recargar).
+  'delivery.assigned':        [['logistics-deliveries'], ['order-delivery']],
+  'delivery.seller.requested': [['logistics-deliveries'], ['order-delivery']],
   'delivery.tracking.recorded': [['logistics-deliveries'], ['logistics-mine']],
   // Clientes se lee bajo dos keys distintas hoy (sales/page.tsx y
   // customers/page.tsx usan 'sale-customers'; pos/page.tsx usa 'customers')

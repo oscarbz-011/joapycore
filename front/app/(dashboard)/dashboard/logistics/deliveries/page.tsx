@@ -21,6 +21,11 @@ import type { Customer as DeliveryCustomer } from '../../../../../lib/api/sales'
 import { formatDatePY } from '../../../../../lib/date';
 import { DeliveryMap } from '../../../../../components/logistics/delivery-map';
 import { CheckpointTimeline } from '../../../../../components/logistics/checkpoint-timeline';
+import {
+  DeliveryMethodBadge,
+  DeliveryMethodPanel,
+} from '@/components/logistics/delivery-method-panel';
+import { usesCourier } from '@/lib/delivery-method';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -314,6 +319,8 @@ function DeliveryCard({ note }: { note: DeliveryNote }) {
   const fullName = `${customer.firstName} ${customer.lastName}`;
   const address = formatDeliveryAddress(customer);
   const hasCoords = customer.latitude != null && customer.longitude != null;
+  // Solo un envío a domicilio se asigna a un repartidor y se despacha.
+  const courier = usesCourier(note);
 
   return (
     <>
@@ -335,13 +342,19 @@ function DeliveryCard({ note }: { note: DeliveryNote }) {
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
-            {canAssign && note.status === 'PENDING' && !note.assignmentMode && (
+            <DeliveryMethodBadge method={note.method} />
+            {note.sellerRequestStatus === 'PENDING' && (
+              <span className="rounded-full bg-warn-subtle px-2.5 py-1 text-xs font-semibold text-warn">
+                Espera autorización
+              </span>
+            )}
+            {courier && canAssign && note.status === 'PENDING' && !note.assignmentMode && (
               <Button size="sm" variant="outline" onClick={() => setAssigning(true)}>
                 <UserCog size={13} />
                 Asignar
               </Button>
             )}
-            {note.status === 'PENDING' && note.assignmentMode && (
+            {courier && note.status === 'PENDING' && note.assignmentMode && (
               <>
                 {canAssign && (
                   <Button size="sm" variant="ghost" onClick={() => setAssigning(true)}>
@@ -376,6 +389,8 @@ function DeliveryCard({ note }: { note: DeliveryNote }) {
 
         {expanded && (
           <div className="border-t border-border px-4 py-3 space-y-3">
+            <DeliveryMethodPanel note={note} className="border-b border-border pb-3" />
+
             {(address || customer.phone) && (
               <div className="flex flex-wrap gap-4 text-xs text-muted-foreground">
                 {address && (

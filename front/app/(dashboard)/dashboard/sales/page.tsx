@@ -1,6 +1,7 @@
 "use client";
 
 import { apiErrorMessage } from "@/lib/api/api-error";
+import { OrderDelivery } from "@/components/logistics/order-delivery";
 import { orderPartyName } from "@/lib/quote-party";
 import { findStockIssues } from "@/lib/sales-stock";
 import { salesChannelProductFilters } from "@/lib/product-catalog";
@@ -1339,6 +1340,8 @@ function OrderDetailPanel({
             <ContractCard entityType="sale_order" entityId={order.id} />
           </div>
         )}
+
+        <OrderDelivery saleOrderId={order.id} />
 
         {/* Actions */}
         {(canConfirm || canConvert || canCancel) && (

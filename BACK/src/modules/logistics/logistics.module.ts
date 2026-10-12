@@ -6,6 +6,8 @@ import { DeliveryNotesService } from './services/delivery-notes.service';
 import { DeliveryTrackingService } from './services/delivery-tracking.service';
 import { DeliveryNotesController } from './controllers/delivery-notes.controller';
 import { DeliveryTrackingController } from './controllers/delivery-tracking.controller';
+import { DeliveryMethodsController } from './controllers/delivery-methods.controller';
+import { DeliveryMethodsService } from './services/delivery-methods.service';
 import { LogisticsOnSaleCompletedListener } from './events/logistics-on-sale-completed.listener';
 
 // Orden de controllers importa: DeliveryTrackingController declara rutas
@@ -16,10 +18,16 @@ import { LogisticsOnSaleCompletedListener } from './events/logistics-on-sale-com
 // vivo: GET /logistics/deliveries/mine devolvía 404 "Nota de entrega no
 // encontrada" en vez de la lista del repartidor).
 @Module({
-  controllers: [DeliveryTrackingController, DeliveryNotesController],
+  // DeliveryMethodsController también va antes: declara by-order/:saleOrderId.
+  controllers: [
+    DeliveryTrackingController,
+    DeliveryMethodsController,
+    DeliveryNotesController,
+  ],
   providers: [
     DeliveryNotesService,
     DeliveryTrackingService,
+    DeliveryMethodsService,
     DeliveryNotesRepository,
     DeliveryTrackingEventsRepository,
     LogisticsSourcesRepository,

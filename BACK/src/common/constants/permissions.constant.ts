@@ -123,6 +123,7 @@ export const PERMISSIONS = [
   'logistics:read',
   'logistics:manage',
   'logistics:assign',
+  'logistics:authorize',
   'logistics:track',
   // Collections
   'collections:read',
