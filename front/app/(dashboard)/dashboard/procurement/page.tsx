@@ -3,6 +3,7 @@
 import { RequirePermission } from '@/components/require-permission';
 
 import { apiErrorMessage } from '@/lib/api/api-error';
+import { leadTimeLabel, paymentConditionLabel } from '@/lib/suppliers';
 import {
   advanceDraftError,
   resolveAdvanceDraft,
@@ -32,6 +33,7 @@ import { useTableSort } from '@/lib/use-table-sort';
 import {
   PURCHASE_ORDER_STATUSES,
   PURCHASE_ORDER_STATUS_LABEL,
+  expectedDeliveryDay,
 } from '@/lib/purchase-order-status';
 import { localISODate } from '@/lib/date';
 import {
@@ -63,13 +65,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/u
 
 // Una columna por dato; fuera del componente para no reordenar en cada render.
 type OrderSortKey =
-  | 'number' | 'supplier' | 'email' | 'type' | 'date' | 'expected' | 'status' | 'items' | 'total';
+  | 'number' | 'supplier' | 'email' | 'type' | 'payment' | 'date' | 'expected' | 'status' | 'items' | 'total';
 
 const ORDER_SORT: Record<OrderSortKey, (order: PurchaseOrder) => SortValue> = {
   number: (order) => order.orderNumber,
   supplier: (order) => order.supplier.name,
   email: (order) => order.supplier.email,
   type: (order) => order.purchaseType,
+  payment: (order) => order.paymentTermDays ?? 0,
   date: (order) => new Date(order.orderDate),
   expected: (order) => (order.expectedDate ? new Date(order.expectedDate) : null),
   status: (order) => PURCHASE_ORDER_STATUS_LABEL[order.status],
@@ -95,8 +98,8 @@ function CreateOrderModal({
   const queryClient = useQueryClient();
   const [supplierId, setSupplierId] = useState('');
   const [purchaseType, setPurchaseType] = useState<PurchaseType>('LOCAL');
-  const [orderDate, setOrderDate] = useState(todayISODate());
   const [expectedDate, setExpectedDate] = useState('');
+  const [expectedByHand, setExpectedByHand] = useState(false);
   const [exchangeRate, setExchangeRate] = useState('');
   const [customsDuty, setCustomsDuty] = useState('');
   const [customsRef, setCustomsRef] = useState('');
@@ -115,6 +118,16 @@ function CreateOrderModal({
       supplierAdvanceDraft(suppliers.find((s) => s.id === id)?.advancePercent ?? null),
     );
     setItems((prev) => withoutCatalogLines(prev));
+    // La entrega esperada se propone con el plazo del proveedor, salvo que
+    // ya se haya elegido una fecha a mano.
+    if (!expectedByHand) {
+      setExpectedDate(
+        expectedDeliveryDay(
+          todayISODate(),
+          suppliers.find((s) => s.id === id)?.leadTimeDays,
+        ),
+      );
+    }
   }
 
   function patchLine(key: string, patch: Partial<OrderLine>) {
@@ -140,7 +153,6 @@ function CreateOrderModal({
       procurementApi.createOrder({
         supplierId,
         purchaseType,
-        orderDate,
         expectedDate: expectedDate || undefined,
         exchangeRate: exchangeRate ? Number(exchangeRate) : undefined,
         customsDuty: customsDuty ? Number(customsDuty) : undefined,
@@ -207,15 +219,42 @@ function CreateOrderModal({
             </div>
           </div>
 
+          {supplier && (
+            <p className="rounded-xl bg-muted/20 px-3 py-2 text-sm text-foreground">
+              <span className="text-muted-foreground">Condición de pago: </span>
+              <span className="font-medium">{paymentConditionLabel(supplier.paymentTermDays)}</span>
+              <span className="text-muted-foreground">
+                {supplier.paymentTermDays
+                  ? ' — la cuenta por pagar vence esa cantidad de días después de recibir la mercadería.'
+                  : ' — la cuenta por pagar vence el día de la recepción.'}
+              </span>
+            </p>
+          )}
+
           {/* Fechas */}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1">
-              <Label>Fecha de orden *</Label>
-              <DatePicker value={orderDate} onChange={setOrderDate} />
+              <Label>Fecha de orden</Label>
+              {/* La pone el sistema: el día en que se crea la orden. */}
+              <p className="flex h-9 items-center rounded-3xl bg-muted/30 px-3 text-sm text-muted-foreground">
+                {formatDatePY(todayISODate(), 'utc')} · hoy
+              </p>
             </div>
             <div className="space-y-1">
               <Label>Fecha esperada de entrega</Label>
-              <DatePicker value={expectedDate} onChange={setExpectedDate} />
+              <DatePicker
+                value={expectedDate}
+                onChange={(value) => {
+                  setExpectedDate(value);
+                  setExpectedByHand(true);
+                }}
+              />
+              <p className="text-xs text-muted-foreground">
+                {!expectedByHand && expectedDate && supplier?.leadTimeDays != null
+                  ? `Calculada con el plazo de entrega de ${supplier.name} (${leadTimeLabel(supplier.leadTimeDays)}). Podés cambiarla. `
+                  : ''}
+                Para el seguimiento interno: no figura en el PDF de la orden.
+              </p>
             </div>
           </div>
 
@@ -533,6 +572,7 @@ export default function ProcurementPage() {
                   <SortableHeader label="Proveedor" sortKey="supplier" sort={sort} onSort={toggle} />
                   <SortableHeader label="Email" sortKey="email" sort={sort} onSort={toggle} />
                   <SortableHeader label="Tipo" sortKey="type" sort={sort} onSort={toggle} />
+                  <SortableHeader label="Pago" sortKey="payment" sort={sort} onSort={toggle} />
                   <SortableHeader label="Fecha" sortKey="date" sort={sort} onSort={toggle} />
                   <SortableHeader label="Entrega est." sortKey="expected" sort={sort} onSort={toggle} className="whitespace-nowrap" />
                   <SortableHeader label="Estado" sortKey="status" sort={sort} onSort={toggle} />
@@ -562,6 +602,9 @@ export default function ProcurementPage() {
                       <td className="px-4 py-3 font-medium text-foreground">{order.supplier.name}</td>
                       <td className="px-4 py-3 text-muted-foreground">{order.supplier.email ?? '—'}</td>
                       <td className="px-4 py-3"><TypeBadge type={order.purchaseType} /></td>
+                      <td className="px-4 py-3 whitespace-nowrap text-muted-foreground">
+                        {paymentConditionLabel(order.paymentTermDays)}
+                      </td>
                       <td className="px-4 py-3 text-muted-foreground">{formatDatePY(order.orderDate, 'utc')}</td>
                       <td
                         className={cn(

@@ -217,6 +217,8 @@ export interface PurchaseOrder {
   items: PurchaseOrderItem[];
   /** Solo viene al pedir una orden puntual, no en el listado. */
   statusChanges?: PurchaseOrderStatusChange[];
+  /** Condición de pago pactada en la orden, en días (0 = contado). */
+  paymentTermDays: number;
   /** Anticipo que pide la orden antes de despachar (0 = ninguno). */
   advanceAmount: number;
   /** Saldo del anticipo y sus movimientos; solo en la orden puntual. */
@@ -235,7 +237,7 @@ export interface CreatePurchaseOrderItem {
 export interface CreatePurchaseOrderPayload {
   supplierId: string;
   purchaseType: PurchaseType;
-  orderDate: string;
+  // La fecha de la orden la pone el servidor: el día en que se crea.
   expectedDate?: string;
   exchangeRate?: number;
   customsDuty?: number;
@@ -314,8 +316,20 @@ export const procurementApi = {
   createOrder: (dto: CreatePurchaseOrderPayload): Promise<PurchaseOrder> =>
     apiClient.post('/procurement/purchase-orders', dto).then((r) => r.data),
 
-  confirmOrder: (id: string): Promise<PurchaseOrder> =>
-    apiClient.post(`/procurement/purchase-orders/${id}/confirm`).then((r) => r.data),
+  /** Cambia la entrega estimada (control interno); null = a convenir. */
+  setExpectedDate: (id: string, expectedDate: string | null): Promise<PurchaseOrder> =>
+    apiClient
+      .post(`/procurement/purchase-orders/${id}/expected-date`, { expectedDate })
+      .then((r) => r.data),
+
+  /** `expectedDate` (AAAA-MM-DD): la entrega que confirma el proveedor; opcional. */
+  confirmOrder: (id: string, expectedDate?: string): Promise<PurchaseOrder> =>
+    apiClient
+      .post(
+        `/procurement/purchase-orders/${id}/confirm`,
+        expectedDate ? { expectedDate } : {},
+      )
+      .then((r) => r.data),
 
   /** Devuelve la orden con su PDF, generándolo si todavía no existe. */
   orderPdf: (id: string): Promise<PurchaseOrder> =>

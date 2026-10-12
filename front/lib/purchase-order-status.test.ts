@@ -4,6 +4,11 @@ import {
   historyEntryLabel,
   orderActions,
   orderEmailError,
+  changedDeliveryError,
+  confirmDeliveryError,
+  expectedDeliveryDay,
+  deliveryPrompt,
+  orderCalendarDay,
 } from './purchase-order-status';
 
 describe('orderActions', () => {
@@ -13,6 +18,7 @@ describe('orderActions', () => {
       confirm: true,
       cancel: true,
       receive: false,
+      delivery: true,
     });
   });
 
@@ -22,6 +28,7 @@ describe('orderActions', () => {
       confirm: true,
       cancel: true,
       receive: false,
+      delivery: true,
     });
   });
 
@@ -31,6 +38,7 @@ describe('orderActions', () => {
       confirm: false,
       cancel: true,
       receive: true,
+      delivery: true,
     });
   });
 
@@ -41,11 +49,13 @@ describe('orderActions', () => {
       confirm: false,
       cancel: false,
       receive: true,
+      delivery: true,
     });
   });
 
   it.each(['RECEIVED', 'CANCELLED'] as const)('offers nothing on %s', (status) => {
     expect(Object.values(orderActions(status))).toEqual([
+      false,
       false,
       false,
       false,
@@ -90,5 +100,85 @@ describe('orderEmailError', () => {
 
   it('accepts an address, ignoring the spaces around it', () => {
     expect(orderEmailError(' roman@mail.com ')).toBeNull();
+  });
+});
+
+// La entrega que confirma el proveedor: control interno, no va al PDF.
+describe('delivery date on confirmation', () => {
+  const ORDER_DATE = '2026-10-06T00:00:00.000Z';
+
+  it('reads the calendar day the order keeps in UTC', () => {
+    expect(orderCalendarDay(ORDER_DATE)).toBe('2026-10-06');
+    expect(orderCalendarDay(null)).toBe('');
+  });
+
+  it('is optional: the order can be confirmed without touching the date', () => {
+    expect(confirmDeliveryError('', ORDER_DATE)).toBeNull();
+  });
+
+  it('accepts the day of the order and later, not before', () => {
+    expect(confirmDeliveryError('2026-10-06', ORDER_DATE)).toBeNull();
+    expect(confirmDeliveryError('2026-10-20', ORDER_DATE)).toBeNull();
+    expect(confirmDeliveryError('2026-10-05', ORDER_DATE)).toMatch(
+      /anterior a la fecha de la orden/,
+    );
+  });
+});
+
+// El proveedor puede reprogramar una entrega ya confirmada.
+describe('changing the expected delivery', () => {
+  it('is offered while the order still waits for goods', () => {
+    for (const status of ['PENDING', 'SENT', 'CONFIRMED', 'PARTIALLY_RECEIVED'] as const) {
+      expect(orderActions(status).delivery).toBe(true);
+    }
+  });
+
+  it('is not offered once received or cancelled', () => {
+    expect(orderActions('RECEIVED').delivery).toBe(false);
+    expect(orderActions('CANCELLED').delivery).toBe(false);
+  });
+});
+
+// Al confirmar la orden la fecha no se actualiza sola: se le pregunta a la
+// persona si es correcta.
+describe('asking about the delivery date when confirming', () => {
+  it('asks whether the date the order has is right', () => {
+    expect(deliveryPrompt('2026-10-10')).toEqual({
+      question: 'La entrega estimada es el 10/10/2026. ¿La fecha es correcta?',
+      keep: 'Sí, es correcta',
+      change: 'No, cambiar la fecha',
+    });
+  });
+
+  it('asks for one when the order has none', () => {
+    const prompt = deliveryPrompt('');
+    expect(prompt.question).toMatch(/no tiene fecha de entrega/);
+    expect(prompt.keep).toBe('No, confirmar sin fecha');
+    expect(prompt.change).toBe('Sí, cargar la fecha');
+  });
+
+  it('needs a date once the person chose to change it', () => {
+    const ORDER_DATE = '2026-10-06T00:00:00.000Z';
+    expect(changedDeliveryError('', ORDER_DATE)).toBe('Elegí la fecha de entrega');
+    expect(changedDeliveryError('2026-10-05', ORDER_DATE)).toMatch(/anterior/);
+    expect(changedDeliveryError('2026-10-12', ORDER_DATE)).toBeNull();
+  });
+});
+
+// La fecha esperada de entrega se propone con el plazo del proveedor.
+describe('expectedDeliveryDay', () => {
+  it('adds the lead time of the supplier to the day of the order', () => {
+    expect(expectedDeliveryDay('2026-10-07', 7)).toBe('2026-10-14');
+    expect(expectedDeliveryDay('2026-10-07', 0)).toBe('2026-10-07');
+  });
+
+  it('rolls over months and years', () => {
+    expect(expectedDeliveryDay('2026-10-28', 7)).toBe('2026-11-04');
+    expect(expectedDeliveryDay('2026-12-28', 7)).toBe('2027-01-04');
+  });
+
+  it('proposes nothing when the supplier gave no lead time', () => {
+    expect(expectedDeliveryDay('2026-10-07', null)).toBe('');
+    expect(expectedDeliveryDay('2026-10-07', undefined)).toBe('');
   });
 });

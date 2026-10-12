@@ -109,6 +109,7 @@ describe('SupplierInvoicesService', () => {
           estimatedAmount: null,
           paidAmount: 0,
           advanceApplied: 0,
+          purchaseReceipt: { purchaseOrder: { paymentTermDays: 30 } },
         },
       ]),
       updatePayable: jest.fn(),
@@ -378,6 +379,7 @@ describe('SupplierInvoicesService', () => {
           estimatedAmount: null,
           paidAmount: 1_000_000,
           advanceApplied: 1_000_000,
+          purchaseReceipt: { purchaseOrder: { paymentTermDays: 30 } },
         },
       ]);
 
@@ -407,6 +409,7 @@ describe('SupplierInvoicesService', () => {
           estimatedAmount: null,
           paidAmount: 1_000_000,
           advanceApplied: 0,
+          purchaseReceipt: { purchaseOrder: { paymentTermDays: 30 } },
         },
       ]);
 

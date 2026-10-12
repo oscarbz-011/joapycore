@@ -34,6 +34,7 @@ import { usePermission } from '@/lib/permissions';
 import {
   bestQuoteId,
   compareSuppliers,
+  pickCandidate,
   priceGapLabel,
   priceGaps,
   type Need,
@@ -142,8 +143,82 @@ function QuotedLine({ line, gap }: { line: QuoteLine; gap?: PriceGap | null }) {
 }
 
 /**
+ * El proveedor todavía no tiene el producto vinculado, pero en su catálogo hay
+ * un ítem que se le parece: se compara igual. Vincularlo es opcional y se
+ * puede hacer después de decidir a quién comprarle.
+ */
+function UnlinkedLine({
+  line,
+  gap,
+  productName,
+  suggestions,
+  canLink,
+  linkingId,
+  onLink,
+  onPick,
+}: {
+  line: QuoteLine;
+  gap?: PriceGap | null;
+  productName: string;
+  suggestions: LinkSuggestion[];
+  canLink: boolean;
+  linkingId: string | null;
+  onLink: (suggestion: LinkSuggestion) => void;
+  onPick: (itemId: string) => void;
+}) {
+  const current = suggestions.find((s) => s.item.id === line.itemId);
+  const others = suggestions.filter((s) => s.item.id !== line.itemId);
+  return (
+    <div className="space-y-2">
+      <QuotedLine line={line} gap={gap} />
+      <div className="space-y-1.5 rounded-xl border border-warn/30 bg-warn-subtle/40 p-2">
+        <p className="text-xs text-warn">
+          Ítem parecido, todavía sin vincular a {productName}:
+        </p>
+        <p className="text-xs font-medium text-foreground">{line.description}</p>
+        <p className="font-mono text-xs text-muted-foreground">{line.supplierSku}</p>
+        <div className="flex flex-wrap gap-1.5">
+          {canLink && current && (
+            <Button
+              size="xs"
+              variant="outline"
+              disabled={linkingId !== null}
+              onClick={() => onLink(current)}
+            >
+              <Link2 size={12} />
+              {linkingId === current.item.id ? 'Vinculando...' : 'Es el mismo: vincular'}
+            </Button>
+          )}
+          <Button size="xs" variant="ghost" onClick={() => onPick(NONE)}>
+            No es este producto
+          </Button>
+        </div>
+        {others.length > 0 && (
+          <div className="space-y-1 border-t border-warn/20 pt-1.5">
+            <p className="text-xs text-muted-foreground">Otros parecidos de su catálogo:</p>
+            {others.map((other) => (
+              <button
+                key={other.item.id}
+                type="button"
+                onClick={() => onPick(other.item.id)}
+                className="block w-full rounded-lg px-1.5 py-1 text-left text-xs text-foreground hover:bg-muted/30"
+              >
+                {other.item.description}
+                {other.item.price !== null && (
+                  <span className="text-muted-foreground"> · {gs(catalogUnitCost(other.item))}</span>
+                )}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/**
  * El proveedor no cotiza el producto. Si en su catálogo hay ítems sin vincular
- * que se le parecen, se ofrecen para vincular ahí mismo.
+ * que se le parecen, se ofrecen para comparar o vincular ahí mismo.
  */
 function MissingLine({
   supplierId,
@@ -152,6 +227,7 @@ function MissingLine({
   canLink,
   linkingId,
   onLink,
+  onCompare,
 }: {
   supplierId: string;
   productName: string;
@@ -159,6 +235,7 @@ function MissingLine({
   canLink: boolean;
   linkingId: string | null;
   onLink: (suggestion: LinkSuggestion) => void;
+  onCompare: (itemId: string) => void;
 }) {
   if (suggestions.length === 0) {
     return (
@@ -176,7 +253,7 @@ function MissingLine({
   return (
     <div className="space-y-2">
       <p className="text-xs text-warn">
-        Sin vincular. ¿Alguno de estos ítems de su catálogo es {productName}?
+        No se está comparando. ¿Alguno de estos ítems de su catálogo es {productName}?
       </p>
       <ul className="space-y-2">
         {suggestions.map((suggestion) => (
@@ -186,18 +263,22 @@ function MissingLine({
               <span className="font-mono">{suggestion.item.supplierSku}</span>
               {suggestion.item.price !== null && <> · {gs(catalogUnitCost(suggestion.item))}</>}
             </p>
-            {canLink && (
-              <Button
-                size="xs"
-                variant="outline"
-                className="mt-1.5"
-                disabled={linkingId !== null}
-                onClick={() => onLink(suggestion)}
-              >
-                <Link2 size={12} />
-                {linkingId === suggestion.item.id ? 'Vinculando...' : 'Es este: vincular'}
+            <div className="mt-1.5 flex flex-wrap gap-1.5">
+              <Button size="xs" variant="outline" onClick={() => onCompare(suggestion.item.id)}>
+                Comparar este
               </Button>
-            )}
+              {canLink && (
+                <Button
+                  size="xs"
+                  variant="ghost"
+                  disabled={linkingId !== null}
+                  onClick={() => onLink(suggestion)}
+                >
+                  <Link2 size={12} />
+                  {linkingId === suggestion.item.id ? 'Vinculando...' : 'Vincular'}
+                </Button>
+              )}
+            </div>
           </li>
         ))}
       </ul>
@@ -424,11 +505,31 @@ export default function CompareSuppliersPage() {
     }),
   );
 
-  const needs: Need[] = rows.flatMap((row) => {
+  // ── Filas por producto: ítems parecidos todavía sin vincular ──
+  // Se comparan igual, para decidir a quién comprarle antes de vincular. Por
+  // proveedor entra el más parecido, salvo que se elija otro o ninguno.
+  const suggestionsFor = (supplierId: string, productId: string) =>
+    suggestions.filter((s) => s.item.supplier.id === supplierId && s.productId === productId);
+  const candidateFor = (row: NeedRow, supplierId: string) =>
+    row.mode === 'product' && row.productId
+      ? pickCandidate(suggestionsFor(supplierId, row.productId), row.picks[supplierId], NONE)
+      : null;
+  const candidateOffers: CatalogOffer[] = rows.flatMap((row) =>
+    suppliers.flatMap((supplier) => {
+      const candidate = candidateFor(row, supplier.id);
+      return candidate ? [{ ...candidate.item, supplier }] : [];
+    }),
+  );
+
+  const needs: Need[] = rows.flatMap((row): Need[] => {
     const quantity = Number(row.quantity);
     if (!(quantity > 0)) return [];
     if (row.mode === 'product') {
-      return row.productId ? [{ productId: row.productId, quantity }] : [];
+      if (!row.productId) return [];
+      const candidateItemIds = suppliers.flatMap(
+        (supplier) => candidateFor(row, supplier.id)?.item.id ?? [],
+      );
+      return [{ productId: row.productId, quantity, candidateItemIds }];
     }
     const itemIds = suppliers.flatMap((supplier) => pickedItem(row, supplier.id)?.id ?? []);
     return [{ productId: rowId(row), quantity, itemIds }];
@@ -445,6 +546,7 @@ export default function CompareSuppliersPage() {
   ]);
   const quoting = new Set<string>([
     ...productOffers.map((offer) => offer.supplier.id),
+    ...candidateOffers.map((offer) => offer.supplier.id),
     ...searchOffers.map((offer) => offer.supplier.id),
   ]);
   const isShown = (id: string) => shownByHand[id] ?? related.has(id);
@@ -452,7 +554,7 @@ export default function CompareSuppliersPage() {
 
   const quotes = compareSuppliers(
     needs,
-    [...productOffers, ...searchOffers],
+    [...productOffers, ...candidateOffers, ...searchOffers],
     localISODate(new Date()),
     shownSuppliers,
   ).filter((quote) => isShown(quote.supplier.id));
@@ -479,8 +581,6 @@ export default function CompareSuppliersPage() {
 
   const productName = (id: string) => products.find((p) => p.id === id)?.name ?? 'Producto';
   const chosen = new Set(rows.map((row) => row.productId).filter(Boolean));
-  const suggestionsFor = (supplierId: string, productId: string) =>
-    suggestions.filter((s) => s.item.supplier.id === supplierId && s.productId === productId);
   const patch = (key: number, change: Partial<NeedRow>) =>
     setRows((prev) => prev.map((row) => (row.key === key ? { ...row, ...change } : row)));
 
@@ -764,8 +864,23 @@ export default function CompareSuppliersPage() {
                                     patch(row.key, { picks: { ...row.picks, [supplierId]: itemId } })
                                   }
                                 />
-                              ) : line ? (
+                              ) : line && line.linkedProductId ? (
                                 <QuotedLine line={line} gap={gap} />
+                              ) : line ? (
+                                <UnlinkedLine
+                                  line={line}
+                                  gap={gap}
+                                  productName={productName(row.productId)}
+                                  suggestions={suggestionsFor(supplierId, row.productId)}
+                                  canLink={canLink}
+                                  linkingId={
+                                    linkMutation.isPending ? linkMutation.variables.item.id : null
+                                  }
+                                  onLink={(suggestion) => linkMutation.mutate(suggestion)}
+                                  onPick={(itemId) =>
+                                    patch(row.key, { picks: { ...row.picks, [supplierId]: itemId } })
+                                  }
+                                />
                               ) : (
                                 <MissingLine
                                   supplierId={supplierId}
@@ -776,6 +891,9 @@ export default function CompareSuppliersPage() {
                                     linkMutation.isPending ? linkMutation.variables.item.id : null
                                   }
                                   onLink={(suggestion) => linkMutation.mutate(suggestion)}
+                                  onCompare={(itemId) =>
+                                    patch(row.key, { picks: { ...row.picks, [supplierId]: itemId } })
+                                  }
                                 />
                               )}
                             </td>

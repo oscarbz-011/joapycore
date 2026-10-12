@@ -47,10 +47,6 @@ export class CreatePurchaseOrderDto {
   @IsEnum(PurchaseType)
   purchaseType: PurchaseType;
 
-  @ApiProperty()
-  @IsDateString()
-  orderDate: string;
-
   @ApiPropertyOptional()
   @IsOptional()
   @IsDateString()

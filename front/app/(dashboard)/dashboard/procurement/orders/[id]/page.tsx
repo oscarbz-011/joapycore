@@ -4,7 +4,7 @@ import { useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, FileText, Mail, PackageCheck } from 'lucide-react';
+import { ArrowLeft, CalendarClock, FileText, Mail, PackageCheck } from 'lucide-react';
 import { OrderAdvanceCard } from '@/components/procurement/order-advance-card';
 import {
   ReceiveModal,
@@ -19,6 +19,7 @@ import {
 import { RequirePermission } from '@/components/require-permission';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { DatePicker } from '@/components/ui/date-picker';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { cancelAdvanceBlock } from '@/lib/advance';
@@ -28,13 +29,19 @@ import { formatDatePY } from '@/lib/date';
 import { openPdf } from '@/lib/open-pdf';
 import {
   cancelReasonError,
+  changedDeliveryError,
+  confirmDeliveryError,
+  deliveryPrompt,
   historyEntryLabel,
+  orderCalendarDay,
   orderActions,
   orderEmailError,
 } from '@/lib/purchase-order-status';
+import { paymentConditionLabel } from '@/lib/suppliers';
 import { cn } from '@/lib/utils';
 
-type StatusAction = 'send' | 'confirm' | 'cancel';
+// 'delivery' no cambia el estado: solo la entrega estimada.
+type StatusAction = 'send' | 'confirm' | 'cancel' | 'delivery';
 
 const ACTION_COPY: Record<StatusAction, { question: string; yes: string; busy: string }> = {
   send: {
@@ -46,6 +53,11 @@ const ACTION_COPY: Record<StatusAction, { question: string; yes: string; busy: s
     question: '¿El proveedor confirmó esta orden?',
     yes: 'Sí, confirmada',
     busy: 'Confirmando...',
+  },
+  delivery: {
+    question: 'Entrega estimada de esta orden.',
+    yes: 'Guardar fecha',
+    busy: 'Guardando...',
   },
   cancel: {
     question: 'Cancelar la orden. El motivo queda en el historial.',
@@ -103,6 +115,10 @@ export default function PurchaseOrderDetailPage() {
   const [showReceive, setShowReceive] = useState(false);
   const [pendingAction, setPendingAction] = useState<StatusAction | null>(null);
   const [cancelReason, setCancelReason] = useState('');
+  // Entrega que confirma el proveedor al confirmar la orden (control interno).
+  const [confirmDate, setConfirmDate] = useState('');
+  // Al confirmar, la fecha solo cambia si la persona dice que no es correcta.
+  const [changingDate, setChangingDate] = useState(false);
   const [actionError, setActionError] = useState('');
   const [emailing, setEmailing] = useState(false);
   const [emailTo, setEmailTo] = useState('');
@@ -134,6 +150,7 @@ export default function PurchaseOrderDetailPage() {
     setPendingAction(null);
     setCancelReason('');
     setActionError('');
+    setChangingDate(false);
   }
 
   const statusMutation = useMutation({
@@ -141,8 +158,10 @@ export default function PurchaseOrderDetailPage() {
       action === 'send'
         ? procurementApi.sendOrder(id)
         : action === 'confirm'
-          ? procurementApi.confirmOrder(id)
-          : procurementApi.cancelOrder(id, cancelReason.trim()),
+          ? procurementApi.confirmOrder(id, changingDate ? confirmDate : undefined)
+          : action === 'delivery'
+            ? procurementApi.setExpectedDate(id, confirmDate || null)
+            : procurementApi.cancelOrder(id, cancelReason.trim()),
     onSuccess: (updated) => {
       queryClient.setQueryData(['purchase-order', id], updated);
       void queryClient.invalidateQueries({ queryKey: ['purchase-orders'] });
@@ -180,7 +199,16 @@ export default function PurchaseOrderDetailPage() {
 
   function runAction() {
     if (!pendingAction) return;
-    const problem = pendingAction === 'cancel' ? cancelReasonError(cancelReason) : null;
+    const problem =
+      pendingAction === 'cancel'
+        ? cancelReasonError(cancelReason)
+        : pendingAction === 'confirm' && order
+          ? changingDate
+            ? changedDeliveryError(confirmDate, order.orderDate)
+            : null
+          : pendingAction === 'delivery' && order
+            ? confirmDeliveryError(confirmDate, order.orderDate)
+            : null;
     setActionError(problem ?? '');
     if (!problem) statusMutation.mutate(pendingAction);
   }
@@ -239,6 +267,7 @@ export default function PurchaseOrderDetailPage() {
   const tracksReceipt = order.status !== 'PENDING' && order.status !== 'SENT';
   const history = order.statusChanges ?? [];
   const cancelBlock = cancelAdvanceBlock(order.advance);
+  const prompt = deliveryPrompt(orderCalendarDay(order.expectedDate));
   const hasImportData =
     order.purchaseType === 'IMPORT' &&
     (order.exchangeRate || order.customsDuty || order.customsRef);
@@ -276,7 +305,7 @@ export default function PurchaseOrderDetailPage() {
         <div className="min-w-0 space-y-6">
           <Card className="gap-4 p-5">
             <SectionTitle>Datos de la orden</SectionTitle>
-            <dl className="grid gap-x-6 gap-y-4 sm:grid-cols-2 xl:grid-cols-4">
+            <dl className="grid gap-x-6 gap-y-4 sm:grid-cols-2 xl:grid-cols-5">
               <Fact label="Proveedor">
                 <Link
                   href={`/dashboard/procurement/suppliers/${order.supplier.id}`}
@@ -291,8 +320,11 @@ export default function PurchaseOrderDetailPage() {
                 )}
               </Fact>
               <Fact label="Fecha de la orden">{formatDatePY(order.orderDate, 'utc')}</Fact>
+              <Fact label="Condición de pago">
+                {paymentConditionLabel(order.paymentTermDays)}
+              </Fact>
               <Fact
-                label="Entrega estimada"
+                label="Entrega estimada (interno)"
                 className={cn(
                   accent === 'destructive' && 'text-destructive',
                   accent === 'warn' && 'text-warn',
@@ -496,9 +528,25 @@ export default function PurchaseOrderDetailPage() {
                     <Button
                       className="w-full"
                       variant={actions.send ? 'outline' : 'default'}
-                      onClick={() => setPendingAction('confirm')}
+                      onClick={() => {
+                        setConfirmDate(orderCalendarDay(order.expectedDate));
+                        setPendingAction('confirm');
+                      }}
                     >
                       Confirmada por el proveedor
+                    </Button>
+                  )}
+                  {actions.delivery && (
+                    <Button
+                      className="w-full"
+                      variant="outline"
+                      onClick={() => {
+                        setConfirmDate(orderCalendarDay(order.expectedDate));
+                        setPendingAction('delivery');
+                      }}
+                    >
+                      <CalendarClock size={15} />
+                      {order.expectedDate ? 'Cambiar entrega estimada' : 'Cargar entrega estimada'}
                     </Button>
                   )}
                 </>
@@ -507,6 +555,25 @@ export default function PurchaseOrderDetailPage() {
                   <p className="mb-2 text-xs text-muted-foreground">
                     {ACTION_COPY[pendingAction].question}
                   </p>
+                  {pendingAction === 'confirm' && !changingDate && (
+                    <p className="mb-2 text-sm font-medium text-foreground">
+                      {prompt.question}
+                    </p>
+                  )}
+                  {((pendingAction === 'confirm' && changingDate) ||
+                    pendingAction === 'delivery') && (
+                    <div className="mb-2 space-y-1.5">
+                      <Label className="text-xs">
+                        {pendingAction === 'confirm'
+                          ? 'Fecha de entrega que confirmó el proveedor'
+                          : 'Nueva fecha de entrega (vacía = a convenir)'}
+                      </Label>
+                      <DatePicker value={confirmDate} onChange={setConfirmDate} />
+                      <p className="text-xs text-muted-foreground">
+                        Para el seguimiento interno: no figura en el PDF de la orden.
+                      </p>
+                    </div>
+                  )}
                   {pendingAction === 'cancel' && cancelBlock && (
                     <p role="alert" className="mb-2 text-xs text-warn">
                       {cancelBlock}
@@ -528,7 +595,7 @@ export default function PurchaseOrderDetailPage() {
                       {actionError}
                     </p>
                   )}
-                  <div className="flex gap-2">
+                  <div className="flex flex-wrap gap-2">
                     <Button
                       size="sm"
                       className="flex-1"
@@ -540,8 +607,26 @@ export default function PurchaseOrderDetailPage() {
                     >
                       {statusMutation.isPending
                         ? ACTION_COPY[pendingAction].busy
-                        : ACTION_COPY[pendingAction].yes}
+                        : pendingAction === 'confirm'
+                          ? changingDate
+                            ? 'Confirmar con esta fecha'
+                            : prompt.keep
+                          : ACTION_COPY[pendingAction].yes}
                     </Button>
+                    {pendingAction === 'confirm' && !changingDate && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="flex-1"
+                        onClick={() => {
+                          setActionError('');
+                          setChangingDate(true);
+                        }}
+                        disabled={statusMutation.isPending}
+                      >
+                        {prompt.change}
+                      </Button>
+                    )}
                     <Button
                       size="sm"
                       variant="outline"

@@ -292,10 +292,6 @@ export class SupplierInvoicesService {
     const amounts = new Map(
       comparison.payables.map((p) => [p.payableId, p.amount]),
     );
-    const dueDate = invoiceDueDate(
-      invoice.invoiceDate,
-      invoice.supplier.paymentTermDays ?? 0,
-    );
 
     const payables = await this.invoices.lockPayables(tenantId, id, tx);
     for (const payable of payables) {
@@ -320,7 +316,11 @@ export class SupplierInvoicesService {
           paidAmount: after.paidAmount,
           advanceApplied: after.advanceApplied,
           status: after.status,
-          dueDate,
+          // El plazo pactado en la orden, contado desde la factura.
+          dueDate: invoiceDueDate(
+            invoice.invoiceDate,
+            payable.purchaseReceipt.purchaseOrder.paymentTermDays,
+          ),
         },
         tx,
       );
