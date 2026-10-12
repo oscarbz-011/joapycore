@@ -46,6 +46,8 @@ import {
 import { formatDatePY } from '@/lib/date';
 import { localISODate } from '@/lib/date';
 import { cn } from '@/lib/utils';
+import { TablePagination } from '@/components/table-pagination';
+import { usePagination } from '@/lib/use-pagination';
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -522,6 +524,7 @@ export default function SupplierDetailPage() {
     mapFilter === 'expired'
       ? loaded.filter((i) => priceValidity(i, today).status === 'expired')
       : loaded;
+  const pagination = usePagination(items);
 
   const importMutation = useMutation({
     mutationFn: ({ file, validity }: { file: File; validity: CatalogValidity }) =>
@@ -711,7 +714,7 @@ export default function SupplierDetailPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border">
-                    {items.map((item) => {
+                    {pagination.items.map((item) => {
                       const mapped = item.productId !== null;
                       return (
                         <tr key={item.id} className={cn('hover:bg-muted/20 transition-colors', !mapped && 'bg-warn-subtle/40')}>
@@ -789,6 +792,11 @@ export default function SupplierDetailPage() {
                   </tbody>
                 </table>
               </div>
+              <TablePagination
+                {...pagination.controls}
+                label="ítems"
+                className="border-t border-border px-4 py-3"
+              />
             </Card>
           )}
         </>

@@ -22,6 +22,8 @@ import type { Customer as DeliveryCustomer } from '../../../../../lib/api/sales'
 import { formatDatePY } from '../../../../../lib/date';
 import { DeliverModal } from '../../../../../components/logistics/deliver-modal';
 import { cn } from '@/lib/utils';
+import { TablePagination } from '@/components/table-pagination';
+import { usePagination } from '@/lib/use-pagination';
 
 // Compartido con mine/[id]/page.tsx — la dirección estructurada del cliente,
 // mismo criterio que ya usa deliveries/page.tsx (saleOrder.deliveryAddress
@@ -158,6 +160,7 @@ export default function MyDeliveriesPage() {
     queryKey: ['logistics-mine', tab],
     queryFn: () => logisticsApi.listMine(tab),
   });
+  const pagination = usePagination(notes);
 
   return (
     <div className="space-y-6">
@@ -204,7 +207,11 @@ export default function MyDeliveriesPage() {
 
       {!isLoading && !isError && notes.length > 0 && (
         <div className="space-y-2">
-          {notes.map((note) => <MyDeliveryRow key={note.id} note={note} />)}
+          {pagination.items.map((note) => <MyDeliveryRow key={note.id} note={note} />)}
+          <TablePagination
+            {...pagination.controls}
+            label="entregas"
+          />
         </div>
       )}
     </div>

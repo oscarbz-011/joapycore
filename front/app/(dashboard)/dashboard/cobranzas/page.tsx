@@ -35,6 +35,8 @@ import {
 } from '@/components/ui/sheet';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
+import { TablePagination } from '@/components/table-pagination';
+import { usePagination } from '@/lib/use-pagination';
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -590,6 +592,7 @@ function DelinquencyTab() {
     queryKey: ['delinquency-reports', statusFilter],
     queryFn: () => cobranzasApi.listDelinquencyReports(statusFilter || undefined),
   });
+  const pagination = usePagination(reports);
 
   return (
     <>
@@ -633,7 +636,7 @@ function DelinquencyTab() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {reports.map((report) => {
+                {pagination.items.map((report) => {
                   const st = DELINQUENCY_STATUS[report.status];
                   return (
                     <tr key={report.id} className="hover:bg-muted/20 transition-colors">
@@ -683,6 +686,11 @@ function DelinquencyTab() {
             </table>
           </div>
         )}
+        <TablePagination
+          {...pagination.controls}
+          label="clientes en mora"
+          className="border-t border-border px-4 py-3"
+        />
       </Card>
 
       {reviewing && (

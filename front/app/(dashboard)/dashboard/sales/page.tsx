@@ -69,6 +69,8 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
+import { TablePagination } from "@/components/table-pagination";
+import { usePagination } from "@/lib/use-pagination";
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -1536,6 +1538,7 @@ export default function SalesPage() {
   });
 
   const { sorted, sort, toggle } = useTableSort(filtered, ORDER_SORT);
+  const pagination = usePagination(sorted);
 
   function openPanel(order: SaleOrder) {
     setPanelOrder(order);
@@ -1644,7 +1647,7 @@ export default function SalesPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {sorted.map((order) => (
+                {pagination.items.map((order) => (
                   <tr
                     key={order.id}
                     onClick={() => openPanel(order)}
@@ -1695,6 +1698,11 @@ export default function SalesPage() {
               </tbody>
             </table>
           </div>
+          <TablePagination
+            {...pagination.controls}
+            label="pedidos"
+            className="border-t border-border px-4 py-3"
+          />
         </Card>
       )}
 

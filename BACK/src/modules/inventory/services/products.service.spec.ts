@@ -748,4 +748,56 @@ describe('ProductsService', () => {
       );
     });
   });
+
+  // ── pageMovements ──────────────────────────────────────────────────────────
+
+  describe('pageMovements', () => {
+    let findMovementsPage: jest.Mock;
+
+    beforeEach(() => {
+      findMovementsPage = jest
+        .fn()
+        .mockResolvedValue({ items: [{ id: 'mov-1' }], total: 260 });
+      (productsRepository as Record<string, unknown>).findMovementsPage =
+        findMovementsPage;
+    });
+
+    // Antes la pantalla veía solo los últimos 100 movimientos.
+    it('reaches any page of the history, newest first', async () => {
+      const result = await service.pageMovements('tenant-1', {
+        page: 3,
+        limit: 100,
+      });
+
+      expect(findMovementsPage).toHaveBeenCalledWith(
+        'tenant-1',
+        expect.objectContaining({
+          skip: 200,
+          take: 100,
+          orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        }),
+      );
+      expect(result).toMatchObject({ total: 260, page: 3, totalPages: 3 });
+    });
+
+    it('passes the filters and the search on to the query', async () => {
+      await service.pageMovements('tenant-1', {
+        reason: 'PURCHASE',
+        warehouseId: 'wh-1',
+        q: 'heladera samsung',
+        sortBy: 'quantity',
+        sortDir: 'desc',
+      });
+
+      expect(findMovementsPage).toHaveBeenCalledWith(
+        'tenant-1',
+        expect.objectContaining({
+          reason: 'PURCHASE',
+          warehouseId: 'wh-1',
+          words: ['heladera', 'samsung'],
+          orderBy: [{ quantity: 'desc' }, { id: 'desc' }],
+        }),
+      );
+    });
+  });
 });

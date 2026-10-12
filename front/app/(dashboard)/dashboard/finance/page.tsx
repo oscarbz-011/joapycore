@@ -22,6 +22,8 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
 import { PAYMENT_METHODS, PAYMENT_METHOD_LABELS, type PaymentMethod } from '@/lib/payment-methods';
+import { TablePagination } from '@/components/table-pagination';
+import { usePagination } from '@/lib/use-pagination';
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -333,6 +335,7 @@ export default function FinancePage() {
     queryKey: ['finance-loans'],
     queryFn: financeApi.listLoans,
   });
+  const pagination = usePagination(loans);
 
   const { data: overdueInstallments = [] } = useQuery({
     queryKey: ['finance-overdue'],
@@ -387,9 +390,13 @@ export default function FinancePage() {
         </div>
       ) : (
         <div className="space-y-3">
-          {loans.map((loan) => (
+          {pagination.items.map((loan) => (
             <LoanRow key={loan.id} loan={loan} />
           ))}
+          <TablePagination
+            {...pagination.controls}
+            label="financiamientos"
+          />
         </div>
       )}
     </div>

@@ -1,4 +1,5 @@
 import { apiClient } from './client';
+import type { ListQuery, Paginated } from '../pagination';
 import type { ProspectPayload } from '../quote-party';
 
 export type DocumentType = 'CI' | 'RUC' | 'PASSPORT';
@@ -435,8 +436,13 @@ export const salesApi = {
     apiClient.post(`/sales/orders/${id}/deliver`).then((r) => r.data),
 
   // Customers
+  /** Todos los clientes: para los selectores. La lista de Clientes usa `pageCustomers`. */
   listCustomers: (): Promise<Customer[]> =>
     apiClient.get('/sales/customers').then((r) => r.data),
+
+  /** Una página de clientes, buscada y ordenada en el servidor. */
+  pageCustomers: (query: ListQuery): Promise<Paginated<Customer>> =>
+    apiClient.get('/sales/customers/page', { params: query }).then((r) => r.data),
 
   getCustomer: (id: string): Promise<Customer> =>
     apiClient.get(`/sales/customers/${id}`).then((r) => r.data),

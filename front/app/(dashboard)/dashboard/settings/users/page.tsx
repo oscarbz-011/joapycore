@@ -9,6 +9,8 @@ import { CreateUserModal } from './_components/create-user-modal';
 import { UserDetailPanel } from './_components/user-detail-panel';
 import { useAuth } from '../../../../../lib/auth-context';
 import { Button } from '@/components/ui/button';
+import { TablePagination } from '@/components/table-pagination';
+import { usePagination } from '@/lib/use-pagination';
 
 export default function UsersPage() {
   const [showModal, setShowModal] = useState(false);
@@ -19,6 +21,7 @@ export default function UsersPage() {
     queryKey: ['users'],
     queryFn: usersApi.list,
   });
+  const pagination = usePagination(users);
 
   return (
     <>
@@ -69,7 +72,7 @@ export default function UsersPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {users.map((user) => (
+              {pagination.items.map((user) => (
                 <tr
                   key={user.id}
                   onClick={() => setSelectedUser(user)}
@@ -135,6 +138,11 @@ export default function UsersPage() {
             </tbody>
           </table>
         )}
+        <TablePagination
+          {...pagination.controls}
+          label="usuarios"
+          className="border-t border-border px-4 py-3"
+        />
       </div>
 
       {showModal && <CreateUserModal onClose={() => setShowModal(false)} />}

@@ -7,6 +7,8 @@ import { salesApi, type SaleOrder } from '../../../../../lib/api/sales';
 import { useAuth } from '../../../../../lib/auth-context';
 import { isNewRequest, sortPendingRequests } from '../../../../../lib/credit-inbox';
 import { Badge } from '@/components/ui/badge';
+import { TablePagination } from '@/components/table-pagination';
+import { usePagination } from '@/lib/use-pagination';
 import {
   formatPrice,
   formatDate,
@@ -97,6 +99,7 @@ export default function ApprovalsPage() {
   });
 
   const sorted = sortPendingRequests(orders);
+  const pagination = usePagination(sorted);
   const newCount = orders.filter(isNewRequest).length;
 
   if (!canManage) {
@@ -131,9 +134,14 @@ export default function ApprovalsPage() {
         </div>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {sorted.map((order) => (
+          {pagination.items.map((order) => (
             <OrderCard key={order.id} order={order} />
           ))}
+          <TablePagination
+            {...pagination.controls}
+            label="solicitudes"
+            className="col-span-full"
+          />
         </div>
       )}
     </div>

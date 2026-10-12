@@ -8,6 +8,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CurrentTenant } from '../../../common/decorators/current-tenant.decorator';
@@ -18,6 +19,7 @@ import type { JwtPayload } from '../../../common/types/jwt-payload.interface';
 import { CreateCustomerDto } from '../dto/create-customer.dto';
 import { MarkUncollectibleDto } from '../dto/mark-uncollectible.dto';
 import { CustomersService } from '../services/customers.service';
+import { PageCustomersDto } from '../dto/page-customers.dto';
 
 @ApiTags('Sales')
 @ApiBearerAuth()
@@ -31,6 +33,19 @@ export class CustomersController {
   @ApiOperation({ summary: 'Listar clientes' })
   findAll(@CurrentTenant() tenantId: string) {
     return this.customersService.findAll(tenantId);
+  }
+
+  // Antes que ':id': si no, "page" se toma como un id.
+  @Get('page')
+  @Permissions('customers:read')
+  @ApiOperation({
+    summary: 'Listar clientes de a una página, con búsqueda y orden',
+  })
+  findPage(
+    @CurrentTenant() tenantId: string,
+    @Query() query: PageCustomersDto,
+  ) {
+    return this.customersService.findPage(tenantId, query);
   }
 
   @Get(':id')

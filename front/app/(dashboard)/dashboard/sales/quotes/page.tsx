@@ -8,6 +8,8 @@ import { useAuth } from '../../../../../lib/auth-context';
 import { formatDatePY } from '../../../../../lib/date';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { TablePagination } from '@/components/table-pagination';
+import { usePagination } from '@/lib/use-pagination';
 import { isProspectOrder, orderPartyName } from '@/lib/quote-party';
 
 function formatPrice(n: number) {
@@ -35,6 +37,11 @@ export default function QuotesPage() {
     enabled: canRead,
   });
 
+  const quotes = orders
+    .filter((o) => o.orderType === 'QUOTE')
+    .sort((a, b) => new Date(b.orderDate).getTime() - new Date(a.orderDate).getTime());
+  const pagination = usePagination(quotes);
+
   if (!canRead) {
     return (
       <div className="py-24 text-center">
@@ -42,10 +49,6 @@ export default function QuotesPage() {
       </div>
     );
   }
-
-  const quotes = orders
-    .filter((o) => o.orderType === 'QUOTE')
-    .sort((a, b) => new Date(b.orderDate).getTime() - new Date(a.orderDate).getTime());
 
   return (
     <div>
@@ -72,7 +75,7 @@ export default function QuotesPage() {
         </div>
       ) : (
         <div className="space-y-2">
-          {quotes.map((q) => (
+          {pagination.items.map((q) => (
             <Link
               key={q.id}
               href={`/dashboard/sales/quotes/${q.id}`}
@@ -91,6 +94,10 @@ export default function QuotesPage() {
               <p className="text-sm font-medium text-foreground tabular-nums w-32 text-right">{formatPrice(quoteTotal(q.items))}</p>
             </Link>
           ))}
+          <TablePagination
+            {...pagination.controls}
+            label="presupuestos"
+          />
         </div>
       )}
     </div>

@@ -8,6 +8,10 @@ import {
   StockMovementType,
 } from '@prisma/client';
 import { randomUUID } from 'crypto';
+import {
+  accentVariants,
+  normalizeSearch,
+} from '../../../common/pagination/pagination';
 import { PrismaService } from '../../../prisma/prisma.service';
 
 export interface ProductFilters {
@@ -201,6 +205,57 @@ export class ProductsRepository {
       take: filters.take ?? 50,
       skip: filters.skip ?? 0,
     });
+  }
+
+  // Una página del historial, con el total de los que cumplen el filtro.
+  async findMovementsPage(
+    tenantId: string,
+    query: {
+      productId?: string;
+      warehouseId?: string;
+      reason?: MovementReason;
+      words: string[];
+      orderBy: Prisma.StockMovementOrderByWithRelationInput[];
+      skip: number;
+      take: number;
+    },
+  ) {
+    const where: Prisma.StockMovementWhereInput = {
+      tenantId,
+      ...(query.productId && { productId: query.productId }),
+      ...(query.warehouseId && { warehouseId: query.warehouseId }),
+      ...(query.reason && { reason: query.reason }),
+      AND: query.words.map((word) => ({
+        product: {
+          OR: [
+            // Sin distinguir acentos, contra el texto que mantiene la base.
+            { searchText: { contains: normalizeSearch(word) } },
+            // Base creada sin migraciones: no tiene ese texto.
+            {
+              searchText: null,
+              OR: accentVariants(word).flatMap((variant) => [
+                { name: { contains: variant, mode: 'insensitive' as const } },
+                { model: { contains: variant, mode: 'insensitive' as const } },
+              ]),
+            },
+          ],
+        },
+      })),
+    };
+    const [items, total] = await this.prisma.$transaction([
+      this.prisma.stockMovement.findMany({
+        where,
+        include: {
+          product: { select: { id: true, name: true, model: true } },
+          warehouse: { select: { id: true, name: true } },
+        },
+        orderBy: query.orderBy,
+        skip: query.skip,
+        take: query.take,
+      }),
+      this.prisma.stockMovement.count({ where }),
+    ]);
+    return { items, total };
   }
 
   createTransferMovements(

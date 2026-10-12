@@ -1,4 +1,5 @@
 import { apiClient } from './client';
+import type { ListQuery, Paginated } from '../pagination';
 
 export interface Category {
   id: string;
@@ -331,6 +332,12 @@ export const inventoryApi = {
 
   listMovements: (filters?: MovementFilters): Promise<StockMovement[]> =>
     apiClient.get('/inventory/movements', { params: filters }).then((r) => r.data),
+
+  /** Una página del historial, filtrada y ordenada en el servidor. */
+  pageMovements: (
+    query: ListQuery & { reason?: MovementReason; productId?: string; warehouseId?: string },
+  ): Promise<Paginated<StockMovement>> =>
+    apiClient.get('/inventory/movements/page', { params: query }).then((r) => r.data),
 
   createMovement: (dto: CreateGlobalMovementPayload): Promise<StockMovement | StockMovement[]> =>
     apiClient.post('/inventory/movements', dto).then((r) => r.data),
