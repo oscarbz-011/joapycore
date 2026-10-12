@@ -10,6 +10,10 @@ import {
   ShoppingCart,
   Truck,
   Landmark,
+  ReceiptText,
+  HandCoins,
+  Calculator,
+  ChartColumn,
   Hammer,
   Route,
   Users,
@@ -34,6 +38,7 @@ import {
   INVENTORY_NAV_ITEMS,
   isInventoryItemActive,
 } from "../../../../lib/inventory-navigation";
+import { FINANCE_NAV_GROUPS } from "@/lib/finance-navigation";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -61,6 +66,14 @@ interface SidebarGroup {
 }
 
 // ── Group definitions ─────────────────────────────────────────────────────────
+
+const FINANCE_ICONS: Record<string, React.ElementType> = {
+  facturas: ReceiptText,
+  "creditos-cobranzas": HandCoins,
+  tesoreria: Landmark,
+  contabilidad: Calculator,
+  reportes: ChartColumn,
+};
 
 const STATIC_GROUPS: SidebarGroup[] = [
   {
@@ -165,69 +178,12 @@ const STATIC_GROUPS: SidebarGroup[] = [
       },
     ],
   },
-  {
-    id: "finanzas",
-    label: "Finanzas",
-    icon: Landmark,
-    modules: ["billing", "payments", "finance", "collections", "procurement"],
-    anyPermission: [
-      "billing:read",
-      "billing:issue",
-      "payments:read",
-      "finance:read",
-      "collections:read",
-      "sales:credit:evaluate",
-      "procurement:payables:read",
-    ],
-    items: [
-      {
-        label: "Facturas",
-        href: "/dashboard/billing",
-        permission: "billing:read",
-        module: "billing",
-      },
-      {
-        label: "Cuentas por cobrar",
-        href: "/dashboard/payments",
-        permission: "payments:read",
-        module: "payments",
-      },
-      {
-        label: "Cuentas por pagar",
-        href: "/dashboard/procurement/payables",
-        permission: "procurement:payables:read",
-        module: "procurement",
-      },
-      {
-        label: "Evaluación de crédito",
-        href: "/dashboard/billing/approvals",
-        permission: "sales:credit:evaluate",
-        module: "finance",
-      },
-      {
-        label: "Financiamiento",
-        href: "/dashboard/finance",
-        permission: "finance:read",
-        module: "finance",
-      },
-      {
-        label: "Cobranzas",
-        href: "/dashboard/cobranzas",
-        permission: "collections:read",
-        module: "collections",
-      },
-      { label: "Contabilidad", href: "#", stub: true },
-      { label: "Tesorería", href: "#", stub: true },
-      { label: "Presupuesto", href: "#", stub: true },
-      { label: "Gastos", href: "#", stub: true },
-      { label: "Impuestos", href: "#", stub: true },
-      {
-        label: "Reportes",
-        href: "/dashboard/settings/reports",
-        permission: "reports:read",
-      },
-    ],
-  },
+  // Lo que era el menú "Finanzas": cinco entradas de primer nivel (ver
+  // lib/finance-navigation.ts).
+  ...FINANCE_NAV_GROUPS.map((group) => ({
+    ...group,
+    icon: FINANCE_ICONS[group.id] ?? Landmark,
+  })),
   {
     id: "logistics",
     label: "Logística",
@@ -545,6 +501,11 @@ function ModuleGroup({
       >
         <Icon size={15} className="shrink-0 opacity-75" />
         <span className="flex-1 text-left">{group.label}</span>
+        {!!item.badge && (
+          <span className="rounded-full bg-red-500/20 px-1.5 py-px text-[11px] font-bold leading-none text-red-400">
+            {item.badge}
+          </span>
+        )}
       </Link>
     );
   }
