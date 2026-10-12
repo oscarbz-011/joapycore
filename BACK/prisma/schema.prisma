@@ -1361,6 +1361,15 @@ model SaleOrder {
   quoteNumber    String? @map("quote_number") // único por tenant, ver @@unique abajo
   quotePdfFileId String? @map("quote_pdf_file_id")
 
+  // Presupuesto para alguien que todavía no es cliente: sus datos se cargan a
+  // mano acá y `customerId` apunta al cliente genérico "Consumidor Final"
+  // hasta que el presupuesto se convierte en pedido y se elige un cliente real.
+  prospectName     String? @map("prospect_name")
+  prospectDocument String? @map("prospect_document")
+  prospectPhone    String? @map("prospect_phone")
+  prospectEmail    String? @map("prospect_email")
+  prospectAddress  String? @map("prospect_address")
+
   // POS session link (null for NORMAL channel)
   posSessionId String? @map("pos_session_id")
 

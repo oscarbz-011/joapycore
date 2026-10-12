@@ -17,7 +17,10 @@ import type { JwtPayload } from '../../../common/types/jwt-payload.interface';
 import { AdjustOrderDto } from '../dto/adjust-order.dto';
 import { CollectPaymentDto } from '../dto/collect-payment.dto';
 import { CreateGuarantorDto } from '../dto/create-guarantor.dto';
-import { CreateSaleOrderDto } from '../dto/create-sale-order.dto';
+import {
+  ConvertQuoteDto,
+  CreateSaleOrderDto,
+} from '../dto/create-sale-order.dto';
 import { RegisterDownPaymentDto } from '../dto/register-down-payment.dto';
 import { RejectCreditDto } from '../dto/reject-credit.dto';
 import { RequestAdjustmentDto } from '../dto/request-adjustment.dto';
@@ -258,8 +261,14 @@ export class SaleOrdersController {
     @CurrentTenant() tenantId: string,
     @CurrentUser() user: JwtPayload,
     @Param('id') id: string,
+    @Body() dto: ConvertQuoteDto,
   ) {
-    return this.saleOrdersService.convertQuoteToOrder(tenantId, id, user.sub);
+    return this.saleOrdersService.convertQuoteToOrder(
+      tenantId,
+      id,
+      user.sub,
+      dto.customerId,
+    );
   }
 
   @Post(':id/deliver')

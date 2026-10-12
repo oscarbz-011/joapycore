@@ -1,6 +1,7 @@
 "use client";
 
 import { apiErrorMessage } from "@/lib/api/api-error";
+import { orderPartyName } from "@/lib/quote-party";
 import { findStockIssues } from "@/lib/sales-stock";
 import { salesChannelProductFilters } from "@/lib/product-catalog";
 
@@ -1105,7 +1106,7 @@ function OrderDetailPanel({
           <div>
             <div className="flex items-center gap-2 flex-wrap mb-1">
               <SheetTitle className="text-base">
-                {order.customer.firstName} {order.customer.lastName}
+                {orderPartyName(order)}
               </SheetTitle>
               <StatusBadge status={order.status} />
               {order.saleType === "CREDIT" && (
@@ -1487,7 +1488,7 @@ const sellerName = (order: SaleOrder) => {
 
 const ORDER_SORT = {
   customer: (order: SaleOrder) =>
-    `${order.customer.firstName} ${order.customer.lastName}`,
+    orderPartyName(order),
   date: (order: SaleOrder) => new Date(order.orderDate),
   updated: (order: SaleOrder) => new Date(order.updatedAt),
   status: (order: SaleOrder) => STATUS_LABEL[order.status] ?? order.status,
@@ -1524,7 +1525,7 @@ export default function SalesPage() {
   });
 
   const filtered = orders.filter((o) => {
-    const name = `${o.customer.firstName} ${o.customer.lastName}`.toLowerCase();
+    const name = orderPartyName(o).toLowerCase();
     return (
       (!search || name.includes(search.toLowerCase())) &&
       (!statusFilter || o.status === statusFilter)
@@ -1648,7 +1649,7 @@ export default function SalesPage() {
                   >
                     <td className="px-4 py-3">
                       <div className="font-medium text-foreground">
-                        {order.customer.firstName} {order.customer.lastName}
+                        {orderPartyName(order)}
                       </div>
                       {order.customer.documentNumber && (
                         <div className="text-xs text-muted-foreground">
