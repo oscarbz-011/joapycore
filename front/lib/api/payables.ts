@@ -33,7 +33,12 @@ export interface AccountsPayable {
     id: string;
     receiptNumber: number;
     receivedAt: string;
-    purchaseOrder: { id: string };
+    purchaseOrder: {
+      id: string;
+      orderNumber: string | null;
+      /** Condición de pago de la orden, en días (0 = contado). */
+      paymentTermDays: number;
+    };
   };
   supplierPayments: SupplierPayment[];
   /** Lo estimado al recibir, una vez que la factura fijó `amount`. */

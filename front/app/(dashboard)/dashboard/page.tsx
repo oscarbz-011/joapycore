@@ -1,5 +1,6 @@
 'use client';
 
+import { orderPartyName } from '@/lib/quote-party';
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
@@ -531,7 +532,7 @@ export default function DashboardPage() {
                     <tbody className="divide-y divide-border">
                       {orders.slice(0, 8).map((o) => (
                         <tr key={o.id} className="hover:bg-muted/30 transition-colors">
-                          <td className="px-5 py-2.5 text-foreground">{o.customer.firstName} {o.customer.lastName}</td>
+                          <td className="px-5 py-2.5 text-foreground">{orderPartyName(o)}</td>
                           <td className="px-5 py-2.5"><StatusBadge status={o.status} /></td>
                           <td className="px-5 py-2.5 text-right font-mono font-semibold text-foreground">{fmtGs(orderTotal(o))}</td>
                           <td className="px-5 py-2.5 text-right text-muted-foreground">

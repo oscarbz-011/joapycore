@@ -47,9 +47,11 @@ export function orderPlan(
       .flatMap((quote) => quote.lines)
       .filter((other) => other.productId === line.productId);
 
-    // Si otro proveedor ya lo tiene vinculado, el producto existe.
+    // El producto existe si la fila ya era de un producto interno, o si otro
+    // proveedor lo tiene vinculado.
     const existing =
       line.linkedProductId ??
+      line.needProductId ??
       siblings.find((other) => other.linkedProductId)?.linkedProductId ??
       null;
 
@@ -111,13 +113,13 @@ export function newProductPayload(
 
 export function orderPayload(
   supplierId: string,
-  orderDate: string,
   lines: readonly {
     itemId: string;
     productId: string;
     quantity: number;
     unitCost: number;
-  }[],
+  }[],  /** Entrega esperada (AAAA-MM-DD), si el proveedor informó un plazo. */
+  expectedDate = '',
 ): CreatePurchaseOrderPayload {
   // Dos filas pueden haber terminado en el mismo producto, y la orden no
   // admite un producto repetido: se suman en una sola línea.
@@ -134,5 +136,10 @@ export function orderPayload(
       });
     }
   }
-  return { supplierId, purchaseType: 'LOCAL', orderDate, items };
+  return {
+    supplierId,
+    purchaseType: 'LOCAL',
+    ...(expectedDate && { expectedDate }),
+    items,
+  };
 }

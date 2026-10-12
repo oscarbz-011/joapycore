@@ -6,8 +6,9 @@ export interface PurchaseOrderForPdf {
   id: string;
   orderNumber: string | null;
   orderDate: Date;
-  expectedDate: Date | null;
   notes: string | null;
+  /** Condición de pago pactada en la orden, en días (0 = contado). */
+  paymentTermDays: number;
   tenant: {
     name: string;
     razonSocial: string | null;
@@ -25,7 +26,6 @@ export interface PurchaseOrderForPdf {
     contactName: string | null;
     phone: string | null;
     email: string | null;
-    paymentTermDays: number | null;
   };
   items: {
     quantity: number;
@@ -101,12 +101,9 @@ export function buildPurchaseOrderVariables(order: PurchaseOrderForPdf): {
       'proveedor.email': supplier.email ?? '',
       'orden.numero': order.orderNumber ?? '—',
       'orden.fecha': formatDay(order.orderDate),
-      'orden.entregaEstimada': order.expectedDate
-        ? formatDay(order.expectedDate)
-        : 'A convenir',
       'orden.lugarEntrega': deliveryPlace,
-      'orden.condicionPago': supplier.paymentTermDays
-        ? `Crédito a ${supplier.paymentTermDays} días`
+      'orden.condicionPago': order.paymentTermDays
+        ? `Crédito a ${order.paymentTermDays} días`
         : 'Contado',
       'orden.notas': order.notes ?? '',
       'orden.total': formatMoney(total),

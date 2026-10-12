@@ -1145,29 +1145,33 @@ model Supplier {
 }
 
 model PurchaseOrder {
-  id            String              @id @default(uuid())
-  tenantId      String              @map("tenant_id")
+  id              String              @id @default(uuid())
+  tenantId        String              @map("tenant_id")
   // Número visible de la orden (OC-AA-000001), correlativo por empresa. Es
   // con lo que el proveedor la identifica en el PDF.
-  orderNumber   String?             @map("order_number")
+  orderNumber     String?             @map("order_number")
   // PDF de la orden. Se genera al enviarla o al pedirlo; la orden no se edita
   // después de creada, así que no hace falta regenerarlo.
-  pdfFileId     String?             @map("pdf_file_id")
+  pdfFileId       String?             @map("pdf_file_id")
   // Anticipo que pide esta orden antes de despachar (0 = ninguno). Nace del
   // porcentaje del proveedor y se puede ajustar por orden.
-  advanceAmount Decimal             @default(0) @map("advance_amount") @db.Decimal(12, 2)
-  supplierId    String              @map("supplier_id")
-  branchId      String?             @map("branch_id")
-  purchaseType  PurchaseType        @default(LOCAL) @map("purchase_type")
-  status        PurchaseOrderStatus @default(PENDING)
-  orderDate     DateTime            @map("order_date")
-  expectedDate  DateTime?           @map("expected_date")
-  exchangeRate  Decimal?            @map("exchange_rate") @db.Decimal(10, 4)
-  customsDuty   Decimal?            @map("customs_duty") @db.Decimal(5, 2)
-  customsRef    String?             @map("customs_ref")
-  notes         String?
-  createdAt     DateTime            @default(now()) @map("created_at")
-  updatedAt     DateTime            @updatedAt @map("updated_at")
+  advanceAmount   Decimal             @default(0) @map("advance_amount") @db.Decimal(12, 2)
+  // Condición de pago pactada en esta orden, en días (0 = contado). Se copia
+  // del proveedor al crearla: si después el proveedor cambia su plazo, las
+  // órdenes ya hechas conservan el suyo.
+  paymentTermDays Int                 @default(0) @map("payment_term_days")
+  supplierId      String              @map("supplier_id")
+  branchId        String?             @map("branch_id")
+  purchaseType    PurchaseType        @default(LOCAL) @map("purchase_type")
+  status          PurchaseOrderStatus @default(PENDING)
+  orderDate       DateTime            @map("order_date")
+  expectedDate    DateTime?           @map("expected_date")
+  exchangeRate    Decimal?            @map("exchange_rate") @db.Decimal(10, 4)
+  customsDuty     Decimal?            @map("customs_duty") @db.Decimal(5, 2)
+  customsRef      String?             @map("customs_ref")
+  notes           String?
+  createdAt       DateTime            @default(now()) @map("created_at")
+  updatedAt       DateTime            @updatedAt @map("updated_at")
 
   tenant          Tenant                      @relation(fields: [tenantId], references: [id])
   supplier        Supplier                    @relation(fields: [supplierId], references: [id])
@@ -1376,6 +1380,15 @@ model SaleOrder {
   // generado automáticamente al crear. Null para pedidos que no son presupuesto.
   quoteNumber    String? @map("quote_number") // único por tenant, ver @@unique abajo
   quotePdfFileId String? @map("quote_pdf_file_id")
+
+  // Presupuesto para alguien que todavía no es cliente: sus datos se cargan a
+  // mano acá y `customerId` apunta al cliente genérico "Consumidor Final"
+  // hasta que el presupuesto se convierte en pedido y se elige un cliente real.
+  prospectName     String? @map("prospect_name")
+  prospectDocument String? @map("prospect_document")
+  prospectPhone    String? @map("prospect_phone")
+  prospectEmail    String? @map("prospect_email")
+  prospectAddress  String? @map("prospect_address")
 
   // POS session link (null for NORMAL channel)
   posSessionId String? @map("pos_session_id")
