@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
   AppWindow,
+  NotebookPen,
   Package,
   ShoppingCart,
   Truck,
@@ -39,6 +40,7 @@ import {
   isInventoryItemActive,
 } from "../../../../lib/inventory-navigation";
 import { FINANCE_NAV_GROUPS } from "@/lib/finance-navigation";
+import { NOTES_PATH } from "@/lib/notes";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -88,6 +90,13 @@ const STATIC_GROUPS: SidebarGroup[] = [
         permission: "communications:access",
       },
     ],
+  },
+  {
+    id: "notes",
+    label: "Notas",
+    icon: NotebookPen,
+    flat: true,
+    items: [{ label: "Notas", href: NOTES_PATH }],
   },
   {
     id: "inventory",
