@@ -3008,6 +3008,25 @@ enum CommunicationMessageStatus {
   UNKNOWN
 }
 
+// ─── Notas personales ─────────────────────────────────────────────────────────
+
+// Privadas de cada usuario: nadie más de la empresa las ve.
+model UserNote {
+  id        String    @id @default(uuid())
+  tenantId  String    @map("tenant_id")
+  userId    String    @map("user_id")
+  title     String
+  body      String    @default("") @db.Text
+  priority  String    @default("MEDIUM")
+  starred   Boolean   @default(false)
+  trashedAt DateTime? @map("trashed_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+
+  @@index([tenantId, userId, updatedAt])
+  @@map("user_notes")
+}
+
 model CommunicationSettings {
   tenantId            String   @id @map("tenant_id")
   enabled             Boolean  @default(false)
