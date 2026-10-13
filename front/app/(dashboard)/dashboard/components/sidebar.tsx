@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
   AppWindow,
+  CalendarDays,
   Package,
   ShoppingCart,
   Truck,
@@ -39,6 +40,7 @@ import {
   isInventoryItemActive,
 } from "../../../../lib/inventory-navigation";
 import { FINANCE_NAV_GROUPS } from "@/lib/finance-navigation";
+import { CALENDAR_PATH } from "@/lib/calendar";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -88,6 +90,13 @@ const STATIC_GROUPS: SidebarGroup[] = [
         permission: "communications:access",
       },
     ],
+  },
+  {
+    id: "calendar",
+    label: "Calendario",
+    icon: CalendarDays,
+    flat: true,
+    items: [{ label: "Calendario", href: CALENDAR_PATH }],
   },
   {
     id: "inventory",
