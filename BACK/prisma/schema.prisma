@@ -3008,6 +3008,39 @@ enum CommunicationMessageStatus {
   UNKNOWN
 }
 
+// ─── Calendario ───────────────────────────────────────────────────────────────
+
+model CalendarEvent {
+  id          String   @id @default(uuid())
+  tenantId    String   @map("tenant_id")
+  createdBy   String   @map("created_by")
+  title       String
+  description String?  @db.Text
+  location    String?
+  // Con allDay, las dos fechas son días de calendario guardados a medianoche UTC.
+  allDay      Boolean  @default(false) @map("all_day")
+  startsAt    DateTime @map("starts_at")
+  endsAt      DateTime @map("ends_at")
+  // Lo ve toda la empresa; si no, solo quien lo creó.
+  companyWide Boolean  @default(false) @map("company_wide")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@index([tenantId, startsAt])
+  @@index([tenantId, createdBy, startsAt])
+  @@map("calendar_events")
+}
+
+// La dirección secreta con la que otro calendario lee los eventos de un usuario.
+model CalendarFeed {
+  userId    String   @id @map("user_id")
+  tenantId  String   @map("tenant_id")
+  token     String   @unique
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("calendar_feeds")
+}
+
 model CommunicationSettings {
   tenantId            String   @id @map("tenant_id")
   enabled             Boolean  @default(false)

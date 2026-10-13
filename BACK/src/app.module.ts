@@ -41,6 +41,7 @@ import { TenantsModule } from './tenants/tenants.module';
 import { UsersModule } from './users/users.module';
 import { ApplicationsModule } from './applications/applications.module';
 import { CommunicationHubModule } from './communications/communications.module';
+import { CalendarModule } from './calendar/calendar.module';
 
 @Module({
   imports: [
@@ -84,6 +85,7 @@ import { CommunicationHubModule } from './communications/communications.module';
     NotificationsModule,
     ApplicationsModule,
     CommunicationHubModule,
+    CalendarModule,
     SifenModule,
     CreditBureauModule,
   ],
