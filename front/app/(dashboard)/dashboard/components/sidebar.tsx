@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
   AppWindow,
+  MessageCircle,
   Package,
   ShoppingCart,
   Truck,
@@ -39,6 +40,7 @@ import {
   isInventoryItemActive,
 } from "../../../../lib/inventory-navigation";
 import { FINANCE_NAV_GROUPS } from "@/lib/finance-navigation";
+import { CHAT_PATH, useChatUnread } from "@/components/chat/use-chat";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -88,6 +90,13 @@ const STATIC_GROUPS: SidebarGroup[] = [
         permission: "communications:access",
       },
     ],
+  },
+  {
+    id: "chat",
+    label: "Chat",
+    icon: MessageCircle,
+    flat: true,
+    items: [{ label: "Chat", href: CHAT_PATH }],
   },
   {
     id: "inventory",
@@ -615,7 +624,10 @@ export function Sidebar() {
     jwtPayload?.sub,
   );
 
+  const chatUnread = useChatUnread();
+
   const badgeByHref: Record<string, number | undefined> = {
+    [CHAT_PATH]: chatUnread || undefined,
     "/dashboard/settings/alerts": alertBadge,
     "/dashboard/billing": pendingCounts.invoices,
     "/dashboard/billing/approvals": pendingCounts.approvals,
