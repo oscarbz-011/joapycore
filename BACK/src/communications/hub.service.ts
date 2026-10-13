@@ -95,6 +95,18 @@ export class CommunicationHubService {
     return invoice;
   }
 
+  /** Cómo salen hoy los correos de la empresa, para explicarlo en pantalla. */
+  async sender(tenantId: string) {
+    const sender = await this.core.sender(tenantId);
+    if (!sender) return { via: 'none' as const };
+    return {
+      via: sender.via,
+      fromEmail: sender.fromEmail,
+      fromName: sender.fromName,
+      replyTo: sender.replyTo,
+    };
+  }
+
   identities(tenantId: string) {
     return this.prisma.communicationIdentity.findMany({
       where: { tenantId, type: { in: ['SYSTEM', 'SHARED'] } },

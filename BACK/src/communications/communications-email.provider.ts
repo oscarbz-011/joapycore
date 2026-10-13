@@ -15,9 +15,18 @@ export interface TransactionalEmail {
   fromEmail: string;
   fromName: string | null;
   replyTo: string | null;
+  /** Sale con una identidad de la empresa, no con el remitente por defecto. */
+  hasIdentity: boolean;
   subject: string;
   bodyText: string;
   attachment: { filename: string; content: Buffer; contentType: string };
+}
+
+export interface DefaultSender {
+  via: 'smtp' | 'platform';
+  fromEmail: string;
+  fromName: string | null;
+  replyTo: string | null;
 }
 
 export class CommunicationDeliveryError extends Error {
@@ -63,11 +72,45 @@ export class CommunicationsEmailProvider {
     private readonly platformEmail: PlatformEmailService,
   ) {}
 
+  /** Desde dónde sale una empresa que no definió una identidad. */
+  async defaultSender(tenantId: string): Promise<DefaultSender | null> {
+    const config = await this.integrations.getEnabledSmtpConfig(tenantId);
+    if (config) {
+      return {
+        via: 'smtp',
+        fromEmail: config.fromEmail.trim().toLowerCase(),
+        fromName: config.fromName ?? null,
+        replyTo: null,
+      };
+    }
+    const platform = await this.platformEmail.senderFor(tenantId);
+    if (!platform.available) return null;
+    return {
+      via: 'platform',
+      fromEmail: platform.fromAddress,
+      fromName: platform.fromName,
+      replyTo: platform.replyTo,
+    };
+  }
+
   async send(input: TransactionalEmail): Promise<{ messageId: string }> {
     const config = await this.integrations.getEnabledSmtpConfig(input.tenantId);
     // Sin correo propio conectado, la factura sale por el remitente de la
     // plataforma; las respuestas van a la dirección de la identidad.
     if (!config && this.platformEmail.isConfigured()) {
+      return this.sendViaPlatform(input);
+    }
+    const sameSender =
+      config?.fromEmail.trim().toLowerCase() ===
+      input.fromEmail.trim().toLowerCase();
+    // Quedó en cola para el remitente de la plataforma antes de que la
+    // empresa conectara su correo: sale como se registró.
+    if (
+      config &&
+      !sameSender &&
+      !input.hasIdentity &&
+      this.platformEmail.isConfigured()
+    ) {
       return this.sendViaPlatform(input);
     }
     if (!config) {
@@ -77,10 +120,7 @@ export class CommunicationsEmailProvider {
         'El SMTP del tenant está desactivado o sin configurar.',
       );
     }
-    if (
-      config.fromEmail.trim().toLowerCase() !==
-      input.fromEmail.trim().toLowerCase()
-    ) {
+    if (!sameSender) {
       throw new CommunicationDeliveryError(
         'SENDER_CHANGED',
         false,
@@ -158,7 +198,9 @@ export class CommunicationsEmailProvider {
         subject: input.subject,
         text: input.bodyText,
         attachment: input.attachment,
-        replyTo: input.replyTo ?? input.fromEmail,
+        replyTo: input.hasIdentity
+          ? (input.replyTo ?? input.fromEmail)
+          : input.replyTo,
         // El mismo mensaje reintentado no sale dos veces.
         idempotencyKey: `communication-${input.messageId}`,
       });

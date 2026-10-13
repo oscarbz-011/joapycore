@@ -3084,7 +3084,7 @@ model CommunicationMessage {
   invoiceId         String                     @map("invoice_id")
   recipient         String
   pdfFileId         String                     @map("pdf_file_id")
-  identityId        String                     @map("identity_id")
+  identityId        String?                    @map("identity_id")
   templateVersionId String                     @map("template_version_id")
   subject           String
   bodyText          String                     @map("body_text") @db.Text
