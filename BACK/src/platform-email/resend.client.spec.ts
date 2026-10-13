@@ -1,4 +1,5 @@
-import { ResendClient, ResendDeliveryError } from './resend.client';
+import { PlatformDeliveryError } from './platform-delivery';
+import { ResendClient } from './resend.client';
 
 const email = {
   from: '"Mi Empresa vía JoapyCore" <mi-empresa@correo.joapycore.com>',
@@ -32,12 +33,12 @@ describe('ResendClient', () => {
   });
   afterEach(() => fetchMock.mockRestore());
 
-  const failure = async (): Promise<ResendDeliveryError> => {
+  const failure = async (): Promise<PlatformDeliveryError> => {
     const error: unknown = await client
       .send('re_key', email, 'key-1')
       .catch((caught: unknown) => caught);
-    expect(error).toBeInstanceOf(ResendDeliveryError);
-    return error as ResendDeliveryError;
+    expect(error).toBeInstanceOf(PlatformDeliveryError);
+    return error as PlatformDeliveryError;
   };
 
   it('posts the email with the key, the idempotency key and the attachment in base64', async () => {

@@ -10,7 +10,7 @@ import type { EmailConfig } from '../config/email.config';
 import { IntegrationsService } from '../integrations/integrations.service';
 import { resolvePublicNetworkDestination } from '../integrations/network-destination.policy';
 import { PlatformEmailService } from '../platform-email/platform-email.service';
-import { ResendDeliveryError } from '../platform-email/resend.client';
+import { PlatformDeliveryError } from '../platform-email/platform-delivery';
 
 export interface EmailAttachment {
   filename: string;
@@ -121,7 +121,7 @@ export class EmailService {
 
     // La empresa todavía no conectó su correo: sale por el remitente de la
     // plataforma, identificada con su nombre y con las respuestas a su
-    // dirección. Nunca por el SMTP global del .env, que no dice de quién es.
+    // dirección. Sin ese remitente no sale.
     if (input.tenantId) {
       if (!this.platformEmail.isConfigured()) {
         throw new ServiceUnavailableException(
@@ -195,7 +195,7 @@ export class EmailService {
         sentFrom: sent.from,
       };
     } catch (error) {
-      if (!(error instanceof ResendDeliveryError)) throw error;
+      if (!(error instanceof PlatformDeliveryError)) throw error;
       throw new ServiceUnavailableException(
         error.ambiguous
           ? 'No se pudo confirmar si el correo salió. Revisá antes de volver a enviarlo.'

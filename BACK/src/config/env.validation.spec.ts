@@ -31,6 +31,37 @@ describe('validateEnv', () => {
     ).toThrow(/van juntas/);
   });
 
+  it('accepts sending through the SMTP server with a host and an address', () => {
+    expect(() =>
+      validateEnv({
+        ...base,
+        PLATFORM_EMAIL_DRIVER: 'smtp',
+        SMTP_HOST: 'smtp.zoho.com',
+        SMTP_FROM: 'JoapyCore <avisos@joapycore.com>',
+      }),
+    ).not.toThrow();
+  });
+
+  it('refuses the SMTP driver without a host or without an address to send from', () => {
+    const smtp = { ...base, PLATFORM_EMAIL_DRIVER: 'smtp' };
+    expect(() => validateEnv({ ...smtp, SMTP_FROM: 'a@b.com' })).toThrow(
+      /necesita SMTP_HOST/,
+    );
+    expect(() =>
+      validateEnv({
+        ...smtp,
+        SMTP_HOST: 'smtp.zoho.com',
+        SMTP_FROM: 'JoapyCore',
+      }),
+    ).toThrow(/necesita SMTP_HOST/);
+  });
+
+  it('refuses a driver that does not exist', () => {
+    expect(() =>
+      validateEnv({ ...base, PLATFORM_EMAIL_DRIVER: 'sendgrid' }),
+    ).toThrow(/debe ser "resend" o "smtp"/);
+  });
+
   it('treats empty values as not set', () => {
     expect(() =>
       validateEnv({ ...base, RESEND_API_KEY: '', PLATFORM_EMAIL_DOMAIN: '' }),

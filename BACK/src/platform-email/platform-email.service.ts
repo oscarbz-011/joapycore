@@ -8,16 +8,25 @@ import {
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import type { EmailConfig } from '../config/email.config';
 import type { PlatformEmailConfig } from '../config/platform-email.config';
 import { PlatformEmailRepository } from './platform-email.repository';
 import {
+  addressOf,
   remainingToday,
   replyAddress,
   resendTag,
+  sharedSender,
   systemSender,
   tenantSender,
+  tenantSenderName,
 } from './platform-email.util';
-import { ResendClient, ResendDeliveryError } from './resend.client';
+import {
+  PlatformDeliveryError,
+  type PlatformOutgoingEmail,
+} from './platform-delivery';
+import { ResendClient } from './resend.client';
+import { SmtpPlatformClient } from './smtp-platform.client';
 
 export interface PlatformAttachment {
   filename: string;
@@ -49,6 +58,18 @@ export interface PlatformEmailResult {
   from: string;
 }
 
+type Sender = { address: string; name: string; header: string };
+
+/** Por dónde sale y con qué remitente, según el .env. */
+interface Route {
+  tenantSender(tenantName: string): Sender;
+  systemSender(): Sender;
+  send(
+    email: PlatformOutgoingEmail,
+    idempotencyKey: string,
+  ): Promise<{ id: string }>;
+}
+
 /** La empresa agotó lo que puede mandar por el remitente compartido. */
 export class PlatformEmailLimitError extends HttpException {
   constructor(readonly dailyLimit: number) {
@@ -63,7 +84,7 @@ export class PlatformEmailLimitError extends HttpException {
  * El remitente de la plataforma: los correos propios de JoapyCore y los de las
  * empresas que todavía no conectaron su correo.
  *
- * Todas las empresas comparten el dominio, y con él la reputación: por eso
+ * Todas las empresas comparten el remitente, y con él la reputación: por eso
  * cada una tiene un tope diario y sale identificada con su nombre.
  */
 @Injectable()
@@ -74,32 +95,58 @@ export class PlatformEmailService {
     private readonly configService: ConfigService,
     private readonly repository: PlatformEmailRepository,
     private readonly resend: ResendClient,
+    private readonly smtp: SmtpPlatformClient,
   ) {}
 
   private get config(): PlatformEmailConfig {
     return this.configService.get<PlatformEmailConfig>('platformEmail')!;
   }
 
-  /** Hay clave y dominio: el remitente puede enviar. */
   isConfigured(): boolean {
-    return Boolean(this.config.apiKey && this.config.domain);
+    return this.route() !== null;
+  }
+
+  private route(): Route | null {
+    const config = this.config;
+    if (config.driver === 'smtp') {
+      const smtp = this.configService.get<EmailConfig>('email');
+      const address = addressOf(smtp?.from);
+      if (!smtp?.host || !address) return null;
+      // Un servidor SMTP solo deja enviar desde su propia dirección: lo que
+      // distingue a cada empresa es el nombre y a quién se le responde.
+      return {
+        tenantSender: (name) =>
+          sharedSender(address, tenantSenderName(name, config.brand)),
+        systemSender: () => sharedSender(address, config.brand),
+        send: (email, key) => this.smtp.send(smtp, address, email, key),
+      };
+    }
+    const { apiKey, domain } = config;
+    if (!apiKey || !domain) return null;
+    return {
+      tenantSender: (name) => tenantSender(name, config.brand, domain),
+      systemSender: () =>
+        systemSender(config.brand, config.systemLocalPart, domain),
+      send: (email, key) => this.resend.send(apiKey, email, key),
+    };
   }
 
   /** Cómo saldría un correo de esta empresa por el remitente de la plataforma. */
   async senderFor(tenantId: string) {
-    const config = this.config;
-    if (!config.apiKey || !config.domain) return { available: false as const };
+    const route = this.route();
+    if (!route) return { available: false as const };
     const tenant = await this.tenantOf(tenantId);
-    const sender = tenantSender(tenant.shownName, config.brand, config.domain);
+    const sender = route.tenantSender(tenant.shownName);
     const sent = await this.repository.countRecent(tenantId);
+    const { tenantDailyLimit } = this.config;
     return {
       available: true as const,
       fromAddress: sender.address,
       fromName: sender.name,
       replyTo: replyAddress(tenant.email),
-      dailyLimit: config.tenantDailyLimit,
+      dailyLimit: tenantDailyLimit,
       sentToday: sent,
-      remainingToday: remainingToday(sent, config.tenantDailyLimit),
+      remainingToday: remainingToday(sent, tenantDailyLimit),
     };
   }
 
@@ -107,34 +154,34 @@ export class PlatformEmailService {
   async sendForTenant(
     input: TenantPlatformEmail,
   ): Promise<PlatformEmailResult> {
-    const config = this.requireConfig();
+    const route = this.requireRoute();
+    const { tenantDailyLimit } = this.config;
     const tenant = await this.tenantOf(input.tenantId);
 
     const sent = await this.repository.countRecent(input.tenantId);
-    if (remainingToday(sent, config.tenantDailyLimit) === 0) {
-      throw new PlatformEmailLimitError(config.tenantDailyLimit);
+    if (remainingToday(sent, tenantDailyLimit) === 0) {
+      throw new PlatformEmailLimitError(tenantDailyLimit);
     }
 
-    const sender = tenantSender(tenant.shownName, config.brand, config.domain);
-    return this.deliver(config.apiKey, input, {
+    return this.deliver(route, input, {
       tenantId: input.tenantId,
-      from: sender,
+      from: route.tenantSender(tenant.shownName),
       replyTo: replyAddress(input.replyTo) ?? replyAddress(tenant.email),
     });
   }
 
   /** Un correo de JoapyCore mismo: no pertenece a ninguna empresa. */
   async sendSystem(input: Content): Promise<PlatformEmailResult> {
-    const config = this.requireConfig();
-    return this.deliver(config.apiKey, input, {
+    const route = this.requireRoute();
+    return this.deliver(route, input, {
       tenantId: null,
-      from: systemSender(config.brand, config.systemLocalPart, config.domain),
+      from: route.systemSender(),
       replyTo: null,
     });
   }
 
   private async deliver(
-    apiKey: string,
+    route: Route,
     input: Content,
     envelope: {
       tenantId: string | null;
@@ -151,8 +198,7 @@ export class PlatformEmailService {
       replyTo: envelope.replyTo,
     };
     try {
-      const { id } = await this.resend.send(
-        apiKey,
+      const { id } = await route.send(
         {
           from: envelope.from.header,
           to: input.to,
@@ -177,7 +223,7 @@ export class PlatformEmailService {
       });
       return { messageId: id, from: envelope.from.address };
     } catch (error) {
-      if (error instanceof ResendDeliveryError) {
+      if (error instanceof PlatformDeliveryError) {
         // Sin destinatario ni asunto: el registro de la base ya los tiene.
         this.logger.warn(
           `Envío por la plataforma sin confirmar (${error.code}, ${input.purpose})`,
@@ -192,14 +238,14 @@ export class PlatformEmailService {
     }
   }
 
-  private requireConfig() {
-    const { apiKey, domain, ...rest } = this.config;
-    if (!apiKey || !domain) {
+  private requireRoute(): Route {
+    const route = this.route();
+    if (!route) {
       throw new ServiceUnavailableException(
         'El remitente de la plataforma no está configurado',
       );
     }
-    return { ...rest, apiKey, domain };
+    return route;
   }
 
   private async tenantOf(tenantId: string) {

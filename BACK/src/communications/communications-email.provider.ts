@@ -6,7 +6,7 @@ import {
   PlatformEmailLimitError,
   PlatformEmailService,
 } from '../platform-email/platform-email.service';
-import { ResendDeliveryError } from '../platform-email/resend.client';
+import { PlatformDeliveryError } from '../platform-email/platform-delivery';
 
 export interface TransactionalEmail {
   tenantId: string;
@@ -164,7 +164,7 @@ export class CommunicationsEmailProvider {
       });
       return { messageId: sent.messageId };
     } catch (error) {
-      if (error instanceof ResendDeliveryError) {
+      if (error instanceof PlatformDeliveryError) {
         throw new CommunicationDeliveryError(
           error.code,
           error.ambiguous,

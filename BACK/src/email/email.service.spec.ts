@@ -1,5 +1,5 @@
 import { ServiceUnavailableException } from '@nestjs/common';
-import { ResendDeliveryError } from '../platform-email/resend.client';
+import { PlatformDeliveryError } from '../platform-email/platform-delivery';
 import { createTransport } from 'nodemailer';
 import { EmailService } from './email.service';
 import { resolvePublicNetworkDestination } from '../integrations/network-destination.policy';
@@ -203,7 +203,7 @@ describe('EmailService', () => {
 
     it('does not claim a failure when the outcome is unknown', async () => {
       platformEmail.sendForTenant.mockRejectedValue(
-        new ResendDeliveryError('PROVIDER_UNREACHABLE', true, true, 'x'),
+        new PlatformDeliveryError('PROVIDER_UNREACHABLE', true, true, 'x'),
       );
 
       await expect(createService().sendWithAttachment(input)).rejects.toThrow(

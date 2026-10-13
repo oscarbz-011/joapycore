@@ -1,6 +1,6 @@
 import { createTransport } from 'nodemailer';
 import { PlatformEmailLimitError } from '../platform-email/platform-email.service';
-import { ResendDeliveryError } from '../platform-email/resend.client';
+import { PlatformDeliveryError } from '../platform-email/platform-delivery';
 import { IntegrationsService } from '../integrations/integrations.service';
 import { resolvePublicNetworkDestination } from '../integrations/network-destination.policy';
 import {
@@ -138,7 +138,7 @@ describe('Tenant SMTP adapter', () => {
 
     it('keeps the outcome unknown when the provider never answered', async () => {
       platformEmail.sendForTenant.mockRejectedValue(
-        new ResendDeliveryError('PROVIDER_UNREACHABLE', true, true, 'x'),
+        new PlatformDeliveryError('PROVIDER_UNREACHABLE', true, true, 'x'),
       );
 
       await expect(provider.send(input)).rejects.toMatchObject({

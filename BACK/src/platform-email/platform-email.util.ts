@@ -34,10 +34,31 @@ export function tenantSender(
   brand: string,
   domain: string,
 ): { address: string; name: string; header: string } {
-  const address = `${tenantLocalPart(tenantName)}@${domain}`;
+  return sharedSender(
+    `${tenantLocalPart(tenantName)}@${domain}`,
+    tenantSenderName(tenantName, brand),
+  );
+}
+
+/** "Mi Empresa vía JoapyCore" */
+export function tenantSenderName(tenantName: string, brand: string): string {
   const shown = displayName(tenantName);
-  const name = shown ? `${shown} vía ${brand}` : brand;
-  return { address, name, header: `"${name}" <${address}>` };
+  return shown ? `${shown} vía ${brand}` : brand;
+}
+
+/** Una dirección fija con el nombre que corresponda a quien envía. */
+export function sharedSender(
+  address: string,
+  name: string,
+): { address: string; name: string; header: string } {
+  const shown = displayName(name);
+  return { address, name: shown, header: `"${shown}" <${address}>` };
+}
+
+/** La dirección de un remitente escrito como `a@b.c` o `Nombre <a@b.c>`. */
+export function addressOf(from: string | undefined): string | null {
+  const bracketed = from?.match(/<([^<>]+)>\s*$/)?.[1];
+  return replyAddress(bracketed ?? from);
 }
 
 /** `"JoapyCore" <no-reply@correo.joapycore.com>` */
@@ -46,9 +67,7 @@ export function systemSender(
   localPart: string,
   domain: string,
 ): { address: string; name: string; header: string } {
-  const address = `${localPart}@${domain}`;
-  const name = displayName(brand);
-  return { address, name, header: `"${name}" <${address}>` };
+  return sharedSender(`${localPart}@${domain}`, brand);
 }
 
 const EMAIL = /^[^\s<>@,;]+@[^\s<>@,;]+\.[^\s<>@,;]+$/;

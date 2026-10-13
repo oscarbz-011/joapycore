@@ -1,7 +1,9 @@
 import {
+  addressOf,
   remainingToday,
   replyAddress,
   resendTag,
+  sharedSender,
   systemSender,
   tenantLocalPart,
   tenantSender,
@@ -70,6 +72,40 @@ describe('replyAddress', () => {
     expect(replyAddress('')).toBeNull();
     expect(replyAddress('ventas@')).toBeNull();
     expect(replyAddress('a@b.com, c@d.com')).toBeNull();
+  });
+});
+
+describe('sharedSender', () => {
+  it('puts the name of whoever sends on a fixed address', () => {
+    expect(
+      sharedSender('avisos@joapycore.com', 'Mi Empresa vía JoapyCore'),
+    ).toEqual({
+      address: 'avisos@joapycore.com',
+      name: 'Mi Empresa vía JoapyCore',
+      header: '"Mi Empresa vía JoapyCore" <avisos@joapycore.com>',
+    });
+  });
+
+  it('does not let a name break the header', () => {
+    expect(
+      sharedSender('a@b.com', 'Mala "Empresa" <x@y.com>\r\nBcc: z@z.com')
+        .header,
+    ).toBe('"Mala Empresa x@y.com Bcc: z@z.com" <a@b.com>');
+  });
+});
+
+describe('addressOf', () => {
+  it('reads the address of a sender written with or without a name', () => {
+    expect(addressOf('avisos@joapycore.com')).toBe('avisos@joapycore.com');
+    expect(addressOf('JoapyCore <Avisos@JoapyCore.com>')).toBe(
+      'avisos@joapycore.com',
+    );
+  });
+
+  it('is null when there is no address', () => {
+    expect(addressOf(undefined)).toBeNull();
+    expect(addressOf('JoapyCore')).toBeNull();
+    expect(addressOf('JoapyCore <>')).toBeNull();
   });
 });
 
