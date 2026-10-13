@@ -7,6 +7,7 @@ import { useAuth } from '../../../lib/auth-context';
 import { usePermission } from '../../../lib/permissions';
 import { useWsConnection } from '../../../lib/use-ws-connection';
 import { Button } from '@/components/ui/button';
+import { COMMUNICATIONS_PATH } from '@/lib/api/communications';
 import { Sidebar } from './components/sidebar';
 import { AlertsDropdown } from './components/alerts-dropdown';
 import { SearchModal } from './components/search-modal';
@@ -73,9 +74,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           {canCommunicate && <Button
             variant="outline"
             size="icon-sm"
-            onClick={() => router.push('/dashboard/applications/communications')}
-            title="Centro de comunicaciones"
-            aria-label="Abrir centro de comunicaciones"
+            onClick={() => router.push(COMMUNICATIONS_PATH)}
+            title="Comunicaciones"
+            aria-label="Abrir Comunicaciones"
             className="text-muted-foreground"
           >
             <Mail size={15} />

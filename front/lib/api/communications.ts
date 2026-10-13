@@ -1,6 +1,6 @@
 import { apiClient } from "./client";
 
-export const COMMUNICATIONS_PATH = "/dashboard/applications/communications";
+export const COMMUNICATIONS_PATH = "/dashboard/communications";
 export type DeliveryStatus =
   | "QUEUED"
   | "PROCESSING"
@@ -71,6 +71,7 @@ export interface CommunicationNotification {
   createdAt: string;
   readAt: string | null;
   messageId: string | null;
+  contact?: { type: string; id: string } | null;
   entityType?: string | null;
   entityId?: string | null;
 }
@@ -85,6 +86,69 @@ export interface TimelineItem {
   recipient?: string;
   author?: { firstName: string; lastName: string } | null;
 }
+
+export type ContactType = "CUSTOMER";
+export interface ConversationContact {
+  type: ContactType;
+  id: string;
+  code: string | null;
+  name: string;
+  email: string | null;
+  phone: string | null;
+}
+export interface Conversation {
+  contact: ConversationContact;
+  messages: number;
+  notes: number;
+  problems: number;
+  lastAt: string;
+  lastMessage: {
+    id: string;
+    subject: string;
+    status: DeliveryStatus;
+    createdAt: string;
+  } | null;
+}
+export interface ConversationsFilter {
+  page: number;
+  onlyProblems?: boolean;
+  search?: string;
+}
+export interface ConversationsSummary {
+  problemConversations: number;
+  problemMessages: number;
+}
+export interface ThreadMessage {
+  kind: "MESSAGE";
+  id: string;
+  entityType: string;
+  entityId: string;
+  recipient: string;
+  subject: string;
+  bodyText: string;
+  fromEmail: string;
+  fromName: string | null;
+  status: DeliveryStatus;
+  sentAt: string | null;
+  lastError: string | null;
+  createdAt: string;
+}
+export interface ThreadNote {
+  kind: "NOTE";
+  id: string;
+  entityType: string;
+  entityId: string;
+  body: string;
+  createdAt: string;
+  author: { firstName: string; lastName: string } | null;
+}
+export type ThreadItem = ThreadMessage | ThreadNote;
+export interface Thread extends Page<ThreadItem> {
+  contact: ConversationContact;
+}
+
+const conversationPath = (contact: Pick<ConversationContact, "type" | "id">) =>
+  `/communications/conversations/${contact.type}/${encodeURIComponent(contact.id)}`;
 
 export const communicationsApi = {
   settings: (): Promise<CommunicationSettings> =>
@@ -144,6 +208,33 @@ export const communicationsApi = {
         `/communications/timeline/${encodeURIComponent(type)}/${encodeURIComponent(id)}/notes`,
         { body },
       )
+      .then((r) => r.data),
+  conversations: (filter: ConversationsFilter): Promise<Page<Conversation>> =>
+    apiClient
+      .get("/communications/conversations", {
+        params: {
+          page: filter.page,
+          limit: 20,
+          onlyProblems: filter.onlyProblems || undefined,
+          search: filter.search || undefined,
+        },
+      })
+      .then((r) => r.data),
+  conversationsSummary: (): Promise<ConversationsSummary> =>
+    apiClient.get("/communications/conversations/summary").then((r) => r.data),
+  thread: (
+    contact: Pick<ConversationContact, "type" | "id">,
+    page: number,
+  ): Promise<Thread> =>
+    apiClient
+      .get(conversationPath(contact), { params: { page, limit: 20 } })
+      .then((r) => r.data),
+  addConversationNote: (
+    contact: Pick<ConversationContact, "type" | "id">,
+    body: string,
+  ): Promise<ThreadNote> =>
+    apiClient
+      .post(`${conversationPath(contact)}/notes`, { body })
       .then((r) => r.data),
   notifications: (
     page: number,

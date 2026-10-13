@@ -17,7 +17,9 @@ export type PendingNotificationType =
   | 'ar-due-soon'
   | 'credit-adjustment'
   | 'purchase-order'
-  | 'delivery';
+  | 'delivery'
+  | 'communication-problem'
+  | 'communication-notice';
 
 export interface PendingNotification {
   id: string;

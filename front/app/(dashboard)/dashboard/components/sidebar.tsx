@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
-  AppWindow,
+  MessagesSquare,
   Package,
   ShoppingCart,
   Truck,
@@ -39,6 +39,8 @@ import {
   isInventoryItemActive,
 } from "../../../../lib/inventory-navigation";
 import { FINANCE_NAV_GROUPS } from "@/lib/finance-navigation";
+import { COMMUNICATIONS_PATH } from "@/lib/api/communications";
+import { useCommunicationsAttention } from "@/components/communications/inbox/use-communications";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -77,14 +79,15 @@ const FINANCE_ICONS: Record<string, React.ElementType> = {
 
 const STATIC_GROUPS: SidebarGroup[] = [
   {
-    id: "apps",
-    label: "Aplicaciones",
-    icon: AppWindow,
+    id: "communications",
+    label: "Comunicaciones",
+    icon: MessagesSquare,
     anyPermission: ["communications:access"],
+    flat: true,
     items: [
       {
-        label: "Centro de comunicaciones",
-        href: "/dashboard/applications/communications",
+        label: "Comunicaciones",
+        href: COMMUNICATIONS_PATH,
         permission: "communications:access",
       },
     ],
@@ -615,7 +618,10 @@ export function Sidebar() {
     jwtPayload?.sub,
   );
 
+  const communications = useCommunicationsAttention();
+
   const badgeByHref: Record<string, number | undefined> = {
+    [COMMUNICATIONS_PATH]: communications.total || undefined,
     "/dashboard/settings/alerts": alertBadge,
     "/dashboard/billing": pendingCounts.invoices,
     "/dashboard/billing/approvals": pendingCounts.approvals,
