@@ -178,6 +178,11 @@ function CreditReceivable({ ar }: { ar: AccountsReceivable }) {
   const [selection, setSelection] = useState<Selection>({});
   const [amount, setAmount] = useState(0);
   const [paying, setPaying] = useState(false);
+  // Elegir a mano deja sin efecto el monto tipeado.
+  const pick = (next: Selection) => {
+    setSelection(next);
+    setAmount(0);
+  };
 
   const loanQuery = useQuery<Loan>({
     queryKey: ["loan-by-order", saleOrderId],
@@ -257,7 +262,7 @@ function CreditReceivable({ ar }: { ar: AccountsReceivable }) {
                 variant="outline"
                 size="sm"
                 disabled={summary.overdueCount === 0}
-                onClick={() => setSelection(selectOverdue(installments))}
+                onClick={() => pick(selectOverdue(installments))}
               >
                 Seleccionar vencidas
               </Button>
@@ -265,7 +270,7 @@ function CreditReceivable({ ar }: { ar: AccountsReceivable }) {
                 variant="outline"
                 size="sm"
                 disabled={!summary.nextDue}
-                onClick={() => setSelection(selectAll(installments))}
+                onClick={() => pick(selectAll(installments))}
               >
                 Seleccionar todas
               </Button>
@@ -273,7 +278,7 @@ function CreditReceivable({ ar }: { ar: AccountsReceivable }) {
                 variant="ghost"
                 size="sm"
                 disabled={selected.length === 0}
-                onClick={() => setSelection({})}
+                onClick={() => pick({})}
               >
                 Limpiar
               </Button>
@@ -294,7 +299,7 @@ function CreditReceivable({ ar }: { ar: AccountsReceivable }) {
             <InstallmentsTable
               installments={installments}
               selection={selection}
-              onToggle={(inst) => setSelection((current) => toggle(current, inst))}
+              onToggle={(inst) => pick(toggle(selection, inst))}
             />
           </div>
         </section>
