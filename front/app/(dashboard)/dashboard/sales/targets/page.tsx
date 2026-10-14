@@ -1,476 +1,605 @@
 'use client';
 
-import { usePermission } from '@/lib/permissions';
-
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Building2, Check, ChevronLeft, ChevronRight, Pencil, Plus, Target, X } from 'lucide-react';
+import { salesApi, type SellerStat } from '@/lib/api/sales';
+import { usersApi } from '@/lib/api/users';
+import { apiErrorMessage } from '@/lib/api/api-error';
+import { usePermission } from '@/lib/permissions';
+import { localISODate } from '@/lib/date';
+import { useTableSort } from '@/lib/use-table-sort';
+import { usePagination } from '@/lib/use-pagination';
 import {
-  Target,
-  ChevronLeft,
-  ChevronRight,
-  Pencil,
-  Check,
-  X,
-  Plus,
-  Building2,
-  Trophy,
-  CreditCard,
-  Banknote,
-} from 'lucide-react';
-import {
-  salesApi,
-  type SellerStat,
-} from '../../../../../lib/api/sales';
-import { NumericInput } from '../../../../../components/numeric-input';
-import { usersApi } from '../../../../../lib/api/users';
+  STATUS,
+  addMonths,
+  dailyNeeded,
+  fmtGs,
+  gap,
+  goalStatus,
+  monthProgress,
+  percentOf,
+  periodLabel,
+  sellerRows,
+  statusCounts,
+  type GoalStatus,
+  type MonthProgress,
+  type SellerRow,
+} from '@/lib/sales-targets';
+import { NumericInput } from '@/components/numeric-input';
+import { SortableHeader } from '@/components/sortable-header';
+import { TablePagination } from '@/components/table-pagination';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
 
-// ── Constants ──────────────────────────────────────────────────────────────────
+const NUM_CLS =
+  'h-9 w-full min-w-0 rounded-3xl border border-transparent bg-input/50 px-3 text-sm outline-none transition-[color,box-shadow,background-color] focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30';
+const MEDALS: Record<number, string> = { 1: '🥇', 2: '🥈', 3: '🥉' };
 
-const NUM_CLS = 'h-9 w-full min-w-0 rounded-3xl border border-transparent bg-input/50 px-3 text-sm outline-none transition-[color,box-shadow,background-color] focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30';
+const SELLER_SORT = {
+  rank: (row: SellerRow) => row.rank,
+  name: (row: SellerRow) => row.name,
+  actual: (row: SellerRow) => row.actual,
+  target: (row: SellerRow) => row.target,
+  percent: (row: SellerRow) => row.percent,
+  remaining: (row: SellerRow) => row.remaining,
+  status: (row: SellerRow) => STATUS[row.status].label,
+  cash: (row: SellerRow) => row.cashAmount,
+  credit: (row: SellerRow) => row.creditAmount,
+  count: (row: SellerRow) => row.cashCount + row.creditCount,
+};
+const BY_RANK = (a: SellerRow, b: SellerRow) => a.rank - b.rank;
 
-// ── Helpers ────────────────────────────────────────────────────────────────────
+// ── Piezas ─────────────────────────────────────────────────────────────────────
 
-function fmtGs(n: number) {
-  return 'Gs. ' + new Intl.NumberFormat('es-PY').format(Math.round(n));
-}
-
-function pct(actual: number, target: number | null) {
-  if (!target || target === 0) return null;
-  return Math.min(100, Math.round((actual / target) * 100));
-}
-
-function periodLabel(period: string) {
-  const [year, month] = period.split('-').map(Number);
-  return new Date(year, month - 1, 1).toLocaleDateString('es-PY', {
-    month: 'long',
-    year: 'numeric',
-  });
-}
-
-function addMonths(period: string, delta: number) {
-  const [year, month] = period.split('-').map(Number);
-  const d = new Date(year, month - 1 + delta, 1);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-}
-
-function currentPeriod() {
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-}
-
-// ── Progress bar ───────────────────────────────────────────────────────────────
-
-function ProgressBar({ value, color = '#059669' }: { value: number; color?: string }) {
+function StatusChip({ status }: { status: GoalStatus }) {
+  const { label, color } = STATUS[status];
   return (
-    <div className="h-2 w-full rounded-full bg-muted/30 overflow-hidden">
-      <div
-        className="h-full rounded-full transition-all duration-500"
-        style={{ width: `${Math.min(100, value)}%`, background: color }}
-      />
+    <span
+      className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold"
+      style={{ color, background: `color-mix(in srgb, ${color} 14%, transparent)` }}
+    >
+      <span aria-hidden className="size-1.5 rounded-full" style={{ background: color }} />
+      {label}
+    </span>
+  );
+}
+
+/** La barra de lo logrado, con una marca de dónde habría que estar hoy. */
+function PaceBar({
+  percent,
+  status,
+  progress,
+  size = 'md',
+}: {
+  percent: number | null;
+  status: GoalStatus;
+  progress: MonthProgress;
+  size?: 'md' | 'lg';
+}) {
+  const showPace = percent !== null && progress.fraction > 0 && progress.fraction < 1;
+  return (
+    <div className="relative">
+      <div className={cn('w-full overflow-hidden rounded-full bg-muted', size === 'lg' ? 'h-3' : 'h-2')}>
+        <div
+          className="h-full rounded-full transition-all duration-500"
+          style={{ width: `${Math.min(100, percent ?? 0)}%`, background: STATUS[status].color }}
+        />
+      </div>
+      {showPace && (
+        <span
+          aria-hidden
+          title="Donde habría que estar hoy"
+          className={cn('absolute top-1/2 w-0.5 -translate-y-1/2 rounded-full bg-foreground/60', size === 'lg' ? 'h-5' : 'h-3.5')}
+          style={{ left: `${progress.fraction * 100}%` }}
+        />
+      )}
     </div>
   );
 }
 
-// ── Target input (inline edit) ─────────────────────────────────────────────────
-
-function TargetInput({
+function TargetEditor({
   current,
+  canEdit,
+  pending,
   onSave,
+  compact = false,
 }: {
   current: number | null;
+  canEdit: boolean;
+  pending: boolean;
   onSave: (amount: number) => void;
+  compact?: boolean;
 }) {
-  const canManage = usePermission('sales:manage');
   const [editing, setEditing] = useState(false);
-  const [value, setValue] = useState<number>(current != null ? current / 1_000_000 : 0);
-
-  function commit() {
-    if (value > 0) onSave(value * 1_000_000);
-    setEditing(false);
-  }
+  const [millions, setMillions] = useState(0);
 
   if (editing) {
+    const commit = () => {
+      if (millions > 0) onSave(Math.round(millions * 1_000_000));
+      setEditing(false);
+    };
     return (
-      <div className="flex items-center gap-1.5 mt-1">
-        <div className="relative w-28">
+      <div className="flex items-center gap-1.5">
+        <div className="relative w-32">
           <NumericInput
             autoFocus
-            value={value}
-            onChange={setValue}
+            aria-label="Meta en millones de guaraníes"
+            value={millions}
+            onChange={setMillions}
             decimals={1}
-            onKeyDown={(e) => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') setEditing(false); }}
-            className="w-full h-7 min-w-0 rounded-xl border border-transparent bg-input/50 pl-2 pr-7 text-xs outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30"
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') commit();
+              if (event.key === 'Escape') setEditing(false);
+            }}
+            className={cn(NUM_CLS, 'h-8 pr-14 text-sm')}
           />
-          <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground/60">M</span>
+          <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
+            millones
+          </span>
         </div>
-        <button onClick={commit} className="text-emerald-600 hover:text-emerald-800"><Check size={14} /></button>
-        <button onClick={() => setEditing(false)} className="text-muted-foreground/60 hover:text-muted-foreground"><X size={14} /></button>
+        <Button size="icon-sm" variant="ghost" aria-label="Guardar meta" onClick={commit}>
+          <Check size={14} />
+        </Button>
+        <Button size="icon-sm" variant="ghost" aria-label="Cancelar" onClick={() => setEditing(false)}>
+          <X size={14} />
+        </Button>
       </div>
     );
   }
 
-  if (!canManage) {
-    return (
-      <span className="mt-1 block text-xs text-muted-foreground/60">
-        {current != null ? `Meta: ${fmtGs(current)}` : 'Sin meta establecida'}
-      </span>
-    );
-  }
-
+  const amount = current !== null ? (
+    <span className={cn('font-semibold tabular-nums text-foreground', !compact && 'text-base')}>{fmtGs(current)}</span>
+  ) : (
+    <span className="text-muted-foreground">Sin meta</span>
+  );
+  if (!canEdit) return amount;
   return (
-    <button
-      onClick={() => { setValue(current != null ? current / 1_000_000 : 0); setEditing(true); }}
-      className="flex items-center gap-1 text-xs text-muted-foreground/60 hover:text-muted-foreground mt-1 transition-colors"
-    >
-      <span>{current != null ? `Meta: ${fmtGs(current)}` : 'Sin meta establecida'}</span>
-      <Pencil size={10} />
-    </button>
+    <span className="inline-flex items-center gap-1.5">
+      {amount}
+      <Button
+        size="icon-xs"
+        variant="ghost"
+        disabled={pending}
+        aria-label={current !== null ? 'Cambiar la meta' : 'Definir la meta'}
+        onClick={() => {
+          setMillions(current !== null ? current / 1_000_000 : 0);
+          setEditing(true);
+        }}
+      >
+        {current !== null ? <Pencil size={12} /> : <Plus size={12} />}
+      </Button>
+    </span>
   );
 }
 
-// ── Seller card ────────────────────────────────────────────────────────────────
-
-const RANK_BADGE: Record<number, string> = {
-  1: 'bg-yellow-100 text-amber-800 dark:bg-yellow-900/30 dark:text-yellow-300',
-  2: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300',
-  3: 'bg-orange-100 text-amber-900 dark:bg-orange-900/30 dark:text-orange-300',
-};
-
-const RANK_LABEL: Record<number, string> = {
-  1: '🥇 1°',
-  2: '🥈 2°',
-  3: '🥉 3°',
-};
-
-function SellerCard({
-  stat,
-  rank,
-  canManage,
-  onTargetSave,
-}: {
-  stat: SellerStat;
-  rank: number;
-  canManage: boolean;
-  onTargetSave: (userId: string, amount: number) => void;
-}) {
-  const progress = pct(stat.actual, stat.target);
-  const name = `${stat.seller.firstName} ${stat.seller.lastName}`;
-
-  const barColor =
-    progress === null ? '#94a3b8' :
-    progress >= 100   ? '#059669' :
-    progress >= 70    ? '#2563eb' :
-    progress >= 40    ? '#b45309' :
-                        '#dc2626';
-
-  const totalOrders = stat.cashCount + stat.creditCount;
-
+function Figure({ label, value, hint, color }: { label: string; value: string; hint?: string; color?: string }) {
   return (
-    <div className="rounded-xl border border-border bg-card px-5 py-4 space-y-3">
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            <p className="font-semibold text-foreground text-sm truncate">{name}</p>
-            {canManage && RANK_BADGE[rank] && (
-              <span className={cn('rounded-md px-1.5 py-0.5 text-xs font-bold shrink-0', RANK_BADGE[rank])}>
-                {RANK_LABEL[rank]}
-              </span>
-            )}
-          </div>
-          {canManage ? (
-            <TargetInput
-              current={stat.target}
-              onSave={(amount) => onTargetSave(stat.seller.id, amount)}
-            />
-          ) : (
-            <p className="text-xs text-muted-foreground/60 mt-0.5">
-              {stat.target != null ? `Meta: ${fmtGs(stat.target)}` : 'Sin meta establecida'}
-            </p>
-          )}
-        </div>
-        <div className="text-right shrink-0">
-          <p className="text-lg font-bold text-foreground">{fmtGs(stat.actual)}</p>
-          {progress !== null && (
-            <p className={cn('text-xs font-semibold', progress >= 100 ? 'text-emerald-600' : progress >= 70 ? 'text-blue-600' : 'text-muted-foreground')}>
-              {progress}% de meta
-            </p>
-          )}
-        </div>
-      </div>
-
-      <ProgressBar value={progress ?? 0} color={barColor} />
-
-      {totalOrders > 0 && (
-        <div className="flex gap-4 pt-1">
-          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <Banknote size={12} className="text-emerald-500 shrink-0" />
-            <span>Contado:</span>
-            <span className="font-medium">{fmtGs(stat.cashAmount)} ({stat.cashCount})</span>
-          </div>
-          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <CreditCard size={12} className="text-amber-500 shrink-0" />
-            <span>Crédito:</span>
-            <span className="font-medium">{fmtGs(stat.creditAmount)} ({stat.creditCount})</span>
-          </div>
-        </div>
-      )}
-
-      {stat.target != null && (
-        <p className="text-xs text-muted-foreground/60">
-          Faltan {fmtGs(Math.max(0, stat.target - stat.actual))} para la meta
-        </p>
-      )}
+    <div className="min-w-0 rounded-2xl bg-muted/40 px-4 py-3">
+      <dt className="text-xs text-muted-foreground">{label}</dt>
+      <dd className="mt-1 break-words text-lg font-semibold tabular-nums" style={color ? { color } : undefined}>
+        {value}
+      </dd>
+      {hint && <p className="mt-0.5 text-xs text-muted-foreground">{hint}</p>}
     </div>
   );
 }
 
-// ── Add seller target form ─────────────────────────────────────────────────────
+/** Lo vendido contra la meta: de la empresa o, para un vendedor, lo suyo. */
+function GoalSummary({
+  title,
+  actual,
+  target,
+  progress,
+  canEdit,
+  pending,
+  onSave,
+}: {
+  title: string;
+  actual: number;
+  target: number | null;
+  progress: MonthProgress;
+  canEdit: boolean;
+  pending: boolean;
+  onSave: (amount: number) => void;
+}) {
+  const percent = percentOf(actual, target);
+  const status = goalStatus(actual, target, progress);
+  const difference = gap(actual, target);
+  const perDay = dailyNeeded(actual, target, progress);
 
-function AddSellerForm({
+  return (
+    <section aria-label={title} className="space-y-5 rounded-2xl border border-border bg-card p-5">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="flex items-start gap-3">
+          <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-muted">
+            <Building2 size={18} className="text-muted-foreground" />
+          </span>
+          <div>
+            <h2 className="text-sm font-medium text-muted-foreground">{title}</h2>
+            <p className="text-3xl font-bold tabular-nums tracking-tight">{fmtGs(actual)}</p>
+            <p className="mt-1 flex flex-wrap items-center gap-1.5 text-sm text-muted-foreground">
+              de una meta de
+              <TargetEditor current={target} canEdit={canEdit} pending={pending} onSave={onSave} />
+            </p>
+          </div>
+        </div>
+        <div className="text-right">
+          {percent !== null ? (
+            <p className="text-4xl font-bold tabular-nums" style={{ color: STATUS[status].color }}>
+              {percent}%
+            </p>
+          ) : (
+            <p className="text-sm text-muted-foreground">Sin meta definida</p>
+          )}
+          {status !== 'none' && <StatusChip status={status} />}
+        </div>
+      </div>
+
+      {target !== null && <PaceBar percent={percent} status={status} progress={progress} size="lg" />}
+
+      {target !== null && difference && (
+        <dl className="grid gap-3 md:grid-cols-3">
+          <Figure
+            label={difference.kind === 'missing' ? 'Falta para la meta' : 'Superó la meta por'}
+            value={fmtGs(difference.amount)}
+            color={difference.kind === 'exceeded' ? STATUS.achieved.color : undefined}
+          />
+          <Figure
+            label="Hay que vender por día"
+            value={perDay !== null ? fmtGs(perDay) : '—'}
+            hint={perDay !== null ? `En los ${progress.left} ${progress.left === 1 ? 'día que queda' : 'días que quedan'}` : undefined}
+          />
+          <Figure
+            label="Del mes recorrido"
+            value={`${Math.round(progress.fraction * 100)}%`}
+            hint={`${progress.elapsed} de ${progress.days} días · la marca en la barra`}
+          />
+        </dl>
+      )}
+    </section>
+  );
+}
+
+function AddSellerTarget({
   existingIds,
+  pending,
   onAdd,
   onCancel,
 }: {
-  period: string;
   existingIds: Set<string>;
+  pending: boolean;
   onAdd: (userId: string, amount: number) => void;
   onCancel: () => void;
 }) {
   const [userId, setUserId] = useState('');
-  const [amount, setAmount] = useState<number>(0);
-
-  const { data: users = [] } = useQuery({
-    queryKey: ['users'],
-    queryFn: usersApi.list,
-  });
-
-  const available = users.filter((u) => u.status === 'ACTIVE' && !existingIds.has(u.id));
+  const [millions, setMillions] = useState(0);
+  const { data: users = [] } = useQuery({ queryKey: ['users'], queryFn: usersApi.list });
+  const available = users.filter((user) => user.status === 'ACTIVE' && !existingIds.has(user.id));
+  const chosen = available.find((user) => user.id === userId);
 
   return (
-    <div className="rounded-xl border-2 border-dashed border-border bg-muted/30 p-4 space-y-3">
-      <p className="text-sm font-medium text-muted-foreground">Agregar meta para vendedor</p>
-      <div className="flex gap-2">
-        <Select value={userId || 'none'} onValueChange={(v) => setUserId(v && v !== 'none' ? v : '')}>
-          <SelectTrigger className="flex-1">
-            <span className="flex-1 text-left text-sm truncate">{available.find((u) => u.id === userId) ? `${available.find((u) => u.id === userId)?.firstName} ${available.find((u) => u.id === userId)?.lastName}` : 'Seleccionar vendedor…'}</span>
+    <div className="space-y-3 rounded-2xl border-2 border-dashed border-border bg-muted/30 p-4">
+      <p className="text-sm font-medium">Meta para un vendedor que todavía no vendió este mes</p>
+      <div className="flex flex-wrap gap-2">
+        <Select value={userId || 'none'} onValueChange={(value) => setUserId(value && value !== 'none' ? value : '')}>
+          <SelectTrigger className="min-w-56 flex-1">
+            <span className="flex-1 truncate text-left text-sm">
+              {chosen ? `${chosen.firstName} ${chosen.lastName}` : 'Elegir vendedor…'}
+            </span>
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="none">Seleccionar vendedor…</SelectItem>
-            {available.map((u) => (
-              <SelectItem key={u.id} value={u.id}>{u.firstName} {u.lastName}</SelectItem>
+            <SelectItem value="none">Elegir vendedor…</SelectItem>
+            {available.map((user) => (
+              <SelectItem key={user.id} value={user.id}>
+                {user.firstName} {user.lastName}
+              </SelectItem>
             ))}
           </SelectContent>
         </Select>
-        <div className="relative w-36">
+        <div className="relative w-40">
           <NumericInput
-            value={amount}
-            onChange={setAmount}
+            aria-label="Meta en millones de guaraníes"
+            value={millions}
+            onChange={setMillions}
             decimals={1}
-            placeholder="Meta en M"
-            className={cn(NUM_CLS, 'pr-12')}
+            placeholder="Meta"
+            className={cn(NUM_CLS, 'pr-16')}
           />
-          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground/60">M Gs.</span>
+          <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
+            millones
+          </span>
         </div>
       </div>
       <div className="flex gap-2">
         <Button
-          type="button"
           size="sm"
-          disabled={!userId || !amount}
-          onClick={() => onAdd(userId, amount * 1_000_000)}
+          disabled={!userId || !millions || pending}
+          onClick={() => onAdd(userId, Math.round(millions * 1_000_000))}
         >
-          <Check size={13} />
-          Guardar
+          <Check size={13} /> Guardar
         </Button>
-        <Button type="button" variant="outline" size="sm" onClick={onCancel}>
-          <X size={13} />
-          Cancelar
+        <Button variant="outline" size="sm" onClick={onCancel}>
+          <X size={13} /> Cancelar
         </Button>
       </div>
     </div>
   );
 }
 
-// ── Page ──────────────────────────────────────────────────────────────────────
+function SellersTable({
+  rows,
+  progress,
+  canEdit,
+  pending,
+  onSave,
+}: {
+  rows: SellerRow[];
+  progress: MonthProgress;
+  canEdit: boolean;
+  pending: boolean;
+  onSave: (userId: string, amount: number) => void;
+}) {
+  const { sorted, sort, toggle } = useTableSort(rows, SELLER_SORT, BY_RANK);
+  const pagination = usePagination(sorted);
+  const header = (label: string, key: keyof typeof SELLER_SORT, align?: 'right' | 'center') => (
+    <SortableHeader label={label} sortKey={key} sort={sort} onSort={toggle} align={align} className="whitespace-nowrap px-2.5 first:pl-4 last:pr-4" />
+  );
+
+  return (
+    <div className="overflow-hidden rounded-2xl border border-border bg-card">
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead className="border-b border-border bg-muted/30 text-xs font-bold uppercase tracking-wider text-muted-foreground">
+            <tr>
+              {header('#', 'rank', 'center')}
+              {header('Vendedor', 'name')}
+              {header('Vendido', 'actual', 'right')}
+              {header('Meta', 'target', 'right')}
+              {header('Cumplido', 'percent')}
+              {header('Diferencia', 'remaining', 'right')}
+              {header('Estado', 'status')}
+              {header('Contado', 'cash', 'right')}
+              {header('Crédito', 'credit', 'right')}
+              {header('Ventas', 'count', 'right')}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-border">
+            {pagination.items.map((row) => (
+              <tr key={row.seller.id} className="transition-colors hover:bg-muted/20">
+                <td className="px-2.5 py-3 first:pl-4 last:pr-4 text-center tabular-nums">
+                  {MEDALS[row.rank] ? (
+                    <span aria-label={`${row.rank}° puesto`}>{MEDALS[row.rank]}</span>
+                  ) : (
+                    <span className="text-muted-foreground">{row.rank}°</span>
+                  )}
+                </td>
+                <td className="whitespace-nowrap px-2.5 py-3 first:pl-4 last:pr-4 font-medium">{row.name}</td>
+                <td className="whitespace-nowrap px-2.5 py-3 first:pl-4 last:pr-4 text-right text-base font-bold tabular-nums">
+                  {fmtGs(row.actual)}
+                </td>
+                <td className="whitespace-nowrap px-2.5 py-3 first:pl-4 last:pr-4 text-right">
+                  <TargetEditor
+                    compact
+                    current={row.target}
+                    canEdit={canEdit}
+                    pending={pending}
+                    onSave={(amount) => onSave(row.seller.id, amount)}
+                  />
+                </td>
+                <td className="min-w-28 px-2.5 py-3 first:pl-4 last:pr-4">
+                  {row.percent !== null ? (
+                    <div className="space-y-1.5">
+                      <span className="font-bold tabular-nums" style={{ color: STATUS[row.status].color }}>
+                        {row.percent}%
+                      </span>
+                      <PaceBar percent={row.percent} status={row.status} progress={progress} />
+                    </div>
+                  ) : (
+                    <span className="text-muted-foreground">—</span>
+                  )}
+                </td>
+                <td className="whitespace-nowrap px-2.5 py-3 first:pl-4 last:pr-4 text-right tabular-nums">
+                  {row.remaining === null ? (
+                    <span className="text-muted-foreground">—</span>
+                  ) : row.remaining > 0 ? (
+                    <span title="Falta para la meta">−{fmtGs(row.remaining)}</span>
+                  ) : (
+                    <span title="Superó la meta por" className="font-semibold" style={{ color: STATUS.achieved.color }}>
+                      +{fmtGs(-row.remaining)}
+                    </span>
+                  )}
+                </td>
+                <td className="px-2.5 py-3 first:pl-4 last:pr-4">
+                  <StatusChip status={row.status} />
+                </td>
+                <td className="whitespace-nowrap px-2.5 py-3 first:pl-4 last:pr-4 text-right tabular-nums text-muted-foreground">
+                  {fmtGs(row.cashAmount)}
+                </td>
+                <td className="whitespace-nowrap px-2.5 py-3 first:pl-4 last:pr-4 text-right tabular-nums text-muted-foreground">
+                  {fmtGs(row.creditAmount)}
+                </td>
+                <td className="px-2.5 py-3 first:pl-4 last:pr-4 text-right tabular-nums text-muted-foreground">
+                  {row.cashCount + row.creditCount}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div className="px-4 pb-3">
+        <TablePagination {...pagination.controls} label="vendedores" />
+      </div>
+    </div>
+  );
+}
+
+// ── Página ─────────────────────────────────────────────────────────────────────
 
 export default function SalesTargetsPage() {
   const qc = useQueryClient();
-  const [period, setPeriod] = useState(currentPeriod);
-  const [showAddForm, setShowAddForm] = useState(false);
-  const canManageTargets = usePermission('sales:manage');
+  const today = localISODate(new Date());
+  const thisPeriod = today.slice(0, 7);
+  const [period, setPeriod] = useState(thisPeriod);
+  const [adding, setAdding] = useState(false);
+  const canEditTargets = usePermission('sales:manage');
+  const progress = monthProgress(period, today);
 
-  const { data: perf, isLoading } = useQuery({
+  const performance = useQuery({
     queryKey: ['sales-performance', period],
     queryFn: () => salesApi.getPerformance(period),
   });
-
+  const perf = performance.data;
   const canManage = perf?.canManage ?? false;
+  const refresh = () => void qc.invalidateQueries({ queryKey: ['sales-performance', period] });
 
   const setCompanyTarget = useMutation({
-    mutationFn: (amount: number) =>
-      salesApi.setCompanyTarget({ period, targetAmount: amount }),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: ['sales-performance', period] }),
+    mutationFn: (amount: number) => salesApi.setCompanyTarget({ period, targetAmount: amount }),
+    onSuccess: refresh,
   });
-
   const setSellerTarget = useMutation({
     mutationFn: ({ userId, amount }: { userId: string; amount: number }) =>
       salesApi.setSellerTarget(userId, { period, targetAmount: amount }),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ['sales-performance', period] });
-      setShowAddForm(false);
+      refresh();
+      setAdding(false);
     },
   });
 
-  const existingSellerIds = new Set((perf?.sellers ?? []).map((s) => s.seller.id));
-  const companyProgress = pct(perf?.companyActual ?? 0, perf?.companyTarget ?? null);
+  const rows = sellerRows(perf?.sellers ?? [], progress);
+  const counts = statusCounts(rows);
+  const mine: SellerStat | undefined = !canManage ? perf?.sellers[0] : undefined;
+  const failure = setCompanyTarget.error ?? setSellerTarget.error;
 
   return (
-    <div>
-      <div className="mb-6">
-        <h1 className="text-2xl font-semibold text-foreground">Metas</h1>
-        <p className="mt-1 text-sm text-muted-foreground">Rendimiento y metas por vendedor</p>
-      </div>
-
-      {/* Period navigator */}
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-3">
-          <Button
-            variant="outline"
-            size="icon"
-            className="h-8 w-8"
-            onClick={() => setPeriod((p) => addMonths(p, -1))}
-          >
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold">Metas</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Lo vendido contra la meta de cada mes
+            {progress.fraction > 0 && progress.fraction < 1 ? ` · van ${progress.elapsed} de ${progress.days} días` : ''}
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="icon-sm" aria-label="Mes anterior" onClick={() => setPeriod((p) => addMonths(p, -1))}>
             <ChevronLeft size={16} />
           </Button>
-          <h2 className="text-base font-semibold text-foreground capitalize min-w-[160px] text-center">
-            {periodLabel(period)}
-          </h2>
-          <Button
-            variant="outline"
-            size="icon"
-            className="h-8 w-8"
-            onClick={() => setPeriod((p) => addMonths(p, 1))}
-          >
+          <h2 className="min-w-40 text-center text-base font-semibold first-letter:uppercase">{periodLabel(period)}</h2>
+          <Button variant="outline" size="icon-sm" aria-label="Mes siguiente" onClick={() => setPeriod((p) => addMonths(p, 1))}>
             <ChevronRight size={16} />
           </Button>
-          {period !== currentPeriod() && (
-            <button
-              onClick={() => setPeriod(currentPeriod())}
-              className="text-xs font-medium text-muted-foreground hover:text-foreground underline underline-offset-2"
-            >
-              Hoy
-            </button>
+          {period !== thisPeriod && (
+            <Button variant="ghost" size="sm" onClick={() => setPeriod(thisPeriod)}>
+              Este mes
+            </Button>
           )}
         </div>
       </div>
 
-      {isLoading ? (
-        <div className="space-y-4">
-          {[1, 2, 3].map((i) => (
-            <div key={i} className="h-24 animate-pulse rounded-xl bg-muted/30" />
-          ))}
-        </div>
-      ) : (
-        <div className="space-y-6">
-          {/* Company-wide card — only shown to managers */}
-          {canManage && (
-            <div className="rounded-2xl border border-border bg-card p-5 space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted/30">
-                    <Building2 size={16} className="text-muted-foreground" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold text-foreground">Meta empresa</p>
-                    <p className="text-xs text-muted-foreground/60">Total de ventas del período</p>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <p className="text-xl font-bold text-foreground">{fmtGs(perf?.companyActual ?? 0)}</p>
-                  {companyProgress !== null && (
-                    <p className={cn('text-xs font-semibold', companyProgress >= 100 ? 'text-emerald-600' : 'text-muted-foreground')}>
-                      {companyProgress}% de meta
-                    </p>
-                  )}
-                </div>
-              </div>
+      {failure ? (
+        <p role="alert" className="rounded-xl border border-destructive/20 bg-destructive/5 p-3 text-sm text-destructive">
+          {apiErrorMessage(failure, 'No se pudo guardar la meta.')}
+        </p>
+      ) : null}
 
-              <ProgressBar
-                value={companyProgress ?? 0}
-                color={companyProgress === null ? '#94a3b8' : companyProgress >= 100 ? '#059669' : '#2563eb'}
-              />
-
-              <TargetInput
-                current={perf?.companyTarget ?? null}
-                onSave={(amount) => setCompanyTarget.mutate(amount)}
-              />
-            </div>
-          )}
-
-          {/* Sellers section */}
-          <div>
-            {canManage && (
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2">
-                  <Trophy size={15} className="text-muted-foreground" />
-                  <p className="text-sm font-semibold text-muted-foreground">Vendedores</p>
-                  {perf && perf.sellers.length > 0 && (
-                    <span className="rounded-full bg-muted/30 px-2 py-0.5 text-xs font-medium text-muted-foreground">
-                      {perf.sellers.length}
-                    </span>
-                  )}
-                </div>
-                {canManageTargets && !showAddForm && (
-                  <Button variant="outline" size="sm" onClick={() => setShowAddForm(true)}>
-                    <Plus size={13} />
-                    Agregar meta
-                  </Button>
-                )}
-              </div>
-            )}
-
-            <div className="space-y-3">
-              {canManage && showAddForm && (
-                <AddSellerForm
-                  period={period}
-                  existingIds={existingSellerIds}
-                  onAdd={(userId, amount) => setSellerTarget.mutate({ userId, amount })}
-                  onCancel={() => setShowAddForm(false)}
-                />
-              )}
-
-              {!perf || perf.sellers.length === 0 ? (
-                <div className="rounded-xl border border-dashed border-border py-10 text-center">
-                  <Target size={28} className="mx-auto mb-2 text-muted-foreground/60" />
-                  <p className="text-sm text-muted-foreground">
-                    {canManage
-                      ? 'Sin ventas registradas en este período'
-                      : 'No tenés ventas registradas en este período'}
-                  </p>
-                  <p className="text-xs text-muted-foreground/60 mt-1">
-                    Las ventas confirmadas o facturadas aparecerán aquí.
-                  </p>
-                </div>
-              ) : (
-                perf.sellers.map((stat, idx) => (
-                  <SellerCard
-                    key={stat.seller.id}
-                    stat={stat}
-                    rank={idx + 1}
-                    canManage={canManage}
-                    onTargetSave={(userId, amount) =>
-                      setSellerTarget.mutate({ userId, amount })
-                    }
-                  />
-                ))
-              )}
-            </div>
-          </div>
+      {performance.isPending && (
+        <div className="space-y-4" aria-busy="true">
+          <div className="h-48 animate-pulse rounded-2xl bg-muted" />
+          <div className="h-64 animate-pulse rounded-2xl bg-muted" />
         </div>
       )}
+      {performance.error && (
+        <div className="space-y-3">
+          <p role="alert" className="rounded-xl border border-destructive/20 bg-destructive/5 p-3 text-sm text-destructive">
+            {apiErrorMessage(performance.error, 'No se pudieron cargar las metas.')}
+          </p>
+          <Button variant="outline" size="sm" onClick={() => void performance.refetch()}>
+            Reintentar
+          </Button>
+        </div>
+      )}
+
+      {perf && canManage && (
+        <GoalSummary
+          title="Ventas de la empresa"
+          actual={perf.companyActual}
+          target={perf.companyTarget}
+          progress={progress}
+          canEdit={canEditTargets}
+          pending={setCompanyTarget.isPending}
+          onSave={(amount) => setCompanyTarget.mutate(amount)}
+        />
+      )}
+      {perf && !canManage && mine && (
+        <GoalSummary
+          title="Tus ventas"
+          actual={mine.actual}
+          target={mine.target}
+          progress={progress}
+          canEdit={false}
+          pending={false}
+          onSave={() => undefined}
+        />
+      )}
+
+      {perf && canManage && (
+        <section aria-label="Vendedores" className="space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="text-base font-semibold">Vendedores</h2>
+              {(['achieved', 'on-track', 'behind', 'missed', 'none'] as const)
+                .filter((status) => counts[status])
+                .map((status) => (
+                  <span key={status} className="text-xs text-muted-foreground">
+                    <StatusChip status={status} /> {counts[status]}
+                  </span>
+                ))}
+            </div>
+            {canEditTargets && !adding && (
+              <Button variant="outline" size="sm" onClick={() => setAdding(true)}>
+                <Plus size={13} /> Agregar meta
+              </Button>
+            )}
+          </div>
+
+          {adding && (
+            <AddSellerTarget
+              existingIds={new Set(rows.map((row) => row.seller.id))}
+              pending={setSellerTarget.isPending}
+              onAdd={(userId, amount) => setSellerTarget.mutate({ userId, amount })}
+              onCancel={() => setAdding(false)}
+            />
+          )}
+
+          {rows.length === 0 ? (
+            <EmptySales manager />
+          ) : (
+            <SellersTable
+              rows={rows}
+              progress={progress}
+              canEdit={canEditTargets}
+              pending={setSellerTarget.isPending}
+              onSave={(userId, amount) => setSellerTarget.mutate({ userId, amount })}
+            />
+          )}
+        </section>
+      )}
+
+      {perf && !canManage && !mine && <EmptySales manager={false} />}
+    </div>
+  );
+}
+
+function EmptySales({ manager }: { manager: boolean }) {
+  return (
+    <div className="rounded-2xl border border-dashed border-border py-10 text-center">
+      <Target size={28} className="mx-auto mb-2 text-muted-foreground/60" />
+      <p className="text-sm text-muted-foreground">
+        {manager ? 'Todavía no hay ventas en este mes.' : 'Todavía no tenés ventas en este mes.'}
+      </p>
+      <p className="mt-1 text-xs text-muted-foreground">Cuentan las ventas confirmadas o facturadas.</p>
     </div>
   );
 }
