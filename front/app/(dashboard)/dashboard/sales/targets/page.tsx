@@ -46,8 +46,9 @@ const SELLER_SORT = {
   remaining: (row: SellerRow) => row.remaining,
   status: (row: SellerRow) => STATUS[row.status].label,
   cash: (row: SellerRow) => row.cashAmount,
+  cashCount: (row: SellerRow) => row.cashCount,
   credit: (row: SellerRow) => row.creditAmount,
-  count: (row: SellerRow) => row.cashCount + row.creditCount,
+  creditCount: (row: SellerRow) => row.creditCount,
 };
 const BY_RANK = (a: SellerRow, b: SellerRow) => a.rank - b.rank;
 
@@ -104,13 +105,13 @@ function TargetEditor({
   canEdit,
   pending,
   onSave,
-  compact = false,
+  size = 'md',
 }: {
   current: number | null;
   canEdit: boolean;
   pending: boolean;
   onSave: (amount: number) => void;
-  compact?: boolean;
+  size?: 'sm' | 'md' | 'xl';
 }) {
   const [editing, setEditing] = useState(false);
   const [millions, setMillions] = useState(0);
@@ -150,16 +151,24 @@ function TargetEditor({
   }
 
   const amount = current !== null ? (
-    <span className={cn('font-semibold tabular-nums text-foreground', !compact && 'text-base')}>{fmtGs(current)}</span>
+    <span
+      className={cn(
+        'tabular-nums text-foreground',
+        size === 'xl' ? 'text-3xl font-bold tracking-tight' : 'font-semibold',
+        size === 'md' && 'text-base',
+      )}
+    >
+      {fmtGs(current)}
+    </span>
   ) : (
-    <span className="text-muted-foreground">Sin meta</span>
+    <span className={cn('text-muted-foreground', size === 'xl' && 'text-xl font-semibold')}>Sin meta</span>
   );
   if (!canEdit) return amount;
   return (
     <span className="inline-flex items-center gap-1.5">
       {amount}
       <Button
-        size="icon-xs"
+        size={size === 'xl' ? 'icon-sm' : 'icon-xs'}
         variant="ghost"
         disabled={pending}
         aria-label={current !== null ? 'Cambiar la meta' : 'Definir la meta'}
@@ -168,7 +177,7 @@ function TargetEditor({
           setEditing(true);
         }}
       >
-        {current !== null ? <Pencil size={12} /> : <Plus size={12} />}
+        {current !== null ? <Pencil size={size === 'xl' ? 15 : 12} /> : <Plus size={size === 'xl' ? 15 : 12} />}
       </Button>
     </span>
   );
@@ -189,6 +198,7 @@ function Figure({ label, value, hint, color }: { label: string; value: string; h
 /** Lo vendido contra la meta: de la empresa o, para un vendedor, lo suyo. */
 function GoalSummary({
   title,
+  goalLabel,
   actual,
   target,
   progress,
@@ -197,6 +207,7 @@ function GoalSummary({
   onSave,
 }: {
   title: string;
+  goalLabel: string;
   actual: number;
   target: number | null;
   progress: MonthProgress;
@@ -211,31 +222,42 @@ function GoalSummary({
 
   return (
     <section aria-label={title} className="space-y-5 rounded-2xl border border-border bg-card p-5">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="flex items-start gap-3">
-          <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-muted">
-            <Building2 size={18} className="text-muted-foreground" />
-          </span>
-          <div>
-            <h2 className="text-sm font-medium text-muted-foreground">{title}</h2>
-            <p className="text-3xl font-bold tabular-nums tracking-tight">{fmtGs(actual)}</p>
-            <p className="mt-1 flex flex-wrap items-center gap-1.5 text-sm text-muted-foreground">
-              de una meta de
-              <TargetEditor current={target} canEdit={canEdit} pending={pending} onSave={onSave} />
-            </p>
-          </div>
-        </div>
-        <div className="text-right">
-          {percent !== null ? (
-            <p className="text-4xl font-bold tabular-nums" style={{ color: STATUS[status].color }}>
-              {percent}%
-            </p>
-          ) : (
-            <p className="text-sm text-muted-foreground">Sin meta definida</p>
-          )}
-          {status !== 'none' && <StatusChip status={status} />}
-        </div>
+      <div className="flex items-center gap-3">
+        <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-muted">
+          <Building2 size={17} className="text-muted-foreground" />
+        </span>
+        <h2 className="text-base font-semibold">{title}</h2>
       </div>
+
+      <dl className="grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] md:divide-x md:divide-border">
+        <div className="min-w-0">
+          <dt className="text-sm text-muted-foreground">Vendido</dt>
+          <dd className="mt-1 break-words text-3xl font-bold tabular-nums tracking-tight">{fmtGs(actual)}</dd>
+        </div>
+        <div className="min-w-0 md:pl-6">
+          <dt className="text-sm text-muted-foreground">{goalLabel}</dt>
+          <dd className="mt-1 break-words">
+            <TargetEditor size="xl" current={target} canEdit={canEdit} pending={pending} onSave={onSave} />
+          </dd>
+        </div>
+        <div className="md:pl-6 md:text-right">
+          <dt className="text-sm text-muted-foreground">Cumplido</dt>
+          <dd className="mt-1">
+            {percent !== null ? (
+              <span className="block text-4xl font-bold leading-none tabular-nums" style={{ color: STATUS[status].color }}>
+                {percent}%
+              </span>
+            ) : (
+              <span className="block text-xl font-semibold text-muted-foreground">—</span>
+            )}
+            {status !== 'none' && (
+              <span className="mt-2 inline-block">
+                <StatusChip status={status} />
+              </span>
+            )}
+          </dd>
+        </div>
+      </dl>
 
       {target !== null && <PaceBar percent={percent} status={status} progress={progress} size="lg" />}
 
@@ -361,8 +383,9 @@ function SellersTable({
               {header('Diferencia', 'remaining', 'right')}
               {header('Estado', 'status')}
               {header('Contado', 'cash', 'right')}
+              {header('Ventas contado', 'cashCount', 'right')}
               {header('Crédito', 'credit', 'right')}
-              {header('Ventas', 'count', 'right')}
+              {header('Ventas crédito', 'creditCount', 'right')}
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
@@ -381,7 +404,7 @@ function SellersTable({
                 </td>
                 <td className="whitespace-nowrap px-2.5 py-3 first:pl-4 last:pr-4 text-right">
                   <TargetEditor
-                    compact
+                    size="sm"
                     current={row.target}
                     canEdit={canEdit}
                     pending={pending}
@@ -414,14 +437,17 @@ function SellersTable({
                 <td className="px-2.5 py-3 first:pl-4 last:pr-4">
                   <StatusChip status={row.status} />
                 </td>
-                <td className="whitespace-nowrap px-2.5 py-3 first:pl-4 last:pr-4 text-right tabular-nums text-muted-foreground">
+                <td className="whitespace-nowrap px-2.5 py-3 first:pl-4 last:pr-4 text-right tabular-nums">
                   {fmtGs(row.cashAmount)}
                 </td>
-                <td className="whitespace-nowrap px-2.5 py-3 first:pl-4 last:pr-4 text-right tabular-nums text-muted-foreground">
+                <td className="px-2.5 py-3 first:pl-4 last:pr-4 text-right font-semibold tabular-nums">
+                  {row.cashCount}
+                </td>
+                <td className="whitespace-nowrap px-2.5 py-3 first:pl-4 last:pr-4 text-right tabular-nums">
                   {fmtGs(row.creditAmount)}
                 </td>
-                <td className="px-2.5 py-3 first:pl-4 last:pr-4 text-right tabular-nums text-muted-foreground">
-                  {row.cashCount + row.creditCount}
+                <td className="px-2.5 py-3 first:pl-4 last:pr-4 text-right font-semibold tabular-nums">
+                  {row.creditCount}
                 </td>
               </tr>
             ))}
@@ -524,6 +550,7 @@ export default function SalesTargetsPage() {
       {perf && canManage && (
         <GoalSummary
           title="Ventas de la empresa"
+          goalLabel="Meta de la empresa"
           actual={perf.companyActual}
           target={perf.companyTarget}
           progress={progress}
@@ -535,6 +562,7 @@ export default function SalesTargetsPage() {
       {perf && !canManage && mine && (
         <GoalSummary
           title="Tus ventas"
+          goalLabel="Tu meta"
           actual={mine.actual}
           target={mine.target}
           progress={progress}

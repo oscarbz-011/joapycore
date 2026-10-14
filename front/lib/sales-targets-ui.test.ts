@@ -23,7 +23,7 @@ const MANAGER = {
   companyActual: 40_930_000,
   companyTarget: 80_000_000,
   canManage: true,
-  sellers: [seller('ana', 'Ana', 30_400_000, 25_000_000), seller('luis', 'Luis', 9_550_000, 20_000_000), seller('carla', 'Carla', 980_000, null)],
+  sellers: [{ ...seller('ana', 'Ana', 30_400_000, 25_000_000), cashAmount: 7_700_000, creditAmount: 22_700_000, cashCount: 2, creditCount: 3 }, seller('luis', 'Luis', 9_550_000, 20_000_000), seller('carla', 'Carla', 980_000, null)],
 };
 
 beforeEach(() => {
@@ -59,6 +59,22 @@ describe('Metas, for a manager', () => {
     expect(html).toContain('51%');
     expect(html).toContain('Falta para la meta');
     expect(html).toContain('Gs. 39.070.000');
+  });
+
+  it('makes the company goal as visible as what was sold', () => {
+    const html = page();
+
+    expect(html).toMatch(/<dt[^>]*>Meta de la empresa<\/dt>/);
+    expect(html).toMatch(/<span class="[^"]*text-3xl[^"]*">Gs\. 80\.000\.000<\/span>/);
+  });
+
+  it('tells how many sales of each seller were cash and how many on credit', () => {
+    const html = page();
+
+    expect(html).toContain('Ventas contado');
+    expect(html).toContain('Ventas crédito');
+    const ana = html.slice(html.indexOf('Ana Test'), html.indexOf('</tr>', html.indexOf('Ana Test')));
+    expect(ana).toMatch(/Gs\. 7\.700\.000<\/td><td[^>]*>2<\/td><td[^>]*>Gs\. 22\.700\.000<\/td><td[^>]*>3<\/td>/);
   });
 
   // Antes se mostraba "100 %" y "Faltan Gs. 0".
@@ -105,6 +121,7 @@ describe('Metas, for a seller', () => {
     const html = page();
 
     expect(html).toContain('Tus ventas');
+    expect(html).toMatch(/<dt[^>]*>Tu meta<\/dt>/);
     expect(html).toContain('48%');
     expect(html).not.toContain('Ventas de la empresa');
     expect(html).not.toContain('aria-label="Vendedores"');
