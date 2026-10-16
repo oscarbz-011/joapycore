@@ -221,21 +221,5 @@ export function eventInput(form: EventForm): CalendarEventInput {
   };
 }
 
-const compact = (iso: string) => iso.replace(/[-:]/g, '').replace(/\.\d{3}/, '');
-
-/** Enlace que abre Google Calendar con el evento ya cargado. */
-export function googleCalendarUrl(event: Pick<CalendarEvent, 'title' | 'description' | 'location' | 'allDay' | 'startsAt' | 'endsAt'>): string {
-  const dates = event.allDay
-    ? `${compact(event.startsAt).slice(0, 8)}/${compact(new Date(Date.parse(event.endsAt) + DAY_MS).toISOString()).slice(0, 8)}`
-    : `${compact(event.startsAt)}/${compact(event.endsAt)}`;
-  const params = new URLSearchParams({ action: 'TEMPLATE', text: event.title, dates });
-  if (event.description) params.set('details', event.description);
-  if (event.location) params.set('location', event.location);
-  return `https://calendar.google.com/calendar/render?${params.toString()}`;
-}
-
-/** La dirección que se pega en Google Calendar, Outlook o Apple. */
-export const feedUrl = (apiBase: string, token: string) => `${apiBase}/calendar/feeds/${token}.ics`;
-
 const DAY_TITLE = new Intl.DateTimeFormat('es-PY', { timeZone: 'UTC', weekday: 'long', day: 'numeric', month: 'long' });
 export const dayTitle = (day: string) => DAY_TITLE.format(parseISODate(day)!);

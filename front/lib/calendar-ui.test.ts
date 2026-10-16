@@ -141,8 +141,11 @@ describe('Calendar', () => {
     expect(html).toContain('Reintentar eventos');
   });
 
-  it('links to the way of connecting another calendar', () => {
-    expect(page()).toContain('href="/dashboard/calendar/sync"');
+  it('does not offer connecting another calendar', () => {
+    const html = page();
+
+    expect(html).not.toContain('/dashboard/calendar/sync');
+    expect(html).not.toContain('Conectar con otro calendario');
   });
 });
 

@@ -7,10 +7,8 @@ import {
   emptyForm,
   eventInput,
   eventItems,
-  feedUrl,
   formError,
   formOf,
-  googleCalendarUrl,
   installmentItems,
   instantParts,
   isInMonth,
@@ -242,29 +240,7 @@ describe('the event form', () => {
   });
 });
 
-describe('other calendars', () => {
-  it('builds the link that opens Google Calendar with the event', () => {
-    const url = new URL(googleCalendarUrl(event({ location: 'Sala 1' })));
-
-    expect(url.origin + url.pathname).toBe('https://calendar.google.com/calendar/render');
-    expect(url.searchParams.get('text')).toBe('Reunión de cobranzas');
-    expect(url.searchParams.get('dates')).toBe('20261014T130000Z/20261014T140000Z');
-    expect(url.searchParams.get('location')).toBe('Sala 1');
-  });
-
-  // Google toma el fin de un día completo como el día siguiente.
-  it('sends a whole-day event to Google ending the day after', () => {
-    const url = new URL(
-      googleCalendarUrl(event({ allDay: true, startsAt: '2026-10-14T00:00:00.000Z', endsAt: '2026-10-15T00:00:00.000Z' })),
-    );
-
-    expect(url.searchParams.get('dates')).toBe('20261014/20261016');
-  });
-
-  it('builds the address to subscribe from another calendar', () => {
-    expect(feedUrl('https://api.joapycore.com', 'abc')).toBe('https://api.joapycore.com/calendar/feeds/abc.ics');
-  });
-
+describe('day titles', () => {
   it('names a day in full', () => {
     expect(dayTitle('2026-10-14')).toBe('miércoles, 14 de octubre');
   });

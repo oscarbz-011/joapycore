@@ -3,8 +3,6 @@ import {
   Controller,
   Delete,
   Get,
-  Header,
-  HttpCode,
   Param,
   ParseUUIDPipe,
   Patch,
@@ -16,7 +14,6 @@ import {
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { CurrentTenant } from '../common/decorators/current-tenant.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
-import { Public } from '../common/decorators/public.decorator';
 import type { JwtPayload } from '../common/types/jwt-payload.interface';
 import {
   CalendarEventDto,
@@ -83,29 +80,5 @@ export class CalendarController {
     @Param('id', ParseUUIDPipe) id: string,
   ) {
     return this.calendar.remove(tenantId, user.sub, id);
-  }
-
-  @Get('feed')
-  feed(@CurrentTenant() tenantId: string, @CurrentUser() user: JwtPayload) {
-    return this.calendar.feed(tenantId, user.sub);
-  }
-
-  @Post('feed/reset')
-  @HttpCode(200)
-  resetFeed(
-    @CurrentTenant() tenantId: string,
-    @CurrentUser() user: JwtPayload,
-  ) {
-    return this.calendar.resetFeed(tenantId, user.sub);
-  }
-
-  // Lo lee otro calendario (Google, Outlook, Apple), que no inicia sesión:
-  // la dirección secreta es la credencial.
-  @Public()
-  @Get('feeds/:token')
-  @Header('Content-Type', 'text/calendar; charset=utf-8')
-  @Header('Cache-Control', 'private, max-age=300')
-  ics(@Param('token') token: string) {
-    return this.calendar.ics(token.replace(/\.ics$/, ''));
   }
 }

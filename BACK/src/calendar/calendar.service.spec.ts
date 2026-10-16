@@ -4,7 +4,6 @@ import {
   ValidationPipe,
 } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
-import { buildIcs, foldLine, icsText } from './calendar-ics';
 import {
   CalendarEventDto,
   CalendarRangeDto,
@@ -15,7 +14,6 @@ import { CalendarService } from './calendar.service';
 
 const TENANT = 'tenant-a';
 const ME = 'user-me';
-const TOKEN = 'a'.repeat(64);
 const meeting = {
   title: 'Reunión de cobranzas',
   allDay: false,
@@ -49,14 +47,6 @@ describe('CalendarService', () => {
       create: jest.fn().mockResolvedValue(stored()),
       update: jest.fn().mockResolvedValue({ count: 1 }),
       remove: jest.fn().mockResolvedValue({ count: 1 }),
-      feedOf: jest.fn().mockResolvedValue(null),
-      saveFeed: jest.fn().mockResolvedValue({ token: TOKEN }),
-      feedByToken: jest
-        .fn()
-        .mockResolvedValue({ tenantId: TENANT, userId: ME }),
-      activeUser: jest
-        .fn()
-        .mockResolvedValue({ id: ME, tenant: { name: 'Ferro SA' } }),
     } as never;
     events = { emit: jest.fn() };
     service = new CalendarService(
@@ -209,122 +199,6 @@ describe('CalendarService', () => {
       deleted: true,
     });
     expect(repository.remove).toHaveBeenCalledWith(TENANT, ME, 'e1');
-  });
-
-  describe('the address other calendars read', () => {
-    it('is created the first time and kept afterwards', async () => {
-      await expect(service.feed(TENANT, ME)).resolves.toEqual({ token: TOKEN });
-      expect(repository.saveFeed).toHaveBeenCalledWith(
-        TENANT,
-        ME,
-        expect.stringMatching(/^[0-9a-f]{64}$/),
-      );
-
-      repository.feedOf.mockResolvedValue({ token: 'kept' });
-      repository.saveFeed.mockClear();
-      await expect(service.feed(TENANT, ME)).resolves.toEqual({
-        token: 'kept',
-      });
-      expect(repository.saveFeed).not.toHaveBeenCalled();
-    });
-
-    it('serves what that user can see, from three months back to a year ahead', async () => {
-      repository.between.mockResolvedValue([stored()]);
-      const now = new Date('2026-10-13T12:00:00.000Z');
-
-      const ics = await service.ics(TOKEN, now);
-
-      expect(repository.between).toHaveBeenCalledWith(
-        TENANT,
-        ME,
-        new Date('2026-07-15T12:00:00.000Z'),
-        new Date('2027-10-13T12:00:00.000Z'),
-      );
-      expect(ics).toContain('SUMMARY:Reunión de cobranzas');
-      expect(ics).toContain('X-WR-CALNAME:Ferro SA · JoapyCore');
-    });
-
-    it('answers nothing for an unknown address or a user who is no longer active', async () => {
-      repository.feedByToken.mockResolvedValue(null);
-      await expect(service.ics(TOKEN)).rejects.toBeInstanceOf(
-        NotFoundException,
-      );
-
-      repository.feedByToken.mockResolvedValue({
-        tenantId: TENANT,
-        userId: ME,
-      });
-      repository.activeUser.mockResolvedValue(null);
-      await expect(service.ics(TOKEN)).rejects.toBeInstanceOf(
-        NotFoundException,
-      );
-      expect(repository.between).not.toHaveBeenCalled();
-    });
-
-    it('does not even look up something that is not a token', async () => {
-      await expect(service.ics("x' OR 1=1")).rejects.toBeInstanceOf(
-        NotFoundException,
-      );
-      expect(repository.feedByToken).not.toHaveBeenCalled();
-    });
-  });
-});
-
-describe('iCalendar output', () => {
-  const event = {
-    id: 'e1',
-    title: 'Reunión; ventas, cobranzas',
-    description: 'Traer:\nplanilla',
-    location: null,
-    allDay: false,
-    startsAt: new Date('2026-10-14T13:00:00.000Z'),
-    endsAt: new Date('2026-10-14T14:30:00.000Z'),
-    updatedAt: new Date('2026-10-13T12:00:00.000Z'),
-  };
-
-  it('writes a timed event in UTC', () => {
-    const ics = buildIcs([event], 'Ferro SA');
-
-    expect(ics.startsWith('BEGIN:VCALENDAR\r\nVERSION:2.0\r\n')).toBe(true);
-    expect(ics).toContain('UID:e1@joapycore\r\n');
-    expect(ics).toContain('DTSTART:20261014T130000Z\r\n');
-    expect(ics).toContain('DTEND:20261014T143000Z\r\n');
-    expect(ics.endsWith('END:VCALENDAR\r\n')).toBe(true);
-  });
-
-  // En iCalendar el fin de un día completo es el día siguiente.
-  it('writes an all-day event as dates, ending the day after', () => {
-    const ics = buildIcs(
-      [
-        {
-          ...event,
-          allDay: true,
-          startsAt: new Date('2026-10-14T00:00:00.000Z'),
-          endsAt: new Date('2026-10-15T00:00:00.000Z'),
-        },
-      ],
-      'Ferro SA',
-    );
-
-    expect(ics).toContain('DTSTART;VALUE=DATE:20261014\r\n');
-    expect(ics).toContain('DTEND;VALUE=DATE:20261016\r\n');
-  });
-
-  it('escapes what would break a line', () => {
-    expect(icsText('a; b, c\\d\ne')).toBe('a\\; b\\, c\\\\d\\ne');
-    expect(buildIcs([event], 'Ferro SA')).toContain(
-      'SUMMARY:Reunión\\; ventas\\, cobranzas\r\n',
-    );
-  });
-
-  it('folds long lines at 75 bytes', () => {
-    const folded = foldLine(`SUMMARY:${'ñ'.repeat(60)}`);
-
-    expect(folded.split('\r\n ').length).toBeGreaterThan(1);
-    for (const part of folded.split('\r\n ')) {
-      expect(Buffer.byteLength(part)).toBeLessThanOrEqual(75);
-    }
-    expect(folded.replace(/\r\n /g, '')).toBe(`SUMMARY:${'ñ'.repeat(60)}`);
   });
 });
 

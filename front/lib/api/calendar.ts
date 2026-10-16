@@ -33,6 +33,4 @@ export const calendarApi = {
   update: (id: string, input: CalendarEventInput): Promise<CalendarEvent> =>
     apiClient.patch(`/calendar/events/${id}`, input).then((r) => r.data),
   remove: (id: string): Promise<void> => apiClient.delete(`/calendar/events/${id}`).then(() => undefined),
-  feed: (): Promise<{ token: string }> => apiClient.get('/calendar/feed').then((r) => r.data),
-  resetFeed: (): Promise<{ token: string }> => apiClient.post('/calendar/feed/reset').then((r) => r.data),
 };

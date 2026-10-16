@@ -4,7 +4,7 @@ import { Suspense, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import { CalendarDays, ChevronLeft, ChevronRight, Plus, RefreshCw } from "lucide-react";
+import { CalendarDays, ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth-context";
@@ -110,9 +110,6 @@ function Calendar() {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Link href={`${CALENDAR_PATH}/sync`} className={cn(buttonVariants({ variant: "outline" }))}>
-            <RefreshCw size={14} /> Conectar con otro calendario
-          </Link>
           <Link href={`${CALENDAR_PATH}/new?date=${selected}`} className={cn(buttonVariants())}>
             <Plus size={15} /> Nuevo evento
           </Link>

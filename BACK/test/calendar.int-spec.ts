@@ -79,7 +79,6 @@ integration('Calendar (isolated PostgreSQL)', () => {
 
   afterAll(async () => {
     const tenants = { tenantId: { in: [tenantA, tenantB] } };
-    await prisma.calendarFeed.deleteMany({ where: tenants });
     await prisma.calendarEvent.deleteMany({ where: tenants });
     await prisma.user.deleteMany({ where: tenants });
     await prisma.tenant.deleteMany({
@@ -141,36 +140,5 @@ integration('Calendar (isolated PostgreSQL)', () => {
         (item) => item.title,
       ),
     ).toEqual(['De otra empresa']);
-  });
-
-  it('gives each user one secret address, and a new one makes the old one useless', async () => {
-    const first = await service.feed(tenantA, me);
-    const again = await service.feed(tenantA, me);
-    expect(again.token).toBe(first.token);
-
-    const ics = await service.ics(
-      first.token,
-      new Date('2026-10-13T12:00:00.000Z'),
-    );
-    expect(ics).toContain('SUMMARY:Mío privado');
-    expect(ics).toContain('SUMMARY:Reunión general');
-    expect(ics).not.toContain('De Ana privado');
-    expect(ics).not.toContain('De otra empresa');
-
-    const rotated = await service.resetFeed(tenantA, me);
-    expect(rotated.token).not.toBe(first.token);
-    await expect(service.ics(first.token)).rejects.toBeInstanceOf(
-      NotFoundException,
-    );
-  });
-
-  it('stops serving the address of a user who was deactivated', async () => {
-    const { token } = await service.feed(tenantA, ana);
-    await prisma.user.updateMany({
-      where: { tenantId: tenantA, id: ana },
-      data: { status: 'INACTIVE' },
-    });
-
-    await expect(service.ics(token)).rejects.toBeInstanceOf(NotFoundException);
   });
 });

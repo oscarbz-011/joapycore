@@ -1,11 +1,9 @@
-import { randomBytes } from 'node:crypto';
 import {
   BadRequestException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
-import { buildIcs } from './calendar-ics';
 import {
   CalendarEventDto,
   CalendarRangeDto,
@@ -15,9 +13,6 @@ import { CalendarRepository, EventData } from './calendar.repository';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 export const MAX_RANGE_DAYS = 400;
-// Lo que se publica a otros calendarios: de hace tres meses a un año adelante.
-const FEED_PAST_DAYS = 90;
-const FEED_FUTURE_DAYS = 365;
 
 const atMidnightUtc = (date: Date) =>
   date.getTime() % DAY_MS === 0 && !Number.isNaN(date.getTime());
@@ -111,37 +106,6 @@ export class CalendarService {
     await this.repository.remove(tenantId, userId, id);
     this.changed(tenantId, current.companyWide);
     return { deleted: true };
-  }
-
-  async feed(tenantId: string, userId: string) {
-    const existing = await this.repository.feedOf(tenantId, userId);
-    return existing ?? this.resetFeed(tenantId, userId);
-  }
-
-  /** La dirección anterior deja de funcionar. */
-  resetFeed(tenantId: string, userId: string) {
-    return this.repository.saveFeed(
-      tenantId,
-      userId,
-      randomBytes(32).toString('hex'),
-    );
-  }
-
-  async ics(token: string, now: Date = new Date()): Promise<string> {
-    const feed = /^[0-9a-f]{64}$/.test(token)
-      ? await this.repository.feedByToken(token)
-      : null;
-    const user = feed
-      ? await this.repository.activeUser(feed.tenantId, feed.userId)
-      : null;
-    if (!feed || !user) throw new NotFoundException('Calendario no encontrado');
-    const events = await this.repository.between(
-      feed.tenantId,
-      feed.userId,
-      new Date(now.getTime() - FEED_PAST_DAYS * DAY_MS),
-      new Date(now.getTime() + FEED_FUTURE_DAYS * DAY_MS),
-    );
-    return buildIcs(events, `${user.tenant.name} · JoapyCore`);
   }
 
   // Solo quien lo creó; un evento de la empresa creado por otro se ve pero no se toca.

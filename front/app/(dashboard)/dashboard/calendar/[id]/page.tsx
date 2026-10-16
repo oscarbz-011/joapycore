@@ -4,14 +4,14 @@ import { useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, ExternalLink, Trash2 } from "lucide-react";
+import { ArrowLeft, Trash2 } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { EventForm } from "@/components/calendar/event-form";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth-context";
 import { apiErrorMessage } from "@/lib/api/api-error";
 import { calendarApi, type CalendarEvent, type CalendarEventInput } from "@/lib/api/calendar";
-import { CALENDAR_PATH, dayTitle, formOf, googleCalendarUrl, instantParts } from "@/lib/calendar";
+import { CALENDAR_PATH, dayTitle, formOf, instantParts } from "@/lib/calendar";
 
 export default function EventPage() {
   const { id } = useParams<{ id: string }>();
@@ -53,16 +53,6 @@ export default function EventPage() {
           </Link>
           <h1 className="text-2xl font-semibold">Evento</h1>
         </div>
-        {event.data && (
-          <a
-            href={googleCalendarUrl(event.data)}
-            target="_blank"
-            rel="noopener noreferrer"
-            className={cn(buttonVariants({ variant: "outline" }))}
-          >
-            <ExternalLink size={14} /> Agregar a Google Calendar
-          </a>
-        )}
       </div>
 
       {event.isPending && <div className="h-80 animate-pulse rounded-2xl bg-muted" aria-busy="true" />}

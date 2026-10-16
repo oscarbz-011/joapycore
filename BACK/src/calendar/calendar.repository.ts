@@ -81,40 +81,4 @@ export class CalendarRepository {
       where: { tenantId, createdBy: userId, id },
     });
   }
-
-  feedOf(tenantId: string, userId: string) {
-    return this.prisma.calendarFeed.findFirst({
-      where: { tenantId, userId },
-      select: { token: true },
-    });
-  }
-
-  saveFeed(tenantId: string, userId: string, token: string) {
-    return this.prisma.calendarFeed.upsert({
-      where: { userId },
-      create: { tenantId, userId, token },
-      update: { token },
-      select: { token: true },
-    });
-  }
-
-  feedByToken(token: string) {
-    return this.prisma.calendarFeed.findUnique({
-      where: { token },
-      select: { tenantId: true, userId: true },
-    });
-  }
-
-  activeUser(tenantId: string, userId: string) {
-    return this.prisma.user.findFirst({
-      where: {
-        tenantId,
-        id: userId,
-        status: 'ACTIVE',
-        deletedAt: null,
-        tenant: { status: 'ACTIVE' },
-      },
-      select: { id: true, tenant: { select: { name: true } } },
-    });
-  }
 }
