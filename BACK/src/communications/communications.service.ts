@@ -250,6 +250,8 @@ export class CommunicationsService {
       invoiceId,
       entityType: 'INVOICE',
       entityId: invoiceId,
+      contactType: 'CUSTOMER',
+      contactId: customer.id,
       recipient,
       pdfFileId: invoice.pdfFileId,
       identityId: sender.identityId,

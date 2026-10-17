@@ -40,6 +40,9 @@ import {
 } from "../../../../lib/inventory-navigation";
 import { FINANCE_NAV_GROUPS } from "@/lib/finance-navigation";
 import { CompanySwitcher, JoapyCoreBrand } from "./company-switcher";
+import { closedGroupBadge, isNavItemActive } from "@/lib/sidebar-nav";
+import { COMMUNICATIONS_PATH } from "@/lib/api/communications";
+import { useCommunicationsAttention } from "@/components/communications/inbox/use-communications";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -64,6 +67,10 @@ interface SidebarGroup {
   // documents-nav.tsx), donde desplegar un submenú de una sola opción es
   // un clic extra sin aportar nada.
   flat?: boolean;
+  // Cerrado, muestra la suma de lo pendiente de sus entradas.
+  badgeWhenClosed?: boolean;
+  // Una entrada también está activa en sus pantallas internas (/notas/nueva).
+  matchPrefix?: boolean;
 }
 
 // ── Group definitions ─────────────────────────────────────────────────────────
@@ -81,11 +88,12 @@ const STATIC_GROUPS: SidebarGroup[] = [
     id: "apps",
     label: "Aplicaciones",
     icon: AppWindow,
-    anyPermission: ["communications:access"],
+    badgeWhenClosed: true,
+    matchPrefix: true,
     items: [
       {
-        label: "Centro de comunicaciones",
-        href: "/dashboard/applications/communications",
+        label: "Comunicaciones",
+        href: COMMUNICATIONS_PATH,
         permission: "communications:access",
       },
     ],
@@ -479,11 +487,12 @@ function ModuleGroup({
       item.href !== "#" &&
       (group.id === "inventory"
         ? isInventoryItemActive(pathname, item.href)
-        : pathname === item.href),
+        : isNavItemActive(pathname, item.href, group.matchPrefix)),
   );
 
   const [open, setOpen] = useState(hasActive);
   const Icon = group.icon;
+  const closedBadge = group.badgeWhenClosed ? closedGroupBadge(visibleItems) : 0;
 
   if (visibleItems.length === 0) return null;
 
@@ -524,6 +533,11 @@ function ModuleGroup({
       >
         <Icon size={15} className="shrink-0 opacity-75" />
         <span className="flex-1 text-left">{group.label}</span>
+        {!open && closedBadge > 0 && (
+          <span className="rounded-full bg-red-500/20 px-1.5 py-px text-[11px] font-bold leading-none text-red-400">
+            {closedBadge}
+          </span>
+        )}
         <ChevronDown
           size={12}
           className={cn(
@@ -541,7 +555,7 @@ function ModuleGroup({
               item.href !== "#" &&
               (group.id === "inventory"
                 ? isInventoryItemActive(pathname, item.href)
-                : pathname === item.href);
+                : isNavItemActive(pathname, item.href, group.matchPrefix));
 
             if (item.stub) {
               return (
@@ -615,7 +629,10 @@ export function Sidebar() {
     jwtPayload?.sub,
   );
 
+  const communications = useCommunicationsAttention();
+
   const badgeByHref: Record<string, number | undefined> = {
+    [COMMUNICATIONS_PATH]: communications.total || undefined,
     "/dashboard/settings/alerts": alertBadge,
     "/dashboard/billing": pendingCounts.invoices,
     "/dashboard/billing/approvals": pendingCounts.approvals,

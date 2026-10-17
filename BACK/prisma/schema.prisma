@@ -3082,6 +3082,8 @@ model CommunicationMessage {
   entityType        String                     @default("INVOICE") @map("entity_type")
   entityId          String                     @map("entity_id")
   invoiceId         String                     @map("invoice_id")
+  contactType       String?                    @map("contact_type")
+  contactId         String?                    @map("contact_id")
   recipient         String
   pdfFileId         String                     @map("pdf_file_id")
   identityId        String?                    @map("identity_id")
@@ -3105,6 +3107,7 @@ model CommunicationMessage {
 
   @@unique([tenantId, idempotencyKey])
   @@index([tenantId, entityType, entityId, createdAt])
+  @@index([tenantId, contactType, contactId, createdAt])
   @@index([status, availableAt])
   @@index([status, lockedAt])
   @@map("communication_messages")
@@ -3126,15 +3129,18 @@ model CommunicationDeliveryAttempt {
 }
 
 model CommunicationNote {
-  id         String   @id @default(uuid())
-  tenantId   String   @map("tenant_id")
-  entityType String   @map("entity_type")
-  entityId   String   @map("entity_id")
-  body       String   @db.Text
-  createdBy  String   @map("created_by")
-  createdAt  DateTime @default(now()) @map("created_at")
+  id          String   @id @default(uuid())
+  tenantId    String   @map("tenant_id")
+  entityType  String   @map("entity_type")
+  entityId    String   @map("entity_id")
+  contactType String?  @map("contact_type")
+  contactId   String?  @map("contact_id")
+  body        String   @db.Text
+  createdBy   String   @map("created_by")
+  createdAt   DateTime @default(now()) @map("created_at")
 
   @@index([tenantId, entityType, entityId, createdAt])
+  @@index([tenantId, contactType, contactId, createdAt])
   @@map("communication_notes")
 }
 
