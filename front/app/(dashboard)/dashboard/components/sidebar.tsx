@@ -44,6 +44,7 @@ import { closedGroupBadge, isNavItemActive } from "@/lib/sidebar-nav";
 import { COMMUNICATIONS_PATH } from "@/lib/api/communications";
 import { useCommunicationsAttention } from "@/components/communications/inbox/use-communications";
 import { CHAT_PATH, useChatUnread } from "@/components/chat/use-chat";
+import { NOTES_PATH } from "@/lib/notes";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -98,6 +99,7 @@ const STATIC_GROUPS: SidebarGroup[] = [
         permission: "communications:access",
       },
       { label: "Chat", href: CHAT_PATH },
+      { label: "Notas", href: NOTES_PATH },
     ],
   },
   {

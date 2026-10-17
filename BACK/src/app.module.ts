@@ -43,6 +43,7 @@ import { UsersModule } from './users/users.module';
 import { ApplicationsModule } from './applications/applications.module';
 import { CommunicationHubModule } from './communications/communications.module';
 import { ChatModule } from './chat/chat.module';
+import { NotesModule } from './notes/notes.module';
 
 @Module({
   imports: [
@@ -87,6 +88,7 @@ import { ChatModule } from './chat/chat.module';
     ApplicationsModule,
     CommunicationHubModule,
     ChatModule,
+    NotesModule,
     SifenModule,
     CreditBureauModule,
   ],
