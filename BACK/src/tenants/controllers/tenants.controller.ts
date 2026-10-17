@@ -9,7 +9,9 @@ import {
   Patch,
   Post,
   Put,
+  Res,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CurrentTenant } from '../../common/decorators/current-tenant.decorator';
 import { Permissions } from '../../common/decorators/permissions.decorator';
@@ -47,6 +49,24 @@ export class TenantsController {
   @ApiOperation({ summary: 'Get the current tenant' })
   getCurrentTenant(@CurrentTenant() tenantId: string) {
     return this.tenantsService.getById(tenantId);
+  }
+
+  // Sin permiso propio: todo usuario ve en el menú en qué empresa está.
+  @Get('brand')
+  @ApiOperation({ summary: 'Name and logo of the current tenant' })
+  getBrand(@CurrentTenant() tenantId: string) {
+    return this.tenantsService.brand(tenantId);
+  }
+
+  @Get('logo')
+  @ApiOperation({ summary: 'Logo image of the current tenant' })
+  async getLogo(@CurrentTenant() tenantId: string, @Res() res: Response) {
+    const logo = await this.tenantsService.logo(tenantId);
+    res.setHeader('Content-Type', logo.mimeType);
+    res.setHeader('Cache-Control', 'private, max-age=300');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Content-Security-Policy', "sandbox; default-src 'none'");
+    res.send(logo.content);
   }
 
   @Patch()

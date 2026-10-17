@@ -170,13 +170,17 @@ describe("checkRouteAccess", () => {
   });
 
   it("requires the new communication permission even if legacy email was allowed", () => {
-    const path = "/dashboard/applications/communications";
-    expect(checkRouteAccess(path, [], ["communications:access"]).allowed).toBe(
-      true,
-    );
-    expect(
-      checkRouteAccess(path, [], ["applications:email:read"]).allowed,
-    ).toBe(false);
-    expect(checkRouteAccess(path, [], []).allowed).toBe(false);
+    for (const path of [
+      "/dashboard/communications",
+      "/dashboard/applications/communications",
+    ]) {
+      expect(
+        checkRouteAccess(path, [], ["communications:access"]).allowed,
+      ).toBe(true);
+      expect(
+        checkRouteAccess(path, [], ["applications:email:read"]).allowed,
+      ).toBe(false);
+      expect(checkRouteAccess(path, [], []).allowed).toBe(false);
+    }
   });
 });

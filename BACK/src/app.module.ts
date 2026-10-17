@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import emailConfig from './config/email.config';
+import platformEmailConfig from './config/platform-email.config';
 import storageConfig from './config/storage.config';
 import { validateEnv } from './config/env.validation';
 import { APP_GUARD } from '@nestjs/core';
@@ -47,7 +48,7 @@ import { ChatModule } from './chat/chat.module';
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      load: [storageConfig, emailConfig],
+      load: [storageConfig, emailConfig, platformEmailConfig],
       validate: validateEnv,
     }),
     ThrottlerModule.forRoot({

@@ -540,6 +540,7 @@ model Tenant {
   downPayments               DownPayment[]
   salePayments               SalePayment[]
   deliveryNotes              DeliveryNote[]
+  platformEmailMessages      PlatformEmailMessage[]
   deliveryRoutes             DeliveryRoute[]
   deliveryRouteEvents        DeliveryRouteEvent[]
   deliveryTrackingEvents     DeliveryTrackingEvent[]
@@ -2998,6 +2999,30 @@ model OutboxEvent {
   @@map("outbox_events")
 }
 
+// Lo que salió por el remitente de la plataforma: los correos propios de
+// JoapyCore (sin empresa) y los de las empresas que todavía no conectaron su
+// correo. Sirve de constancia y para el tope diario por empresa. No guarda el
+// cuerpo ni los adjuntos.
+model PlatformEmailMessage {
+  id                String   @id @default(uuid())
+  tenantId          String?  @map("tenant_id")
+  purpose           String
+  recipient         String
+  subject           String
+  fromAddress       String   @map("from_address")
+  replyTo           String?  @map("reply_to")
+  // SENT | FAILED | UNKNOWN (no se supo si el proveedor lo aceptó)
+  status            String
+  providerMessageId String?  @map("provider_message_id")
+  errorCode         String?  @map("error_code")
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  tenant Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, createdAt])
+  @@map("platform_email_messages")
+}
+
 // Communications v1: tenant-scoped projections and durable delivery intent.
 // Business references remain scalar across module boundaries, as in OutboxEvent.
 enum CommunicationMessageStatus {
@@ -3100,9 +3125,11 @@ model CommunicationMessage {
   entityType        String                     @default("INVOICE") @map("entity_type")
   entityId          String                     @map("entity_id")
   invoiceId         String                     @map("invoice_id")
+  contactType       String?                    @map("contact_type")
+  contactId         String?                    @map("contact_id")
   recipient         String
   pdfFileId         String                     @map("pdf_file_id")
-  identityId        String                     @map("identity_id")
+  identityId        String?                    @map("identity_id")
   templateVersionId String                     @map("template_version_id")
   subject           String
   bodyText          String                     @map("body_text") @db.Text
@@ -3123,6 +3150,7 @@ model CommunicationMessage {
 
   @@unique([tenantId, idempotencyKey])
   @@index([tenantId, entityType, entityId, createdAt])
+  @@index([tenantId, contactType, contactId, createdAt])
   @@index([status, availableAt])
   @@index([status, lockedAt])
   @@map("communication_messages")
@@ -3144,15 +3172,18 @@ model CommunicationDeliveryAttempt {
 }
 
 model CommunicationNote {
-  id         String   @id @default(uuid())
-  tenantId   String   @map("tenant_id")
-  entityType String   @map("entity_type")
-  entityId   String   @map("entity_id")
-  body       String   @db.Text
-  createdBy  String   @map("created_by")
-  createdAt  DateTime @default(now()) @map("created_at")
+  id          String   @id @default(uuid())
+  tenantId    String   @map("tenant_id")
+  entityType  String   @map("entity_type")
+  entityId    String   @map("entity_id")
+  contactType String?  @map("contact_type")
+  contactId   String?  @map("contact_id")
+  body        String   @db.Text
+  createdBy   String   @map("created_by")
+  createdAt   DateTime @default(now()) @map("created_at")
 
   @@index([tenantId, entityType, entityId, createdAt])
+  @@index([tenantId, contactType, contactId, createdAt])
   @@map("communication_notes")
 }
 

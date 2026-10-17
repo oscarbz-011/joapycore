@@ -27,6 +27,17 @@ export function communicationRetryDelay(attempt: number): number {
   return Math.min(30_000 * 2 ** Math.max(attempt - 1, 0), 60 * 60_000);
 }
 
+export interface CommunicationSender {
+  via: 'identity' | 'smtp' | 'platform';
+  identityId: string | null;
+  fromEmail: string;
+  fromName: string | null;
+  replyTo: string | null;
+}
+
+const NO_SENDER =
+  'Los correos no pueden salir todavía: conectá el correo de la empresa en Integraciones.';
+
 const PREPARATION_FAILURE = Symbol('communication.preparationFailure');
 type PreparationFailure = { code: string; safeReason: string };
 
@@ -56,6 +67,25 @@ export class CommunicationsService {
     private readonly provider: CommunicationsEmailProvider,
     private readonly events: EventEmitter2,
   ) {}
+
+  /**
+   * Desde dónde salen los correos de la empresa: su identidad si definió una;
+   * si no, su correo conectado; si no, el remitente de la plataforma.
+   */
+  async sender(tenantId: string): Promise<CommunicationSender | null> {
+    const identity = await this.repository.identity(tenantId);
+    if (identity) {
+      return {
+        via: 'identity',
+        identityId: identity.id,
+        fromEmail: identity.fromEmail,
+        fromName: identity.fromName,
+        replyTo: identity.replyTo,
+      };
+    }
+    const fallback = await this.provider.defaultSender(tenantId);
+    return fallback ? { ...fallback, identityId: null } : null;
+  }
 
   async queueInvoiceAutomatically(
     tenantId: string,
@@ -129,8 +159,8 @@ export class CommunicationsService {
         'El cliente no tiene un correo válido.',
       );
     }
-    const [identity, template, file] = await Promise.all([
-      this.repository.identity(tenantId),
+    const [sender, template, file] = await Promise.all([
+      this.sender(tenantId),
       this.repository.template(tenantId, INVOICE_TEMPLATE_CODE),
       this.files
         .getById(tenantId, invoice.pdfFileId)
@@ -144,13 +174,11 @@ export class CommunicationsService {
           throw error;
         }),
     ]);
-    if (!identity)
+    if (!sender)
       throw knownPreparationFailure(
-        new BadRequestException(
-          'Configurá una identidad predeterminada con salida habilitada.',
-        ),
-        'IDENTITY_MISSING',
-        'Configurá una identidad predeterminada con salida habilitada.',
+        new BadRequestException(NO_SENDER),
+        'SENDER_MISSING',
+        NO_SENDER,
       );
     if (!template)
       throw knownPreparationFailure(
@@ -222,14 +250,16 @@ export class CommunicationsService {
       invoiceId,
       entityType: 'INVOICE',
       entityId: invoiceId,
+      contactType: 'CUSTOMER',
+      contactId: customer.id,
       recipient,
       pdfFileId: invoice.pdfFileId,
-      identityId: identity.id,
+      identityId: sender.identityId,
       templateVersionId: template.id,
       ...rendered,
-      fromEmail: identity.fromEmail,
-      fromName: identity.fromName,
-      replyTo: identity.replyTo,
+      fromEmail: sender.fromEmail,
+      fromName: sender.fromName,
+      replyTo: sender.replyTo,
       idempotencyKey,
       requestedBy: actor?.id,
     });
@@ -285,11 +315,10 @@ export class CommunicationsService {
           'La factura ya no está emitida o no está disponible.',
         );
       }
-      const identity = await this.repository.activeIdentity(
-        tenantId,
-        message.identityId,
-      );
-      if (!identity)
+      const identity = message.identityId
+        ? await this.repository.activeIdentity(tenantId, message.identityId)
+        : null;
+      if (message.identityId && !identity)
         throw new CommunicationDeliveryError(
           'IDENTITY_DISABLED',
           false,
@@ -328,6 +357,7 @@ export class CommunicationsService {
         fromEmail: message.fromEmail,
         fromName: message.fromName,
         replyTo: message.replyTo,
+        hasIdentity: Boolean(message.identityId),
         subject: message.subject,
         bodyText: message.bodyText,
         attachment: {

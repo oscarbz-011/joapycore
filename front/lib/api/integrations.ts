@@ -1,4 +1,5 @@
 import { apiClient } from "./client";
+import type { PlatformSender } from "../platform-sender";
 
 export type IntegrationStatus = "DISCONNECTED" | "CONNECTED" | "ERROR";
 
@@ -71,6 +72,10 @@ export const integrationsApi = {
     apiClient
       .put("/integrations/email/incoming", dto)
       .then((response) => response.data),
+
+  /** Cómo salen los correos de la empresa mientras no conecta el suyo. */
+  getPlatformSender: (): Promise<PlatformSender> =>
+    apiClient.get("/platform-email/sender").then((response) => response.data),
 
   testIncomingEmail: (): Promise<{ ok: true }> =>
     apiClient

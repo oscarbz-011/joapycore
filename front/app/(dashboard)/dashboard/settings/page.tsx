@@ -7,6 +7,7 @@ import { apiErrorMessage } from "@/lib/api/api-error";
 import { useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { senderNotice, type SenderNotice } from "@/lib/platform-sender";
 import {
   User,
   Shield,
@@ -44,6 +45,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { useActiveModules } from "@/lib/use-active-modules";
+import { MessagesSquare } from "lucide-react";
+import { communicationsApi } from "@/lib/api/communications";
+import { CommunicationConfiguration } from "@/components/communications/communication-settings";
+import { CommunicationError } from "@/components/communications/shared";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -52,6 +57,7 @@ type Tab =
   | "security"
   | "notifications"
   | "integrations"
+  | "communications"
   | "certificates"
   | "billing";
 
@@ -972,9 +978,35 @@ function CreditBureauIntegrationCard() {
   );
 }
 
+// Desde dónde salen los correos mientras la empresa no conecta el suyo.
+function SenderNoticeBox({ notice }: { notice: SenderNotice | null }) {
+  if (!notice) return null;
+  return (
+    <div
+      role={notice.tone === "warning" ? "alert" : "status"}
+      className={
+        notice.tone === "warning"
+          ? "mt-4 rounded-lg border border-warn/40 bg-warn-subtle p-3 text-xs text-foreground"
+          : "mt-4 rounded-lg border border-border bg-muted/40 p-3 text-xs text-foreground"
+      }
+    >
+      <p className="font-semibold">{notice.title}</p>
+      <ul className="mt-1 space-y-0.5 text-muted-foreground">
+        {notice.lines.map((line) => (
+          <li key={line}>{line}</li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 function EmailIntegrationCard() {
   const queryClient = useQueryClient();
   const canManage = usePermission("integrations:manage");
+  const { data: platformSender } = useQuery({
+    queryKey: ["platform-email-sender"],
+    queryFn: integrationsApi.getPlatformSender,
+  });
   const { data: config, isLoading } = useQuery({
     queryKey: ["email-integration"],
     queryFn: integrationsApi.getEmail,
@@ -1155,6 +1187,13 @@ function EmailIntegrationCard() {
               disabled={!canManage}
             />
           </div>
+
+          <SenderNoticeBox
+            notice={senderNotice(
+              platformSender,
+              Boolean(config?.enabled && config.configured),
+            )}
+          />
 
           <fieldset
             disabled={!canManage}
@@ -2031,6 +2070,37 @@ function BillingTab({ onGoToCerts }: { onGoToCerts: () => void }) {
   );
 }
 
+// ── Tab: Communications ────────────────────────────────────────────────────────
+
+function CommunicationsTab() {
+  const { jwtPayload } = useAuth();
+  const tenantId = jwtPayload?.tenantId;
+  const userId = jwtPayload?.sub;
+  const settings = useQuery({
+    queryKey: ["communications", tenantId, userId, "settings"],
+    queryFn: communicationsApi.settings,
+  });
+  if (settings.isPending)
+    return (
+      <div className="h-40 animate-pulse rounded-2xl bg-muted" aria-busy="true" />
+    );
+  if (settings.error)
+    return (
+      <div className="space-y-3">
+        <CommunicationError error={settings.error} />
+        <Button variant="outline" onClick={() => void settings.refetch()}>
+          Reintentar
+        </Button>
+      </div>
+    );
+  return (
+    <CommunicationConfiguration
+      key={`${tenantId}:${userId}`}
+      settings={settings.data}
+    />
+  );
+}
+
 // ── Tab definitions ────────────────────────────────────────────────────────────
 
 const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
@@ -2038,6 +2108,11 @@ const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
   { id: "security", label: "Seguridad", icon: <Shield size={14} /> },
   { id: "notifications", label: "Notificaciones", icon: <Bell size={14} /> },
   { id: "integrations", label: "Integraciones", icon: <Puzzle size={14} /> },
+  {
+    id: "communications",
+    label: "Comunicaciones",
+    icon: <MessagesSquare size={14} />,
+  },
   { id: "certificates", label: "Certificados", icon: <KeyRound size={14} /> },
   { id: "billing", label: "Facturación", icon: <Receipt size={14} /> },
 ];
@@ -2055,8 +2130,13 @@ export default function SettingsPage() {
   // y modificarlo sifen:manage; sin manage los controles quedan deshabilitados.
   const canManageSifen = usePermission("sifen:manage");
   const canReadSifen = usePermission("sifen:read") || canManageSifen;
-  const visibleTabs = TABS.filter(
-    (t) => (t.id !== "certificates" && t.id !== "billing") || canReadSifen,
+  const canAccessCommunications = usePermission("communications:access");
+  const canManageCommunications =
+    usePermission("communications:settings:manage") && canAccessCommunications;
+  const visibleTabs = TABS.filter((t) =>
+    t.id === "communications"
+      ? canManageCommunications
+      : (t.id !== "certificates" && t.id !== "billing") || canReadSifen,
   );
 
   return (
@@ -2096,6 +2176,9 @@ export default function SettingsPage() {
       {activeTab === "security" && <SecurityTab />}
       {activeTab === "notifications" && <NotificationsTab />}
       {activeTab === "integrations" && <IntegrationsTab />}
+      {activeTab === "communications" && canManageCommunications && (
+        <CommunicationsTab />
+      )}
       {activeTab === "certificates" && canReadSifen && (
         <fieldset
           disabled={!canManageSifen}

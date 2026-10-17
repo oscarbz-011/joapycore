@@ -56,7 +56,7 @@ integration(
     let hub: CommunicationHubService;
     let outbox: OutboxService;
     let events: EventEmitter2;
-    const transport = { send: jest.fn() };
+    const transport = { send: jest.fn(), defaultSender: jest.fn() };
     let worker: CommunicationsWorker | undefined;
     let redisTestClient: Redis | undefined;
     let redisNamespaceClaimed = false;
@@ -464,5 +464,81 @@ integration(
       },
       20000,
     );
+
+    // Una empresa sin correo propio no define una identidad: sale por el
+    // remitente de la plataforma.
+    it('queues and sends an invoice for a company that defined no identity', async () => {
+      const identities = { tenantId, isDefault: true };
+      await prisma.communicationIdentity.updateMany({
+        where: identities,
+        data: { outboundEnabled: false },
+      });
+      transport.defaultSender.mockResolvedValue({
+        via: 'platform',
+        fromEmail: 'communication-test@correo.example.test',
+        fromName: 'Communication test vía JoapyCore',
+        replyTo: 'empresa@example.test',
+      });
+      try {
+        const invoice = await invoiceFixture();
+
+        const message = await core.queueInvoice(tenantId, invoice.id, userId);
+
+        expect(message).toMatchObject({
+          identityId: null,
+          fromEmail: 'communication-test@correo.example.test',
+          fromName: 'Communication test vía JoapyCore',
+          replyTo: 'empresa@example.test',
+          status: 'QUEUED',
+        });
+        expect(transport.defaultSender).toHaveBeenCalledWith(tenantId);
+
+        await core.process(tenantId, message!.id);
+
+        expect(transport.send).toHaveBeenCalledWith(
+          expect.objectContaining({
+            hasIdentity: false,
+            fromEmail: 'communication-test@correo.example.test',
+            replyTo: 'empresa@example.test',
+          }),
+        );
+        await expect(
+          prisma.communicationMessage.findFirstOrThrow({
+            where: { tenantId, id: message!.id },
+          }),
+        ).resolves.toMatchObject({ status: 'SENT', identityId: null });
+      } finally {
+        await prisma.communicationIdentity.updateMany({
+          where: identities,
+          data: { outboundEnabled: true },
+        });
+      }
+    });
+
+    it('refuses to queue when the company has nowhere to send from', async () => {
+      const identities = { tenantId, isDefault: true };
+      await prisma.communicationIdentity.updateMany({
+        where: identities,
+        data: { outboundEnabled: false },
+      });
+      transport.defaultSender.mockResolvedValue(null);
+      try {
+        const invoice = await invoiceFixture();
+
+        await expect(
+          core.queueInvoice(tenantId, invoice.id, userId),
+        ).rejects.toThrow(/conectá el correo de la empresa/);
+        await expect(
+          prisma.communicationMessage.count({
+            where: { tenantId, invoiceId: invoice.id },
+          }),
+        ).resolves.toBe(0);
+      } finally {
+        await prisma.communicationIdentity.updateMany({
+          where: identities,
+          data: { outboundEnabled: true },
+        });
+      }
+    });
   },
 );

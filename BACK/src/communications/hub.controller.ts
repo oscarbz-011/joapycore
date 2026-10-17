@@ -57,6 +57,12 @@ export class CommunicationHubController {
     return this.hub.updateSettings(tenantId, user.sub, dto);
   }
 
+  @Get('sender')
+  @Permissions('communications:access', 'communications:settings:manage')
+  sender(@CurrentTenant() tenantId: string) {
+    return this.hub.sender(tenantId);
+  }
+
   @Get('identities')
   @Permissions('communications:access', 'communications:settings:manage')
   identities(@CurrentTenant() tenantId: string) {

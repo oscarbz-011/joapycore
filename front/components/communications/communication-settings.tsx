@@ -15,6 +15,7 @@ import {
   type IdentityInput,
   type TemplateInput,
 } from "@/lib/api/communications";
+import { senderExplanation } from "@/lib/communications-sender";
 import { CommunicationDate, CommunicationError } from "./shared";
 
 export function CommunicationConfiguration({
@@ -33,6 +34,11 @@ export function CommunicationConfiguration({
     queryKey: ["communications", tenantId, userId, "identities"],
     queryFn: communicationsApi.identities,
   });
+  const sender = useQuery({
+    queryKey: ["communications", tenantId, userId, "sender"],
+    queryFn: communicationsApi.sender,
+  });
+  const explanation = sender.data ? senderExplanation(sender.data) : null;
   const templates = useQuery({
     queryKey: ["communications", tenantId, userId, "templates"],
     queryFn: communicationsApi.templates,
@@ -111,15 +117,52 @@ export function CommunicationConfiguration({
       </section>
       <section className="space-y-4 rounded-2xl border border-border bg-card p-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <h2 className="font-semibold">Identidades remitentes</h2>
-          <Button variant="outline" size="sm" onClick={() => setEditing("new")}>
-            Nueva identidad
-          </Button>
+          <h2 className="font-semibold">Remitente de las facturas</h2>
+          {explanation?.canDefineIdentity && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setEditing("new")}
+            >
+              Nueva identidad
+            </Button>
+          )}
         </div>
-        <p className="text-sm text-muted-foreground">
-          La dirección debe coincidir con el remitente SMTP configurado.
-          Reply-To permite recibir respuestas en otra dirección.
-        </p>
+        {sender.error && (
+          <div className="space-y-3">
+            <CommunicationError error={sender.error} />
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => void sender.refetch()}
+            >
+              Reintentar remitente
+            </Button>
+          </div>
+        )}
+        {explanation && (
+          <div
+            role={explanation.tone === "warning" ? "alert" : "status"}
+            className={
+              explanation.tone === "warning"
+                ? "rounded-xl border border-warn/40 bg-warn-subtle p-3 text-sm"
+                : "rounded-xl border border-border bg-muted/40 p-3 text-sm"
+            }
+          >
+            <p className="font-medium">{explanation.title}</p>
+            <ul className="mt-1 space-y-0.5 text-muted-foreground">
+              {explanation.lines.map((line) => (
+                <li key={line}>{line}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+        {explanation?.canDefineIdentity && (
+          <p className="text-sm text-muted-foreground">
+            La dirección de una identidad debe ser la del correo conectado de la
+            empresa.
+          </p>
+        )}
         {canReadIntegrations ? (
           <Link
             href="/dashboard/settings?tab=integrations"
@@ -150,9 +193,9 @@ export function CommunicationConfiguration({
             </Button>
           </div>
         )}
-        {identities.data?.length === 0 && (
+        {identities.data?.length === 0 && explanation?.canDefineIdentity && (
           <p className="text-sm text-muted-foreground">
-            No hay identidades configuradas.
+            No hay identidades definidas.
           </p>
         )}
         {identities.data?.map((identity) => (

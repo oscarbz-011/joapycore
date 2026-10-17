@@ -1,4 +1,5 @@
 import { ServiceUnavailableException } from '@nestjs/common';
+import { PlatformDeliveryError } from '../platform-email/platform-delivery';
 import { createTransport } from 'nodemailer';
 import { EmailService } from './email.service';
 import { resolvePublicNetworkDestination } from '../integrations/network-destination.policy';
@@ -26,6 +27,12 @@ describe('EmailService', () => {
     }),
   };
 
+  const platformEmail = {
+    isConfigured: jest.fn(),
+    sendForTenant: jest.fn(),
+    sendSystem: jest.fn(),
+  };
+
   const input = {
     tenantId: 'tenant-1',
     to: 'cliente@example.com',
@@ -40,6 +47,7 @@ describe('EmailService', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    platformEmail.isConfigured.mockReturnValue(false);
     verify.mockResolvedValue(true);
     (createTransport as jest.Mock).mockReturnValue({ sendMail, verify, close });
     jest.mocked(resolvePublicNetworkDestination).mockResolvedValue({
@@ -62,6 +70,7 @@ describe('EmailService', () => {
     return new EmailService(
       configService as never,
       integrationsService as never,
+      platformEmail as never,
     );
   }
 
@@ -147,5 +156,92 @@ describe('EmailService', () => {
         text: 'Mensaje',
       }),
     ).rejects.toEqual(expect.objectContaining({ ambiguous: false }));
+  });
+
+  describe('a company that has not connected its own email', () => {
+    beforeEach(() => {
+      integrationsService.getEnabledSmtpConfig.mockResolvedValue(null);
+      platformEmail.isConfigured.mockReturnValue(true);
+      platformEmail.sendForTenant.mockResolvedValue({
+        messageId: 'msg-1',
+        from: 'mi-empresa@correo.joapycore.com',
+      });
+    });
+
+    it('goes out through the platform sender, in the name of that company', async () => {
+      const result = await createService().sendWithAttachment({
+        ...input,
+        purpose: 'purchase.order',
+      });
+
+      expect(platformEmail.sendForTenant).toHaveBeenCalledWith({
+        tenantId: 'tenant-1',
+        purpose: 'purchase.order',
+        to: 'cliente@example.com',
+        subject: 'Contrato',
+        html: '<p>Contrato</p>',
+        attachment: input.attachment,
+      });
+      expect(result).toEqual({
+        to: 'cliente@example.com',
+        messageId: 'msg-1',
+        accepted: ['cliente@example.com'],
+        sentFrom: 'mi-empresa@correo.joapycore.com',
+      });
+      // Nunca por el SMTP global, que no dice de qué empresa es el correo.
+      expect(createTransport).not.toHaveBeenCalled();
+    });
+
+    it('still fails clearly when the platform sender is off', async () => {
+      platformEmail.isConfigured.mockReturnValue(false);
+
+      await expect(createService().sendWithAttachment(input)).rejects.toThrow(
+        /no está configurado/,
+      );
+      expect(platformEmail.sendForTenant).not.toHaveBeenCalled();
+    });
+
+    it('does not claim a failure when the outcome is unknown', async () => {
+      platformEmail.sendForTenant.mockRejectedValue(
+        new PlatformDeliveryError('PROVIDER_UNREACHABLE', true, true, 'x'),
+      );
+
+      await expect(createService().sendWithAttachment(input)).rejects.toThrow(
+        /No se pudo confirmar/,
+      );
+    });
+
+    it('prefers the company email once it is connected', async () => {
+      integrationsService.getEnabledSmtpConfig.mockResolvedValue({
+        host: 'smtp.tenant.example.com',
+        port: 587,
+        secure: false,
+        fromEmail: 'ventas@tenant.example.com',
+      });
+      sendMail.mockResolvedValue({
+        messageId: 'smtp-1',
+        accepted: ['cliente@example.com'],
+        rejected: [],
+      });
+
+      await createService().sendWithAttachment(input);
+
+      expect(platformEmail.sendForTenant).not.toHaveBeenCalled();
+    });
+  });
+
+  it("sends the platform's own emails through its sender", async () => {
+    platformEmail.isConfigured.mockReturnValue(true);
+    platformEmail.sendSystem.mockResolvedValue({
+      messageId: 'msg-2',
+      from: 'no-reply@correo.joapycore.com',
+    });
+
+    await createService().sendWithAttachment({ ...input, tenantId: undefined });
+
+    expect(platformEmail.sendSystem).toHaveBeenCalledWith(
+      expect.objectContaining({ purpose: 'system', to: 'cliente@example.com' }),
+    );
+    expect(platformEmail.sendForTenant).not.toHaveBeenCalled();
   });
 });
