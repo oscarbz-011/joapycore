@@ -39,6 +39,7 @@ import {
   isInventoryItemActive,
 } from "../../../../lib/inventory-navigation";
 import { FINANCE_NAV_GROUPS } from "@/lib/finance-navigation";
+import { CompanySwitcher, JoapyCoreBrand } from "./company-switcher";
 import { closedGroupBadge, isNavItemActive } from "@/lib/sidebar-nav";
 import { COMMUNICATIONS_PATH } from "@/lib/api/communications";
 import { useCommunicationsAttention } from "@/components/communications/inbox/use-communications";
@@ -609,7 +610,6 @@ export function Sidebar() {
   const { jwtPayload } = useAuth();
 
   const permissions = jwtPayload?.permissions ?? [];
-  const tenantName = jwtPayload?.tenantName ?? "";
 
   // En vivo, no del JWT — ver useActiveModules.
   const { activeModules } = useActiveModules();
@@ -642,7 +642,6 @@ export function Sidebar() {
     "/dashboard/logistics/deliveries": pendingCounts.pendingDeliveries,
   };
 
-  const brandInitial = (tenantName?.[0] ?? "J").toUpperCase();
   const isDashActive = pathname === "/dashboard";
 
   const groups = STATIC_GROUPS.map((g) => ({
@@ -664,20 +663,11 @@ export function Sidebar() {
   return (
     <aside className="fixed inset-y-0 left-0 flex w-[250px] flex-col border-r ">
       {/* Brand */}
-      <div className="flex shrink-0 items-center gap-3 px-[18px] pb-4 pt-[18px]">
-        <div className="flex size-[38px] shrink-0 items-center justify-center rounded-[10px] bg-gradient-to-br from-emerald-500 to-emerald-700 text-[18px] font-extrabold text-white shadow-[0_4px_12px_rgba(16,185,129,0.35)]">
-          {brandInitial}
+      <div className="shrink-0 space-y-3 px-3 pb-3 pt-[18px]">
+        <div className="px-1.5">
+          <JoapyCoreBrand />
         </div>
-        <div className="min-w-0 leading-tight">
-          <div className="text-[15px] font-bold text-sidebar-foreground">
-            JoapyCore
-          </div>
-          {tenantName && (
-            <div className="truncate text-[12px] text-sidebar-foreground/50">
-              {tenantName}
-            </div>
-          )}
-        </div>
+        <CompanySwitcher />
       </div>
 
       {/* Scrollable nav */}

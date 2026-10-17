@@ -68,6 +68,7 @@ export class PurchaseOrderDocumentService {
 
     const delivery = await this.emailService.sendWithAttachment({
       tenantId,
+      purpose: 'purchase.order',
       to: recipient,
       subject: `Orden de compra ${number}`,
       html: `<p>Estimados:</p><p>Adjuntamos la orden de compra <strong>${number}</strong>.</p><p>Por favor confirmen su recepción.</p>`,
@@ -87,7 +88,11 @@ export class PurchaseOrderDocumentService {
       after: { to: recipient },
     } satisfies AuditLogEvent);
 
-    return { to: delivery.to, accepted: delivery.accepted };
+    return {
+      to: delivery.to,
+      accepted: delivery.accepted,
+      sentFrom: delivery.sentFrom,
+    };
   }
 
   private async getOrderOrFail(tenantId: string, id: string) {

@@ -53,6 +53,15 @@ export interface TenantResponse {
   updatedAt: string;
 }
 
+/** Lo que cualquier usuario ve de su empresa en el menú. */
+export interface TenantBrand {
+  id: string;
+  name: string;
+  razonSocial: string | null;
+  ruc: string | null;
+  hasLogo: boolean;
+}
+
 export interface TenantModuleResponse {
   id: string;
   tenantId: string;
@@ -133,6 +142,12 @@ export interface UpsertBranchPayload {
 }
 
 export const tenantsApi = {
+  getBrand: (): Promise<TenantBrand> =>
+    apiClient.get('/tenants/me/brand').then((r) => r.data),
+
+  getLogo: (): Promise<Blob> =>
+    apiClient.get('/tenants/me/logo', { responseType: 'blob' }).then((r) => r.data),
+
   getMe: (): Promise<TenantResponse> =>
     apiClient.get('/tenants/me').then((r) => r.data),
 

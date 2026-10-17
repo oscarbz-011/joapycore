@@ -7,6 +7,7 @@ import { apiErrorMessage } from "@/lib/api/api-error";
 import { useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { senderNotice, type SenderNotice } from "@/lib/platform-sender";
 import {
   User,
   Shield,
@@ -977,9 +978,35 @@ function CreditBureauIntegrationCard() {
   );
 }
 
+// Desde dónde salen los correos mientras la empresa no conecta el suyo.
+function SenderNoticeBox({ notice }: { notice: SenderNotice | null }) {
+  if (!notice) return null;
+  return (
+    <div
+      role={notice.tone === "warning" ? "alert" : "status"}
+      className={
+        notice.tone === "warning"
+          ? "mt-4 rounded-lg border border-warn/40 bg-warn-subtle p-3 text-xs text-foreground"
+          : "mt-4 rounded-lg border border-border bg-muted/40 p-3 text-xs text-foreground"
+      }
+    >
+      <p className="font-semibold">{notice.title}</p>
+      <ul className="mt-1 space-y-0.5 text-muted-foreground">
+        {notice.lines.map((line) => (
+          <li key={line}>{line}</li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 function EmailIntegrationCard() {
   const queryClient = useQueryClient();
   const canManage = usePermission("integrations:manage");
+  const { data: platformSender } = useQuery({
+    queryKey: ["platform-email-sender"],
+    queryFn: integrationsApi.getPlatformSender,
+  });
   const { data: config, isLoading } = useQuery({
     queryKey: ["email-integration"],
     queryFn: integrationsApi.getEmail,
@@ -1160,6 +1187,13 @@ function EmailIntegrationCard() {
               disabled={!canManage}
             />
           </div>
+
+          <SenderNoticeBox
+            notice={senderNotice(
+              platformSender,
+              Boolean(config?.enabled && config.configured),
+            )}
+          />
 
           <fieldset
             disabled={!canManage}

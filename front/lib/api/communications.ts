@@ -18,6 +18,14 @@ export interface CommunicationSettings {
   emailEnabled: boolean;
   invoiceEmailEnabled: boolean;
 }
+export type CommunicationSender =
+  | { via: "none" }
+  | {
+      via: "identity" | "smtp" | "platform";
+      fromEmail: string;
+      fromName: string | null;
+      replyTo: string | null;
+    };
 export interface CommunicationIdentity {
   id: string;
   type: "SYSTEM" | "SHARED";
@@ -157,6 +165,8 @@ export const communicationsApi = {
     dto: CommunicationSettings,
   ): Promise<CommunicationSettings> =>
     apiClient.patch("/communications/settings", dto).then((r) => r.data),
+  sender: (): Promise<CommunicationSender> =>
+    apiClient.get("/communications/sender").then((r) => r.data),
   identities: (): Promise<CommunicationIdentity[]> =>
     apiClient.get("/communications/identities").then((r) => r.data),
   createIdentity: (dto: IdentityInput): Promise<CommunicationIdentity> =>

@@ -146,7 +146,7 @@ export function usePendingNotifications(permissions: string[], activeModules: st
         type: 'overdue-ar' as const,
         title: isCredit ? `Cuota ${urgency.installmentNumber} vencida` : 'Cuenta por cobrar vencida',
         description: `${ar.invoice.saleOrder.customer.firstName} ${ar.invoice.saleOrder.customer.lastName} · ${formatPrice(ar.amount - ar.paidAmount)}`,
-        href: `/dashboard/payments?ar=${ar.id}`,
+        href: `/dashboard/payments/${ar.id}`,
       };
     }),
     ...dueSoonAR.map((ar) => {
@@ -156,7 +156,7 @@ export function usePendingNotifications(permissions: string[], activeModules: st
         type: 'ar-due-soon' as const,
         title: `Cuota ${urgency.installmentNumber} vence en ${urgency.days} ${urgency.days === 1 ? 'día' : 'días'}`,
         description: `${ar.invoice.saleOrder.customer.firstName} ${ar.invoice.saleOrder.customer.lastName}`,
-        href: `/dashboard/payments?ar=${ar.id}`,
+        href: `/dashboard/payments/${ar.id}`,
       };
     }),
     ...myAdjustments.map((order) => ({
