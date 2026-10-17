@@ -37,7 +37,7 @@ describe('CommunicationHubService isolation and controls', () => {
   };
   let integrations: { getEnabledSmtpConfig: jest.Mock };
   let events: { emit: jest.Mock };
-  let core: { queueInvoice: jest.Mock; retry: jest.Mock };
+  let core: { queueInvoice: jest.Mock; retry: jest.Mock; sender: jest.Mock };
   let service: CommunicationHubService;
 
   beforeEach(() => {
@@ -73,7 +73,7 @@ describe('CommunicationHubService isolation and controls', () => {
       }),
     };
     events = { emit: jest.fn() };
-    core = { queueInvoice: jest.fn(), retry: jest.fn() };
+    core = { queueInvoice: jest.fn(), retry: jest.fn(), sender: jest.fn() };
     service = new CommunicationHubService(
       prisma as unknown as PrismaService,
       integrations as unknown as IntegrationsService,
@@ -154,6 +154,34 @@ describe('CommunicationHubService isolation and controls', () => {
     });
     expect(core.queueInvoice).not.toHaveBeenCalled();
     expect(prisma.communicationNote.create).not.toHaveBeenCalled();
+  });
+
+  describe('sender', () => {
+    it('tells how the emails of the company go out, without the identity id', async () => {
+      core.sender.mockResolvedValue({
+        via: 'platform',
+        identityId: null,
+        fromEmail: 'mi-empresa@correo.joapycore.com',
+        fromName: 'Mi Empresa vía JoapyCore',
+        replyTo: 'ventas@miempresa.com',
+      });
+
+      await expect(service.sender('tenant-a')).resolves.toEqual({
+        via: 'platform',
+        fromEmail: 'mi-empresa@correo.joapycore.com',
+        fromName: 'Mi Empresa vía JoapyCore',
+        replyTo: 'ventas@miempresa.com',
+      });
+      expect(core.sender).toHaveBeenCalledWith('tenant-a');
+    });
+
+    it('says so when nothing can go out', async () => {
+      core.sender.mockResolvedValue(null);
+
+      await expect(service.sender('tenant-a')).resolves.toEqual({
+        via: 'none',
+      });
+    });
   });
 
   it('cannot modify another tenant sender identity', async () => {

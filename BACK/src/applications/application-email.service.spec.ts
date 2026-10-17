@@ -378,7 +378,11 @@ describe('Email inbox capability status', () => {
         incoming: { enabled: true, configured: true, password: 'hidden' },
       }),
     };
-    const service = new EmailService({} as never, integrations as never);
+    const service = new EmailService(
+      {} as never,
+      integrations as never,
+      {} as never,
+    );
     await expect(
       service.getTenantEmailStatus('tenant-1', 'user@example.com'),
     ).resolves.toEqual({

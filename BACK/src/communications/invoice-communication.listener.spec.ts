@@ -53,6 +53,7 @@ describe('invoice.issued automatic communication', () => {
     user: { findFirst: jest.Mock };
   };
   let files: { getById: jest.Mock };
+  let provider: { defaultSender: jest.Mock };
   let listener: InvoiceCommunicationListener;
   let communications: CommunicationsService;
 
@@ -99,13 +100,14 @@ describe('invoice.issued automatic communication', () => {
         entityId: invoiceId,
       }),
     };
+    provider = { defaultSender: jest.fn().mockResolvedValue(null) };
     const repository = new CommunicationsRepository(
       prisma as unknown as PrismaService,
     );
     communications = new CommunicationsService(
       repository,
       files as unknown as FilesService,
-      {} as CommunicationsEmailProvider,
+      provider as unknown as CommunicationsEmailProvider,
       new EventEmitter2(),
     );
     listener = new InvoiceCommunicationListener(communications);
@@ -149,7 +151,7 @@ describe('invoice.issued automatic communication', () => {
     );
   });
 
-  it('records a fixed reason when the default sender identity is missing', async () => {
+  it('records a fixed reason when the company has nowhere to send from', async () => {
     prisma.invoice.findFirst.mockResolvedValue(
       invoiceFixture('customer@example.test'),
     );
@@ -158,10 +160,50 @@ describe('invoice.issued automatic communication', () => {
     expect(prisma.communicationNotification.upsert).toHaveBeenCalledWith(
       expect.objectContaining({
         create: expect.objectContaining({
-          body: 'Configurá una identidad predeterminada con salida habilitada.',
+          body: 'Los correos no pueden salir todavía: conectá el correo de la empresa en Integraciones.',
         }),
       }),
     );
+  });
+
+  describe('where the emails of a company go out from', () => {
+    it('uses the identity the company defined', async () => {
+      await expect(communications.sender(tenantId)).resolves.toEqual({
+        via: 'identity',
+        identityId: 'identity-a',
+        fromEmail: 'sender@example.test',
+        fromName: null,
+        replyTo: null,
+      });
+      expect(provider.defaultSender).not.toHaveBeenCalled();
+    });
+
+    // Sin identidad no hace falta crear una: alcanza con el correo conectado
+    // o, si tampoco hay, con el remitente de la plataforma.
+    it('falls back to the default sender, bound to no identity', async () => {
+      prisma.communicationIdentity.findFirst.mockResolvedValue(null);
+      provider.defaultSender.mockResolvedValue({
+        via: 'platform',
+        fromEmail: 'mi-empresa@correo.joapycore.com',
+        fromName: 'Mi Empresa vía JoapyCore',
+        replyTo: 'ventas@miempresa.com',
+      });
+
+      await expect(communications.sender(tenantId)).resolves.toEqual({
+        via: 'platform',
+        identityId: null,
+        fromEmail: 'mi-empresa@correo.joapycore.com',
+        fromName: 'Mi Empresa vía JoapyCore',
+        replyTo: 'ventas@miempresa.com',
+      });
+      expect(provider.defaultSender).toHaveBeenCalledWith(tenantId);
+    });
+
+    it('is nothing when there is no identity and no default sender', async () => {
+      prisma.communicationIdentity.findFirst.mockResolvedValue(null);
+
+      await expect(communications.sender(tenantId)).resolves.toBeNull();
+    });
   });
 
   it('records a fixed reason when the invoice no longer exists', async () => {
