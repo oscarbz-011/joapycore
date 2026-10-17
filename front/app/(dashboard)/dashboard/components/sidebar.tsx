@@ -43,6 +43,7 @@ import { CompanySwitcher, JoapyCoreBrand } from "./company-switcher";
 import { closedGroupBadge, isNavItemActive } from "@/lib/sidebar-nav";
 import { COMMUNICATIONS_PATH } from "@/lib/api/communications";
 import { useCommunicationsAttention } from "@/components/communications/inbox/use-communications";
+import { CHAT_PATH, useChatUnread } from "@/components/chat/use-chat";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -96,6 +97,7 @@ const STATIC_GROUPS: SidebarGroup[] = [
         href: COMMUNICATIONS_PATH,
         permission: "communications:access",
       },
+      { label: "Chat", href: CHAT_PATH },
     ],
   },
   {
@@ -630,9 +632,11 @@ export function Sidebar() {
   );
 
   const communications = useCommunicationsAttention();
+  const chatUnread = useChatUnread();
 
   const badgeByHref: Record<string, number | undefined> = {
     [COMMUNICATIONS_PATH]: communications.total || undefined,
+    [CHAT_PATH]: chatUnread || undefined,
     "/dashboard/settings/alerts": alertBadge,
     "/dashboard/billing": pendingCounts.invoices,
     "/dashboard/billing/approvals": pendingCounts.approvals,
