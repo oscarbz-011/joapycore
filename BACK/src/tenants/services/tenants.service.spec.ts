@@ -38,6 +38,91 @@ describe('TenantsService', () => {
     });
   });
 
+  // ── brand / logo ───────────────────────────────────────────────────────────
+
+  describe('brand', () => {
+    it('names the company by its trade name when it has one', async () => {
+      repo.findById.mockResolvedValue(
+        makeTenant({
+          nombreFantasia: ' Ferro ',
+          razonSocial: 'Ferro S.A.',
+          ruc: '80012345-6',
+          logoFileId: 'logo-1',
+        }),
+      );
+
+      await expect(service.brand('tenant-1')).resolves.toEqual({
+        id: 'tenant-1',
+        name: 'Ferro',
+        razonSocial: 'Ferro S.A.',
+        ruc: '80012345-6',
+        hasLogo: true,
+      });
+      expect(repo.findById).toHaveBeenCalledWith('tenant-1');
+    });
+
+    it('falls back to the registered name', async () => {
+      repo.findById.mockResolvedValue(
+        makeTenant({ nombreFantasia: '  ', logoFileId: null }),
+      );
+
+      await expect(service.brand('tenant-1')).resolves.toMatchObject({
+        name: 'Empresa Demo',
+        hasLogo: false,
+      });
+    });
+  });
+
+  describe('logo', () => {
+    const files = () =>
+      filesService as unknown as {
+        getById: jest.Mock;
+        getFileBuffer: jest.Mock;
+      };
+
+    beforeEach(() => {
+      Object.assign(filesService, {
+        getById: jest
+          .fn()
+          .mockResolvedValue({ id: 'logo-1', mimeType: 'image/png' }),
+        getFileBuffer: jest.fn().mockResolvedValue(Buffer.from('png')),
+      });
+    });
+
+    it('serves the logo of the company, read inside the same company', async () => {
+      repo.findById.mockResolvedValue(makeTenant({ logoFileId: 'logo-1' }));
+
+      await expect(service.logo('tenant-1')).resolves.toEqual({
+        mimeType: 'image/png',
+        content: Buffer.from('png'),
+      });
+      expect(files().getById).toHaveBeenCalledWith('tenant-1', 'logo-1');
+    });
+
+    it('has nothing to serve without a logo', async () => {
+      repo.findById.mockResolvedValue(makeTenant({ logoFileId: null }));
+
+      await expect(service.logo('tenant-1')).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
+      expect(files().getById).not.toHaveBeenCalled();
+    });
+
+    // Sin permiso de archivos, solo puede salir una imagen.
+    it('never serves a file that is not an image', async () => {
+      repo.findById.mockResolvedValue(makeTenant({ logoFileId: 'logo-1' }));
+      files().getById.mockResolvedValue({
+        id: 'logo-1',
+        mimeType: 'application/pdf',
+      });
+
+      await expect(service.logo('tenant-1')).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
+      expect(files().getFileBuffer).not.toHaveBeenCalled();
+    });
+  });
+
   // ── update ─────────────────────────────────────────────────────────────────
 
   describe('update', () => {

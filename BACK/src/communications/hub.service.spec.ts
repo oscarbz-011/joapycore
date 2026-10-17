@@ -37,7 +37,7 @@ describe('CommunicationHubService isolation and controls', () => {
   };
   let integrations: { getEnabledSmtpConfig: jest.Mock };
   let events: { emit: jest.Mock };
-  let core: { queueInvoice: jest.Mock; retry: jest.Mock };
+  let core: { queueInvoice: jest.Mock; retry: jest.Mock; sender: jest.Mock };
   let service: CommunicationHubService;
 
   beforeEach(() => {
@@ -73,7 +73,7 @@ describe('CommunicationHubService isolation and controls', () => {
       }),
     };
     events = { emit: jest.fn() };
-    core = { queueInvoice: jest.fn(), retry: jest.fn() };
+    core = { queueInvoice: jest.fn(), retry: jest.fn(), sender: jest.fn() };
     service = new CommunicationHubService(
       prisma as unknown as PrismaService,
       integrations as unknown as IntegrationsService,
@@ -150,10 +150,38 @@ describe('CommunicationHubService isolation and controls', () => {
     ).rejects.toBeInstanceOf(NotFoundException);
     expect(prisma.invoice.findFirst).toHaveBeenCalledWith({
       where: { id: 'other-invoice', tenantId: 'tenant-a' },
-      select: { id: true },
+      select: { id: true, saleOrder: { select: { customerId: true } } },
     });
     expect(core.queueInvoice).not.toHaveBeenCalled();
     expect(prisma.communicationNote.create).not.toHaveBeenCalled();
+  });
+
+  describe('sender', () => {
+    it('tells how the emails of the company go out, without the identity id', async () => {
+      core.sender.mockResolvedValue({
+        via: 'platform',
+        identityId: null,
+        fromEmail: 'mi-empresa@correo.joapycore.com',
+        fromName: 'Mi Empresa vía JoapyCore',
+        replyTo: 'ventas@miempresa.com',
+      });
+
+      await expect(service.sender('tenant-a')).resolves.toEqual({
+        via: 'platform',
+        fromEmail: 'mi-empresa@correo.joapycore.com',
+        fromName: 'Mi Empresa vía JoapyCore',
+        replyTo: 'ventas@miempresa.com',
+      });
+      expect(core.sender).toHaveBeenCalledWith('tenant-a');
+    });
+
+    it('says so when nothing can go out', async () => {
+      core.sender.mockResolvedValue(null);
+
+      await expect(service.sender('tenant-a')).resolves.toEqual({
+        via: 'none',
+      });
+    });
   });
 
   it('cannot modify another tenant sender identity', async () => {
@@ -188,6 +216,27 @@ describe('CommunicationHubService isolation and controls', () => {
     expect(prisma.communicationNotification.count).toHaveBeenCalledWith({
       where: { tenantId: 'tenant-a', userId: 'user-a', readAt: null },
     });
+  });
+
+  it('tells which conversation a notice belongs to, looking only inside the tenant', async () => {
+    prisma.communicationNotification.findMany.mockResolvedValue([
+      { id: 'n1', messageId: 'm1', title: 'Enviado' },
+      { id: 'n2', messageId: null, title: 'Sin correo' },
+    ]);
+    prisma.communicationMessage.findMany.mockResolvedValue([
+      { id: 'm1', contactType: 'CUSTOMER', contactId: 'customer-1' },
+    ]);
+
+    const result = await service.notifications('tenant-a', 'user-a', page);
+
+    expect(prisma.communicationMessage.findMany).toHaveBeenCalledWith({
+      where: { tenantId: 'tenant-a', id: { in: ['m1'] } },
+      select: { id: true, contactType: true, contactId: true },
+    });
+    expect(result.items.map((item) => item.contact)).toEqual([
+      { type: 'CUSTOMER', id: 'customer-1' },
+      null,
+    ]);
   });
 
   it('refuses marking a notification owned by another user as read', async () => {
@@ -229,6 +278,21 @@ describe('CommunicationHubService isolation and controls', () => {
     expect(JSON.stringify(events.emit.mock.calls)).not.toContain(
       'private-text',
     );
+  });
+
+  it('files an invoice note under the customer of that invoice', async () => {
+    prisma.invoice.findFirst.mockResolvedValue({
+      id: 'invoice',
+      saleOrder: { customerId: 'customer-1' },
+    });
+    await service.createNote('tenant-a', 'user-a', 'invoice', { body: 'x' });
+    expect(prisma.communicationNote.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        tenantId: 'tenant-a',
+        contactType: 'CUSTOMER',
+        contactId: 'customer-1',
+      }),
+    });
   });
 });
 

@@ -12,6 +12,16 @@ Implementación del primer incremento de la sección 24 del build plan (18/09/20
 - Envío automático opcional al recibir el evento `invoice.issued`, que Billing ya guarda mediante Outbox en su transacción de emisión. Se conserva ese nombre para no romper sus consumidores.
 - Flags `enabled`, `emailEnabled`, `invoiceEmailEnabled` desactivados por defecto. No se activan tenants ni se envían correos al instalar la migración.
 
+## Bandeja por conversación (13/10/2026)
+
+La pantalla pasó a `/dashboard/communications` (menú principal); las rutas `/dashboard/applications/communications` y `/dashboard/applications/email` redirigen ahí. La configuración (activación, remitentes, plantilla) está en Configuración → Comunicaciones.
+
+- La unidad es la conversación con un contacto. Cada mensaje y cada nota guardan `contact_type` y `contact_id`; hoy el único tipo es `CUSTOMER`, tomado del cliente de la factura. La migración `20261013100000_communication_contacts` completa las filas anteriores.
+- Bandejas: Clientes, Con problemas (correos `FAILED` o `UNKNOWN`) y Mis avisos (las notificaciones personales). La campana y el menú muestran cuántas conversaciones tienen problemas y cuántos avisos hay sin leer.
+- El hilo mezcla correos y notas internas. Una nota escrita desde la conversación queda sobre el cliente (`entity_type = CUSTOMER`); una escrita desde la factura también aparece en el hilo.
+- Endpoints, bajo `/communications/conversations` y con los mismos permisos que `messages` (módulo Billing, `communications:delivery:read`, `billing:read`): `GET ?page&limit&onlyProblems&search&contactType`, `GET summary`, `GET :contactType/:contactId?page&limit`, `POST :contactType/:contactId/notes` con `{body}` (`communications:notes:create`).
+- `GET notifications` agrega `contact` a cada aviso que nació de un mensaje.
+
 ## Puesta en marcha
 
 1. Instalar las dependencias de BACK con `pnpm install --frozen-lockfile` y ejecutar `pnpm exec prisma generate`.

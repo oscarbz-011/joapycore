@@ -1,4 +1,8 @@
 export const WS_EVENT_MAP: Record<string, string[][]> = {
+  // Chat interno: llegan solo a quien participa de la conversación.
+  'chat.message':      [['chat']],
+  'chat.conversation': [['chat']],
+  'chat.read':         [['chat']],
   // Cambió un evento visible para toda la empresa.
   'calendar.changed':  [['calendar']],
   'sale.order.completed':          [['sale-orders']],
