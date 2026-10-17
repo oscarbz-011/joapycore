@@ -9,6 +9,8 @@ import type SMTPTransport from 'nodemailer/lib/smtp-transport';
 import type { EmailConfig } from '../config/email.config';
 import { IntegrationsService } from '../integrations/integrations.service';
 import { resolvePublicNetworkDestination } from '../integrations/network-destination.policy';
+import { PlatformEmailService } from '../platform-email/platform-email.service';
+import { PlatformDeliveryError } from '../platform-email/platform-delivery';
 
 export interface EmailAttachment {
   filename: string;
@@ -18,6 +20,8 @@ export interface EmailAttachment {
 
 export interface SendWithAttachmentInput {
   tenantId?: string;
+  /** Para qué es: queda en el registro de envíos de la plataforma. */
+  purpose?: string;
   to: string;
   subject: string;
   html: string;
@@ -28,6 +32,8 @@ export interface EmailDeliveryResult {
   to: string;
   messageId: string | null;
   accepted: string[];
+  /** Dirección de la plataforma, cuando no salió por el correo de la empresa. */
+  sentFrom?: string;
 }
 
 export class TenantSmtpDeliveryError extends Error {
@@ -58,6 +64,7 @@ export class EmailService {
   constructor(
     private readonly configService: ConfigService,
     private readonly integrationsService: IntegrationsService,
+    private readonly platformEmail: PlatformEmailService,
   ) {}
 
   private getTransporter(): Transporter<SMTPTransport.SentMessageInfo> {
@@ -112,12 +119,37 @@ export class EmailService {
       }
     }
 
-    // Si la operación pertenece a un tenant nunca se debe simular/fallback
-    // al SMTP global del .env. El administrador debe configurar su salida y
-    // el usuario recibe un error real hasta que exista.
+    // La empresa todavía no conectó su correo: sale por el remitente de la
+    // plataforma, identificada con su nombre y con las respuestas a su
+    // dirección. Sin ese remitente no sale.
     if (input.tenantId) {
-      throw new ServiceUnavailableException(
-        'El correo saliente del tenant no está configurado o está desactivado',
+      if (!this.platformEmail.isConfigured()) {
+        throw new ServiceUnavailableException(
+          'El correo saliente de la empresa no está configurado o está desactivado',
+        );
+      }
+      return this.viaPlatform(input.to, () =>
+        this.platformEmail.sendForTenant({
+          tenantId: input.tenantId!,
+          purpose: input.purpose ?? 'document',
+          to: input.to,
+          subject: input.subject,
+          html: input.html,
+          attachment: input.attachment,
+        }),
+      );
+    }
+
+    // Un correo de JoapyCore mismo: por su remitente, si está configurado.
+    if (this.platformEmail.isConfigured()) {
+      return this.viaPlatform(input.to, () =>
+        this.platformEmail.sendSystem({
+          purpose: input.purpose ?? 'system',
+          to: input.to,
+          subject: input.subject,
+          html: input.html,
+          attachment: input.attachment,
+        }),
       );
     }
 
@@ -148,6 +180,28 @@ export class EmailService {
       ],
     });
     return this.deliveryResult(input.to, info);
+  }
+
+  private async viaPlatform(
+    to: string,
+    send: () => Promise<{ messageId: string; from: string }>,
+  ): Promise<EmailDeliveryResult> {
+    try {
+      const sent = await send();
+      return {
+        to,
+        messageId: sent.messageId,
+        accepted: [to],
+        sentFrom: sent.from,
+      };
+    } catch (error) {
+      if (!(error instanceof PlatformDeliveryError)) throw error;
+      throw new ServiceUnavailableException(
+        error.ambiguous
+          ? 'No se pudo confirmar si el correo salió. Revisá antes de volver a enviarlo.'
+          : error.message,
+      );
+    }
   }
 
   private deliveryResult(

@@ -6,6 +6,7 @@ import {
   IsInt,
   IsOptional,
   IsString,
+  IsUUID,
   Matches,
   Max,
   MaxLength,
@@ -113,4 +114,33 @@ export class CommunicationNoteDto {
   @MinLength(1)
   @MaxLength(5000)
   body!: string;
+}
+
+export class ConversationsQueryDto extends CommunicationPageDto {
+  @IsOptional()
+  @IsIn(['CUSTOMER'])
+  contactType?: 'CUSTOMER';
+
+  @IsOptional()
+  @Transform(
+    ({ value }: { value: unknown }) => value === true || value === 'true',
+  )
+  @IsBoolean()
+  onlyProblems = false;
+
+  @IsOptional()
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.trim() : value,
+  )
+  @IsString()
+  @MaxLength(120)
+  search?: string;
+}
+
+export class ConversationParamsDto {
+  @IsIn(['CUSTOMER'])
+  contactType!: 'CUSTOMER';
+
+  @IsUUID()
+  contactId!: string;
 }

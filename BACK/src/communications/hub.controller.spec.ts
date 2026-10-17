@@ -57,6 +57,7 @@ describe('Communication Hub route authorization', () => {
 
   it.each([
     'updateSettings',
+    'sender',
     'identities',
     'createIdentity',
     'updateIdentity',

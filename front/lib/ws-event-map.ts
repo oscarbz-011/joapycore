@@ -1,4 +1,8 @@
 export const WS_EVENT_MAP: Record<string, string[][]> = {
+  // Chat interno: llegan solo a quien participa de la conversación.
+  'chat.message':      [['chat']],
+  'chat.conversation': [['chat']],
+  'chat.read':         [['chat']],
   'sale.order.completed':          [['sale-orders']],
   'sale.order.cancelled':          [['sale-orders']],
   // Entra/reentra a PENDING_CREDIT_APPROVAL — mueve el conteo del badge

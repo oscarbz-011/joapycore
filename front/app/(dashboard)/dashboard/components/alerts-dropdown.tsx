@@ -3,11 +3,14 @@
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
-import { Bell, Package, CreditCard, FileText, ShieldAlert, AlertCircle, Settings, X, CheckCircle, Truck, Wrench, Clock } from 'lucide-react';
+import { Bell, Package, CreditCard, FileText, ShieldAlert, AlertCircle, Settings, X, CheckCircle, Truck, Wrench, Clock, Mail, MailWarning } from 'lucide-react';
 import { alertsApi, type AlertConfig, type AlertType } from '../../../../lib/api/alerts';
 import { useAuth } from '../../../../lib/auth-context';
 import { usePendingNotifications, type PendingNotificationType } from '../../../../lib/use-pending-notifications';
 import { Button } from '@/components/ui/button';
+import { COMMUNICATIONS_PATH } from '@/lib/api/communications';
+import { attentionItems } from '@/lib/communications-inbox';
+import { useCommunicationsAttention } from '@/components/communications/inbox/use-communications';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 
@@ -21,6 +24,8 @@ const PENDING_META: Record<PendingNotificationType, { icon: React.ElementType; c
   'credit-adjustment':{ icon: Wrench,      color: 'var(--warn)' },
   'purchase-order':   { icon: Truck,       color: 'var(--danger)' },
   delivery:           { icon: Package,     color: 'var(--warn)' },
+  'communication-problem': { icon: MailWarning, color: 'var(--danger)' },
+  'communication-notice':  { icon: Mail,        color: 'var(--info)' },
 };
 
 // ── Alert type metadata ────────────────────────────────────────────────────────
@@ -73,7 +78,12 @@ export function AlertsDropdown() {
   });
 
   const active = configs.filter((c) => c.isActive);
-  const { items: pending } = usePendingNotifications(permissions, activeModules, jwtPayload?.sub);
+  const { items: pendingWork } = usePendingNotifications(permissions, activeModules, jwtPayload?.sub);
+  const communications = useCommunicationsAttention();
+  const pending = [
+    ...pendingWork,
+    ...attentionItems(COMMUNICATIONS_PATH, communications.problems, communications.unreadNotices),
+  ];
   const count = active.length + pending.length;
 
   useEffect(() => {

@@ -89,10 +89,22 @@ export class CommunicationHubService {
   private async invoice(tenantId: string, id: string) {
     const invoice = await this.prisma.invoice.findFirst({
       where: { id, tenantId },
-      select: { id: true },
+      select: { id: true, saleOrder: { select: { customerId: true } } },
     });
     if (!invoice) throw new NotFoundException('Factura no encontrada');
     return invoice;
+  }
+
+  /** Cómo salen hoy los correos de la empresa, para explicarlo en pantalla. */
+  async sender(tenantId: string) {
+    const sender = await this.core.sender(tenantId);
+    if (!sender) return { via: 'none' as const };
+    return {
+      via: sender.via,
+      fromEmail: sender.fromEmail,
+      fromName: sender.fromName,
+      replyTo: sender.replyTo,
+    };
   }
 
   identities(tenantId: string) {
@@ -383,13 +395,17 @@ export class CommunicationHubService {
     dto: CommunicationNoteDto,
   ) {
     await this.requireEnabled(tenantId);
-    await this.invoice(tenantId, invoiceId);
+    const invoice = await this.invoice(tenantId, invoiceId);
+    const customerId = invoice.saleOrder?.customerId;
     // Notes are plain text. No HTML rendering or attachment URLs are accepted.
     const note = await this.prisma.communicationNote.create({
       data: {
         tenantId,
         entityType: 'INVOICE',
         entityId: invoiceId,
+        ...(customerId
+          ? { contactType: 'CUSTOMER', contactId: customerId }
+          : {}),
         body: dto.body.trim(),
         createdBy: userId,
       },
@@ -429,7 +445,33 @@ export class CommunicationHubService {
         where: { ...where, readAt: null },
       }),
     ]);
-    return { items, total, unreadCount, page, limit };
+    const messageIds = items.flatMap((item) => item.messageId ?? []);
+    const messages = messageIds.length
+      ? await this.prisma.communicationMessage.findMany({
+          where: { tenantId, id: { in: messageIds } },
+          select: { id: true, contactType: true, contactId: true },
+        })
+      : [];
+    const contactByMessage = new Map(
+      messages.map((message) => [message.id, message]),
+    );
+    return {
+      items: items.map((item) => {
+        const message = item.messageId
+          ? contactByMessage.get(item.messageId)
+          : undefined;
+        return {
+          ...item,
+          contact: message?.contactId
+            ? { type: message.contactType, id: message.contactId }
+            : null,
+        };
+      }),
+      total,
+      unreadCount,
+      page,
+      limit,
+    };
   }
 
   async readNotification(tenantId: string, userId: string, id: string) {

@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import emailConfig from './config/email.config';
+import platformEmailConfig from './config/platform-email.config';
 import storageConfig from './config/storage.config';
 import { validateEnv } from './config/env.validation';
 import { APP_GUARD } from '@nestjs/core';
@@ -41,13 +42,14 @@ import { TenantsModule } from './tenants/tenants.module';
 import { UsersModule } from './users/users.module';
 import { ApplicationsModule } from './applications/applications.module';
 import { CommunicationHubModule } from './communications/communications.module';
+import { ChatModule } from './chat/chat.module';
 import { NotesModule } from './notes/notes.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      load: [storageConfig, emailConfig],
+      load: [storageConfig, emailConfig, platformEmailConfig],
       validate: validateEnv,
     }),
     ThrottlerModule.forRoot({
@@ -85,6 +87,7 @@ import { NotesModule } from './notes/notes.module';
     NotificationsModule,
     ApplicationsModule,
     CommunicationHubModule,
+    ChatModule,
     NotesModule,
     SifenModule,
     CreditBureauModule,

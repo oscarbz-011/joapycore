@@ -11,6 +11,9 @@ import { JwtService } from '@nestjs/jwt';
 import { JwtPayload } from '../../common/types/jwt-payload.interface';
 import { corsOrigin } from '../../config/security.config';
 
+const userRoom = (tenantId: string, userId: string) =>
+  `tenant:${tenantId}:user:${userId}`;
+
 @Injectable()
 @WebSocketGateway({
   cors: { origin: corsOrigin },
@@ -39,6 +42,7 @@ export class NotificationsGateway
         secret: this.configService.getOrThrow('JWT_ACCESS_SECRET'),
       });
       await socket.join(`tenant:${payload.tenantId}`);
+      await socket.join(userRoom(payload.tenantId, payload.sub));
       this.logger.log(
         `WS connected: ${socket.id} → tenant:${payload.tenantId}`,
       );
@@ -49,6 +53,18 @@ export class NotificationsGateway
 
   handleDisconnect(socket: Socket) {
     this.logger.debug(`WS disconnected: ${socket.id}`);
+  }
+
+  /** Para lo que es de una sola persona: no pasa por el room de la empresa. */
+  emitToUser(
+    tenantId: string,
+    userId: string,
+    event: string,
+    payload: unknown,
+  ) {
+    this.server
+      .to(userRoom(tenantId, userId))
+      .emit('ws-event', { type: event, payload });
   }
 
   emitToTenant(tenantId: string, event: string, payload: unknown) {
