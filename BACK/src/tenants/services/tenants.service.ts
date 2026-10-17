@@ -21,6 +21,32 @@ export class TenantsService {
     return tenant;
   }
 
+  /** Lo que cualquier usuario ve de su empresa en el menú. */
+  async brand(tenantId: string) {
+    const tenant = await this.getById(tenantId);
+    return {
+      id: tenant.id,
+      name: tenant.nombreFantasia?.trim() || tenant.name,
+      razonSocial: tenant.razonSocial,
+      ruc: tenant.ruc,
+      hasLogo: Boolean(tenant.logoFileId),
+    };
+  }
+
+  async logo(tenantId: string) {
+    const tenant = await this.getById(tenantId);
+    if (!tenant.logoFileId) throw new NotFoundException('Sin logo');
+    const record = await this.filesService.getById(tenantId, tenant.logoFileId);
+    // Solo una imagen: este endpoint no exige permiso de archivos.
+    if (!record.mimeType.startsWith('image/')) {
+      throw new NotFoundException('Sin logo');
+    }
+    return {
+      mimeType: record.mimeType,
+      content: await this.filesService.getFileBuffer(record),
+    };
+  }
+
   async update(tenantId: string, dto: UpdateTenantDto) {
     const tenant = await this.getById(tenantId);
     const { actividadesEconomicas, timbradoFecha, timbradoFechaFin, ...rest } =
