@@ -45,6 +45,7 @@ import { COMMUNICATIONS_PATH } from "@/lib/api/communications";
 import { useCommunicationsAttention } from "@/components/communications/inbox/use-communications";
 import { CHAT_PATH, useChatUnread } from "@/components/chat/use-chat";
 import { NOTES_PATH } from "@/lib/notes";
+import { CALENDAR_PATH } from "@/lib/calendar";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -99,6 +100,7 @@ const STATIC_GROUPS: SidebarGroup[] = [
         permission: "communications:access",
       },
       { label: "Chat", href: CHAT_PATH },
+      { label: "Calendario", href: CALENDAR_PATH },
       { label: "Notas", href: NOTES_PATH },
     ],
   },

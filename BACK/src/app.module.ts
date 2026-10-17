@@ -44,6 +44,7 @@ import { ApplicationsModule } from './applications/applications.module';
 import { CommunicationHubModule } from './communications/communications.module';
 import { ChatModule } from './chat/chat.module';
 import { NotesModule } from './notes/notes.module';
+import { CalendarModule } from './calendar/calendar.module';
 
 @Module({
   imports: [
@@ -89,6 +90,7 @@ import { NotesModule } from './notes/notes.module';
     CommunicationHubModule,
     ChatModule,
     NotesModule,
+    CalendarModule,
     SifenModule,
     CreditBureauModule,
   ],

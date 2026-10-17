@@ -3,6 +3,8 @@ export const WS_EVENT_MAP: Record<string, string[][]> = {
   'chat.message':      [['chat']],
   'chat.conversation': [['chat']],
   'chat.read':         [['chat']],
+  // Cambió un evento visible para toda la empresa.
+  'calendar.changed':  [['calendar']],
   'sale.order.completed':          [['sale-orders']],
   'sale.order.cancelled':          [['sale-orders']],
   // Entra/reentra a PENDING_CREDIT_APPROVAL — mueve el conteo del badge
