@@ -13,8 +13,10 @@ import {
   Prisma,
   Product,
   ProductStatus,
+  SaleOrderStatus,
 } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
+import { TenantModulesCache } from '../../../tenants/services/tenant-modules.cache';
 import { AdjustOrderDto } from '../dto/adjust-order.dto';
 import { CollectPaymentDto } from '../dto/collect-payment.dto';
 import { CreateGuarantorDto } from '../dto/create-guarantor.dto';
@@ -63,6 +65,12 @@ function toNum(value: unknown): number {
 
 type CreatedItemInfo = StockLine;
 
+const DELIVERABLE_STATUSES: SaleOrderStatus[] = [
+  'CONFIRMED',
+  'INVOICED',
+  'PAYMENT_RECEIVED',
+];
+
 // Venta rápida (POS): el shape vive en common/contracts como QuickSaleInput.
 export type QuickSaleDto = QuickSaleInput;
 
@@ -85,6 +93,7 @@ export class SaleOrdersService implements SalesGateway {
     private readonly creditSources: CreditSourcesRepository,
     private readonly salesSources: SalesSourcesRepository,
     private readonly customersRepository: CustomersRepository,
+    private readonly tenantModules: TenantModulesCache,
   ) {}
 
   /**
@@ -1344,25 +1353,57 @@ export class SaleOrdersService implements SalesGateway {
     }
   }
 
-  // Called by SalesOnDeliveryListener when logistics confirms delivery
+  // Logística cerró la entrega. Llega por el outbox y puede repetirse: si el
+  // pedido ya está entregado no se vuelve a descontar stock.
   async handleDeliveryConfirmed(
     tenantId: string,
     saleOrderId: string,
     userId?: string,
   ) {
-    await this.saleOrdersRepository.transition(
-      tenantId,
-      saleOrderId,
-      { status: { in: ['CONFIRMED', 'INVOICED', 'PAYMENT_RECEIVED'] } },
-      { status: 'DELIVERED' },
-    );
+    await this.markDelivered(tenantId, saleOrderId, userId);
+  }
 
+  // Entrega registrada desde Ventas, para tenants sin Logística: con Logística
+  // activa la entrega se cierra allá, con sus autorizaciones y su nota.
+  async deliver(tenantId: string, id: string, userId?: string) {
+    if (await this.tenantModules.isActive(tenantId, 'logistics')) {
+      throw new UnprocessableEntityException(
+        'Con Logística activa, la entrega se registra desde Logística',
+      );
+    }
+    if (!(await this.markDelivered(tenantId, id, userId))) {
+      throw new UnprocessableEntityException(
+        'Solo los pedidos confirmados o facturados pueden marcarse como entregados',
+      );
+    }
+    return this.saleOrdersRepository.findById(tenantId, id);
+  }
+
+  /** Devuelve false si el pedido no estaba en condiciones de entregarse. */
+  private async markDelivered(
+    tenantId: string,
+    saleOrderId: string,
+    userId?: string,
+  ): Promise<boolean> {
     const order = await this.findOne(tenantId, saleOrderId);
 
-    await this.prisma.$transaction((tx) =>
-      this.applyDeliveryStockOut(tx, tenantId, order),
-    );
-    this.eventEmitter.emit('sale.order.stock_out', { tenantId, saleOrderId });
+    const eventId = await this.prisma.$transaction(async (tx) => {
+      const { count } = await this.saleOrdersRepository.transition(
+        tenantId,
+        saleOrderId,
+        { status: { in: DELIVERABLE_STATUSES } },
+        { status: 'DELIVERED' },
+        tx,
+      );
+      if (count === 0) return null;
+      await this.applyDeliveryStockOut(tx, tenantId, order);
+      return this.outbox.enqueue(tx, tenantId, 'sale.order.stock_out', {
+        tenantId,
+        saleOrderId,
+      });
+    });
+    if (!eventId) return false;
+    await this.outbox.dispatch(eventId);
 
     this.eventEmitter.emit('audit.log', {
       tenantId,
@@ -1371,39 +1412,7 @@ export class SaleOrdersService implements SalesGateway {
       action: 'sale.order.delivered',
       resourceId: saleOrderId,
     } satisfies AuditLogEvent);
-  }
-
-  async deliver(tenantId: string, id: string, userId?: string) {
-    const result = await this.saleOrdersRepository.transition(
-      tenantId,
-      id,
-      { status: { in: ['CONFIRMED', 'PAYMENT_RECEIVED'] } },
-      { status: 'DELIVERED' },
-    );
-    if (result.count === 0) {
-      throw new UnprocessableEntityException(
-        'Solo los pedidos confirmados pueden marcarse como entregados',
-      );
-    }
-
-    const order = await this.findOne(tenantId, id);
-
-    await this.prisma.$transaction((tx) =>
-      this.applyDeliveryStockOut(tx, tenantId, order),
-    );
-    this.eventEmitter.emit('sale.order.stock_out', {
-      tenantId,
-      saleOrderId: id,
-    });
-
-    this.eventEmitter.emit('audit.log', {
-      tenantId,
-      userId,
-      module: 'sales',
-      action: 'sale.order.delivered',
-      resourceId: id,
-    } satisfies AuditLogEvent);
-    return this.saleOrdersRepository.findById(tenantId, id);
+    return true;
   }
 
   async cancel(tenantId: string, id: string, userId?: string) {

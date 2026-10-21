@@ -121,4 +121,14 @@ describe('InventoryOnSaleDeliveredListener', () => {
 
     expect(stockEntryService.consumeFifo).not.toHaveBeenCalled();
   });
+
+  // El outbox solo reintenta si el error le llega.
+  it('rethrows a failure so the outbox retries it', async () => {
+    prisma.saleOrder.findFirst.mockResolvedValue(makeOrder());
+    stockEntryService.consumeFifo.mockRejectedValue(new Error('lote vacío'));
+
+    await expect(
+      listener.handle({ tenantId: 'tenant-1', saleOrderId: 'order-1' }),
+    ).rejects.toThrow('lote vacío');
+  });
 });

@@ -18,11 +18,13 @@ import { SaleOrdersService } from './services/sale-orders.service';
 import { SaleTargetsService } from './services/sale-targets.service';
 import { CreditSourcesRepository } from './repositories/credit-sources.repository';
 import { SalesSourcesRepository } from './repositories/sales-sources.repository';
+import { TenantsModule } from '../../tenants/tenants.module';
 
 // Global solo para exponer SALES_GATEWAY (lo usa POS sin importar este
 // módulo). Inventario llega por los contratos de InventoryContractsModule.
 @Global()
 @Module({
+  imports: [TenantsModule],
   controllers: [
     CustomersController,
     SaleOrdersController,

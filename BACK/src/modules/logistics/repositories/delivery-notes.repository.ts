@@ -5,6 +5,9 @@ import {
   Prisma,
 } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
+import { PrismaClientOrTx } from '../../../prisma/types';
+
+const OPEN_STATUSES: DeliveryNoteStatus[] = ['PENDING', 'DISPATCHED'];
 
 const PERSON = { id: true, firstName: true, lastName: true } as const;
 
@@ -135,6 +138,35 @@ export class DeliveryNotesRepository {
       where: { id, tenantId },
       data,
     });
+  }
+
+  /** Cierra la entrega si sigue abierta. Devuelve 0 si ya estaba cerrada. */
+  async close(
+    tenantId: string,
+    id: string,
+    client: PrismaClientOrTx = this.prisma,
+  ): Promise<number> {
+    const { count } = await client.deliveryNote.updateMany({
+      where: { id, tenantId, status: { in: OPEN_STATUSES } },
+      data: { status: 'DELIVERED', deliveredAt: new Date() },
+    });
+    return count;
+  }
+
+  /**
+   * Notas que quedaron abiertas de pedidos que Ventas entregó mientras
+   * Logística estaba apagada. Sin fecha de entrega: no se sabe cuándo fue.
+   */
+  async closeDeliveredOutsideLogistics(tenantId: string): Promise<number> {
+    const { count } = await this.prisma.deliveryNote.updateMany({
+      where: {
+        tenantId,
+        status: { in: OPEN_STATUSES },
+        saleOrder: { status: 'DELIVERED' },
+      },
+      data: { status: 'DELIVERED' },
+    });
+    return count;
   }
 
   update(

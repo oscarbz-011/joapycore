@@ -14,6 +14,8 @@ import { DeliveryRoutesService } from './services/delivery-routes.service';
 import { DeliveryRouteCustomerStopsService } from './services/delivery-route-customer-stops.service';
 import { LogisticsOnSaleCompletedListener } from './events/logistics-on-sale-completed.listener';
 import { LogisticsRouteProgressListener } from './events/logistics-route-progress.listener';
+import { LogisticsOnModuleActivatedListener } from './events/logistics-on-module-activated.listener';
+import { TenantsModule } from '../../tenants/tenants.module';
 
 // Orden de controllers importa: DeliveryTrackingController declara rutas
 // literales bajo /logistics/deliveries/* (p.ej. GET .../mine) que Express
@@ -23,6 +25,7 @@ import { LogisticsRouteProgressListener } from './events/logistics-route-progres
 // vivo: GET /logistics/deliveries/mine devolvía 404 "Nota de entrega no
 // encontrada" en vez de la lista del repartidor).
 @Module({
+  imports: [TenantsModule],
   // DeliveryMethodsController también va antes: declara by-order/:saleOrderId.
   controllers: [
     DeliveryTrackingController,
@@ -42,34 +45,21 @@ import { LogisticsRouteProgressListener } from './events/logistics-route-progres
     LogisticsSourcesRepository,
     LogisticsOnSaleCompletedListener,
     LogisticsRouteProgressListener,
+    LogisticsOnModuleActivatedListener,
   ],
 })
 export class LogisticsModule implements OnApplicationBootstrap {
   private readonly logger = new Logger(LogisticsModule.name);
 
-  constructor(
-    private readonly sources: LogisticsSourcesRepository,
-    private readonly deliveryNotesRepository: DeliveryNotesRepository,
-  ) {}
+  constructor(private readonly deliveryNotes: DeliveryNotesService) {}
 
   async onApplicationBootstrap() {
     try {
-      // Backfill: create PENDING delivery notes for CONFIRMED/INVOICED orders
-      // that don't have one yet (orders confirmed before this feature existed).
-      const orders =
-        await this.sources.findConfirmedOrdersWithoutDeliveryNote();
-
-      if (orders.length === 0) return;
-
-      this.logger.log(
-        `Backfilling ${orders.length} delivery note(s) for confirmed orders without one`,
-      );
-
-      for (const order of orders) {
-        await this.deliveryNotesRepository.ensurePendingForOrder(
-          order.tenantId,
-          order.id,
-        );
+      // Pedidos confirmados sin nota (de antes de que existiera la nota, o de
+      // un listener que falló), solo en tenants con Logística activa.
+      const created = await this.deliveryNotes.backfillPending();
+      if (created > 0) {
+        this.logger.log(`Backfilled ${created} delivery note(s)`);
       }
     } catch (err) {
       this.logger.warn(

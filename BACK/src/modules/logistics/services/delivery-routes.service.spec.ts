@@ -124,6 +124,7 @@ describe('DeliveryRoutesService', () => {
       markCheckpoint: jest.fn().mockResolvedValue(3),
       completeIfDone: jest.fn().mockResolvedValue(false),
       addEvents: jest.fn().mockResolvedValue(undefined),
+      hasStopEvent: jest.fn().mockResolvedValue(false),
     };
     sources = {
       findActiveCourier: jest.fn().mockResolvedValue(otherDriver),
@@ -797,6 +798,24 @@ describe('DeliveryRoutesService', () => {
       await service.stopDelivered('tenant-1', 'note-1');
 
       expect(routes.addEvents).not.toHaveBeenCalled();
+    });
+
+    it('does not write the stop twice when the event is retried', async () => {
+      routes.findStop.mockResolvedValue(
+        inRoute(makeRoute({ status: 'IN_PROGRESS' }), { status: 'DELIVERED' }),
+      );
+      routes.hasStopEvent.mockResolvedValue(true);
+
+      await service.stopDelivered('tenant-1', 'note-1', 'user-driver');
+
+      expect(routes.hasStopEvent).toHaveBeenCalledWith(
+        'tenant-1',
+        'route-1',
+        'note-1',
+        'STOP_DELIVERED',
+      );
+      expect(routes.addEvents).not.toHaveBeenCalled();
+      expect(routes.completeIfDone).not.toHaveBeenCalled();
     });
   });
 

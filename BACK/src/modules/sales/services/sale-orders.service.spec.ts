@@ -98,6 +98,7 @@ describe('SaleOrdersService', () => {
 
   let tx: any;
   let outbox: { enqueue: jest.Mock; dispatch: jest.Mock };
+  let tenantModules: { isActive: jest.Mock };
 
   beforeEach(() => {
     // El resto de métodos del repositorio corren reales sobre los mocks de
@@ -142,6 +143,7 @@ describe('SaleOrdersService', () => {
       enqueue: jest.fn().mockResolvedValue('event-1'),
       dispatch: jest.fn().mockResolvedValue(true),
     };
+    tenantModules = { isActive: jest.fn().mockResolvedValue(false) };
 
     tx = {
       saleOrder: {
@@ -246,6 +248,7 @@ describe('SaleOrdersService', () => {
       new CreditSourcesRepository(prisma as any),
       new SalesSourcesRepository(prisma as any),
       new CustomersRepository(prisma as any),
+      tenantModules as any,
     );
     // approveCredit y collectPayment transicionan dentro de la transacción:
     // mismo mock para no duplicar los setups existentes.
@@ -1051,6 +1054,91 @@ describe('SaleOrdersService', () => {
         ['RESERVED', 2],
         ['OUT', -2],
       ]);
+    });
+
+    it('delivers an invoiced order and sends the lot consumption through the outbox', async () => {
+      saleOrdersRepository.findById.mockResolvedValue(
+        makeOrder({ status: 'INVOICED', items: [makeOrderItem()] }),
+      );
+
+      await service.deliver('tenant-1', 'order-1', 'user-1');
+
+      expect(prisma.saleOrder.updateMany).toHaveBeenCalledWith({
+        where: {
+          id: 'order-1',
+          tenantId: 'tenant-1',
+          status: { in: ['CONFIRMED', 'INVOICED', 'PAYMENT_RECEIVED'] },
+        },
+        data: { status: 'DELIVERED' },
+      });
+      expect(outbox.enqueue).toHaveBeenCalledWith(
+        tx,
+        'tenant-1',
+        'sale.order.stock_out',
+        { tenantId: 'tenant-1', saleOrderId: 'order-1' },
+      );
+      expect(outbox.dispatch).toHaveBeenCalledWith('event-1');
+      expect(eventEmitter.emit).not.toHaveBeenCalledWith(
+        'sale.order.stock_out',
+        expect.anything(),
+      );
+    });
+
+    it('rejects an order that cannot be delivered without touching stock', async () => {
+      saleOrdersRepository.findById.mockResolvedValue(
+        makeOrder({ status: 'PENDING', items: [makeOrderItem()] }),
+      );
+      prisma.saleOrder.updateMany.mockResolvedValue({ count: 0 });
+
+      await expect(
+        service.deliver('tenant-1', 'order-1'),
+      ).rejects.toBeInstanceOf(UnprocessableEntityException);
+      expect(tx.stockMovement.create).not.toHaveBeenCalled();
+      expect(outbox.enqueue).not.toHaveBeenCalled();
+    });
+
+    // Con Logística activa la entrega pasa por sus autorizaciones y su nota.
+    it('is closed to Sales while the tenant uses Logistics', async () => {
+      tenantModules.isActive.mockResolvedValue(true);
+
+      await expect(service.deliver('tenant-1', 'order-1')).rejects.toThrow(
+        /desde Logística/,
+      );
+      expect(tenantModules.isActive).toHaveBeenCalledWith(
+        'tenant-1',
+        'logistics',
+      );
+      expect(prisma.saleOrder.updateMany).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('handleDeliveryConfirmed', () => {
+    it('applies the stock-out once even if Logistics announces the delivery again', async () => {
+      saleOrdersRepository.findById.mockResolvedValue(
+        makeOrder({ status: 'DELIVERED', items: [makeOrderItem()] }),
+      );
+      prisma.saleOrder.updateMany.mockResolvedValue({ count: 0 });
+
+      await service.handleDeliveryConfirmed('tenant-1', 'order-1', 'user-1');
+
+      expect(tx.stockMovement.create).not.toHaveBeenCalled();
+      expect(outbox.enqueue).not.toHaveBeenCalled();
+    });
+
+    it('does not depend on whether the tenant uses Logistics', async () => {
+      tenantModules.isActive.mockResolvedValue(true);
+      saleOrdersRepository.findById.mockResolvedValue(
+        makeOrder({ status: 'INVOICED', items: [makeOrderItem()] }),
+      );
+
+      await service.handleDeliveryConfirmed('tenant-1', 'order-1');
+
+      expect(outbox.enqueue).toHaveBeenCalledWith(
+        tx,
+        'tenant-1',
+        'sale.order.stock_out',
+        { tenantId: 'tenant-1', saleOrderId: 'order-1' },
+      );
     });
   });
 

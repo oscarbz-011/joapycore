@@ -42,6 +42,11 @@ export class TenantModulesCache {
     return modules;
   }
 
+  async isActive(tenantId: string, moduleName: string): Promise<boolean> {
+    const modules = await this.getActiveModules(tenantId);
+    return modules.includes(moduleName);
+  }
+
   /** Se llama al activar/desactivar un módulo — el cambio se ve al instante. */
   invalidate(tenantId: string) {
     this.cache.delete(tenantId);

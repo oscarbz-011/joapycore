@@ -540,6 +540,19 @@ export class DeliveryRoutesRepository {
     return this.record(this.prisma, tenantId, events);
   }
 
+  async hasStopEvent(
+    tenantId: string,
+    routeId: string,
+    deliveryNoteId: string,
+    type: DeliveryRouteEventType,
+  ): Promise<boolean> {
+    const event = await this.prisma.deliveryRouteEvent.findFirst({
+      where: { tenantId, routeId, deliveryNoteId, type },
+      select: { id: true },
+    });
+    return event !== null;
+  }
+
   private async record(
     client: Prisma.TransactionClient,
     tenantId: string,

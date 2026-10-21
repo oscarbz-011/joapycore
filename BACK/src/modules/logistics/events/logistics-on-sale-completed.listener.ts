@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { EventEmitter2, OnEvent } from '@nestjs/event-emitter';
+import { TenantModulesCache } from '../../../tenants/services/tenant-modules.cache';
 import { DeliveryNotesRepository } from '../repositories/delivery-notes.repository';
 
 interface SaleOrderCompletedEvent {
@@ -16,10 +17,16 @@ export class LogisticsOnSaleCompletedListener {
   constructor(
     private readonly deliveryNotesRepository: DeliveryNotesRepository,
     private readonly eventEmitter: EventEmitter2,
+    private readonly tenantModules: TenantModulesCache,
   ) {}
 
   @OnEvent('sale.order.completed', { suppressErrors: false })
   async handle(event: SaleOrderCompletedEvent): Promise<void> {
+    // Sin Logística la entrega la registra Ventas; si se activa después, el
+    // listener de activación crea las notas que falten.
+    if (!(await this.tenantModules.isActive(event.tenantId, 'logistics'))) {
+      return;
+    }
     const note = await this.deliveryNotesRepository.ensurePendingForOrder(
       event.tenantId,
       event.saleOrderId,

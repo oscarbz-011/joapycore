@@ -26,18 +26,50 @@ const MANAGE = ['logistics:manage'];
 
 describe('DeliveryNotesService', () => {
   let service: DeliveryNotesService;
-  let repo: { findById: jest.Mock; findAll: jest.Mock; update: jest.Mock };
+  let repo: {
+    findById: jest.Mock;
+    findAll: jest.Mock;
+    update: jest.Mock;
+    close: jest.Mock;
+    ensurePendingForOrder: jest.Mock;
+    closeDeliveredOutsideLogistics: jest.Mock;
+  };
   let eventEmitter: { emit: jest.Mock };
-  let prisma: { employee: { findUnique: jest.Mock } };
+  let prisma: {
+    employee: { findUnique: jest.Mock };
+    saleOrder: { findMany: jest.Mock };
+    $transaction: jest.Mock;
+  };
+  let outbox: { enqueue: jest.Mock; dispatch: jest.Mock };
+  const tx = { tx: true };
 
   beforeEach(() => {
-    repo = { findById: jest.fn(), findAll: jest.fn(), update: jest.fn() };
+    repo = {
+      findById: jest.fn(),
+      findAll: jest.fn(),
+      update: jest.fn(),
+      close: jest.fn().mockResolvedValue(1),
+      ensurePendingForOrder: jest
+        .fn()
+        .mockResolvedValue({ id: 'note-new', created: true }),
+      closeDeliveredOutsideLogistics: jest.fn().mockResolvedValue(0),
+    };
     eventEmitter = { emit: jest.fn() };
-    prisma = { employee: { findUnique: jest.fn() } };
+    prisma = {
+      employee: { findUnique: jest.fn() },
+      saleOrder: { findMany: jest.fn().mockResolvedValue([]) },
+      $transaction: jest.fn().mockImplementation((cb) => cb(tx)),
+    };
+    outbox = {
+      enqueue: jest.fn().mockResolvedValue('evt-1'),
+      dispatch: jest.fn().mockResolvedValue(true),
+    };
     service = new DeliveryNotesService(
       repo as any,
       eventEmitter as any,
       new LogisticsSourcesRepository(prisma as any),
+      prisma as any,
+      outbox as any,
     );
   });
 
@@ -207,7 +239,7 @@ describe('DeliveryNotesService', () => {
       await expect(
         service.markDelivered('tenant-1', 'note-1', 'user-1'),
       ).rejects.toThrow(/registrá el retiro/);
-      expect(repo.update).not.toHaveBeenCalled();
+      expect(repo.close).not.toHaveBeenCalled();
     });
 
     it('closes a pending delivery that never goes through dispatch', async () => {
@@ -215,12 +247,10 @@ describe('DeliveryNotesService', () => {
 
       await service.complete('tenant-1', 'note-1', 'user-1');
 
-      expect(repo.update).toHaveBeenCalledWith(
+      expect(repo.close).toHaveBeenCalledWith('tenant-1', 'note-1', tx);
+      expect(outbox.enqueue).toHaveBeenCalledWith(
+        tx,
         'tenant-1',
-        'note-1',
-        expect.objectContaining({ status: 'DELIVERED' }),
-      );
-      expect(eventEmitter.emit).toHaveBeenCalledWith(
         'delivery.note.delivered',
         expect.objectContaining({ saleOrderId: 'order-1' }),
       );
@@ -234,26 +264,99 @@ describe('DeliveryNotesService', () => {
       ).rejects.toThrow(/ya fue cerrada/);
     });
 
-    it('marks a DISPATCHED note as DELIVERED and emits the stock-out chain event', async () => {
+    // Dos cierres simultáneos: el segundo no descuenta stock otra vez.
+    it('does not announce the delivery when another request closed it first', async () => {
+      repo.findById.mockResolvedValue(makeNote({ status: 'DISPATCHED' }));
+      repo.close.mockResolvedValue(0);
+
+      await expect(
+        service.markDelivered('tenant-1', 'note-1', 'user-1'),
+      ).rejects.toThrow(/ya fue cerrada/);
+      expect(outbox.enqueue).not.toHaveBeenCalled();
+      expect(outbox.dispatch).not.toHaveBeenCalled();
+    });
+
+    it('closes a DISPATCHED note and sends the stock-out chain through the outbox', async () => {
       repo.findById
         .mockResolvedValueOnce(makeNote({ status: 'DISPATCHED' }))
         .mockResolvedValueOnce(makeNote({ status: 'DELIVERED' }));
 
       await service.markDelivered('tenant-1', 'note-1', 'user-1');
 
-      expect(repo.update).toHaveBeenCalledWith(
+      expect(outbox.enqueue).toHaveBeenCalledWith(
+        tx,
         'tenant-1',
-        'note-1',
-        expect.objectContaining({ status: 'DELIVERED' }),
-      );
-      expect(eventEmitter.emit).toHaveBeenCalledWith(
         'delivery.note.delivered',
-        expect.objectContaining({
+        {
           tenantId: 'tenant-1',
           saleOrderId: 'order-1',
           deliveryNoteId: 'note-1',
+          userId: 'user-1',
+        },
+      );
+      expect(outbox.dispatch).toHaveBeenCalledWith('evt-1');
+      expect(eventEmitter.emit).not.toHaveBeenCalledWith(
+        'delivery.note.delivered',
+        expect.anything(),
+      );
+    });
+  });
+
+  describe('backfillPending', () => {
+    it('only looks at tenants that use Logistics', async () => {
+      await service.backfillPending();
+
+      expect(prisma.saleOrder.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            tenant: {
+              tenantModules: {
+                some: { moduleName: 'logistics', active: true },
+              },
+            },
+          }),
         }),
       );
+    });
+
+    it('creates the missing notes and keeps going when one fails', async () => {
+      prisma.saleOrder.findMany.mockResolvedValue([
+        { id: 'o1', tenantId: 'tenant-1' },
+        { id: 'o2', tenantId: 'tenant-1' },
+        { id: 'o3', tenantId: 'tenant-1' },
+      ]);
+      repo.ensurePendingForOrder
+        .mockResolvedValueOnce({ id: 'n1', created: true })
+        .mockRejectedValueOnce(new Error('boom'))
+        .mockResolvedValueOnce({ id: 'n3', created: false });
+
+      await expect(service.backfillPending('tenant-1')).resolves.toBe(1);
+      expect(repo.ensurePendingForOrder).toHaveBeenCalledTimes(3);
+      expect(prisma.saleOrder.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ tenantId: 'tenant-1' }),
+        }),
+      );
+    });
+  });
+
+  describe('syncAfterActivation', () => {
+    it('closes what Sales already delivered and opens the missing notes', async () => {
+      repo.closeDeliveredOutsideLogistics.mockResolvedValue(2);
+      prisma.saleOrder.findMany.mockResolvedValue([
+        { id: 'o1', tenantId: 'tenant-1' },
+      ]);
+
+      await expect(service.syncAfterActivation('tenant-1')).resolves.toEqual({
+        closed: 2,
+        created: 1,
+      });
+      expect(repo.closeDeliveredOutsideLogistics).toHaveBeenCalledWith(
+        'tenant-1',
+      );
+      expect(eventEmitter.emit).toHaveBeenCalledWith('delivery.note.created', {
+        tenantId: 'tenant-1',
+      });
     });
   });
 });

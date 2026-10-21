@@ -69,11 +69,16 @@ export class LogisticsSourcesRepository {
   }
 
   // Backfill de arranque: recorre todos los tenants a propósito.
-  findConfirmedOrdersWithoutDeliveryNote() {
+  /** Sin `tenantId`, de todos los tenants que tienen Logística activa. */
+  findConfirmedOrdersWithoutDeliveryNote(tenantId?: string) {
     return this.prisma.saleOrder.findMany({
       where: {
+        ...(tenantId && { tenantId }),
         status: { in: ['CONFIRMED', 'INVOICED'] },
         deliveryNote: null,
+        tenant: {
+          tenantModules: { some: { moduleName: 'logistics', active: true } },
+        },
       },
       select: { id: true, tenantId: true },
     });
