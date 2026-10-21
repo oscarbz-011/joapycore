@@ -1341,7 +1341,7 @@ function OrderDetailPanel({
           </div>
         )}
 
-        <OrderDelivery saleOrderId={order.id} />
+        <OrderDelivery order={order} onDelivered={invalidate} />
 
         {/* Actions */}
         {(canConfirm || canConvert || canCancel) && (
