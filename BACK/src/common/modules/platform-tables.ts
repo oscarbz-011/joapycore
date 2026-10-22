@@ -8,7 +8,7 @@ import type { Prisma } from '@prisma/client';
  * SalesConfig, PricingConfig, CreditPlan, InterestComponent) están acá porque
  * hoy las administra src/tenants; su dueño natural es el módulo de negocio.
  */
-export const PLATFORM_TABLES: Prisma.ModelName[] = [
+export const PLATFORM_TABLES: readonly Prisma.ModelName[] = [
   'Tenant',
   'TenantModule',
   'TenantIntegration',

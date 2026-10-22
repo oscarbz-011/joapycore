@@ -57,4 +57,13 @@ export const KNOWN_BOUNDARY_DEBT: Record<string, string[]> = {
     'read:Product',
     'read:SaleOrder',
   ],
+
+  // Plataforma (fuera de src/modules) sobre tablas de módulos.
+  'tenants/repositories/tenants.repository.ts': [
+    'write:Branch',
+    'write:Warehouse',
+  ],
+  'communications/communications.repository.ts': ['read:Invoice'],
+  'communications/conversations.repository.ts': ['read:Customer'],
+  'communications/hub.service.ts': ['read:Invoice'],
 };

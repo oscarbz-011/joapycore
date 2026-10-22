@@ -1,6 +1,10 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative, resolve, sep } from 'node:path';
-import { MODULE_CATALOG } from '../constants/modules.constant';
+import {
+  FALLBACK_MODULES,
+  MODULE_CATALOG,
+  MODULE_TEMPLATES,
+} from '../constants/modules.constant';
 import { KNOWN_BOUNDARY_DEBT } from './module-boundary-debt';
 import type { ModuleManifest } from './module-manifest';
 import { MODULE_REGISTRY } from './module-registry';
@@ -84,6 +88,14 @@ for (const model of PLATFORM_TABLES) ownerOf.set(model, 'platform');
 
 const toPosix = (path: string) => relative(SRC, path).split(sep).join('/');
 
+// Fuera de src/modules todo es plataforma (tenants, usuarios, comunicaciones…).
+function ownerOfFile(file: string): string {
+  const [first, dir] = toPosix(file).split('/');
+  return first === 'modules' ? (modulesByDir.get(dir)?.key ?? dir) : 'platform';
+}
+
+const kindOf = new Map(MODULE_REGISTRY.map((m) => [m.key, m.kind]));
+
 describe('Arquitectura modular', () => {
   describe('registro de módulos', () => {
     it('has one manifest per key', () => {
@@ -143,6 +155,23 @@ describe('Arquitectura modular', () => {
       );
       expect(Object.keys(MODULE_CATALOG)).toEqual(addons);
     });
+
+    // El catálogo descarta las dependencias core (siempre activas). Si una
+    // dependencia deja de ser addon, se perdería en silencio.
+    it('lets addons depend only on addons or core modules', () => {
+      const problems = MODULE_REGISTRY.filter((m) => m.kind === 'addon')
+        .flatMap((m) => m.depends.map((dep) => [m.key, dep, kindOf.get(dep)]))
+        .filter(([, , kind]) => kind !== 'addon' && kind !== 'core');
+      expect(problems).toEqual([]);
+    });
+
+    it('only activates catalog modules in the industry templates', () => {
+      const templated = [
+        ...Object.values(MODULE_TEMPLATES).flat(),
+        ...FALLBACK_MODULES,
+      ];
+      expect(templated.filter((key) => !(key in MODULE_CATALOG))).toEqual([]);
+    });
   });
 
   describe('dueños de las tablas', () => {
@@ -187,6 +216,20 @@ describe('Arquitectura modular', () => {
       }
       expect(problems).toEqual([]);
     });
+
+    it('only requires modules that can be activated', () => {
+      const problems = sourceFiles(SRC).flatMap((file) =>
+        [
+          ...readFileSync(file, 'utf8').matchAll(
+            /@RequiredModule\('([^']+)'\)/g,
+          ),
+        ]
+          .map((m) => m[1])
+          .filter((key) => !(key in MODULE_CATALOG))
+          .map((key) => `${toPosix(file)}: ${key}`),
+      );
+      expect(problems).toEqual([]);
+    });
   });
 
   describe('límites entre módulos', () => {
@@ -213,23 +256,21 @@ describe('Arquitectura modular', () => {
 
     it('touches other modules’ tables only where it is already known', () => {
       const found = new Map<string, Set<string>>();
-      for (const [dir, manifest] of modulesByDir) {
-        for (const file of sourceFiles(join(MODULES_DIR, dir))) {
-          const isSources = file.endsWith('-sources.repository.ts');
-          for (const [, delegate, method] of readFileSync(
-            file,
-            'utf8',
-          ).matchAll(DELEGATE_CALL)) {
-            const model = delegateToModel.get(delegate);
-            if (!model || ownerOf.get(model) === manifest.key) continue;
-            // Leer datos ajenos está permitido en el repositorio de
-            // fuentes del módulo; escribirlos, nunca.
-            if (isSources && READ_METHODS.has(method)) continue;
-            const kind = WRITE_METHODS.has(method) ? 'write' : 'read';
-            const key = toPosix(file);
-            if (!found.has(key)) found.set(key, new Set());
-            found.get(key)?.add(`${kind}:${model}`);
-          }
+      for (const file of sourceFiles(SRC)) {
+        const owner = ownerOfFile(file);
+        const isSources = file.endsWith('-sources.repository.ts');
+        for (const [, delegate, method] of readFileSync(file, 'utf8').matchAll(
+          DELEGATE_CALL,
+        )) {
+          const model = delegateToModel.get(delegate);
+          if (!model || ownerOf.get(model) === owner) continue;
+          // Leer datos ajenos está permitido en el repositorio de fuentes del
+          // módulo; escribirlos, nunca.
+          if (isSources && READ_METHODS.has(method)) continue;
+          const kind = WRITE_METHODS.has(method) ? 'write' : 'read';
+          const key = toPosix(file);
+          if (!found.has(key)) found.set(key, new Set());
+          found.get(key)?.add(`${kind}:${model}`);
         }
       }
       const actual = Object.fromEntries(
