@@ -294,7 +294,7 @@ describe('Entrega → descuento de stock (PostgreSQL)', () => {
       data: { active: true },
     });
 
-    await expect(notes.syncAfterActivation(tenantId)).resolves.toEqual({
+    await expect(notes.syncWithSales(tenantId)).resolves.toEqual({
       closed: 1,
       created: 1,
     });
@@ -305,6 +305,44 @@ describe('Entrega → descuento de stock (PostgreSQL)', () => {
     expect(stale.status).toBe('DELIVERED');
     const created = await prisma.deliveryNote.findUniqueOrThrow({
       where: { saleOrderId: pending.id },
+    });
+    expect(created.status).toBe('PENDING');
+  });
+
+  it('does not close another tenant’s note', async () => {
+    const own = await seed({ logistics: true, status: 'INVOICED' });
+    const other = await seed({ logistics: true, status: 'INVOICED' });
+    const note = await prisma.deliveryNote.create({
+      data: { tenantId: other.tenantId, saleOrderId: other.orderId },
+      select: { id: true },
+    });
+
+    await expect(
+      new DeliveryNotesRepository(prisma).close(own.tenantId, note.id),
+    ).resolves.toBe(0);
+    const untouched = await prisma.deliveryNote.findUniqueOrThrow({
+      where: { id: note.id },
+    });
+    expect(untouched.status).toBe('PENDING');
+  });
+
+  it('syncs at startup only the tenants that use Logistics', async () => {
+    const off = await seed({ logistics: false, status: 'INVOICED' });
+    const offNote = await prisma.deliveryNote.create({
+      data: { tenantId: off.tenantId, saleOrderId: off.orderId },
+      select: { id: true },
+    });
+    await sales.deliver(off.tenantId, off.orderId);
+    const on = await seed({ logistics: true, status: 'INVOICED' });
+
+    await notes.syncWithSales();
+
+    const stillOpen = await prisma.deliveryNote.findUniqueOrThrow({
+      where: { id: offNote.id },
+    });
+    expect(stillOpen.status).toBe('PENDING');
+    const created = await prisma.deliveryNote.findUniqueOrThrow({
+      where: { saleOrderId: on.orderId },
     });
     expect(created.status).toBe('PENDING');
   });

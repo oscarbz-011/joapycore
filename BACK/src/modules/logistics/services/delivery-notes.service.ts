@@ -50,11 +50,14 @@ export class DeliveryNotesService {
     return created;
   }
 
-  /** Pone Logística al día con lo que pasó mientras estuvo apagada. */
-  async syncAfterActivation(tenantId: string) {
+  /**
+   * Pone Logística al día con lo que pasó mientras estuvo apagada. Sin
+   * `tenantId` (al arrancar), en todos los tenants con Logística activa.
+   */
+  async syncWithSales(tenantId?: string) {
     const closed = await this.repo.closeDeliveredOutsideLogistics(tenantId);
     const created = await this.backfillPending(tenantId);
-    if (created > 0) {
+    if (tenantId && created > 0) {
       this.eventEmitter.emit('delivery.note.created', { tenantId });
     }
     return { closed, created };
@@ -190,7 +193,9 @@ export class DeliveryNotesService {
     // caída entre el cierre y el descuento no lo pierda.
     const eventId = await this.prisma.$transaction(async (tx) => {
       if ((await this.repo.close(tenantId, id, tx)) === 0) {
-        throw new UnprocessableEntityException('Esta entrega ya fue cerrada');
+        throw new UnprocessableEntityException(
+          'Esta entrega ya fue cerrada o cancelada',
+        );
       }
       return this.outbox.enqueue(tx, tenantId, 'delivery.note.delivered', {
         tenantId,

@@ -55,11 +55,13 @@ export class LogisticsModule implements OnApplicationBootstrap {
 
   async onApplicationBootstrap() {
     try {
-      // Pedidos confirmados sin nota (de antes de que existiera la nota, o de
-      // un listener que falló), solo en tenants con Logística activa.
-      const created = await this.deliveryNotes.backfillPending();
-      if (created > 0) {
-        this.logger.log(`Backfilled ${created} delivery note(s)`);
+      // Cubre una activación cuya sincronización falló y pedidos de antes de
+      // que existiera la nota. Solo tenants con Logística activa.
+      const { closed, created } = await this.deliveryNotes.syncWithSales();
+      if (closed + created > 0) {
+        this.logger.log(
+          `Delivery notes synced: ${created} created, ${closed} closed`,
+        );
       }
     } catch (err) {
       this.logger.warn(

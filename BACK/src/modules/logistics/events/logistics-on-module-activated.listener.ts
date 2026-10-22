@@ -19,6 +19,6 @@ export class LogisticsOnModuleActivatedListener {
   @OnEvent('tenant.module.activated')
   async handle(event: TenantModuleActivatedEvent): Promise<void> {
     if (event.moduleName !== 'logistics') return;
-    await this.deliveryNotes.syncAfterActivation(event.tenantId);
+    await this.deliveryNotes.syncWithSales(event.tenantId);
   }
 }

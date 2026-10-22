@@ -3,6 +3,7 @@ import {
   ForbiddenException,
   Inject,
   Injectable,
+  Logger,
   NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
@@ -76,6 +77,8 @@ export type QuickSaleDto = QuickSaleInput;
 
 @Injectable()
 export class SaleOrdersService implements SalesGateway {
+  private readonly logger = new Logger(SaleOrdersService.name);
+
   constructor(
     // Solo para abrir transacciones; los accesos a datos van por repositorios.
     private readonly prisma: PrismaService,
@@ -1360,7 +1363,17 @@ export class SaleOrdersService implements SalesGateway {
     saleOrderId: string,
     userId?: string,
   ) {
-    await this.markDelivered(tenantId, saleOrderId, userId);
+    const { delivered, status } = await this.markDelivered(
+      tenantId,
+      saleOrderId,
+      userId,
+    );
+    // Reintentar no lo arregla: la nota quedó entregada y el pedido no.
+    if (!delivered && status !== 'DELIVERED') {
+      this.logger.error(
+        `Logística entregó el pedido ${saleOrderId}, que está en ${status} y no se puede entregar`,
+      );
+    }
   }
 
   // Entrega registrada desde Ventas, para tenants sin Logística: con Logística
@@ -1371,7 +1384,7 @@ export class SaleOrdersService implements SalesGateway {
         'Con Logística activa, la entrega se registra desde Logística',
       );
     }
-    if (!(await this.markDelivered(tenantId, id, userId))) {
+    if (!(await this.markDelivered(tenantId, id, userId)).delivered) {
       throw new UnprocessableEntityException(
         'Solo los pedidos confirmados o facturados pueden marcarse como entregados',
       );
@@ -1379,13 +1392,14 @@ export class SaleOrdersService implements SalesGateway {
     return this.saleOrdersRepository.findById(tenantId, id);
   }
 
-  /** Devuelve false si el pedido no estaba en condiciones de entregarse. */
+  /** `status` es el que tenía el pedido antes de intentar entregarlo. */
   private async markDelivered(
     tenantId: string,
     saleOrderId: string,
     userId?: string,
-  ): Promise<boolean> {
+  ): Promise<{ delivered: boolean; status: SaleOrderStatus }> {
     const order = await this.findOne(tenantId, saleOrderId);
+    const status = order.status;
 
     const eventId = await this.prisma.$transaction(async (tx) => {
       const { count } = await this.saleOrdersRepository.transition(
@@ -1402,7 +1416,7 @@ export class SaleOrdersService implements SalesGateway {
         saleOrderId,
       });
     });
-    if (!eventId) return false;
+    if (!eventId) return { delivered: false, status };
     await this.outbox.dispatch(eventId);
 
     this.eventEmitter.emit('audit.log', {
@@ -1412,7 +1426,7 @@ export class SaleOrdersService implements SalesGateway {
       action: 'sale.order.delivered',
       resourceId: saleOrderId,
     } satisfies AuditLogEvent);
-    return true;
+    return { delivered: true, status };
   }
 
   async cancel(tenantId: string, id: string, userId?: string) {

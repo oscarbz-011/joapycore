@@ -340,14 +340,14 @@ describe('DeliveryNotesService', () => {
     });
   });
 
-  describe('syncAfterActivation', () => {
+  describe('syncWithSales', () => {
     it('closes what Sales already delivered and opens the missing notes', async () => {
       repo.closeDeliveredOutsideLogistics.mockResolvedValue(2);
       prisma.saleOrder.findMany.mockResolvedValue([
         { id: 'o1', tenantId: 'tenant-1' },
       ]);
 
-      await expect(service.syncAfterActivation('tenant-1')).resolves.toEqual({
+      await expect(service.syncWithSales('tenant-1')).resolves.toEqual({
         closed: 2,
         created: 1,
       });

@@ -1125,6 +1125,33 @@ describe('SaleOrdersService', () => {
       expect(outbox.enqueue).not.toHaveBeenCalled();
     });
 
+    it('reports a delivered note for an order that cannot be delivered', async () => {
+      saleOrdersRepository.findById.mockResolvedValue(
+        makeOrder({ status: 'CANCELLED', items: [makeOrderItem()] }),
+      );
+      prisma.saleOrder.updateMany.mockResolvedValue({ count: 0 });
+      const error = jest
+        .spyOn(service['logger'], 'error')
+        .mockImplementation(() => undefined);
+
+      await service.handleDeliveryConfirmed('tenant-1', 'order-1');
+
+      expect(error).toHaveBeenCalledWith(expect.stringContaining('CANCELLED'));
+      expect(tx.stockMovement.create).not.toHaveBeenCalled();
+    });
+
+    it('stays quiet when the order was already delivered', async () => {
+      saleOrdersRepository.findById.mockResolvedValue(
+        makeOrder({ status: 'DELIVERED', items: [makeOrderItem()] }),
+      );
+      prisma.saleOrder.updateMany.mockResolvedValue({ count: 0 });
+      const error = jest.spyOn(service['logger'], 'error');
+
+      await service.handleDeliveryConfirmed('tenant-1', 'order-1');
+
+      expect(error).not.toHaveBeenCalled();
+    });
+
     it('does not depend on whether the tenant uses Logistics', async () => {
       tenantModules.isActive.mockResolvedValue(true);
       saleOrdersRepository.findById.mockResolvedValue(

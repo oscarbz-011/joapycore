@@ -156,11 +156,20 @@ export class DeliveryNotesRepository {
   /**
    * Notas que quedaron abiertas de pedidos que Ventas entregó mientras
    * Logística estaba apagada. Sin fecha de entrega: no se sabe cuándo fue.
+   * Sin `tenantId`, en todos los tenants que tienen Logística activa.
    */
-  async closeDeliveredOutsideLogistics(tenantId: string): Promise<number> {
+  async closeDeliveredOutsideLogistics(tenantId?: string): Promise<number> {
     const { count } = await this.prisma.deliveryNote.updateMany({
       where: {
-        tenantId,
+        ...(tenantId
+          ? { tenantId }
+          : {
+              tenant: {
+                tenantModules: {
+                  some: { moduleName: 'logistics', active: true },
+                },
+              },
+            }),
         status: { in: OPEN_STATUSES },
         saleOrder: { status: 'DELIVERED' },
       },
