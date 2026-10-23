@@ -20,6 +20,7 @@ import type { Response } from 'express';
 import { memoryStorage } from 'multer';
 import { CurrentTenant } from '../../../common/decorators/current-tenant.decorator';
 import { Permissions } from '../../../common/decorators/permissions.decorator';
+import { RequiredModule } from '../../../common/decorators/required-module.decorator';
 import { UpdateSifenSettingsDto } from '../dto/update-sifen-settings.dto';
 import { SifenService } from '../services/sifen.service';
 import { contentDisposition } from '../../../common/utils/download-headers.util';
@@ -28,6 +29,7 @@ const memStorage = memoryStorage();
 
 @ApiTags('SIFEN')
 @ApiBearerAuth()
+@RequiredModule('sifen')
 @Controller('sifen')
 export class SifenController {
   constructor(private readonly sifenService: SifenService) {}

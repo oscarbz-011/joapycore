@@ -61,10 +61,9 @@ describe('TenantModulesService', () => {
     });
 
     it('backfills missing module rows before activating, so a module without a row can be turned on', async () => {
-      // sales has no inactive deps when inventory is active
       repo.findAllForTenant.mockResolvedValue([
         makeModule('inventory', true),
-        makeModule('sales', false),
+        makeModule('documents', false),
       ]);
       const order: string[] = [];
       repo.backfillMissing.mockImplementation(() => {
@@ -76,7 +75,7 @@ describe('TenantModulesService', () => {
         return Promise.resolve(1);
       });
 
-      await service.setActive('tenant-1', 'sales', true);
+      await service.setActive('tenant-1', 'documents', true);
 
       expect(order).toEqual(['backfill', 'setActive']);
     });
@@ -94,16 +93,96 @@ describe('TenantModulesService', () => {
     });
 
     it('throws UnprocessableEntityException when deactivating a module that others depend on', async () => {
-      // sales is active and billing depends on it
       repo.findAllForTenant.mockResolvedValue([
         makeModule('inventory', true),
         makeModule('sales', true),
-        makeModule('billing', true),
       ]);
       await expect(
-        service.setActive('tenant-1', 'sales', false),
+        service.setActive('tenant-1', 'inventory', false),
       ).rejects.toBeInstanceOf(UnprocessableEntityException);
       expect(repo.setActive).not.toHaveBeenCalled();
+    });
+
+    describe('Facturación atada a Ventas', () => {
+      it('rejects toggling billing on its own', async () => {
+        repo.findAllForTenant.mockResolvedValue([
+          makeModule('sales', true),
+          makeModule('billing', true),
+        ]);
+        await expect(
+          service.setActive('tenant-1', 'billing', false),
+        ).rejects.toThrow(
+          '"Facturación" se activa y desactiva junto con "Ventas"',
+        );
+        expect(repo.setActive).not.toHaveBeenCalled();
+      });
+
+      it('activates billing together with sales', async () => {
+        repo.findAllForTenant.mockResolvedValue([
+          makeModule('inventory', true),
+          makeModule('sales', false),
+          makeModule('billing', false),
+        ]);
+        repo.setActive.mockResolvedValue(1);
+
+        await service.setActive('tenant-1', 'sales', true);
+
+        expect(repo.setActive).toHaveBeenCalledWith('tenant-1', 'sales', true);
+        expect(repo.setActive).toHaveBeenCalledWith(
+          'tenant-1',
+          'billing',
+          true,
+        );
+        expect(eventEmitter.emit).toHaveBeenCalledWith(
+          'tenant.module.activated',
+          { tenantId: 'tenant-1', moduleName: 'billing' },
+        );
+      });
+
+      it('deactivates billing together with sales when nothing else needs it', async () => {
+        repo.findAllForTenant.mockResolvedValue([
+          makeModule('inventory', true),
+          makeModule('sales', true),
+          makeModule('billing', true),
+        ]);
+        repo.setActive.mockResolvedValue(1);
+
+        await service.setActive('tenant-1', 'sales', false);
+
+        expect(repo.setActive).toHaveBeenCalledWith('tenant-1', 'sales', false);
+        expect(repo.setActive).toHaveBeenCalledWith(
+          'tenant-1',
+          'billing',
+          false,
+        );
+      });
+
+      it('keeps sales active while a module depends on billing', async () => {
+        repo.findAllForTenant.mockResolvedValue([
+          makeModule('inventory', true),
+          makeModule('sales', true),
+          makeModule('billing', true),
+          makeModule('payments', true),
+        ]);
+
+        await expect(
+          service.setActive('tenant-1', 'sales', false),
+        ).rejects.toThrow('porque dependen de él: Pagos');
+        expect(repo.setActive).not.toHaveBeenCalled();
+      });
+
+      it('asks for sales, not billing, when a module needs billing', async () => {
+        repo.findAllForTenant.mockResolvedValue([
+          makeModule('inventory', true),
+          makeModule('sales', false),
+          makeModule('billing', false),
+          makeModule('payments', false),
+        ]);
+
+        await expect(
+          service.setActive('tenant-1', 'payments', true),
+        ).rejects.toThrow('primero debés activar: Ventas');
+      });
     });
 
     it('activates a module when its dependencies are active', async () => {

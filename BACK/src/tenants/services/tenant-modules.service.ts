@@ -30,54 +30,77 @@ export class TenantModulesService {
     }
 
     const definition = MODULE_CATALOG[moduleName];
+    if (definition.bundledWith) {
+      const parent = MODULE_CATALOG[definition.bundledWith];
+      throw new UnprocessableEntityException(
+        `"${definition.displayName}" se activa y desactiva junto con "${parent.displayName}"`,
+      );
+    }
+
+    // Los addons sin interruptor propio siguen a este módulo.
+    const bundled = ALL_TENANT_MODULES.filter(
+      (key) => MODULE_CATALOG[key].bundledWith === moduleName,
+    );
+    const affected = [moduleName, ...bundled];
+    const displayName = (key: string) => {
+      const parentKey = MODULE_CATALOG[key]?.bundledWith ?? key;
+      return MODULE_CATALOG[parentKey]?.displayName ?? key;
+    };
+
     const allModules =
       await this.tenantModulesRepository.findAllForTenant(tenantId);
     const activeMap = new Map(allModules.map((m) => [m.moduleName, m.active]));
 
     if (active) {
-      // Verificar que todas las dependencias estén activas
-      const inactiveDeps = definition.dependencies.filter(
-        (dep) => !activeMap.get(dep),
-      );
+      const inactiveDeps = [
+        ...new Set(
+          affected.flatMap((key) =>
+            MODULE_CATALOG[key].dependencies.filter(
+              (dep) => !affected.includes(dep) && !activeMap.get(dep),
+            ),
+          ),
+        ),
+      ];
       if (inactiveDeps.length > 0) {
-        const names = inactiveDeps
-          .map((d) => MODULE_CATALOG[d]?.displayName ?? d)
-          .join(', ');
+        const names = [...new Set(inactiveDeps.map(displayName))].join(', ');
         throw new UnprocessableEntityException(
           `Para activar "${definition.displayName}" primero debés activar: ${names}`,
         );
       }
     } else {
-      // Verificar que ningún módulo activo dependa de éste
       const blockingModules = allModules.filter(
         (m) =>
           m.active &&
-          m.moduleName !== moduleName &&
-          MODULE_CATALOG[m.moduleName]?.dependencies.includes(moduleName),
+          !affected.includes(m.moduleName) &&
+          MODULE_CATALOG[m.moduleName]?.dependencies.some((dep) =>
+            affected.includes(dep),
+          ),
       );
       if (blockingModules.length > 0) {
-        const names = blockingModules
-          .map((m) => MODULE_CATALOG[m.moduleName]?.displayName ?? m.moduleName)
-          .join(', ');
+        const names = [
+          ...new Set(blockingModules.map((m) => displayName(m.moduleName))),
+        ].join(', ');
         throw new UnprocessableEntityException(
           `No podés desactivar "${definition.displayName}" porque dependen de él: ${names}`,
         );
       }
     }
 
-    const wasActive = activeMap.get(moduleName) ?? false;
-
     await this.tenantModulesRepository.backfillMissing(tenantId);
-    await this.tenantModulesRepository.setActive(tenantId, moduleName, active);
+    for (const key of affected) {
+      await this.tenantModulesRepository.setActive(tenantId, key, active);
+    }
     // Sin esto el cambio tardaría hasta el TTL en verse; con esto el próximo
     // request ya lee el estado nuevo.
     this.tenantModulesCache.invalidate(tenantId);
 
-    if (active && !wasActive) {
-      this.eventEmitter.emit('tenant.module.activated', {
-        tenantId,
-        moduleName,
-      });
+    if (active) {
+      for (const key of affected.filter((k) => !activeMap.get(k))) {
+        this.eventEmitter.emit('tenant.module.activated', {
+          tenantId,
+          moduleName: key,
+        });
+      }
     }
 
     return this.tenantModulesRepository.findAllForTenant(tenantId);
