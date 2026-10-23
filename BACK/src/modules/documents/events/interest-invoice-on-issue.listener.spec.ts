@@ -9,6 +9,11 @@ function makeInvoice(overrides: Record<string, unknown> = {}) {
     id: INVOICE_ID,
     invoiceNumber: '0000013',
     invoicePrefix: '001-002-',
+    sequential: 13,
+    modality: 'SELF_PRINTED',
+    timbrado: '12345678',
+    timbradoValidFrom: new Date('2026-01-01T00:00:00.000Z'),
+    timbradoValidUntil: new Date('2026-12-31T00:00:00.000Z'),
     issuedAt: new Date('2026-08-26'),
     total: 350_000,
     tenant: {
@@ -18,9 +23,6 @@ function makeInvoice(overrides: Record<string, unknown> = {}) {
       address: 'Calle Falsa 123',
       city: 'Asunción',
       phone: '021-555555',
-      timbradoNumero: '12345678',
-      timbradoFecha: null,
-      timbradoFechaFin: null,
       logoFileId: null,
     },
     items: [
@@ -150,6 +152,60 @@ describe('InterestInvoiceOnIssueListener', () => {
 
     expect(prisma.invoice.findFirst).toHaveBeenCalledTimes(1);
     expect(filesService.upload).not.toHaveBeenCalled();
+  });
+
+  it('waits for the talonario number before generating the PDF', async () => {
+    prisma.invoice.findFirst.mockResolvedValue(
+      makeInvoice({ sequential: null, invoiceNumber: null }),
+    );
+
+    await listener.handle({
+      tenantId: TENANT,
+      invoiceId: INVOICE_ID,
+      paymentReceiptId: 'r-1',
+      total: 350_000,
+    });
+
+    expect(filesService.upload).not.toHaveBeenCalled();
+  });
+
+  it('prints the timbrado copied to the invoice', async () => {
+    prisma.invoice.findFirst.mockResolvedValue(makeInvoice());
+
+    await listener.handle({
+      tenantId: TENANT,
+      invoiceId: INVOICE_ID,
+      paymentReceiptId: 'r-1',
+      total: 350_000,
+    });
+
+    const variables = pdfService.renderHtmlTemplate.mock.calls[0][1];
+    expect(variables).toMatchObject({
+      'timbrado.numero': '12345678',
+      'timbrado.inicioVigencia': '01/01/2026',
+      'timbrado.finVigencia': '31/12/2026',
+      'factura.leyendaFiscal': '',
+    });
+    expect(pdfService.renderHtmlTemplate.mock.calls[0][5]).toBeUndefined();
+  });
+
+  it('marks a talonario invoice as an internal copy', async () => {
+    prisma.invoice.findFirst.mockResolvedValue(
+      makeInvoice({ modality: 'PREPRINTED' }),
+    );
+
+    await listener.handle({
+      tenantId: TENANT,
+      invoiceId: INVOICE_ID,
+      paymentReceiptId: 'r-1',
+      total: 350_000,
+    });
+
+    const call = pdfService.renderHtmlTemplate.mock.calls[0];
+    expect(call[1]['factura.leyendaFiscal']).toBe(
+      'COPIA INTERNA – NO VÁLIDA COMO COMPROBANTE FISCAL',
+    );
+    expect(call[5]).toBe('COPIA INTERNA – NO VÁLIDA COMO COMPROBANTE FISCAL');
   });
 
   it('does nothing if the invoice has no paymentReceipt (defensive)', async () => {

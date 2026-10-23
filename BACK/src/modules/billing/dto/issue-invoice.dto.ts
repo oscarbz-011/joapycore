@@ -8,8 +8,9 @@ import {
   IsString,
   MaxLength,
 } from 'class-validator';
+import { AssignInvoiceNumberDto } from './assign-invoice-number.dto';
 
-export class IssueInvoiceDto {
+export class IssueInvoiceDto extends AssignInvoiceNumberDto {
   @ApiProperty({
     enum: ['CASH', 'CREDIT'],
     description: 'Condición de venta: contado o crédito',

@@ -2,7 +2,6 @@ import { ApiPropertyOptional } from '@nestjs/swagger';
 import { EmployeeCount } from '@prisma/client';
 import {
   IsArray,
-  IsDateString,
   IsEmail,
   IsEnum,
   IsInt,
@@ -109,25 +108,6 @@ export class UpdateTenantDto {
   currency?: string;
 
   // ── SIFEN — datos fiscales ────────────────────────────────────────────────
-
-  @ApiPropertyOptional({ description: 'Número de timbrado otorgado por SET' })
-  @IsOptional()
-  @IsString()
-  timbradoNumero?: string;
-
-  @ApiPropertyOptional({
-    description: 'Fecha de inicio de vigencia del timbrado (ISO 8601)',
-  })
-  @IsOptional()
-  @IsDateString()
-  timbradoFecha?: string;
-
-  @ApiPropertyOptional({
-    description: 'Fecha de fin de vigencia del timbrado (ISO 8601)',
-  })
-  @IsOptional()
-  @IsDateString()
-  timbradoFechaFin?: string;
 
   @ApiPropertyOptional({
     description: '1 = Persona Física, 2 = Persona Jurídica',

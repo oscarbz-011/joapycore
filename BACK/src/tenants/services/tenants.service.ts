@@ -49,8 +49,7 @@ export class TenantsService {
 
   async update(tenantId: string, dto: UpdateTenantDto) {
     const tenant = await this.getById(tenantId);
-    const { actividadesEconomicas, timbradoFecha, timbradoFechaFin, ...rest } =
-      dto;
+    const { actividadesEconomicas, ...rest } = dto;
     const data: Prisma.TenantUncheckedUpdateInput = {
       ...rest,
       ...(actividadesEconomicas !== undefined
@@ -58,14 +57,6 @@ export class TenantsService {
             actividadesEconomicas:
               actividadesEconomicas as unknown as Prisma.InputJsonValue,
           }
-        : {}),
-      // @IsDateString() acepta "2026-07-16" (sin componente de hora) — Prisma
-      // exige un DateTime completo, hay que convertirlo antes de persistir.
-      ...(timbradoFecha !== undefined
-        ? { timbradoFecha: new Date(timbradoFecha) }
-        : {}),
-      ...(timbradoFechaFin !== undefined
-        ? { timbradoFechaFin: new Date(timbradoFechaFin) }
         : {}),
     };
     const updated = await this.tenantsRepository.update(tenantId, data);

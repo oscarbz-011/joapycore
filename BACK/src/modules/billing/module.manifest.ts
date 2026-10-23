@@ -9,5 +9,5 @@ export const billingManifest = defineModule({
   isStable: true,
   depends: ['sales'],
   bundledWith: 'sales',
-  owns: ['Invoice', 'InvoiceItem', 'CreditNote'],
+  owns: ['Invoice', 'InvoiceItem', 'CreditNote', 'BillingSeries'],
 });

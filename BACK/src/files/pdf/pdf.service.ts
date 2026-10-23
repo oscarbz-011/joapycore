@@ -83,6 +83,19 @@ export function buildHeaderHtml(options?: PdfHeaderOptions): string {
 // se colgaban en máquinas con poca memoria (el PDF quedaba sin generar).
 const runExclusive = createSerialQueue();
 
+const escapeHtml = (text: string) =>
+  text.replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
+
+// Leyenda cruzada sobre toda la página, para que se vea aunque la plantilla
+// del tenant no la incluya.
+export function withWatermark(html: string, watermark?: string): string {
+  if (!watermark) return html;
+  const mark = `<div style="position:fixed;top:45%;left:-10%;width:120%;text-align:center;transform:rotate(-30deg);font:bold 30px sans-serif;color:rgba(200,0,0,0.35);z-index:9999;pointer-events:none">${escapeHtml(watermark)}</div>`;
+  return html.includes('</body>')
+    ? html.replace('</body>', `${mark}</body>`)
+    : `${html}${mark}`;
+}
+
 // Un PDF normal tarda pocos segundos. Si Chromium se cuelga, se lo mata al
 // pasar este límite: como se genera de a uno, un render colgado dejaría
 // esperando a todos los PDFs siguientes.
@@ -99,6 +112,7 @@ export class PdfService {
     tableVariables: Record<string, PdfTableVariable> = {},
     headerOptions?: PdfHeaderOptions,
     pageSize: PdfPageSize = 'A4',
+    watermark?: string,
   ): Promise<Buffer> {
     const doc = JSON.parse(contentJson) as TiptapNode;
     const bodyHtml = convertTiptapToHtml(
@@ -119,7 +133,7 @@ ${bodyHtml}
 </body>
 </html>`;
 
-    return this.renderHtmlToPdf(html, pageSize);
+    return this.renderHtmlToPdf(withWatermark(html, watermark), pageSize);
   }
 
   // Plantillas HTML/CSS crudo (factura, recibo): el contenido ya es un
@@ -132,6 +146,7 @@ ${bodyHtml}
     tableVariables: Record<string, PdfTableVariable> = {},
     rawVariables: Record<string, string> = {},
     pageSize: PdfPageSize = 'A4',
+    watermark?: string,
   ): Promise<Buffer> {
     const resolved = interpolateHtmlTemplate(
       contentHtml,
@@ -143,7 +158,7 @@ ${bodyHtml}
       ? resolved
       : `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body>${resolved}</body></html>`;
 
-    return this.renderHtmlToPdf(html, pageSize);
+    return this.renderHtmlToPdf(withWatermark(html, watermark), pageSize);
   }
 
   private renderHtmlToPdf(

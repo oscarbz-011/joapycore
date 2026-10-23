@@ -2,9 +2,8 @@ import {
   NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { InvoicesService } from './invoices.service';
-import { BillingSourcesRepository } from '../repositories/billing-sources.repository';
-import { InvoicesRepository } from '../repositories/invoices.repository';
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 
@@ -25,10 +24,31 @@ function makeInvoice(overrides = {}) {
     updatedAt: new Date('2026-09-23T12:00:00.000Z'),
     saleOrder: {
       saleType: 'CASH',
-      branch: { codigoEstablecimiento: '001', puntoExpedicion: '002' },
+      branchId: 'branch-1',
     },
     ...overrides,
   };
+}
+
+const NUMBERING = {
+  seriesId: 'series-1',
+  modality: 'SELF_PRINTED' as const,
+  timbrado: '12345678',
+  timbradoValidFrom: new Date('2026-01-01T00:00:00.000Z'),
+  timbradoValidUntil: new Date('2026-12-31T00:00:00.000Z'),
+  serieCode: '',
+  establecimiento: '001',
+  puntoExpedicion: '002',
+  sequential: 5,
+  invoiceNumber: '0000005',
+  invoicePrefix: '001-002-',
+};
+
+function duplicateNumberError() {
+  return new Prisma.PrismaClientKnownRequestError('Unique constraint', {
+    code: 'P2002',
+    clientVersion: 'test',
+  });
 }
 
 function deferred<T>() {
@@ -53,7 +73,8 @@ describe('InvoicesService', () => {
     hasPdf: jest.Mock;
     finalizeIssue: jest.Mock;
     createInterestInvoice: jest.Mock;
-    findLastSequential: jest.Mock;
+    findInterestForNumbering: jest.Mock;
+    assignNumber: jest.Mock;
   };
   let creditNotesRepository: {
     findAll: jest.Mock;
@@ -63,10 +84,12 @@ describe('InvoicesService', () => {
   let eventEmitter: { emit: jest.Mock; emitAsync: jest.Mock };
   let outbox: { enqueue: jest.Mock; dispatch: jest.Mock };
   let prisma: { $transaction: jest.Mock };
-  let invoiceFindFirstMock: jest.Mock;
-  let branchFindFirstMock: jest.Mock;
-
-  const realInvoicesRepository = new InvoicesRepository({} as any);
+  let seriesService: {
+    numberForIssue: jest.Mock;
+    numberForAutomatic: jest.Mock;
+    findIssueOptions: jest.Mock;
+  };
+  const tx = { marker: 'tx' };
 
   beforeEach(() => {
     invoicesRepository = {
@@ -79,10 +102,8 @@ describe('InvoicesService', () => {
       hasPdf: jest.fn().mockResolvedValue(true),
       finalizeIssue: jest.fn().mockResolvedValue({ count: 1 }),
       createInterestInvoice: jest.fn(),
-      // Implementación real: consulta el tx que recibe (mockeado abajo).
-      findLastSequential: jest.fn((...args: [string, string, string, any]) =>
-        realInvoicesRepository.findLastSequential(...args),
-      ),
+      findInterestForNumbering: jest.fn(),
+      assignNumber: jest.fn().mockResolvedValue({ count: 1 }),
     };
     creditNotesRepository = {
       findAll: jest.fn().mockResolvedValue([]),
@@ -94,14 +115,10 @@ describe('InvoicesService', () => {
       emitAsync: jest.fn().mockResolvedValue([]),
     };
 
-    invoiceFindFirstMock = jest.fn().mockResolvedValue(null);
-    branchFindFirstMock = jest.fn().mockResolvedValue({
-      codigoEstablecimiento: '001',
-      puntoExpedicion: '002',
-    });
-    const tx = {
-      invoice: { findFirst: invoiceFindFirstMock },
-      branch: { findFirst: branchFindFirstMock },
+    seriesService = {
+      numberForIssue: jest.fn().mockResolvedValue(NUMBERING),
+      numberForAutomatic: jest.fn().mockResolvedValue(NUMBERING),
+      findIssueOptions: jest.fn().mockResolvedValue([]),
     };
     prisma = {
       $transaction: jest.fn().mockImplementation((cb) => cb(tx)),
@@ -117,7 +134,7 @@ describe('InvoicesService', () => {
       creditNotesRepository as any,
       eventEmitter as any,
       outbox as any,
-      new BillingSourcesRepository(prisma as any),
+      seriesService as any,
     );
   });
 
@@ -332,62 +349,54 @@ describe('InvoicesService', () => {
       expect(invoicesRepository.updateStatus).not.toHaveBeenCalled();
     });
 
-    it('auto-generates the invoice number from the branch establecimiento/puntoExpedicion — never accepts one from the client', async () => {
+    it('numbers the invoice with the series of the sale branch', async () => {
       invoicesRepository.findById.mockResolvedValue(makeInvoice());
-      invoiceFindFirstMock.mockResolvedValue({ sequential: 4 });
 
       await service.issue('tenant-1', 'inv-1', {
         paymentCondition: 'CASH',
         paymentMethod: 'CASH',
+        seriesId: 'series-1',
       });
 
-      expect(invoiceFindFirstMock).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: {
-            tenantId: 'tenant-1',
-            establecimiento: '001',
-            puntoExpedicion: '002',
-          },
-        }),
+      expect(seriesService.numberForIssue).toHaveBeenCalledWith(
+        'tenant-1',
+        {
+          branchId: 'branch-1',
+          seriesId: 'series-1',
+          documentNumber: undefined,
+          at: expect.any(Date),
+        },
+        tx,
       );
       expect(invoicesRepository.claimIssue).toHaveBeenCalledWith(
         'tenant-1',
         'inv-1',
         expect.any(Date),
         expect.any(Date),
-        expect.objectContaining({
-          establecimiento: '001',
-          puntoExpedicion: '002',
-          sequential: 5,
-          invoiceNumber: '0000005',
-          invoicePrefix: '001-002-',
-        }),
-        expect.anything(),
+        expect.objectContaining(NUMBERING),
+        tx,
       );
     });
 
-    it('starts sequential numbering at 1 for the first invoice of an establecimiento/puntoExpedicion', async () => {
+    it('passes the talonario number typed by the user to the series', async () => {
       invoicesRepository.findById.mockResolvedValue(makeInvoice());
-      invoiceFindFirstMock.mockResolvedValue(null);
 
       await service.issue('tenant-1', 'inv-1', {
         paymentCondition: 'CASH',
         paymentMethod: 'CASH',
+        documentNumber: 41,
       });
 
-      expect(invoicesRepository.claimIssue).toHaveBeenCalledWith(
+      expect(seriesService.numberForIssue).toHaveBeenCalledWith(
         'tenant-1',
-        'inv-1',
-        expect.any(Date),
-        expect.any(Date),
-        expect.objectContaining({ sequential: 1, invoiceNumber: '0000001' }),
-        expect.anything(),
+        expect.objectContaining({ documentNumber: 41 }),
+        tx,
       );
     });
 
-    it("falls back to '001'/'001' when the sale order has no branch configured", async () => {
+    it('does not number again when a previous attempt already reserved the number', async () => {
       invoicesRepository.findById.mockResolvedValue(
-        makeInvoice({ saleOrder: { branch: null } }),
+        makeInvoice({ sequential: 7 }),
       );
 
       await service.issue('tenant-1', 'inv-1', {
@@ -395,17 +404,55 @@ describe('InvoicesService', () => {
         paymentMethod: 'CASH',
       });
 
-      expect(invoicesRepository.claimIssue).toHaveBeenCalledWith(
-        'tenant-1',
-        'inv-1',
-        expect.any(Date),
-        expect.any(Date),
-        expect.objectContaining({
-          establecimiento: '001',
-          puntoExpedicion: '001',
-        }),
-        expect.anything(),
+      expect(seriesService.numberForIssue).not.toHaveBeenCalled();
+      expect(invoicesRepository.claimIssue.mock.calls[0][4]).not.toHaveProperty(
+        'sequential',
       );
+    });
+
+    it('rejects a talonario number different from the one already reserved', async () => {
+      invoicesRepository.findById.mockResolvedValue(
+        makeInvoice({ sequential: 7 }),
+      );
+
+      await expect(
+        service.issue('tenant-1', 'inv-1', {
+          paymentCondition: 'CASH',
+          paymentMethod: 'CASH',
+          documentNumber: 8,
+        }),
+      ).rejects.toThrow('ya tiene reservado el número 7');
+      expect(invoicesRepository.claimIssue).not.toHaveBeenCalled();
+    });
+
+    it('reports a talonario number taken by a simultaneous issuance', async () => {
+      invoicesRepository.findById.mockResolvedValue(makeInvoice());
+      invoicesRepository.claimIssue.mockRejectedValue(duplicateNumberError());
+
+      await expect(
+        service.issue('tenant-1', 'inv-1', {
+          paymentCondition: 'CASH',
+          paymentMethod: 'CASH',
+          documentNumber: 41,
+        }),
+      ).rejects.toThrow('El número 41 del talonario ya fue usado');
+      expect(eventEmitter.emitAsync).not.toHaveBeenCalled();
+    });
+
+    it('does not issue when the series cannot number the invoice', async () => {
+      invoicesRepository.findById.mockResolvedValue(makeInvoice());
+      seriesService.numberForIssue.mockRejectedValue(
+        new UnprocessableEntityException('El timbrado venció el 31/12/2025'),
+      );
+
+      await expect(
+        service.issue('tenant-1', 'inv-1', {
+          paymentCondition: 'CASH',
+          paymentMethod: 'CASH',
+        }),
+      ).rejects.toThrow('El timbrado venció el 31/12/2025');
+      expect(invoicesRepository.claimIssue).not.toHaveBeenCalled();
+      expect(eventEmitter.emitAsync).not.toHaveBeenCalled();
     });
 
     it('awaits invoice.pdf.requested and delivers invoice.issued through the outbox before returning', async () => {
@@ -640,6 +687,7 @@ describe('InvoicesService', () => {
       invoicesRepository.createInterestInvoice.mockResolvedValue({
         id: 'inv-interest-1',
         total: 350_000,
+        sequential: 5,
       });
     });
 
@@ -657,51 +705,39 @@ describe('InvoicesService', () => {
       );
     });
 
-    it('auto-generates numbering from the branch, continuing the tenant general invoice sequence', async () => {
-      invoiceFindFirstMock.mockResolvedValue({ sequential: 12 });
-
+    it('numbers it with the self-printed series of the receipt branch', async () => {
       await service.createInterestInvoiceFromReceipt('tenant-1', makeParams());
 
-      expect(branchFindFirstMock).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: { id: 'branch-1', tenantId: 'tenant-1' },
-        }),
-      );
-      expect(invoiceFindFirstMock).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: {
-            tenantId: 'tenant-1',
-            establecimiento: '001',
-            puntoExpedicion: '002',
-          },
-        }),
+      expect(seriesService.numberForAutomatic).toHaveBeenCalledWith(
+        'tenant-1',
+        'branch-1',
+        new Date('2026-08-26'),
+        tx,
       );
       expect(invoicesRepository.createInterestInvoice).toHaveBeenCalledWith(
         'tenant-1',
-        expect.objectContaining({
-          establecimiento: '001',
-          puntoExpedicion: '002',
-          sequential: 13,
-          invoiceNumber: '0000013',
-          invoicePrefix: '001-002-',
-        }),
-        expect.anything(),
+        expect.objectContaining({ numbering: NUMBERING }),
+        tx,
       );
     });
 
-    it("falls back to '001'/'001' when there is no branchId", async () => {
-      await service.createInterestInvoiceFromReceipt(
-        'tenant-1',
-        makeParams({ branchId: null }),
-      );
+    it('leaves it unnumbered and without PDF when the branch bills with a talonario', async () => {
+      seriesService.numberForAutomatic.mockResolvedValue(null);
+      invoicesRepository.createInterestInvoice.mockResolvedValue({
+        id: 'inv-interest-1',
+        total: 350_000,
+        sequential: null,
+      });
 
-      expect(branchFindFirstMock).not.toHaveBeenCalled();
+      await service.createInterestInvoiceFromReceipt('tenant-1', makeParams());
+
       expect(invoicesRepository.createInterestInvoice).toHaveBeenCalledWith(
         'tenant-1',
-        expect.objectContaining({
-          establecimiento: '001',
-          puntoExpedicion: '001',
-        }),
+        expect.objectContaining({ numbering: null }),
+        tx,
+      );
+      expect(eventEmitter.emitAsync).not.toHaveBeenCalledWith(
+        'invoice.interest.issued',
         expect.anything(),
       );
     });
@@ -761,6 +797,96 @@ describe('InvoicesService', () => {
           resourceId: 'inv-interest-1',
         }),
       );
+    });
+  });
+
+  // ── assignInterestNumber ─────────────────────────────────────────────────
+
+  describe('assignInterestNumber', () => {
+    const pending = {
+      id: 'inv-interest-1',
+      sequential: null,
+      issuedAt: new Date('2026-08-26'),
+      total: 350_000,
+      paymentReceiptId: 'receipt-1',
+      paymentReceipt: { branchId: 'branch-1' },
+    };
+
+    it('numbers it with the talonario and requests its PDF', async () => {
+      invoicesRepository.findInterestForNumbering.mockResolvedValue(pending);
+      seriesService.numberForIssue.mockResolvedValue({
+        ...NUMBERING,
+        modality: 'PREPRINTED',
+        sequential: 41,
+      });
+
+      await service.assignInterestNumber(
+        'tenant-1',
+        'inv-interest-1',
+        { documentNumber: 41 },
+        'user-1',
+      );
+
+      expect(seriesService.numberForIssue).toHaveBeenCalledWith(
+        'tenant-1',
+        {
+          branchId: 'branch-1',
+          seriesId: undefined,
+          documentNumber: 41,
+          at: pending.issuedAt,
+        },
+        tx,
+      );
+      expect(invoicesRepository.assignNumber).toHaveBeenCalledWith(
+        'tenant-1',
+        'inv-interest-1',
+        expect.objectContaining({ sequential: 41 }),
+        tx,
+      );
+      expect(eventEmitter.emitAsync).toHaveBeenCalledWith(
+        'invoice.interest.issued',
+        expect.objectContaining({ invoiceId: 'inv-interest-1' }),
+      );
+    });
+
+    it('rejects an invoice that already has a number', async () => {
+      invoicesRepository.findInterestForNumbering.mockResolvedValue({
+        ...pending,
+        sequential: 3,
+      });
+
+      await expect(
+        service.assignInterestNumber('tenant-1', 'inv-interest-1', {
+          documentNumber: 41,
+        }),
+      ).rejects.toThrow('La factura ya tiene número');
+      expect(seriesService.numberForIssue).not.toHaveBeenCalled();
+    });
+
+    it('does not touch another tenant’s invoice', async () => {
+      invoicesRepository.findInterestForNumbering.mockResolvedValue(null);
+
+      await expect(
+        service.assignInterestNumber('tenant-2', 'inv-interest-1', {
+          documentNumber: 41,
+        }),
+      ).rejects.toBeInstanceOf(NotFoundException);
+      expect(invoicesRepository.findInterestForNumbering).toHaveBeenCalledWith(
+        'tenant-2',
+        'inv-interest-1',
+      );
+    });
+
+    it('fails when someone numbered it at the same time', async () => {
+      invoicesRepository.findInterestForNumbering.mockResolvedValue(pending);
+      invoicesRepository.assignNumber.mockResolvedValue({ count: 0 });
+
+      await expect(
+        service.assignInterestNumber('tenant-1', 'inv-interest-1', {
+          documentNumber: 41,
+        }),
+      ).rejects.toThrow('numeró la factura al mismo tiempo');
+      expect(eventEmitter.emitAsync).not.toHaveBeenCalled();
     });
   });
 

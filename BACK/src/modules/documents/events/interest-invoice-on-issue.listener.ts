@@ -10,6 +10,10 @@ import { PdfService } from '../../../files/pdf/pdf.service';
 import { DocumentSourcesRepository } from '../repositories/document-sources.repository';
 import { DEFAULT_INTEREST_INVOICE_TEMPLATE } from '../constants/default-templates.constant';
 import { DocumentsRepository } from '../repositories/documents.repository';
+import {
+  invoiceFiscalVariables,
+  invoiceWatermark,
+} from '../utils/invoice-fiscal.util';
 
 interface InterestInvoiceIssuedEvent {
   tenantId: string;
@@ -20,16 +24,6 @@ interface InterestInvoiceIssuedEvent {
 
 function formatMoney(value: unknown): string {
   return Number(value).toLocaleString('es-PY', { maximumFractionDigits: 0 });
-}
-
-function formatDate(value: Date | null | undefined): string {
-  if (!value) return '—';
-  return value.toLocaleDateString('es-PY', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    timeZone: 'UTC',
-  });
 }
 
 // Para instantes reales (issuedAt = new Date() al emitir) — ver la misma
@@ -101,7 +95,16 @@ export class InterestInvoiceOnIssueListener {
       event.tenantId,
       event.invoiceId,
     );
-    if (!invoice || !invoice.paymentReceipt || invoice.pdfFileId) return;
+    // Sin número todavía (sucursal con talonario): el PDF se genera cuando
+    // alguien le carga el número.
+    if (
+      !invoice ||
+      !invoice.paymentReceipt ||
+      invoice.pdfFileId ||
+      invoice.sequential == null
+    ) {
+      return;
+    }
     if (!invoice.issuedAt) {
       throw new Error(
         `La factura de intereses ${event.invoiceId} no tiene fecha de emisión`,
@@ -150,9 +153,7 @@ export class InterestInvoiceOnIssueListener {
       'tenant.direccion': invoice.tenant.address ?? '',
       'tenant.ciudad': invoice.tenant.city ?? '',
       'tenant.telefono': invoice.tenant.phone ?? '',
-      'timbrado.numero': invoice.tenant.timbradoNumero ?? '',
-      'timbrado.inicioVigencia': formatDate(invoice.tenant.timbradoFecha),
-      'timbrado.finVigencia': formatDate(invoice.tenant.timbradoFechaFin),
+      ...invoiceFiscalVariables(invoice),
       'factura.numero': [invoice.invoicePrefix, invoice.invoiceNumber]
         .filter(Boolean)
         .join(''),
@@ -225,6 +226,7 @@ export class InterestInvoiceOnIssueListener {
                 companyName: invoice.tenant.razonSocial ?? invoice.tenant.name,
               },
               'A4',
+              invoiceWatermark(invoice),
             )
           : await this.pdfService.renderHtmlTemplate(
               content,
@@ -236,6 +238,7 @@ export class InterestInvoiceOnIssueListener {
                   : '',
               },
               'A4',
+              invoiceWatermark(invoice),
             );
 
     const fileRecord = await this.filesService.upload(

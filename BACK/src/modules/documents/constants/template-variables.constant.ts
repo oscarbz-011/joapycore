@@ -179,6 +179,11 @@ export const TEMPLATE_KIND_DEFS: Record<TemplateKind, TemplateKindDef> = {
         label: 'Fin de vigencia del timbrado',
         type: 'text',
       },
+      {
+        key: 'factura.leyendaFiscal',
+        label: 'Leyenda de copia interna (facturas de talonario)',
+        type: 'text',
+      },
       { key: 'factura.numero', label: 'Número de factura', type: 'text' },
       { key: 'factura.fechaEmision', label: 'Fecha de emisión', type: 'text' },
       {
@@ -372,6 +377,11 @@ export const TEMPLATE_KIND_DEFS: Record<TemplateKind, TemplateKindDef> = {
       {
         key: 'timbrado.finVigencia',
         label: 'Fin de vigencia del timbrado',
+        type: 'text',
+      },
+      {
+        key: 'factura.leyendaFiscal',
+        label: 'Leyenda de copia interna (facturas de talonario)',
         type: 'text',
       },
       { key: 'factura.numero', label: 'Número de factura', type: 'text' },

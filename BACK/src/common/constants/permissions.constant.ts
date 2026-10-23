@@ -87,6 +87,7 @@ export const PERMISSIONS = [
   'billing:read',
   'billing:issue',
   'billing:cancel',
+  'billing:series:manage',
   // Payments
   'payments:read',
   'payments:register',
