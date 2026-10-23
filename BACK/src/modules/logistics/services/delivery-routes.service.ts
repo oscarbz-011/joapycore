@@ -584,6 +584,17 @@ export class DeliveryRoutesService {
   async stopDelivered(tenantId: string, noteId: string, userId?: string) {
     const note = await this.routes.findStop(tenantId, noteId);
     if (!note?.route) return;
+    // El evento llega por el outbox y puede repetirse.
+    if (
+      await this.routes.hasStopEvent(
+        tenantId,
+        note.route.id,
+        noteId,
+        'STOP_DELIVERED',
+      )
+    ) {
+      return;
+    }
     await this.routes.addEvents(tenantId, [
       {
         routeId: note.route.id,

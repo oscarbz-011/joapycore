@@ -37,7 +37,9 @@ export const WS_EVENT_MAP: Record<string, string[][]> = {
   // Nota de entrega nueva en PENDING — mueve el badge "Entregas" de Logística.
   'delivery.note.created':    [['logistics-deliveries'], ['logistics-routes']],
   'delivery.dispatched':      [['logistics-deliveries'], ['logistics-routes']],
-  'delivery.note.delivered':  [['logistics-deliveries'], ['order-delivery'], ['logistics-routes']],
+  'delivery.note.delivered':  [['logistics-deliveries'], ['order-delivery'], ['logistics-routes'], ['sale-orders']],
+  // Venta entregada (por Logística o desde Ventas): sale del stock.
+  'sale.order.stock_out':     [['sale-orders'], ['products'], ['stock-movements']],
   // Planificación de rutas: cambia qué entregas van en cada ruta y, con
   // eso, las que cada repartidor tiene asignadas.
   'delivery.route.changed':   [['logistics-routes'], ['logistics-route'], ['logistics-my-routes'], ['logistics-unplanned'], ['logistics-deliveries'], ['logistics-mine']],

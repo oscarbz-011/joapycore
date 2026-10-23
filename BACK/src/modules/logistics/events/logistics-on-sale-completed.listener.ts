@@ -1,25 +1,53 @@
 import { Injectable } from '@nestjs/common';
 import { EventEmitter2, OnEvent } from '@nestjs/event-emitter';
+import { TenantModulesCache } from '../../../tenants/services/tenant-modules.cache';
 import { DeliveryNotesRepository } from '../repositories/delivery-notes.repository';
+import {
+  AWAITING_DELIVERY,
+  LogisticsSourcesRepository,
+} from '../repositories/logistics-sources.repository';
 
-interface SaleOrderCompletedEvent {
+interface SaleOrderEvent {
   tenantId: string;
   saleOrderId: string;
 }
 
 /**
- * Crea la nota de entrega PENDING cuando se confirma un pedido. Antes la
- * creaba Ventas escribiendo directo en delivery_notes.
+ * Crea la nota de entrega PENDING cuando un pedido queda listo para entregar:
+ * al confirmarlo, o al cobrar una venta de contado, que no pasa por
+ * "confirmar". Antes la creaba Ventas escribiendo directo en delivery_notes.
  */
 @Injectable()
 export class LogisticsOnSaleCompletedListener {
   constructor(
     private readonly deliveryNotesRepository: DeliveryNotesRepository,
     private readonly eventEmitter: EventEmitter2,
+    private readonly tenantModules: TenantModulesCache,
+    private readonly sources: LogisticsSourcesRepository,
   ) {}
 
   @OnEvent('sale.order.completed', { suppressErrors: false })
-  async handle(event: SaleOrderCompletedEvent): Promise<void> {
+  async handle(event: SaleOrderEvent): Promise<void> {
+    await this.ensureNote(event);
+  }
+
+  @OnEvent('sale.payment.collected', { suppressErrors: false })
+  async handlePaymentCollected(event: SaleOrderEvent): Promise<void> {
+    // Las ventas del POS se cobran ya entregadas.
+    const status = await this.sources.findOrderStatus(
+      event.tenantId,
+      event.saleOrderId,
+    );
+    if (!status || !AWAITING_DELIVERY.includes(status)) return;
+    await this.ensureNote(event);
+  }
+
+  private async ensureNote(event: SaleOrderEvent) {
+    // Sin Logística la entrega la registra Ventas; si se activa después, el
+    // listener de activación crea las notas que falten.
+    if (!(await this.tenantModules.isActive(event.tenantId, 'logistics'))) {
+      return;
+    }
     const note = await this.deliveryNotesRepository.ensurePendingForOrder(
       event.tenantId,
       event.saleOrderId,

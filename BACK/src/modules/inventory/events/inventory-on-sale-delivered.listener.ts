@@ -12,9 +12,8 @@ interface SaleOrderStockOutEvent {
 
 // Consumo FIFO de lotes al entregarse una venta — sales no sabe nada de
 // ProductBatch/usesLots, solo emite `sale.order.stock_out` después de crear
-// sus propios StockMovement OUT (ver COMPRAS_INVENTARIO_LOGISTICA.md). Es
-// consistencia eventual, no atómica con el OUT — mismo criterio que el resto
-// del proyecto usa para efectos secundarios entre módulos.
+// sus propios StockMovement OUT (ver COMPRAS_INVENTARIO_LOGISTICA.md). Llega
+// por el outbox: un fallo se reintenta, y es idempotente por línea.
 @Injectable()
 export class InventoryOnSaleDeliveredListener {
   private readonly logger = new Logger(InventoryOnSaleDeliveredListener.name);
@@ -27,7 +26,7 @@ export class InventoryOnSaleDeliveredListener {
     private readonly stockMovements: StockMovementsRepository,
   ) {}
 
-  @OnEvent('sale.order.stock_out')
+  @OnEvent('sale.order.stock_out', { suppressErrors: false })
   async handle(event: SaleOrderStockOutEvent) {
     try {
       await this.process(event);
@@ -35,6 +34,7 @@ export class InventoryOnSaleDeliveredListener {
       this.logger.error(
         `No se pudo procesar el consumo FIFO de lotes para la venta ${event.saleOrderId}: ${(error as Error).message}`,
       );
+      throw error;
     }
   }
 

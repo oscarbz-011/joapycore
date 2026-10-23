@@ -1,10 +1,13 @@
 import {
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
+import { OutboxService } from '../../../outbox/outbox.service';
+import { PrismaService } from '../../../prisma/prisma.service';
 import { LogisticsSourcesRepository } from '../repositories/logistics-sources.repository';
 import { DeliveryNotesRepository } from '../repositories/delivery-notes.repository';
 import { DispatchDeliveryDto } from '../dto/dispatch-delivery.dto';
@@ -12,11 +15,53 @@ import type { AuditLogEvent } from '../../../audit/audit-log.event';
 
 @Injectable()
 export class DeliveryNotesService {
+  private readonly logger = new Logger(DeliveryNotesService.name);
+
   constructor(
     private readonly repo: DeliveryNotesRepository,
     private readonly eventEmitter: EventEmitter2,
     private readonly sources: LogisticsSourcesRepository,
+    // Solo para abrir la transacción del cierre.
+    private readonly prisma: PrismaService,
+    private readonly outbox: OutboxService,
   ) {}
+
+  /**
+   * Crea la nota PENDING de los pedidos confirmados que no tienen una. Sin
+   * `tenantId` recorre todos los tenants con Logística activa.
+   */
+  async backfillPending(tenantId?: string): Promise<number> {
+    const orders =
+      await this.sources.findConfirmedOrdersWithoutDeliveryNote(tenantId);
+    let created = 0;
+    for (const order of orders) {
+      try {
+        const note = await this.repo.ensurePendingForOrder(
+          order.tenantId,
+          order.id,
+        );
+        if (note.created) created++;
+      } catch (error) {
+        this.logger.warn(
+          `No se pudo crear la nota de entrega del pedido ${order.id}: ${(error as Error).message}`,
+        );
+      }
+    }
+    return created;
+  }
+
+  /**
+   * Pone Logística al día con lo que pasó mientras estuvo apagada. Sin
+   * `tenantId` (al arrancar), en todos los tenants con Logística activa.
+   */
+  async syncWithSales(tenantId?: string) {
+    const closed = await this.repo.closeDeliveredOutsideLogistics(tenantId);
+    const created = await this.backfillPending(tenantId);
+    if (tenantId && created > 0) {
+      this.eventEmitter.emit('delivery.note.created', { tenantId });
+    }
+    return { closed, created };
+  }
 
   findAll(tenantId: string, status?: string) {
     const validStatuses = [
@@ -144,17 +189,22 @@ export class DeliveryNotesService {
     userId?: string,
   ) {
     const id = note.id;
-    await this.repo.update(tenantId, id, {
-      status: 'DELIVERED',
-      deliveredAt: new Date(),
+    // Ventas descuenta el stock con este evento: va por el outbox para que una
+    // caída entre el cierre y el descuento no lo pierda.
+    const eventId = await this.prisma.$transaction(async (tx) => {
+      if ((await this.repo.close(tenantId, id, tx)) === 0) {
+        throw new UnprocessableEntityException(
+          'Esta entrega ya fue cerrada o cancelada',
+        );
+      }
+      return this.outbox.enqueue(tx, tenantId, 'delivery.note.delivered', {
+        tenantId,
+        saleOrderId: note.saleOrder.id,
+        deliveryNoteId: id,
+        userId,
+      });
     });
-    // Trigger stock movements and SaleOrder → DELIVERED via sales listener
-    this.eventEmitter.emit('delivery.note.delivered', {
-      tenantId,
-      saleOrderId: note.saleOrder.id,
-      deliveryNoteId: id,
-      userId,
-    });
+    await this.outbox.dispatch(eventId);
     this.eventEmitter.emit('audit.log', {
       tenantId,
       userId,

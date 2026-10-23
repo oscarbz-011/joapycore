@@ -1,5 +1,12 @@
 import { Injectable } from '@nestjs/common';
+import { SaleOrderStatus } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
+
+export const AWAITING_DELIVERY: SaleOrderStatus[] = [
+  'CONFIRMED',
+  'PAYMENT_RECEIVED',
+  'INVOICED',
+];
 
 /**
  * Datos de otros módulos (empleados de RRHH, clientes, pedidos) que Logística
@@ -68,12 +75,24 @@ export class LogisticsSourcesRepository {
     });
   }
 
-  // Backfill de arranque: recorre todos los tenants a propósito.
-  findConfirmedOrdersWithoutDeliveryNote() {
+  async findOrderStatus(tenantId: string, saleOrderId: string) {
+    const order = await this.prisma.saleOrder.findFirst({
+      where: { id: saleOrderId, tenantId },
+      select: { status: true },
+    });
+    return order?.status ?? null;
+  }
+
+  /** Sin `tenantId`, de todos los tenants que tienen Logística activa. */
+  findConfirmedOrdersWithoutDeliveryNote(tenantId?: string) {
     return this.prisma.saleOrder.findMany({
       where: {
-        status: { in: ['CONFIRMED', 'INVOICED'] },
+        ...(tenantId && { tenantId }),
+        status: { in: AWAITING_DELIVERY },
         deliveryNote: null,
+        tenant: {
+          tenantModules: { some: { moduleName: 'logistics', active: true } },
+        },
       },
       select: { id: true, tenantId: true },
     });
