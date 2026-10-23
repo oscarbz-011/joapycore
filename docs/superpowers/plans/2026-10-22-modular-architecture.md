@@ -1,8 +1,8 @@
 # Plan de construcción — Arquitectura modular
 
-**Objetivo:** que los módulos de JoapyCore se activen y desactiven de verdad, al estilo de Odoo (manifiesto, tablas propias, datos iniciales y extensiones de la UI), y que cada uno pueda separarse más adelante como servicio sin romper a los demás.
+**Objetivo:** que los módulos de JoapyCore se activen y desactiven de verdad, cada uno con su manifiesto, sus tablas, sus datos iniciales y sus extensiones de la UI, y que cada uno pueda separarse más adelante como servicio sin romper a los demás.
 
-**Enfoque:** monolito modular primero. Cada módulo declara lo que es dueño y de qué depende, y un test lo hace cumplir. Los efectos entre módulos viajan como eventos tipados por el outbox. No se copia la herencia de tablas de Odoo: un módulo que extiende a otro lo hace con su propia tabla 1:1.
+**Enfoque:** monolito modular primero. Cada módulo declara lo que es dueño y de qué depende, y un test lo hace cumplir. Los efectos entre módulos viajan como eventos tipados por el outbox. Un módulo nunca agrega columnas a la tabla de otro: si lo extiende, lo hace con su propia tabla 1:1.
 
 **Coordinación con Facturación:** este plan se intercala con el de Facturación (`2026-10-22-billing-series.md`).
 
