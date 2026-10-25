@@ -226,4 +226,37 @@ describe('PosInvoicingService (PostgreSQL)', () => {
       service.findSeries(otherTenantId, series.id),
     ).resolves.toBeNull();
   });
+
+  // El mismo papel y el mismo informe del proveedor sirven para varias cajas.
+  it('lets two cash registers share the paper durability report', async () => {
+    const file = await prisma.fileRecord.create({
+      data: {
+        tenantId,
+        module: 'pos',
+        entityType: 'pos_terminal',
+        key: `test/${randomUUID()}.pdf`,
+        originalName: 'informe-papel.pdf',
+        mimeType: 'application/pdf',
+        sizeBytes: 10,
+      },
+      select: { id: true },
+    });
+    const terminal = (name: string) =>
+      prisma.posTerminal.create({
+        data: {
+          tenantId,
+          branchId,
+          name,
+          thermalPaperReportFileId: file.id,
+        },
+        select: { id: true },
+      });
+
+    await expect(
+      Promise.all([terminal('Caja A'), terminal('Caja B')]),
+    ).resolves.toHaveLength(2);
+
+    await prisma.posTerminal.deleteMany({ where: { tenantId } });
+    await prisma.fileRecord.deleteMany({ where: { id: file.id } });
+  });
 });

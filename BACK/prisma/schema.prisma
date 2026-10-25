@@ -2496,7 +2496,7 @@ model FileRecord {
   invoiceScanFor    Invoice?             @relation("InvoicePhysicalScan")
   voidedSheetFor    BillingVoidedNumber? @relation("VoidedSheetScan")
   receiptFor        PaymentReceipt?      @relation("ReceiptPdf")
-  posPaperReportFor PosTerminal?         @relation("PosPaperReport")
+  posPaperReportFor PosTerminal[]        @relation("PosPaperReport")
 
   @@index([tenantId, module, entityType, entityId])
   @@map("file_records")
@@ -2968,7 +2968,7 @@ model PosTerminal {
   printFormat              PosPrintFormat @default(A4) @map("print_format")
   // Informe del proveedor sobre la durabilidad del papel térmico y las
   // condiciones de conservación que se imprimen en la factura.
-  thermalPaperReportFileId String?        @unique @map("thermal_paper_report_file_id")
+  thermalPaperReportFileId String?        @map("thermal_paper_report_file_id")
   thermalPaperConservation String?        @map("thermal_paper_conservation")
 
   createdAt DateTime @default(now()) @map("created_at")
@@ -2981,6 +2981,7 @@ model PosTerminal {
   sessions           PosSession[]
 
   @@unique([tenantId, branchId, name])
+  @@index([thermalPaperReportFileId])
   @@map("pos_terminals")
 }
 
