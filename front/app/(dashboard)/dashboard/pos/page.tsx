@@ -11,19 +11,30 @@ import { salesChannelProductFilters } from '@/lib/product-catalog';
 
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { DoorClosed, DoorOpen, Minus, Plus, ShoppingCart, Trash2 } from 'lucide-react';
+import { AlertTriangle, DoorClosed, DoorOpen, Minus, Plus, Printer, ShoppingCart, Trash2 } from 'lucide-react';
 import {
   posApi,
+  type ActivePosSession,
   type CreatePosSaleItem,
   type CreatePosSalePayment,
   type PosPaymentMethod,
   type PosSession,
 } from '../../../../lib/api/pos';
 import { inventoryApi, type ProductWithStock } from '../../../../lib/api/inventory';
-import { salesApi } from '../../../../lib/api/sales';
+import type { Customer } from '../../../../lib/api/sales';
+import { seriesCode } from '@/lib/billing-series';
+import {
+  needsTalonarioNumber,
+  printReceipt,
+  seriesBlocker,
+  talonarioNumberProblem,
+} from '@/lib/pos-receipt';
 import { SearchSelect } from '../components/search-select';
+import { PosCustomerPicker } from '@/components/pos/pos-customer-picker';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 
 const PAYMENT_METHOD_LABELS: Record<PosPaymentMethod, string> = {
   CASH: 'Efectivo',
@@ -275,27 +286,33 @@ interface PaymentLine {
   amount: number;
 }
 
-function SaleScreen({ session }: { session: PosSession }) {
+function SaleScreen({ session }: { session: ActivePosSession }) {
   const queryClient = useQueryClient();
   const { data: products = [] } = useQuery({
     queryKey: ['products-with-stock', 'POS'],
     queryFn: () =>
       inventoryApi.listProductsWithStock(salesChannelProductFilters('POS')),
   });
-  const { data: customers = [] } = useQuery({
-    queryKey: ['customers'],
-    queryFn: salesApi.listCustomers,
-  });
   const { data: sessionSales = [] } = useQuery({
     queryKey: ['pos-session-sales', session.id],
     queryFn: () => posApi.listSessionSales(session.id),
   });
 
+  const series = session.invoiceSeries;
+  const blocker = seriesBlocker(series);
+  const askNumber = needsTalonarioNumber(series);
+
   const [cart, setCart] = useState<CartLine[]>([]);
-  const [customerId, setCustomerId] = useState('');
+  const [customer, setCustomer] = useState<Customer | null>(null);
+  const [talonarioNumber, setTalonarioNumber] = useState('');
   const [payments, setPayments] = useState<PaymentLine[]>([{ key: 'p0', method: 'CASH', amount: 0 }]);
   const [closeOpen, setCloseOpen] = useState(false);
   const [error, setError] = useState('');
+  const [lastSale, setLastSale] = useState<{ saleOrderId: string; number: string } | null>(null);
+
+  const suggestedNumber = series && askNumber ? String(series.nextNumber) : '';
+  const documentNumber = talonarioNumber || suggestedNumber;
+  const numberProblem = series && askNumber ? talonarioNumberProblem(series, documentNumber) : null;
 
   const total = cart.reduce((sum, l) => sum + l.quantity * l.unitPrice, 0);
   const paidTotal = payments.reduce((sum, p) => sum + (p.amount || 0), 0);
@@ -344,15 +361,25 @@ function SaleScreen({ session }: { session: PosSession }) {
       const paymentsPayload: CreatePosSalePayment[] = payments
         .filter((p) => p.amount > 0)
         .map((p) => ({ amount: p.amount, paymentMethod: p.method }));
-      return posApi.createSale({ customerId: customerId || undefined, items, payments: paymentsPayload });
+      return posApi.createSale({
+        customerId: customer?.id,
+        items,
+        payments: paymentsPayload,
+        ...(askNumber ? { documentNumber: Number(documentNumber) } : {}),
+      });
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
+      printReceipt(result.receipt);
+      setLastSale({ saleOrderId: result.saleOrderId, number: result.receipt.number });
       setCart([]);
-      setCustomerId('');
+      setCustomer(null);
+      setTalonarioNumber('');
       setPayments([{ key: 'p0', method: 'CASH', amount: 0 }]);
       setError('');
       void queryClient.invalidateQueries({ queryKey: ['pos-session-sales', session.id] });
       void queryClient.invalidateQueries({ queryKey: ['products-with-stock'] });
+      // El próximo número sugerido del talonario cambia con cada venta.
+      void queryClient.invalidateQueries({ queryKey: ['pos-active-session'] });
     },
     onError: (err: Error) => {
       setError(apiErrorMessage(err, 'No se pudo completar la venta'));
@@ -363,8 +390,15 @@ function SaleScreen({ session }: { session: PosSession }) {
     setPayments([{ key: 'p0', method: payments[0]?.method ?? 'CASH', amount: total }]);
   }
 
+  const reprint = useMutation({
+    mutationFn: (saleOrderId: string) => posApi.getReceipt(saleOrderId, true),
+    onSuccess: printReceipt,
+    onError: (err: Error) => setError(apiErrorMessage(err, 'No se pudo reimprimir la factura')),
+  });
+
   const serialsOk = cart.every((l) => !l.isSerialized || l.serialNumbers.length === l.quantity);
-  const canCharge = cart.length > 0 && total > 0 && paidTotal >= total && serialsOk;
+  const canCharge =
+    cart.length > 0 && total > 0 && paidTotal >= total && serialsOk && !blocker && !numberProblem;
 
   return (
     <div className="space-y-6">
@@ -383,6 +417,13 @@ function SaleScreen({ session }: { session: PosSession }) {
           </Button>
         </RequirePermission>
       </div>
+
+      {blocker && (
+        <div role="alert" className="flex items-start gap-2 rounded-lg border border-warn/30 bg-warn-subtle px-4 py-3 text-sm text-warn">
+          <AlertTriangle size={16} className="mt-0.5 shrink-0" />
+          <span>{blocker}</span>
+        </div>
+      )}
 
       <div className="grid gap-5 lg:grid-cols-[1fr_360px]">
         {/* Product picker + cart */}
@@ -472,16 +513,28 @@ function SaleScreen({ session }: { session: PosSession }) {
         {/* Checkout panel */}
         <div className="space-y-4">
           <div className="space-y-3 rounded-[14px] border border-border bg-card p-4">
-            <label className={lbl}>Cliente (opcional)</label>
-            <select value={customerId} onChange={(e) => setCustomerId(e.target.value)} className={inp}>
-              <option value="">Consumidor Final</option>
-              {customers.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.firstName} {c.lastName}
-                </option>
-              ))}
-            </select>
+            <p className={lbl}>Factura a nombre de</p>
+            <PosCustomerPicker value={customer} onChange={setCustomer} />
           </div>
+
+          {series && askNumber && !blocker && (
+            <div className="space-y-1.5 rounded-[14px] border border-border bg-card p-4">
+              <Label htmlFor="talonario-number">N° de la hoja del talonario ({seriesCode(series)})</Label>
+              <Input
+                id="talonario-number"
+                inputMode="numeric"
+                value={documentNumber}
+                onChange={(e) => setTalonarioNumber(e.target.value.replace(/\D/g, ''))}
+              />
+              {numberProblem ? (
+                <p className="text-xs text-destructive">{numberProblem}</p>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  Completá a mano la hoja con este número; lo que imprime la caja es un comprobante interno.
+                </p>
+              )}
+            </div>
+          )}
 
           <div className="space-y-3 rounded-[14px] border border-border bg-card p-4">
             <div className="flex items-center justify-between">
@@ -566,8 +619,22 @@ function SaleScreen({ session }: { session: PosSession }) {
                 saleMutation.mutate();
               }}
             >
-              {saleMutation.isPending ? 'Procesando...' : 'Cobrar'}
+              {saleMutation.isPending ? 'Procesando...' : 'Cobrar y facturar'}
             </Button>
+
+            {lastSale && (
+              <div className="flex items-center justify-between gap-2 border-t border-border pt-3 text-xs text-muted-foreground">
+                <span>Última factura N° {lastSale.number}</span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={reprint.isPending}
+                  onClick={() => reprint.mutate(lastSale.saleOrderId)}
+                >
+                  <Printer size={13} /> Reimprimir copia
+                </Button>
+              </div>
+            )}
           </div>
 
           {sessionSales.length > 0 && (
