@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { PosPrintFormat } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
 
 export interface CreatePosTerminalData {
@@ -9,6 +10,10 @@ export interface CreatePosTerminalData {
 export interface UpdatePosTerminalData {
   name?: string;
   isActive?: boolean;
+  invoiceSeriesId?: string | null;
+  printFormat?: PosPrintFormat;
+  thermalPaperReportFileId?: string | null;
+  thermalPaperConservation?: string | null;
 }
 
 @Injectable()
@@ -16,7 +21,10 @@ export class PosTerminalsRepository {
   constructor(private readonly prisma: PrismaService) {}
 
   private get include() {
-    return { branch: { select: { id: true, name: true } } };
+    return {
+      branch: { select: { id: true, name: true } },
+      thermalPaperReport: { select: { id: true, originalName: true } },
+    };
   }
 
   findAll(tenantId: string) {
@@ -43,7 +51,7 @@ export class PosTerminalsRepository {
 
   update(tenantId: string, id: string, data: UpdatePosTerminalData) {
     return this.prisma.posTerminal.update({
-      where: { id },
+      where: { id, tenantId },
       data,
       include: this.include,
     });

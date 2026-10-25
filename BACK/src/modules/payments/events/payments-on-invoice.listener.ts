@@ -40,7 +40,8 @@ export class PaymentsOnInvoiceListener {
       event.tenantId,
       event.invoiceId,
     );
-    if (!invoice) return;
+    // Cobrada antes de emitirse (venta de caja): no queda nada por cobrar.
+    if (!invoice || invoice.status === 'PAID') return;
 
     const arAmount =
       invoice.saleOrder?.saleType === 'CREDIT' && invoice.saleOrder.loan

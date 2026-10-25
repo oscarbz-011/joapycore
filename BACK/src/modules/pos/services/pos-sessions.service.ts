@@ -1,4 +1,5 @@
 import {
+  Inject,
   Injectable,
   NotFoundException,
   UnprocessableEntityException,
@@ -6,6 +7,10 @@ import {
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PosSessionStatus } from '@prisma/client';
 import type { AuditLogEvent } from '../../../audit/audit-log.event';
+import {
+  BILLING_GATEWAY,
+  type BillingGateway,
+} from '../../../common/contracts/billing-gateway.contract';
 import { ClosePosSessionDto } from '../dto/close-pos-session.dto';
 import { OpenPosSessionDto } from '../dto/open-pos-session.dto';
 import { PosSessionsRepository } from '../repositories/pos-sessions.repository';
@@ -24,6 +29,7 @@ export class PosSessionsService {
     private readonly posSessionsRepository: PosSessionsRepository,
     private readonly posTerminalsService: PosTerminalsService,
     private readonly eventEmitter: EventEmitter2,
+    @Inject(BILLING_GATEWAY) private readonly billing: BillingGateway,
   ) {}
 
   async open(tenantId: string, dto: OpenPosSessionDto, cashierId: string) {
@@ -64,8 +70,19 @@ export class PosSessionsService {
     return session;
   }
 
-  getActive(tenantId: string, cashierId: string) {
-    return this.posSessionsRepository.findActiveByCashier(tenantId, cashierId);
+  // La caja necesita saber con qué serie factura: si pide el número del
+  // talonario y si la serie está vigente.
+  async getActive(tenantId: string, cashierId: string) {
+    const session = await this.posSessionsRepository.findActiveByCashier(
+      tenantId,
+      cashierId,
+    );
+    if (!session) return null;
+    const seriesId = session.terminal.invoiceSeriesId;
+    const invoiceSeries = seriesId
+      ? await this.billing.findSeries(tenantId, seriesId)
+      : null;
+    return { ...session, invoiceSeries };
   }
 
   async findOne(tenantId: string, id: string) {

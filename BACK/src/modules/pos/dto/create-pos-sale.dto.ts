@@ -3,11 +3,14 @@ import { Type } from 'class-transformer';
 import {
   IsArray,
   IsEnum,
+  IsInt,
   IsNumber,
   IsOptional,
   IsPositive,
   IsString,
   IsUUID,
+  Max,
+  Min,
   ValidateNested,
 } from 'class-validator';
 import { PaymentMethod } from '@prisma/client';
@@ -52,4 +55,14 @@ export class CreatePosSaleDto {
   @ValidateNested({ each: true })
   @Type(() => PosPaymentEntryDto)
   payments!: PosPaymentEntryDto[];
+
+  @ApiPropertyOptional({
+    description:
+      'Número de la hoja del talonario; solo si la caja factura con talonario de imprenta',
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(9_999_999)
+  documentNumber?: number;
 }

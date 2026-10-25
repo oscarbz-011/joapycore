@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { InvoiceStatus, Prisma } from '@prisma/client';
+import { InvoiceStatus, PaymentMethod, Prisma } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { PrismaClientOrTx } from '../../../prisma/types';
 import type { SeriesNumbering } from '../types/series-numbering';
@@ -172,6 +172,102 @@ export class InvoicesRepository {
         items: { create: data.items },
       },
       include: { items: true },
+    });
+  }
+
+  // Factura de una venta ya cobrada en caja: nace pagada y numerada.
+  createPaid(
+    tenantId: string,
+    data: {
+      saleOrderId: string;
+      numbering: SeriesNumbering;
+      total: number;
+      issuedAt: Date;
+      paymentMethod: PaymentMethod | null;
+      anonymousBuyer: boolean;
+      items: Omit<Prisma.InvoiceItemCreateManyInvoiceInput, 'id'>[];
+    },
+    client: PrismaClientOrTx = this.prisma,
+  ) {
+    return client.invoice.create({
+      data: {
+        tenantId,
+        saleOrderId: data.saleOrderId,
+        invoiceType: 'SALE',
+        status: 'PAID',
+        ...data.numbering,
+        total: data.total,
+        issuedAt: data.issuedAt,
+        paymentMethod: data.paymentMethod,
+        anonymousBuyer: data.anonymousBuyer,
+        items: { create: data.items },
+      },
+      select: { id: true },
+    });
+  }
+
+  findForReceipt(tenantId: string, saleOrderId: string) {
+    return this.prisma.invoice.findFirst({
+      where: { tenantId, saleOrderId },
+      select: {
+        id: true,
+        modality: true,
+        invoicePrefix: true,
+        invoiceNumber: true,
+        timbrado: true,
+        timbradoValidFrom: true,
+        timbradoValidUntil: true,
+        issuedAt: true,
+        total: true,
+        anonymousBuyer: true,
+        tenant: {
+          select: {
+            name: true,
+            razonSocial: true,
+            nombreFantasia: true,
+            ruc: true,
+            address: true,
+            numeroCasa: true,
+            city: true,
+            phone: true,
+            actividadesEconomicas: true,
+          },
+        },
+        saleOrder: {
+          select: {
+            saleType: true,
+            customer: {
+              select: {
+                firstName: true,
+                secondFirstName: true,
+                lastName: true,
+                secondLastName: true,
+                documentType: true,
+                documentNumber: true,
+                taxpayerType: true,
+              },
+            },
+            branch: {
+              select: {
+                name: true,
+                address: true,
+                numeroCasa: true,
+                city: true,
+              },
+            },
+          },
+        },
+        items: {
+          select: {
+            description: true,
+            quantity: true,
+            unitPrice: true,
+            total: true,
+            ivaRate: true,
+            ivaAmount: true,
+          },
+        },
+      },
     });
   }
 

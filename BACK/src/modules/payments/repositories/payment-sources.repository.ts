@@ -20,6 +20,7 @@ export class PaymentSourcesRepository {
     return this.prisma.invoice.findFirst({
       where: { id: invoiceId, tenantId },
       select: {
+        status: true,
         total: true,
         dueDate: true,
         saleOrder: {

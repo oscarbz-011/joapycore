@@ -1,4 +1,4 @@
-import type { PaymentMethod } from '@prisma/client';
+import type { PaymentMethod, Prisma } from '@prisma/client';
 import type { SaleOrderItemDto } from './sale-order-item.dto';
 
 export interface QuickSaleInput {
@@ -24,4 +24,13 @@ export interface SalesGateway {
     posSessionId: string,
     userId: string,
   ): Promise<{ id: string }>;
+
+  /** La venta dentro de la transacción de quien llama, que despacha los eventos. */
+  createPosSaleInTransaction(
+    tx: Prisma.TransactionClient,
+    tenantId: string,
+    input: QuickSaleInput,
+    posSessionId: string,
+    userId: string,
+  ): Promise<{ id: string; eventIds: string[] }>;
 }

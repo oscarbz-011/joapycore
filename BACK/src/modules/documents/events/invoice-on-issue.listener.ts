@@ -123,17 +123,25 @@ export class InvoiceOnIssueListener {
       );
     }
 
-    const customerName = [
-      invoice.saleOrder.customer.firstName,
-      invoice.saleOrder.customer.secondFirstName,
-      invoice.saleOrder.customer.lastName,
-      invoice.saleOrder.customer.secondLastName,
-    ]
-      .filter(Boolean)
-      .join(' ');
-    const customerDoc = invoice.saleOrder.customer.documentNumber
-      ? `${invoice.saleOrder.customer.documentType ?? 'CI'}: ${invoice.saleOrder.customer.documentNumber}`
-      : '—';
+    // Consumidor final sin identificar: "Sin Nombre" y una X en el documento
+    // (art. 20 del Decreto 6539/05).
+    const customerName = invoice.anonymousBuyer
+      ? 'Sin Nombre'
+      : invoice.saleOrder.customer.taxpayerType === 'COMPANY'
+        ? invoice.saleOrder.customer.firstName
+        : [
+            invoice.saleOrder.customer.firstName,
+            invoice.saleOrder.customer.secondFirstName,
+            invoice.saleOrder.customer.lastName,
+            invoice.saleOrder.customer.secondLastName,
+          ]
+            .filter(Boolean)
+            .join(' ');
+    const customerDoc = invoice.anonymousBuyer
+      ? 'X'
+      : invoice.saleOrder.customer.documentNumber
+        ? `${invoice.saleOrder.customer.documentType ?? 'CI'}: ${invoice.saleOrder.customer.documentNumber}`
+        : '—';
 
     const isCredit = invoice.saleOrder.saleType === 'CREDIT';
     let condicionVenta = 'CONTADO';

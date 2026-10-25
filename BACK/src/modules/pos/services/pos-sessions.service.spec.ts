@@ -34,6 +34,7 @@ describe('PosSessionsService', () => {
   };
   let posTerminalsService: { findOne: jest.Mock };
   let eventEmitter: { emit: jest.Mock };
+  let billing: { findSeries: jest.Mock };
 
   beforeEach(() => {
     posSessionsRepository = {
@@ -49,12 +50,50 @@ describe('PosSessionsService', () => {
       findOne: jest.fn().mockResolvedValue({ id: 'terminal-1' }),
     };
     eventEmitter = { emit: jest.fn() };
+    billing = { findSeries: jest.fn() };
 
     service = new PosSessionsService(
       posSessionsRepository as any,
       posTerminalsService as any,
       eventEmitter as any,
+      billing as any,
     );
+  });
+
+  describe('getActive', () => {
+    it('includes the invoice series of the cash register', async () => {
+      posSessionsRepository.findActiveByCashier.mockResolvedValue(
+        makeSession({ terminal: { invoiceSeriesId: 'series-1' } }),
+      );
+      billing.findSeries.mockResolvedValue({
+        id: 'series-1',
+        modality: 'PREPRINTED',
+      });
+
+      const session = await service.getActive('tenant-1', 'user-1');
+
+      expect(billing.findSeries).toHaveBeenCalledWith('tenant-1', 'series-1');
+      expect(session?.invoiceSeries).toEqual({
+        id: 'series-1',
+        modality: 'PREPRINTED',
+      });
+    });
+
+    it('returns no series when the cash register has none', async () => {
+      posSessionsRepository.findActiveByCashier.mockResolvedValue(
+        makeSession({ terminal: { invoiceSeriesId: null } }),
+      );
+
+      const session = await service.getActive('tenant-1', 'user-1');
+
+      expect(billing.findSeries).not.toHaveBeenCalled();
+      expect(session?.invoiceSeries).toBeNull();
+    });
+
+    it('returns null without an open session', async () => {
+      posSessionsRepository.findActiveByCashier.mockResolvedValue(null);
+      await expect(service.getActive('tenant-1', 'user-1')).resolves.toBeNull();
+    });
   });
 
   describe('open', () => {

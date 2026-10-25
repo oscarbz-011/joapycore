@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { FilesModule } from '../../files/files.module';
 import { PosSalesController } from './controllers/pos-sales.controller';
 import { PosSessionsController } from './controllers/pos-sessions.controller';
 import { PosTerminalsController } from './controllers/pos-terminals.controller';
@@ -10,6 +11,7 @@ import { PosSessionsService } from './services/pos-sessions.service';
 import { PosTerminalsService } from './services/pos-terminals.service';
 
 @Module({
+  imports: [FilesModule],
   controllers: [
     PosTerminalsController,
     PosSessionsController,

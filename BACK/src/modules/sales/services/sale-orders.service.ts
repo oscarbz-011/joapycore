@@ -1468,6 +1468,36 @@ export class SaleOrdersService implements SalesGateway {
     posSessionId: string,
     userId: string,
   ) {
+    const { eventIds, ...posOrder } = await this.prisma.$transaction((tx) =>
+      this.createPosSaleInTransaction(tx, tenantId, dto, posSessionId, userId),
+    );
+
+    for (const eventId of eventIds) await this.outbox.dispatch(eventId);
+    this.eventEmitter.emit('audit.log', {
+      tenantId,
+      userId,
+      module: 'sales',
+      action: 'sale.order.created',
+      resourceId: posOrder.id,
+      after: posOrder,
+    } satisfies AuditLogEvent);
+
+    return posOrder;
+  }
+
+  /**
+   * La venta de mostrador dentro de una transacción ajena: el POS la usa
+   * para guardar en la misma transacción la venta y su factura. Devuelve
+   * los eventos del outbox; despacharlos después del commit queda a cargo
+   * de quien abrió la transacción.
+   */
+  async createPosSaleInTransaction(
+    tx: Prisma.TransactionClient,
+    tenantId: string,
+    dto: QuickSaleDto,
+    posSessionId: string,
+    userId: string,
+  ) {
     for (const item of dto.items) {
       if (!item.productId && !item.description) {
         throw new UnprocessableEntityException(
@@ -1489,7 +1519,7 @@ export class SaleOrdersService implements SalesGateway {
     const { subtotal, total } = this.computeTotals(dto);
     const branchId = await this.resolveBranchId(tenantId, userId);
 
-    const order = await this.prisma.$transaction(async (tx) => {
+    {
       // Re-checked inside the transaction: the session could have been closed
       // by a concurrent request between the controller call and this point.
       const session = await this.salesSources.findOpenPosSession(
@@ -1582,20 +1612,7 @@ export class SaleOrdersService implements SalesGateway {
         created.id,
         tx,
       );
-      return Object.assign(saved, { eventId });
-    });
-
-    const { eventId: paymentCollectedEvent, ...posOrder } = order;
-    await this.outbox.dispatch(paymentCollectedEvent);
-    this.eventEmitter.emit('audit.log', {
-      tenantId,
-      userId,
-      module: 'sales',
-      action: 'sale.order.created',
-      resourceId: posOrder.id,
-      after: posOrder,
-    } satisfies AuditLogEvent);
-
-    return posOrder;
+      return Object.assign(saved, { eventIds: [eventId] });
+    }
   }
 }
