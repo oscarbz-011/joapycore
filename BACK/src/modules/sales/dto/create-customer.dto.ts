@@ -10,7 +10,7 @@ import {
   IsPositive,
   IsString,
 } from 'class-validator';
-import { DocumentType, EconomicActivity } from '@prisma/client';
+import { DocumentType, EconomicActivity, TaxpayerType } from '@prisma/client';
 
 export class CreateCustomerDto {
   @ApiProperty()
@@ -36,10 +36,18 @@ export class CreateCustomerDto {
   @IsEnum(DocumentType)
   documentType?: DocumentType;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ description: 'RUC con su dígito: 80012345-6' })
   @IsOptional()
   @IsString()
   documentNumber?: string;
+
+  @ApiPropertyOptional({
+    enum: TaxpayerType,
+    description: 'En una persona jurídica, firstName es la razón social',
+  })
+  @IsOptional()
+  @IsEnum(TaxpayerType)
+  taxpayerType?: TaxpayerType;
 
   @ApiPropertyOptional()
   @IsOptional()

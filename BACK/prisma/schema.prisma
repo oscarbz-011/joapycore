@@ -351,6 +351,12 @@ enum DocumentType {
   PASSPORT
 }
 
+// Persona física o jurídica. En una jurídica, firstName guarda la razón social.
+enum TaxpayerType {
+  INDIVIDUAL
+  COMPANY
+}
+
 enum Gender {
   MASCULINO
   FEMENINO
@@ -1342,6 +1348,7 @@ model Customer {
   secondLastName  String?       @map("second_last_name")
   documentType    DocumentType? @map("document_type")
   documentNumber  String?       @map("document_number")
+  taxpayerType    TaxpayerType? @map("taxpayer_type")
   email           String?
   phone           String?
   address         String?
