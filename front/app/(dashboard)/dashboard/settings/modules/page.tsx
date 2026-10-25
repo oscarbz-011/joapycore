@@ -72,12 +72,15 @@ interface CatalogEntry {
    * para no duplicar el mismo acceso en dos lugares.
    */
   settingsHref?: string;
+  /** Sin interruptor propio: se activa y desactiva con este módulo. */
+  bundledWith?: string;
 }
 
 const CATALOG: Record<string, CatalogEntry> = {
   inventory:   { displayName: 'Inventario',      icon: Package,       category: 'Inventario y Productos', description: 'Gestión de productos, stock y movimientos de almacén',      dependencies: [],                                isStable: true  },
   sales:       { displayName: 'Ventas',          icon: ShoppingCart,  category: 'Ventas y CRM',           description: 'Pedidos, presupuestos y gestión de clientes',               dependencies: ['inventory'],                     isStable: true,  settingsHref: '/dashboard/settings/combos' },
-  billing:     { displayName: 'Facturación',     icon: FileText,      category: 'Finanzas y Contabilidad', description: 'Emisión y administración de facturas',                     dependencies: ['sales'],                         isStable: true  },
+  billing:     { displayName: 'Facturación',     icon: FileText,      category: 'Finanzas y Contabilidad', description: 'Emisión y administración de facturas',                     dependencies: ['sales'],                         isStable: true,  settingsHref: '/dashboard/settings/billing-series', bundledWith: 'sales' },
+  sifen:       { displayName: 'Facturación electrónica', icon: Receipt, category: 'Finanzas y Contabilidad', description: 'Certificado digital y emisión de documentos electrónicos ante SIFEN', dependencies: ['billing'], isStable: true,  settingsHref: '/dashboard/settings?tab=billing' },
   payments:    { displayName: 'Pagos',           icon: CreditCard,    category: 'Finanzas y Contabilidad', description: 'Cuentas por cobrar y registros de pago',                   dependencies: ['billing'],                       isStable: true  },
   procurement: { displayName: 'Compras',         icon: Truck,         category: 'Compras y Proveedores',  description: 'Órdenes de compra y gestión de proveedores',                dependencies: ['inventory'],                     isStable: true  },
   hr:          { displayName: 'Recursos Humanos', icon: Users,        category: 'Recursos Humanos',       description: 'Empleados, licencias y procesamiento de nómina',            dependencies: [],                                isStable: true  },
@@ -172,6 +175,14 @@ function Toggle({
   );
 }
 
+function BundledNote({ parent }: { parent: string }) {
+  return (
+    <span className="shrink-0 text-[11.5px] text-muted-foreground">
+      Incluido con {depLabel(parent)}
+    </span>
+  );
+}
+
 // ── Info modal ───────────────────────────────────────────────────────────────
 
 function ModuleInfoModal({
@@ -225,6 +236,12 @@ function ModuleInfoModal({
               {meta.dependencies.length > 0 ? meta.dependencies.map(depLabel).join(', ') : 'Ningún otro módulo'}
             </p>
           </div>
+          {meta.bundledWith && (
+            <div>
+              <p className="font-medium text-muted-foreground/70 mb-0.5">Activación</p>
+              <p className="text-foreground">Se activa y desactiva junto con {depLabel(meta.bundledWith)}</p>
+            </div>
+          )}
           <div>
             <p className="font-medium text-muted-foreground/70 mb-0.5">Dependen de este</p>
             <p className="text-foreground">{dependents.length > 0 ? dependents.join(', ') : 'Ningún módulo activo'}</p>
@@ -334,7 +351,9 @@ function GridCard({
             <span>Activá primero: {inactiveDeps.map(depLabel).join(', ')}</span>
           </div>
         ) : <span />}
-        {canToggle && (
+        {meta.bundledWith ? (
+          <BundledNote parent={meta.bundledWith} />
+        ) : canToggle && (
           <Toggle
             checked={mod.active}
             disabled={isPending || isLocked}
@@ -405,7 +424,9 @@ function ListRow({
       <CardActions moduleName={mod.moduleName} active={mod.active} onInfo={onInfo} />
 
       {/* Toggle */}
-      {canToggle && (
+      {meta.bundledWith ? (
+        <BundledNote parent={meta.bundledWith} />
+      ) : canToggle && (
         <Toggle
           checked={mod.active}
           disabled={isPending || isLocked}

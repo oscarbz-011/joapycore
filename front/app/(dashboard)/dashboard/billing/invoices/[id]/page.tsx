@@ -2,6 +2,14 @@
 
 import { RequirePermission } from "@/components/require-permission";
 import { EntityTimeline } from "@/components/communications/entity-timeline";
+import { SeriesNumberingFields } from "@/components/billing/series-numbering-fields";
+import {
+  defaultSeriesId,
+  documentNumberError,
+  MODALITY_LABELS,
+  needsDocumentNumber,
+  usableOptions,
+} from "@/lib/billing-series";
 
 import { apiErrorMessage } from "@/lib/api/api-error";
 
@@ -189,6 +197,25 @@ export default function InvoiceDetailPage() {
 
   const [showCancelForm, setShowCancelForm] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
+  const [chosenSeriesId, setChosenSeriesId] = useState("");
+  const [documentNumber, setDocumentNumber] = useState("");
+
+  // Un intento anterior pudo haber reservado el número: ya no se elige serie.
+  const needsSeries =
+    invoice?.status === "PENDING" && invoice.sequential == null;
+  const { data: seriesOptions = [], isLoading: loadingSeries } = useQuery({
+    queryKey: ["invoice", id, "series-options"],
+    queryFn: () => billingApi.getSeriesOptions(id),
+    enabled: needsSeries,
+  });
+  const seriesId = chosenSeriesId || defaultSeriesId(seriesOptions);
+  const selectedSeries = usableOptions(seriesOptions).find(
+    (o) => o.id === seriesId,
+  );
+  const numberError = needsDocumentNumber(selectedSeries)
+    ? documentNumberError(documentNumber, selectedSeries)
+    : null;
+  const seriesReady = !needsSeries || (!!selectedSeries && !numberError);
 
   const issueMutation = useMutation({
     // Si ya no hay conexión, debe fallar y ofrecer reintento explícito en
@@ -200,6 +227,14 @@ export default function InvoiceDetailPage() {
         dueDate: form.dueDate || undefined,
         paymentMethod: form.paymentMethod,
         notes: form.notes || undefined,
+        ...(needsSeries
+          ? {
+              seriesId: seriesId || undefined,
+              ...(needsDocumentNumber(selectedSeries)
+                ? { documentNumber: Number(documentNumber) }
+                : {}),
+            }
+          : {}),
       }),
     // También se reconcilia después de un error: el POST pudo haber llegado
     // al backend y haberse perdido únicamente la respuesta. Al reconectar,
@@ -260,7 +295,8 @@ export default function InvoiceDetailPage() {
     ? `${invoice.invoicePrefix ?? ""}${invoice.invoiceNumber}`
     : `#${invoice.id.slice(0, 8).toUpperCase()}`;
   const isCredit = invoice.saleOrder.saleType === "CREDIT";
-  const canIssue = isCredit ? !!form.dueDate : !!form.paymentMethod;
+  const canIssue =
+    (isCredit ? !!form.dueDate : !!form.paymentMethod) && seriesReady;
   const pdfAction = invoicePdfAction(invoice);
 
   return (
@@ -540,6 +576,26 @@ export default function InvoiceDetailPage() {
                 </div>
               )}
 
+              <div className="mb-4">
+                {needsSeries ? (
+                  <SeriesNumberingFields
+                    options={seriesOptions}
+                    isLoading={loadingSeries}
+                    seriesId={seriesId}
+                    onSeriesChange={setChosenSeriesId}
+                    documentNumber={documentNumber}
+                    onDocumentNumberChange={setDocumentNumber}
+                    documentNumberError={documentNumber ? numberError : null}
+                    disabled={issueMutation.isPending}
+                  />
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    Número reservado:{" "}
+                    <span className="font-mono text-foreground">{invoiceRef}</span>
+                  </p>
+                )}
+              </div>
+
               {/* Notes */}
               <div className="mb-5 space-y-1.5">
                 <Label>Notas</Label>
@@ -595,6 +651,21 @@ export default function InvoiceDetailPage() {
                 <InfoRow
                   label="N° Factura"
                   value={`${invoice.invoicePrefix ?? ""}${invoice.invoiceNumber ?? ""}`}
+                />
+              )}
+              {invoice.timbrado && (
+                <InfoRow label="Timbrado" value={invoice.timbrado} />
+              )}
+              {invoice.timbradoValidUntil && (
+                <InfoRow
+                  label="Vigencia del timbrado"
+                  value={`${formatDatePY(invoice.timbradoValidFrom, "utc")} al ${formatDatePY(invoice.timbradoValidUntil, "utc")}`}
+                />
+              )}
+              {invoice.modality && (
+                <InfoRow
+                  label="Modalidad"
+                  value={MODALITY_LABELS[invoice.modality]}
                 />
               )}
               {invoice.notes && <InfoRow label="Notas" value={invoice.notes} />}

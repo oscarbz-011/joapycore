@@ -16,6 +16,9 @@ export interface InvoiceRow {
   pdfFileId: string | null;
   // Número fiscal ("001-001-0000027"); null en borradores sin numerar.
   fiscalNumber: string | null;
+  // Factura de intereses de una sucursal con talonario: espera que alguien
+  // le cargue el número.
+  needsNumber: boolean;
 }
 
 function fiscalNumber(invoice: {
@@ -80,6 +83,7 @@ export function toInvoiceRows(
       total: Number(invoice.total),
       pdfFileId: null,
       fiscalNumber: fiscalNumber(invoice),
+      needsNumber: false,
     }),
   );
   const interestRows = interests.map((invoice): InvoiceRow => {
@@ -100,6 +104,7 @@ export function toInvoiceRows(
       total: Number(invoice.total),
       pdfFileId: invoice.pdfFileId,
       fiscalNumber: fiscalNumber(invoice),
+      needsNumber: invoice.sequential == null && invoice.status !== 'CANCELLED',
     };
   });
   return [...saleRows, ...interestRows].sort(compareFiscalOrder);

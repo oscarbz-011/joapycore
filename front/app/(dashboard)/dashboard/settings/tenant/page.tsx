@@ -13,7 +13,7 @@ import {
 } from '../../../../../lib/api/tenants';
 import { filesApi } from '../../../../../lib/api/files';
 import { useAuth } from '../../../../../lib/auth-context';
-import { DatePicker } from '@/components/ui/date-picker';
+import Link from 'next/link';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
 
 // ── Logo de la empresa ────────────────────────────────────────────────────────
@@ -167,9 +167,6 @@ type FormState = {
   employeeCount: string;
   currency: string;
   // SIFEN
-  timbradoNumero: string;
-  timbradoFecha: string;
-  timbradoFechaFin: string;
   tipoContribuyente: string;
   tipoRegimen: string;
   departamentoCodigo: string;
@@ -196,9 +193,6 @@ function fromTenant(t: Awaited<ReturnType<typeof tenantsApi.getMe>>): FormState 
     country:           t.country ?? 'Paraguay',
     employeeCount:     t.employeeCount ?? 'RANGE_1_5',
     currency:          t.currency ?? 'PYG',
-    timbradoNumero:    t.timbradoNumero ?? '',
-    timbradoFecha:     t.timbradoFecha ? t.timbradoFecha.split('T')[0] : '',
-    timbradoFechaFin:  t.timbradoFechaFin ? t.timbradoFechaFin.split('T')[0] : '',
     tipoContribuyente: t.tipoContribuyente?.toString() ?? '',
     tipoRegimen:       t.tipoRegimen?.toString() ?? '',
     departamentoCodigo: t.departamentoCodigo?.toString() ?? '',
@@ -228,7 +222,7 @@ export default function TenantPage() {
     name: '', razonSocial: '', nombreFantasia: '', ruc: '', email: '', phone: '',
     address: '', numeroCasa: '', postalCode: '', city: '', department: '',
     country: 'Paraguay', employeeCount: 'RANGE_1_5', currency: 'PYG',
-    timbradoNumero: '', timbradoFecha: '', timbradoFechaFin: '', tipoContribuyente: '', tipoRegimen: '',
+    tipoContribuyente: '', tipoRegimen: '',
     departamentoCodigo: '', departamentoDesc: '', distritoCodigo: '', distritoDesc: '',
     ciudadCodigo: '', ciudadDesc: '',
   });
@@ -268,9 +262,6 @@ export default function TenantPage() {
         country:           form.country || undefined,
         employeeCount:     form.employeeCount as UpdateTenantPayload['employeeCount'],
         currency:          form.currency || undefined,
-        timbradoNumero:    form.timbradoNumero || undefined,
-        timbradoFecha:     form.timbradoFecha || undefined,
-        timbradoFechaFin:  form.timbradoFechaFin || undefined,
         tipoContribuyente: form.tipoContribuyente ? Number(form.tipoContribuyente) : undefined,
         tipoRegimen:       form.tipoRegimen ? Number(form.tipoRegimen) : undefined,
         departamentoCodigo: form.departamentoCodigo ? Number(form.departamentoCodigo) : undefined,
@@ -296,10 +287,6 @@ export default function TenantPage() {
 
   const set = (field: keyof FormState) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
     setForm((f) => ({ ...f, [field]: e.target.value }));
-
-  // Para DatePicker, que entrega el valor directo (no un evento) en onChange.
-  const setValue = (field: keyof FormState) => (value: string) =>
-    setForm((f) => ({ ...f, [field]: value }));
 
   const addActividad = () => setActividades((a) => [...a, blankActividad()]);
   const removeActividad = (i: number) => setActividades((a) => a.filter((_, idx) => idx !== i));
@@ -560,40 +547,13 @@ export default function TenantPage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-3 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-muted-foreground mb-1">
-                  Número de timbrado
-                </label>
-                <input
-                  className={inputClass}
-                  value={form.timbradoNumero}
-                  onChange={set('timbradoNumero')}
-                  disabled={!canEdit}
-                  placeholder="12345678"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-muted-foreground mb-1">
-                  Inicio de vigencia
-                </label>
-                <DatePicker
-                  value={form.timbradoFecha}
-                  onChange={setValue('timbradoFecha')}
-                  disabled={!canEdit}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-muted-foreground mb-1">
-                  Fin de vigencia
-                </label>
-                <DatePicker
-                  value={form.timbradoFechaFin}
-                  onChange={setValue('timbradoFechaFin')}
-                  disabled={!canEdit}
-                />
-              </div>
-            </div>
+            <p className="text-sm text-muted-foreground">
+              El timbrado y su vigencia se cargan por sucursal y punto de expedición en{' '}
+              <Link href="/dashboard/settings/billing-series" className="font-medium text-foreground underline underline-offset-2">
+                Series de facturación
+              </Link>
+              .
+            </p>
 
             {/* Dirección estructurada SET */}
             <div>

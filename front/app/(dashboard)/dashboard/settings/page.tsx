@@ -1923,8 +1923,8 @@ function BillingTab({ onGoToCerts }: { onGoToCerts: () => void }) {
             />
             <p className="text-xs text-amber-700 dark:text-amber-300">
               En modo Producción los documentos emitidos tienen validez fiscal
-              ante el SET. Asegurate de tener el timbrado vigente configurado en
-              los datos de empresa.
+              ante el SET. Asegurate de tener el timbrado electrónico vigente
+              cargado en las series de facturación.
             </p>
           </div>
         )}
@@ -2128,8 +2128,10 @@ export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState<Tab>(initialTab);
   // SIFEN (certificados y facturación electrónica): verlo requiere sifen:read
   // y modificarlo sifen:manage; sin manage los controles quedan deshabilitados.
+  const { hasModule } = useActiveModules();
   const canManageSifen = usePermission("sifen:manage");
-  const canReadSifen = usePermission("sifen:read") || canManageSifen;
+  const canReadSifen =
+    (usePermission("sifen:read") || canManageSifen) && hasModule("sifen");
   const canAccessCommunications = usePermission("communications:access");
   const canManageCommunications =
     usePermission("communications:settings:manage") && canAccessCommunications;

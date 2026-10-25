@@ -3,6 +3,8 @@ import type { PaymentMethod } from "../payment-methods";
 
 export type InvoiceStatus = "PENDING" | "ISSUED" | "PAID" | "CANCELLED";
 export type CreditNoteStatus = "ISSUED" | "APPLIED";
+export type BillingModality = "PREPRINTED" | "SELF_PRINTED" | "ELECTRONIC";
+export type BillingDocumentType = "INVOICE" | "CREDIT_NOTE";
 export type { PaymentMethod } from "../payment-methods";
 
 export interface InvoiceItem {
@@ -26,9 +28,6 @@ export interface InvoiceTenant {
   department: string | null;
   phone: string | null;
   logoFileId: string | null;
-  timbradoNumero: string | null;
-  timbradoFecha: string | null;
-  timbradoFechaFin: string | null;
 }
 
 export interface InvoiceBranch {
@@ -52,6 +51,7 @@ export interface InterestInvoice {
   total: number | string;
   invoiceNumber: string | null;
   invoicePrefix: string | null;
+  sequential: number | null;
   pdfFileId: string | null;
   paymentReceipt: {
     id: string;
@@ -67,6 +67,7 @@ export interface InterestInvoice {
 
 export interface Invoice {
   id: string;
+  invoiceType: "SALE" | "INTEREST";
   status: InvoiceStatus;
   issuedAt: string | null;
   dueDate: string | null;
@@ -74,7 +75,13 @@ export interface Invoice {
   notes: string | null;
   paymentMethod: PaymentMethod | null;
   createdAt: string;
-  // Numbering
+  // Numeración: copia de la serie al emitir
+  seriesId: string | null;
+  modality: BillingModality | null;
+  timbrado: string | null;
+  timbradoValidFrom: string | null;
+  timbradoValidUntil: string | null;
+  sequential: number | null;
   invoiceNumber: string | null;
   invoicePrefix: string | null;
   // PDF
@@ -87,6 +94,7 @@ export interface Invoice {
   tenant: InvoiceTenant;
   saleOrder: {
     id: string;
+    branchId: string | null;
     saleType: "CASH" | "CREDIT";
     installments: number | null;
     customer: {
@@ -132,12 +140,62 @@ export interface CreditNote {
   };
 }
 
-export interface IssueInvoicePayload {
+export interface AssignInvoiceNumberPayload {
+  seriesId?: string;
+  /** Número del talonario; solo en series de talonario. */
+  documentNumber?: number;
+}
+
+export interface IssueInvoicePayload extends AssignInvoiceNumberPayload {
   paymentCondition: "CASH" | "CREDIT";
   dueDate?: string;
   paymentMethod?: PaymentMethod;
   notes?: string;
 }
+
+export interface BillingSeries {
+  id: string;
+  branchId: string;
+  documentType: BillingDocumentType;
+  modality: BillingModality;
+  timbrado: string | null;
+  validFrom: string | null;
+  validUntil: string | null;
+  establecimiento: string;
+  puntoExpedicion: string;
+  serieCode: string;
+  rangeFrom: number;
+  rangeTo: number;
+  nextNumber: number;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+  branch: { id: string; name: string };
+  _count: { invoices: number };
+}
+
+/** Serie entre las que se puede elegir al numerar; `problem` dice por qué no sirve hoy. */
+export interface BillingSeriesOption extends BillingSeries {
+  problem: string | null;
+}
+
+export interface CreateBillingSeriesPayload {
+  branchId: string;
+  documentType?: BillingDocumentType;
+  modality: BillingModality;
+  timbrado: string;
+  validFrom: string;
+  validUntil?: string;
+  establecimiento: string;
+  puntoExpedicion: string;
+  rangeFrom: number;
+  rangeTo: number;
+  nextNumber?: number;
+}
+
+export type UpdateBillingSeriesPayload = Partial<CreateBillingSeriesPayload> & {
+  isActive?: boolean;
+};
 
 export function canRetryInvoicePdf(
   invoice: Pick<Invoice, "status" | "pdfFileId">,
@@ -188,4 +246,30 @@ export const billingApi = {
 
   listCreditNotes: (): Promise<CreditNote[]> =>
     apiClient.get("/billing/credit-notes").then((r) => r.data),
+
+  getSeriesOptions: (invoiceId: string): Promise<BillingSeriesOption[]> =>
+    apiClient.get(`/billing/invoices/${invoiceId}/series`).then((r) => r.data),
+
+  assignInvoiceNumber: (
+    invoiceId: string,
+    dto: AssignInvoiceNumberPayload,
+  ): Promise<Invoice> =>
+    apiClient
+      .post(`/billing/invoices/${invoiceId}/number`, dto)
+      .then((r) => r.data),
+
+  listSeries: (): Promise<BillingSeries[]> =>
+    apiClient.get("/billing/series").then((r) => r.data),
+
+  getSeries: (id: string): Promise<BillingSeries> =>
+    apiClient.get(`/billing/series/${id}`).then((r) => r.data),
+
+  createSeries: (dto: CreateBillingSeriesPayload): Promise<BillingSeries> =>
+    apiClient.post("/billing/series", dto).then((r) => r.data),
+
+  updateSeries: (
+    id: string,
+    dto: UpdateBillingSeriesPayload,
+  ): Promise<BillingSeries> =>
+    apiClient.patch(`/billing/series/${id}`, dto).then((r) => r.data),
 };
