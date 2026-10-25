@@ -21,6 +21,20 @@ import { Card } from '@/components/ui/card';
 const formatPrice = (n: number) =>
   new Intl.NumberFormat('es-PY', { style: 'currency', currency: 'PYG', maximumFractionDigits: 0 }).format(n);
 
+function LoadError({ message, onRetry }: { message: string; onRetry: () => void }) {
+  return (
+    <div
+      role="alert"
+      className="flex items-center justify-between gap-3 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive"
+    >
+      <span>{message}</span>
+      <Button size="sm" variant="outline" onClick={onRetry}>
+        Reintentar
+      </Button>
+    </div>
+  );
+}
+
 export default function NumberInterestInvoicePage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
@@ -32,11 +46,21 @@ export default function NumberInterestInvoicePage() {
   const [documentNumber, setDocumentNumber] = useState('');
   const [error, setError] = useState('');
 
-  const { data: invoice, isLoading } = useQuery({
+  const {
+    data: invoice,
+    isLoading,
+    isError: invoiceFailed,
+    refetch: refetchInvoice,
+  } = useQuery({
     queryKey: ['invoice', id],
     queryFn: () => billingApi.getInvoice(id),
   });
-  const { data: options = [], isLoading: loadingOptions } = useQuery({
+  const {
+    data: options = [],
+    isLoading: loadingOptions,
+    isError: optionsFailed,
+    refetch: refetchOptions,
+  } = useQuery({
     queryKey: ['invoice', id, 'series-options'],
     queryFn: () => billingApi.getSeriesOptions(id),
     enabled: Boolean(invoice && invoice.sequential == null),
@@ -77,6 +101,10 @@ export default function NumberInterestInvoicePage() {
 
       {isLoading && <div className="py-16 text-center text-sm text-muted-foreground">Cargando…</div>}
 
+      {invoiceFailed && (
+        <LoadError message="No se pudo cargar la factura." onRetry={() => void refetchInvoice()} />
+      )}
+
       {invoice && invoice.sequential != null && (
         <Card className="p-6 text-sm text-muted-foreground">
           Esta factura ya tiene el número {invoice.invoicePrefix}{invoice.invoiceNumber}.
@@ -106,6 +134,13 @@ export default function NumberInterestInvoicePage() {
             documentNumberError={documentNumber ? numberError : null}
             disabled={assign.isPending}
           />
+
+          {optionsFailed && (
+            <LoadError
+              message="No se pudieron cargar las series para numerar."
+              onRetry={() => void refetchOptions()}
+            />
+          )}
 
           {error && (
             <div role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
