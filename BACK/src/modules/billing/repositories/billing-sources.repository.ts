@@ -23,7 +23,7 @@ export class BillingSourcesRepository {
             unitPrice: true,
             financedUnitPrice: true,
             description: true,
-            product: { select: { name: true } },
+            product: { select: { name: true, ivaTaxRate: true } },
           },
         },
       },

@@ -3,26 +3,15 @@ import { EventEmitter2, OnEvent } from '@nestjs/event-emitter';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { BillingSourcesRepository } from '../repositories/billing-sources.repository';
 import { InvoicesRepository } from '../repositories/invoices.repository';
+import {
+  effectiveUnitPrice,
+  toInvoiceItem,
+  toNum,
+} from '../utils/invoice-items.util';
 
 interface SaleOrderCompletedEvent {
   tenantId: string;
   saleOrderId: string;
-}
-
-function toNum(value: number | { toNumber(): number }): number {
-  return typeof value === 'object' ? value.toNumber() : value;
-}
-
-// Precio con interés ya aplicado cuando existe (ventas a crédito) — cae al
-// precio contado para ventas al contado o ítems de ventas a crédito creados
-// antes de que este campo existiera.
-function effectiveUnitPrice(item: {
-  unitPrice: number | { toNumber(): number };
-  financedUnitPrice?: number | { toNumber(): number } | null;
-}): number {
-  return item.financedUnitPrice != null
-    ? toNum(item.financedUnitPrice)
-    : toNum(item.unitPrice);
 }
 
 @Injectable()
@@ -87,15 +76,8 @@ export class BillingOnSaleListener {
       );
 
       for (const item of order.items) {
-        const unitPrice = effectiveUnitPrice(item);
         await this.invoicesRepository.createItem(
-          {
-            invoiceId: inv.id,
-            description: item.product?.name ?? item.description ?? 'Ítem',
-            quantity: item.quantity,
-            unitPrice,
-            total: unitPrice * item.quantity,
-          },
+          { invoiceId: inv.id, ...toInvoiceItem(item) },
           tx,
         );
       }
