@@ -60,7 +60,7 @@ INSERT INTO "billing_series" (
 )
 SELECT
   gen_random_uuid()::text, u.tenant_id, b.id, 'INVOICE', 'SELF_PRINTED',
-  t.timbrado_numero, t.timbrado_fecha, t.timbrado_fecha_fin,
+  t.timbrado_numero, date_trunc('day', t.timbrado_fecha), date_trunc('day', t.timbrado_fecha_fin),
   u.establecimiento, u.punto_expedicion,
   1, GREATEST(9999999, u.last_seq), u.last_seq + 1, CURRENT_TIMESTAMP
 FROM used u
@@ -86,7 +86,7 @@ INSERT INTO "billing_series" (
 )
 SELECT DISTINCT ON (br.tenant_id, br.codigo_establecimiento, COALESCE(br.punto_expedicion, '001'))
   gen_random_uuid()::text, br.tenant_id, br.id, 'INVOICE', 'SELF_PRINTED',
-  t.timbrado_numero, t.timbrado_fecha, t.timbrado_fecha_fin,
+  t.timbrado_numero, date_trunc('day', t.timbrado_fecha), date_trunc('day', t.timbrado_fecha_fin),
   br.codigo_establecimiento, COALESCE(br.punto_expedicion, '001'),
   1, 9999999, 1, CURRENT_TIMESTAMP
 FROM branches br
@@ -137,7 +137,10 @@ WHERE s.module_name = 'sales'
 
 -- La numeración pasa a ser única por serie (un timbrado nuevo puede repetir
 -- números del anterior).
-DROP INDEX "invoices_tenant_id_establecimiento_punto_expedicion_sequent_key";
+-- La migración que lo creó (20260818020000) y `db push` le dieron nombres
+-- distintos al truncar a 63 caracteres.
+DROP INDEX IF EXISTS "invoices_tenant_id_establecimiento_punto_expedicion_sequen_key";
+DROP INDEX IF EXISTS "invoices_tenant_id_establecimiento_punto_expedicion_sequent_key";
 CREATE INDEX "invoices_tenant_id_series_id_idx" ON "invoices"("tenant_id", "series_id");
 CREATE UNIQUE INDEX "invoices_series_id_serie_code_sequential_key" ON "invoices"("series_id", "serie_code", "sequential");
 ALTER TABLE "invoices" ADD CONSTRAINT "invoices_series_id_fkey" FOREIGN KEY ("series_id") REFERENCES "billing_series"("id") ON DELETE SET NULL ON UPDATE CASCADE;
