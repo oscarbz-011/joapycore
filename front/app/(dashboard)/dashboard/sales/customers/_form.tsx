@@ -14,7 +14,7 @@ import {
   type EconomicActivity,
   type TaxpayerType,
 } from '../../../../../lib/api/sales';
-import { rucProblem } from '@/lib/ruc';
+import { customerRucProblem } from '@/lib/ruc';
 import { NumericInput } from '../../../../../components/numeric-input';
 import { DeliveryMap } from '../../../../../components/logistics/delivery-map';
 import { Button } from '@/components/ui/button';
@@ -129,8 +129,7 @@ export function CustomerForm({ initial, prefill, onDone }: Props) {
   }
 
   const company = form.taxpayerType === 'COMPANY';
-  const rucError =
-    form.documentType === 'RUC' && form.documentNumber?.trim() ? rucProblem(form.documentNumber) : null;
+  const rucError = customerRucProblem(form, initial);
 
   function setTaxpayerType(type: TaxpayerType) {
     setForm((f) => ({

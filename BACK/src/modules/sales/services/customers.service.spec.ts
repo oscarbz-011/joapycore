@@ -265,6 +265,22 @@ describe('CustomersService', () => {
         service.update('tenant-1', 'cust-1', { documentNumber: '80069563-9' }),
       ).rejects.toThrow('dígito verificador');
     });
+
+    // El formulario reenvía el documento aunque no cambie.
+    it('lets a customer with an old RUC be edited when the RUC is resent unchanged', async () => {
+      customersRepository.findById.mockResolvedValue(
+        makeCustomer({ documentType: 'RUC', documentNumber: '80012345' }),
+      );
+      customersRepository.update.mockResolvedValue(makeCustomer());
+
+      await expect(
+        service.update('tenant-1', 'cust-1', {
+          documentType: 'RUC',
+          documentNumber: '80012345',
+          phone: '0981',
+        }),
+      ).resolves.toBeDefined();
+    });
   });
 
   // ── documento duplicado ────────────────────────────────────────────────────

@@ -128,10 +128,14 @@ export class CustomersService {
   ) {
     const before = await this.findOne(tenantId, id);
     if (dto.documentNumber !== undefined || dto.documentType !== undefined) {
-      this.assertValidRuc(
-        dto.documentType ?? before.documentType,
-        dto.documentNumber ?? before.documentNumber,
-      );
+      const documentType = dto.documentType ?? before.documentType;
+      const documentNumber = dto.documentNumber ?? before.documentNumber;
+      // Clientes cargados antes de validar el RUC: se pueden editar sin
+      // corregirlo mientras no se toque el documento.
+      const documentChanged =
+        documentType !== before.documentType ||
+        documentNumber?.trim() !== before.documentNumber?.trim();
+      if (documentChanged) this.assertValidRuc(documentType, documentNumber);
       await this.assertDocumentAvailable(
         tenantId,
         dto.documentType ?? before.documentType ?? null,
