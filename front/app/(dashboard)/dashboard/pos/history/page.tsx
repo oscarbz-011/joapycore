@@ -69,7 +69,7 @@ export default function PosHistoryPage() {
   });
 
   const reprint = useMutation({
-    mutationFn: (saleOrderId: string) => posApi.getReceipt(saleOrderId, true),
+    mutationFn: (saleOrderId: string) => posApi.reprintReceipt(saleOrderId),
     onSuccess: printReceipt,
   });
 

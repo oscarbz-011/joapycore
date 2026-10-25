@@ -238,6 +238,34 @@ describe('PosSalesService', () => {
       expect(billing.requestPdf).not.toHaveBeenCalled();
     });
 
+    it('does not number a self-printed sale as if the cashier had typed it', async () => {
+      const unique = new Prisma.PrismaClientKnownRequestError('Unique', {
+        code: 'P2002',
+        clientVersion: 'test',
+      });
+      prisma.$transaction.mockRejectedValue(unique);
+
+      await expect(service.create('tenant-1', dto, 'cashier-1')).rejects.toBe(
+        unique,
+      );
+    });
+
+    // La venta ya está guardada: reintentar el cobro la duplicaría.
+    it('returns the registered sale even if its receipt cannot be built', async () => {
+      billing.findReceiptBySaleOrder.mockRejectedValue(new Error('caída'));
+      jest
+        .spyOn(service['logger'], 'error')
+        .mockImplementation(() => undefined);
+
+      await expect(
+        service.create('tenant-1', dto, 'cashier-1'),
+      ).resolves.toEqual({
+        saleOrderId: 'order-1',
+        receipt: null,
+      });
+      expect(outbox.dispatch).toHaveBeenCalled();
+    });
+
     it('rolls back the sale when the invoice cannot be numbered', async () => {
       billing.issuePosInvoice.mockRejectedValue(
         new UnprocessableEntityException('El timbrado venció el 31/12/2025'),
@@ -251,12 +279,9 @@ describe('PosSalesService', () => {
     });
   });
 
-  describe('receipt', () => {
-    it('marks a reprint as a copy and audits it', async () => {
-      const receipt = await service.receipt('tenant-1', 'order-1', {
-        copy: true,
-        userId: 'cashier-1',
-      });
+  describe('reprint', () => {
+    it('always prints a copy and audits it', async () => {
+      const receipt = await service.reprint('tenant-1', 'order-1', 'cashier-1');
 
       expect(receipt.copy).toBe(true);
       expect(eventEmitter.emit).toHaveBeenCalledWith(
@@ -275,13 +300,13 @@ describe('PosSalesService', () => {
         modality: 'PREPRINTED',
       });
 
-      await service.receipt('tenant-1', 'order-1');
+      await service.reprint('tenant-1', 'order-1');
 
       expect(billing.recordFormPrint).toHaveBeenCalledWith('tenant-1', 'inv-1');
     });
 
     it('does not count prints of a self-printed invoice as sheets', async () => {
-      await service.receipt('tenant-1', 'order-1');
+      await service.reprint('tenant-1', 'order-1');
       expect(billing.recordFormPrint).not.toHaveBeenCalled();
     });
 
@@ -289,7 +314,7 @@ describe('PosSalesService', () => {
       sales.findForReceipt.mockResolvedValue(null);
 
       await expect(
-        service.receipt('tenant-2', 'order-1'),
+        service.reprint('tenant-2', 'order-1'),
       ).rejects.toBeInstanceOf(NotFoundException);
       expect(sales.findForReceipt).toHaveBeenCalledWith('tenant-2', 'order-1');
     });
@@ -297,8 +322,12 @@ describe('PosSalesService', () => {
     it('explains when the sale has no invoice', async () => {
       billing.findReceiptBySaleOrder.mockResolvedValue(null);
 
-      await expect(service.receipt('tenant-1', 'order-1')).rejects.toThrow(
+      await expect(service.reprint('tenant-1', 'order-1')).rejects.toThrow(
         'La venta no tiene factura emitida',
+      );
+      expect(eventEmitter.emit).not.toHaveBeenCalledWith(
+        'audit.log',
+        expect.objectContaining({ action: 'pos.receipt.reprinted' }),
       );
     });
   });

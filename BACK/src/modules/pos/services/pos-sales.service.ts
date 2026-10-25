@@ -1,6 +1,7 @@
 import {
   Inject,
   Injectable,
+  Logger,
   NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
@@ -41,6 +42,8 @@ function mainPaymentMethod(
 
 @Injectable()
 export class PosSalesService {
+  private readonly logger = new Logger(PosSalesService.name);
+
   constructor(
     @Inject(SALES_GATEWAY) private readonly salesGateway: SalesGateway,
     @Inject(BILLING_GATEWAY) private readonly billing: BillingGateway,
@@ -109,12 +112,14 @@ export class PosSalesService {
         { timeout: SALE_TRANSACTION_TIMEOUT_MS },
       );
     } catch (error) {
+      // Solo con talonario el número lo pone el cajero y puede repetirse.
       if (
+        documentNumber !== undefined &&
         error instanceof Prisma.PrismaClientKnownRequestError &&
         error.code === 'P2002'
       ) {
         throw new UnprocessableEntityException(
-          `El número ${documentNumber ?? ''} del talonario ya fue usado en otra factura`,
+          `El número ${documentNumber} del talonario ya fue usado en otra factura`,
         );
       }
       throw error;
@@ -136,20 +141,40 @@ export class PosSalesService {
       resourceId: result.saleOrderId,
     } satisfies AuditLogEvent);
 
-    return {
-      saleOrderId: result.saleOrderId,
-      receipt: await this.receipt(tenantId, result.saleOrderId),
-    };
+    // La venta ya está registrada: si no se puede armar el comprobante, el
+    // cajero lo reimprime en vez de volver a cobrar.
+    let receipt: Awaited<ReturnType<PosSalesService['buildReceipt']>> | null =
+      null;
+    try {
+      receipt = await this.buildReceipt(tenantId, result.saleOrderId, false);
+    } catch (error) {
+      this.logger.error(
+        `No se pudo armar el comprobante de la venta ${result.saleOrderId}: ${(error as Error).message}`,
+      );
+    }
+    return { saleOrderId: result.saleOrderId, receipt };
   }
 
   /**
-   * Lo que imprime la caja. La reimpresión sale como copia (RG 27/19,
-   * art. 3) y queda en la auditoría.
+   * Reimpresión: siempre sale como copia (RG 27/19, art. 3) y queda en la
+   * auditoría. El original solo viaja en la respuesta del cobro.
    */
-  async receipt(
+  async reprint(tenantId: string, saleOrderId: string, userId?: string) {
+    const receipt = await this.buildReceipt(tenantId, saleOrderId, true);
+    this.eventEmitter.emit('audit.log', {
+      tenantId,
+      userId,
+      module: 'pos',
+      action: 'pos.receipt.reprinted',
+      resourceId: saleOrderId,
+    } satisfies AuditLogEvent);
+    return receipt;
+  }
+
+  private async buildReceipt(
     tenantId: string,
     saleOrderId: string,
-    options: { copy?: boolean; userId?: string } = {},
+    copy: boolean,
   ) {
     const sale = await this.posSalesRepository.findForReceipt(
       tenantId,
@@ -168,16 +193,6 @@ export class PosSalesService {
       await this.billing.recordFormPrint(tenantId, fiscal.invoiceId);
     }
 
-    if (options.copy) {
-      this.eventEmitter.emit('audit.log', {
-        tenantId,
-        userId: options.userId,
-        module: 'pos',
-        action: 'pos.receipt.reprinted',
-        resourceId: saleOrderId,
-      } satisfies AuditLogEvent);
-    }
-
     const payments = sale.salePayments.map((p) => ({
       paymentMethod: p.paymentMethod,
       amount: toNum(p.amount),
@@ -186,7 +201,7 @@ export class PosSalesService {
     const { terminal, cashier } = sale.posSession;
     return {
       ...fiscal,
-      copy: Boolean(options.copy),
+      copy,
       terminalName: terminal.name,
       cashierName: [cashier.firstName, cashier.lastName].join(' '),
       printFormat: terminal.printFormat,
