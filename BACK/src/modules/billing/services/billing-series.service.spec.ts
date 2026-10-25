@@ -435,5 +435,16 @@ describe('BillingSeriesService', () => {
       ).resolves.toBeNull();
       expect(repo.claimNextNumber).not.toHaveBeenCalled();
     });
+
+    // Sin esto, el error deshacía la transacción del recibo y la factura de
+    // interés no llegaba a existir.
+    it('leaves the invoice unnumbered when the range is used up', async () => {
+      repo.findActiveForBranch.mockResolvedValue([makeSeries()]);
+      repo.claimNextNumber.mockResolvedValue(null);
+
+      await expect(
+        service.numberForAutomatic('tenant-1', 'branch-1', ISSUE_DAY, tx),
+      ).resolves.toBeNull();
+    });
   });
 });

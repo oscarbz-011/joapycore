@@ -211,8 +211,8 @@ export class BillingSeriesService {
   /**
    * Número para una factura que el sistema genera sin intervención de un
    * usuario (intereses moratorios). Solo una serie de impresión propia puede
-   * numerarla; si la sucursal factura con talonario, devuelve null y la
-   * factura queda pendiente de que alguien le cargue el número.
+   * numerarla; si la sucursal factura con talonario o el rango se agotó,
+   * devuelve null y la factura queda pendiente de que alguien la numere.
    */
   async numberForAutomatic(
     tenantId: string,
@@ -231,7 +231,12 @@ export class BillingSeriesService {
         s.modality === BillingModality.SELF_PRINTED && !seriesProblem(s, at),
     );
     if (!series) return null;
-    return this.numbering(series, await this.claim(tenantId, series, tx));
+    const number = await this.seriesRepository.claimNextNumber(
+      tenantId,
+      series.id,
+      tx,
+    );
+    return number === null ? null : this.numbering(series, number);
   }
 
   private async pickSeries(

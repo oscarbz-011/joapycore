@@ -103,6 +103,23 @@ describe('BillingSeriesService (PostgreSQL)', () => {
     expect(String(rejected[0].reason)).toContain('Se agotó el rango');
   });
 
+  it('leaves an automatic invoice unnumbered once the range is used up', async () => {
+    const series = await createSeries({ rangeTo: 1 });
+    await prisma.$transaction((tx) =>
+      service.numberForIssue(tenantId, { branchId, at }, tx),
+    );
+
+    await expect(
+      prisma.$transaction((tx) =>
+        service.numberForAutomatic(tenantId, branchId, at, tx),
+      ),
+    ).resolves.toBeNull();
+    const stored = await prisma.billingSeries.findUniqueOrThrow({
+      where: { id: series.id },
+    });
+    expect(stored.nextNumber).toBe(2);
+  });
+
   it('rolls back the number when the issuance transaction fails', async () => {
     await createSeries();
 

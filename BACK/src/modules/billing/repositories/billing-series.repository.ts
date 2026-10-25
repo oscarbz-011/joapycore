@@ -78,13 +78,29 @@ export class BillingSeriesRepository {
     id: string,
     client: PrismaClientOrTx,
   ): Promise<number | null> {
-    const updated = await client.billingSeries.update({
-      where: { id, tenantId, modality: BillingModality.SELF_PRINTED },
-      data: { nextNumber: { increment: 1 } },
-      select: { nextNumber: true, rangeTo: true },
-    });
-    const claimed = updated.nextNumber - 1;
-    return claimed <= updated.rangeTo ? claimed : null;
+    // La condición del rango va en el mismo UPDATE: con el rango agotado no
+    // se incrementa, y quien llama puede seguir sin número.
+    try {
+      const updated = await client.billingSeries.update({
+        where: {
+          id,
+          tenantId,
+          modality: BillingModality.SELF_PRINTED,
+          nextNumber: { lte: client.billingSeries.fields.rangeTo },
+        },
+        data: { nextNumber: { increment: 1 } },
+        select: { nextNumber: true },
+      });
+      return updated.nextNumber - 1;
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2025'
+      ) {
+        return null;
+      }
+      throw error;
+    }
   }
 
   // Tras usar un número del talonario, el siguiente sugerido avanza (nunca
