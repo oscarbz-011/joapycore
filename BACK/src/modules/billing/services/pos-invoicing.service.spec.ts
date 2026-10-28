@@ -21,7 +21,7 @@ const NUMBERING = {
 
 describe('PosInvoicingService', () => {
   let seriesRepository: { findById: jest.Mock };
-  let seriesService: { numberForIssue: jest.Mock };
+  let seriesService: { numberForIssue: jest.Mock; formFitProblem: jest.Mock };
   let invoicesRepository: {
     createPaid: jest.Mock;
     findById: jest.Mock;
@@ -44,12 +44,16 @@ describe('PosInvoicingService', () => {
 
   beforeEach(() => {
     seriesRepository = { findById: jest.fn() };
-    seriesService = { numberForIssue: jest.fn().mockResolvedValue(NUMBERING) };
+    seriesService = {
+      numberForIssue: jest.fn().mockResolvedValue(NUMBERING),
+      formFitProblem: jest.fn().mockResolvedValue(null),
+    };
     invoicesRepository = {
       createPaid: jest.fn().mockResolvedValue({ id: 'inv-1' }),
       findById: jest.fn(),
       findForReceipt: jest.fn(),
-    };
+      recordFormPrint: jest.fn().mockResolvedValue({ count: 1 }),
+    } as typeof invoicesRepository;
     billingSources = {
       findSaleOrderForInvoicing: jest.fn().mockResolvedValue({
         saleType: 'CASH',
@@ -145,6 +149,35 @@ describe('PosInvoicingService', () => {
       expect(result).toEqual({ invoiceId: 'inv-1', eventId: 'event-1' });
     });
 
+    it('rejects a talonario sale with more items than lines on the sheet', async () => {
+      seriesService.numberForIssue.mockResolvedValue({
+        ...NUMBERING,
+        modality: 'PREPRINTED',
+      });
+      seriesService.formFitProblem.mockResolvedValue(
+        'La factura tiene 1 ítems y la hoja del talonario admite 0.',
+      );
+
+      await expect(
+        service.issuePosInvoice(tx, 'tenant-1', {
+          ...input,
+          documentNumber: 41,
+        }),
+      ).rejects.toThrow('la hoja del talonario admite 0');
+      expect(seriesService.formFitProblem).toHaveBeenCalledWith(
+        'tenant-1',
+        'series-1',
+        1,
+        tx,
+      );
+      expect(invoicesRepository.createPaid).not.toHaveBeenCalled();
+    });
+
+    it('does not check the sheet with a self-printed series', async () => {
+      await service.issuePosInvoice(tx, 'tenant-1', input);
+      expect(seriesService.formFitProblem).not.toHaveBeenCalled();
+    });
+
     it('fails when the sale is not of the tenant', async () => {
       billingSources.findSaleOrderForInvoicing.mockResolvedValue(null);
 
@@ -216,6 +249,31 @@ describe('PosInvoicingService', () => {
           attemptAt: AT,
           expectedStatus: 'PAID',
         }),
+      );
+    });
+
+    it('does not render a PDF for a talonario invoice', async () => {
+      invoicesRepository.findById.mockResolvedValue({
+        id: 'inv-1',
+        issuedAt: AT,
+        pdfFileId: null,
+        modality: 'PREPRINTED',
+        status: 'PAID',
+        total: 220_000,
+      });
+
+      service.requestPdf('tenant-1', 'inv-1');
+      await new Promise((resolve) => setImmediate(resolve));
+
+      expect(eventEmitter.emitAsync).not.toHaveBeenCalled();
+    });
+
+    it('records a print on the talonario sheet', async () => {
+      await service.recordFormPrint('tenant-1', 'inv-1');
+      expect((invoicesRepository as any).recordFormPrint).toHaveBeenCalledWith(
+        'tenant-1',
+        'inv-1',
+        expect.any(Date),
       );
     });
 

@@ -217,6 +217,7 @@ describe('sale screen', () => {
 
     expect(html).toContain('N° de la hoja del talonario (001-002)');
     expect(html).toContain('value="42"');
+    expect(html).toContain('al cobrar se imprimen los datos de la venta sobre ella');
   });
 
   it('shows why an expired timbrado cannot invoice', () => {

@@ -142,6 +142,9 @@ export interface BillingGateway {
   /** Genera el PDF A4 en segundo plano; la caja imprime sin esperarlo. */
   requestPdf(tenantId: string, invoiceId: string): void;
 
+  /** Registra una impresión sobre la hoja de un talonario de imprenta. */
+  recordFormPrint(tenantId: string, invoiceId: string): Promise<void>;
+
   findReceiptBySaleOrder(
     tenantId: string,
     saleOrderId: string,

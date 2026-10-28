@@ -163,6 +163,10 @@ export class PosSalesService {
     if (!fiscal) {
       throw new NotFoundException('La venta no tiene factura emitida');
     }
+    // Con talonario cada impresión es sobre la hoja: queda registrada.
+    if (fiscal.modality === 'PREPRINTED') {
+      await this.billing.recordFormPrint(tenantId, fiscal.invoiceId);
+    }
 
     if (options.copy) {
       this.eventEmitter.emit('audit.log', {

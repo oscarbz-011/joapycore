@@ -1,5 +1,6 @@
 import type { PosInvoiceSeries, PosPrintFormat, PosReceipt } from './api/pos';
 import { paymentMethodLabel } from './payment-methods';
+import { printPreprintedForm } from './preprinted-form';
 import { escapeHtml, printHtmlDocument } from './print-html';
 
 export const PRINT_FORMAT_LABELS: Record<PosPrintFormat, string> = {
@@ -175,7 +176,14 @@ ${header}<hr>${fiscal}<hr>${items}<hr>${subtotals}<hr>${payments}<hr>${footer}
 </main></body></html>`;
 }
 
-/** Imprime la factura sin salir de la pantalla de caja. */
+/**
+ * Imprime la factura sin salir de la pantalla de caja. Con talonario de
+ * imprenta los datos van sobre la hoja preimpresa.
+ */
 export function printReceipt(receipt: PosReceipt): void {
+  if (receipt.modality === 'PREPRINTED' && receipt.formLayout) {
+    printPreprintedForm(receipt, receipt.formLayout);
+    return;
+  }
   printHtmlDocument(receiptHtml(receipt));
 }

@@ -308,7 +308,7 @@ function SaleScreen({ session }: { session: ActivePosSession }) {
   const [payments, setPayments] = useState<PaymentLine[]>([{ key: 'p0', method: 'CASH', amount: 0 }]);
   const [closeOpen, setCloseOpen] = useState(false);
   const [error, setError] = useState('');
-  const [lastSale, setLastSale] = useState<{ saleOrderId: string; number: string } | null>(null);
+  const [lastSale, setLastSale] = useState<{ saleOrderId: string; number: string; onSheet: boolean } | null>(null);
 
   const suggestedNumber = series && askNumber ? String(series.nextNumber) : '';
   const documentNumber = talonarioNumber || suggestedNumber;
@@ -370,7 +370,11 @@ function SaleScreen({ session }: { session: ActivePosSession }) {
     },
     onSuccess: (result) => {
       printReceipt(result.receipt);
-      setLastSale({ saleOrderId: result.saleOrderId, number: result.receipt.number });
+      setLastSale({
+        saleOrderId: result.saleOrderId,
+        number: result.receipt.number,
+        onSheet: result.receipt.modality === 'PREPRINTED',
+      });
       setCart([]);
       setCustomer(null);
       setTalonarioNumber('');
@@ -530,7 +534,7 @@ function SaleScreen({ session }: { session: ActivePosSession }) {
                 <p className="text-xs text-destructive">{numberProblem}</p>
               ) : (
                 <p className="text-xs text-muted-foreground">
-                  Completá a mano la hoja con este número; lo que imprime la caja es un comprobante interno.
+                  Poné esta hoja en la impresora: al cobrar se imprimen los datos de la venta sobre ella.
                 </p>
               )}
             </div>
@@ -631,7 +635,7 @@ function SaleScreen({ session }: { session: ActivePosSession }) {
                   disabled={reprint.isPending}
                   onClick={() => reprint.mutate(lastSale.saleOrderId)}
                 >
-                  <Printer size={13} /> Reimprimir copia
+                  <Printer size={13} /> {lastSale.onSheet ? 'Reimprimir sobre la hoja' : 'Reimprimir copia'}
                 </Button>
               </div>
             )}

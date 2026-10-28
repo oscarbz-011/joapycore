@@ -59,6 +59,7 @@ describe('PosSalesService', () => {
     issuePosInvoice: jest.Mock;
     requestPdf: jest.Mock;
     findReceiptBySaleOrder: jest.Mock;
+    recordFormPrint: jest.Mock;
   };
   let prisma: { $transaction: jest.Mock };
   let outbox: { dispatch: jest.Mock };
@@ -86,6 +87,7 @@ describe('PosSalesService', () => {
       }),
       requestPdf: jest.fn(),
       findReceiptBySaleOrder: jest.fn().mockResolvedValue(FISCAL),
+      recordFormPrint: jest.fn().mockResolvedValue(undefined),
     };
     prisma = {
       $transaction: jest.fn().mockImplementation(async (cb) => {
@@ -265,6 +267,22 @@ describe('PosSalesService', () => {
           userId: 'cashier-1',
         }),
       );
+    });
+
+    it('records each print on a talonario sheet', async () => {
+      billing.findReceiptBySaleOrder.mockResolvedValue({
+        ...FISCAL,
+        modality: 'PREPRINTED',
+      });
+
+      await service.receipt('tenant-1', 'order-1');
+
+      expect(billing.recordFormPrint).toHaveBeenCalledWith('tenant-1', 'inv-1');
+    });
+
+    it('does not count prints of a self-printed invoice as sheets', async () => {
+      await service.receipt('tenant-1', 'order-1');
+      expect(billing.recordFormPrint).not.toHaveBeenCalled();
     });
 
     it('does not find a sale of another tenant', async () => {

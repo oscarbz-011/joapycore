@@ -1,4 +1,9 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  NotFoundException,
+  UnprocessableEntityException,
+} from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { BillingDocumentType, Prisma } from '@prisma/client';
 import type {
@@ -72,6 +77,16 @@ export class PosInvoicingService implements BillingGateway {
       tx,
     );
 
+    if (numbering.modality === 'PREPRINTED') {
+      const problem = await this.seriesService.formFitProblem(
+        tenantId,
+        numbering.seriesId,
+        order.items.length,
+        tx,
+      );
+      if (problem) throw new UnprocessableEntityException(problem);
+    }
+
     const items = order.items.map(toInvoiceItem);
     const total = items.reduce((sum, item) => sum + item.total, 0);
     const invoice = await this.invoicesRepository.createPaid(
@@ -104,6 +119,14 @@ export class PosInvoicingService implements BillingGateway {
     void this.generatePdf(tenantId, invoiceId);
   }
 
+  async recordFormPrint(tenantId: string, invoiceId: string): Promise<void> {
+    await this.invoicesRepository.recordFormPrint(
+      tenantId,
+      invoiceId,
+      new Date(),
+    );
+  }
+
   async findReceiptBySaleOrder(
     tenantId: string,
     saleOrderId: string,
@@ -121,7 +144,14 @@ export class PosInvoicingService implements BillingGateway {
         tenantId,
         invoiceId,
       );
-      if (!invoice?.issuedAt || invoice.pdfFileId) return;
+      // Con talonario la factura es la hoja impresa: no lleva PDF.
+      if (
+        !invoice?.issuedAt ||
+        invoice.pdfFileId ||
+        invoice.modality === 'PREPRINTED'
+      ) {
+        return;
+      }
       await this.eventEmitter.emitAsync('invoice.pdf.requested', {
         tenantId,
         invoiceId,
