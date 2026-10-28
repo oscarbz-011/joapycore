@@ -812,7 +812,7 @@ describe('InvoicesService', () => {
       paymentReceipt: { branchId: 'branch-1' },
     };
 
-    it('numbers it with the talonario and requests its PDF', async () => {
+    it('numbers it with the talonario without generating a PDF', async () => {
       invoicesRepository.findInterestForNumbering.mockResolvedValue(pending);
       seriesService.numberForIssue.mockResolvedValue({
         ...NUMBERING,
@@ -843,6 +843,17 @@ describe('InvoicesService', () => {
         expect.objectContaining({ sequential: 41 }),
         tx,
       );
+      expect(eventEmitter.emitAsync).not.toHaveBeenCalledWith(
+        'invoice.interest.issued',
+        expect.anything(),
+      );
+    });
+
+    it('requests the PDF when a self-printed series numbers it', async () => {
+      invoicesRepository.findInterestForNumbering.mockResolvedValue(pending);
+
+      await service.assignInterestNumber('tenant-1', 'inv-interest-1', {});
+
       expect(eventEmitter.emitAsync).toHaveBeenCalledWith(
         'invoice.interest.issued',
         expect.objectContaining({ invoiceId: 'inv-interest-1' }),
@@ -1033,6 +1044,111 @@ describe('InvoicesService', () => {
         'invoice.cancelled',
         expect.anything(),
       );
+    });
+  });
+
+  describe('issue with a printing-house talonario', () => {
+    const PREPRINTED = {
+      ...NUMBERING,
+      modality: 'PREPRINTED' as const,
+      sequential: 41,
+    };
+
+    beforeEach(() => {
+      invoicesRepository.findById.mockResolvedValue(
+        makeInvoice({ items: [{ id: 'item-1' }, { id: 'item-2' }] }),
+      );
+      seriesService.numberForIssue.mockResolvedValue(PREPRINTED);
+      Object.assign(seriesService, {
+        formFitProblem: jest.fn().mockResolvedValue(null),
+      });
+      Object.assign(invoicesRepository, {
+        issuePreprinted: jest.fn().mockResolvedValue({ count: 1 }),
+      });
+    });
+
+    it('issues it with the sheet number, without a PDF and in one transaction', async () => {
+      await service.issue(
+        'tenant-1',
+        'inv-1',
+        { paymentCondition: 'CASH', paymentMethod: 'CASH', documentNumber: 41 },
+        'user-1',
+      );
+
+      expect((invoicesRepository as any).issuePreprinted).toHaveBeenCalledWith(
+        'tenant-1',
+        'inv-1',
+        new Date('2026-09-23T12:00:00.000Z'),
+        expect.any(Date),
+        expect.objectContaining({
+          sequential: 41,
+          modality: 'PREPRINTED',
+          paymentMethod: 'CASH',
+        }),
+        tx,
+      );
+      expect(outbox.enqueue).toHaveBeenCalledWith(
+        tx,
+        'tenant-1',
+        'invoice.issued',
+        expect.objectContaining({
+          invoiceId: 'inv-1',
+          paymentCondition: 'CASH',
+        }),
+      );
+      expect(outbox.dispatch).toHaveBeenCalledWith('event-1');
+      expect(invoicesRepository.claimIssue).not.toHaveBeenCalled();
+      expect(invoicesRepository.finalizeIssue).not.toHaveBeenCalled();
+      expect(eventEmitter.emitAsync).not.toHaveBeenCalledWith(
+        'invoice.pdf.requested',
+        expect.anything(),
+      );
+    });
+
+    it('rejects a sale with more items than lines on the sheet', async () => {
+      (seriesService as any).formFitProblem.mockResolvedValue(
+        'La factura tiene 2 ítems y la hoja del talonario admite 1.',
+      );
+
+      await expect(
+        service.issue('tenant-1', 'inv-1', {
+          paymentCondition: 'CASH',
+          documentNumber: 41,
+        }),
+      ).rejects.toThrow('la hoja del talonario admite 1');
+      expect(
+        (invoicesRepository as any).issuePreprinted,
+      ).not.toHaveBeenCalled();
+      expect(outbox.enqueue).not.toHaveBeenCalled();
+    });
+
+    it('reports a concurrent issuance without publishing', async () => {
+      (invoicesRepository as any).issuePreprinted.mockResolvedValue({
+        count: 0,
+      });
+
+      await expect(
+        service.issue('tenant-1', 'inv-1', {
+          paymentCondition: 'CASH',
+          documentNumber: 41,
+        }),
+      ).rejects.toThrow('ya está siendo emitida');
+      expect(outbox.dispatch).not.toHaveBeenCalled();
+    });
+
+    it('does not regenerate a PDF for a talonario invoice', async () => {
+      invoicesRepository.findById.mockResolvedValue(
+        makeInvoice({
+          status: 'ISSUED',
+          modality: 'PREPRINTED',
+          issuedAt: new Date(),
+        }),
+      );
+
+      await expect(service.retryPdf('tenant-1', 'inv-1')).rejects.toThrow(
+        'se imprime sobre la hoja del talonario',
+      );
+      expect(eventEmitter.emitAsync).not.toHaveBeenCalled();
     });
   });
 });

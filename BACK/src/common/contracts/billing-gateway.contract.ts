@@ -33,6 +33,51 @@ export interface IssuePosInvoiceInput {
   at: Date;
 }
 
+/** Posición sobre la hoja en mm desde el borde superior izquierdo. */
+export interface FormPoint {
+  x: number;
+  y: number;
+}
+
+/**
+ * Dónde va cada dato al imprimir sobre una hoja de talonario de imprenta.
+ * Los importes se alinean a la derecha: su `x` es el borde derecho.
+ */
+export interface PreprintedLayout {
+  pageWidth: number;
+  pageHeight: number;
+  /** Corrimiento de calibración para toda la hoja. */
+  offsetX: number;
+  offsetY: number;
+  /** Tamaño de letra en puntos. */
+  fontSize: number;
+  date: FormPoint;
+  cashMark: FormPoint;
+  creditMark: FormPoint;
+  buyerName: FormPoint;
+  buyerDocument: FormPoint;
+  buyerAddress: FormPoint;
+  items: {
+    top: number;
+    lineHeight: number;
+    maxLines: number;
+    quantityX: number;
+    descriptionX: number;
+    descriptionWidth: number;
+    unitPriceX: number;
+    exemptX: number;
+    taxed5X: number;
+    taxed10X: number;
+  };
+  /** Fila de subtotales por tasa; usa las columnas de los ítems. */
+  subtotalsY: number;
+  total: FormPoint;
+  totalInWords: FormPoint;
+  iva5: FormPoint;
+  iva10: FormPoint;
+  ivaTotal: FormPoint;
+}
+
 export interface FiscalReceiptLine {
   description: string;
   quantity: number;
@@ -62,7 +107,7 @@ export interface FiscalReceipt {
     branchName: string | null;
     branchAddress: string | null;
   };
-  buyer: { name: string; document: string };
+  buyer: { name: string; document: string; address: string | null };
   lines: FiscalReceiptLine[];
   totals: {
     exempt: number;
@@ -73,6 +118,8 @@ export interface FiscalReceipt {
     ivaTotal: number;
     total: number;
   };
+  /** Solo con talonario de imprenta: cómo imprimir sobre la hoja. */
+  formLayout: PreprintedLayout | null;
 }
 
 export interface BillingGateway {

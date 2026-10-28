@@ -20,12 +20,28 @@ import { UpdateBillingSeriesDto } from '../dto/update-billing-series.dto';
 import { BillingSeriesRepository } from '../repositories/billing-series.repository';
 import { BillingSourcesRepository } from '../repositories/billing-sources.repository';
 import type { SeriesNumbering } from '../types/series-numbering';
+import {
+  formFitProblem as layoutFitProblem,
+  resolvePreprintedLayout,
+} from '../utils/preprinted-layout';
 
 type SeriesWithUsage = Awaited<
   ReturnType<BillingSeriesRepository['findAll']>
 >[number];
 
 const toCalendarDate = (value: string) => new Date(`${value}T00:00:00.000Z`);
+
+const layoutColumn = (layout: CreateBillingSeriesDto['printLayout']) =>
+  layout === null
+    ? Prisma.DbNull
+    : (JSON.parse(JSON.stringify(layout)) as Prisma.InputJsonValue);
+
+// El diseño de impresión se devuelve siempre completo, con el estándar donde
+// la serie no tiene uno propio.
+const present = <T extends { printLayout: Prisma.JsonValue }>(series: T) => ({
+  ...series,
+  printLayout: resolvePreprintedLayout(series.printLayout),
+});
 
 const formatDay = (value: Date) =>
   value.toISOString().slice(0, 10).split('-').reverse().join('/');
@@ -65,14 +81,15 @@ export class BillingSeriesService {
     private readonly billingSources: BillingSourcesRepository,
   ) {}
 
-  findAll(tenantId: string) {
-    return this.seriesRepository.findAll(tenantId);
+  async findAll(tenantId: string) {
+    const series = await this.seriesRepository.findAll(tenantId);
+    return series.map(present);
   }
 
   async findOne(tenantId: string, id: string) {
     const series = await this.seriesRepository.findById(tenantId, id);
     if (!series) throw new NotFoundException('Serie no encontrada');
-    return series;
+    return present(series);
   }
 
   async create(tenantId: string, dto: CreateBillingSeriesDto) {
@@ -92,7 +109,15 @@ export class BillingSeriesService {
       nextNumber: dto.nextNumber ?? dto.rangeFrom,
     };
     this.assertConsistent(data);
-    return this.saveUnique(() => this.seriesRepository.create(data));
+    const created = await this.saveUnique(() =>
+      this.seriesRepository.create({
+        ...data,
+        ...(dto.printLayout !== undefined
+          ? { printLayout: layoutColumn(dto.printLayout) }
+          : {}),
+      }),
+    );
+    return present(created);
   }
 
   async update(tenantId: string, id: string, dto: UpdateBillingSeriesDto) {
@@ -100,7 +125,7 @@ export class BillingSeriesService {
     const used = current._count.invoices > 0;
 
     if (used) {
-      const locked: (keyof UpdateBillingSeriesDto)[] = [
+      const locked: Exclude<keyof UpdateBillingSeriesDto, 'printLayout'>[] = [
         'branchId',
         'documentType',
         'modality',
@@ -152,8 +177,133 @@ export class BillingSeriesService {
       isActive: dto.isActive ?? current.isActive,
     };
     this.assertConsistent(next, used ? current.nextNumber - 1 : undefined);
-    return this.saveUnique(() =>
-      this.seriesRepository.update(tenantId, id, next),
+    const updated = await this.saveUnique(() =>
+      this.seriesRepository.update(tenantId, id, {
+        ...next,
+        ...(dto.printLayout !== undefined
+          ? { printLayout: layoutColumn(dto.printLayout) }
+          : {}),
+      }),
+    );
+    return present(updated);
+  }
+
+  /** Por qué los ítems no entran en la hoja del talonario, o null. */
+  async formFitProblem(
+    tenantId: string,
+    seriesId: string,
+    itemCount: number,
+    tx: PrismaClientOrTx,
+  ) {
+    const series = await this.seriesRepository.findById(tenantId, seriesId, tx);
+    if (!series) throw new NotFoundException('Serie no encontrada');
+    return layoutFitProblem(
+      resolvePreprintedLayout(series.printLayout),
+      itemCount,
+    );
+  }
+
+  findVoided(tenantId: string, seriesId: string) {
+    return this.findOne(tenantId, seriesId).then(() =>
+      this.seriesRepository.findVoided(tenantId, seriesId),
+    );
+  }
+
+  /**
+   * Número de una hoja de talonario para volver a imprimir una factura
+   * cuya hoja se inutilizó: el indicado o el siguiente sugerido.
+   */
+  async numberForPreprintedSheet(
+    tenantId: string,
+    params: { seriesId: string; documentNumber?: number; at: Date },
+    tx: PrismaClientOrTx,
+  ): Promise<SeriesNumbering> {
+    const series = await this.seriesRepository.findById(
+      tenantId,
+      params.seriesId,
+      tx,
+    );
+    if (!series) throw new NotFoundException('Serie no encontrada');
+    if (series.modality !== BillingModality.PREPRINTED) {
+      throw new UnprocessableEntityException(
+        'Solo se inutilizan hojas de un talonario de imprenta',
+      );
+    }
+    return this.numberForIssue(
+      tenantId,
+      {
+        branchId: series.branchId,
+        seriesId: series.id,
+        documentNumber: params.documentNumber ?? series.nextNumber,
+        at: params.at,
+      },
+      tx,
+    );
+  }
+
+  /** Marca como inutilizada una hoja del talonario que no tiene factura. */
+  async voidLooseSheet(
+    tenantId: string,
+    seriesId: string,
+    params: {
+      documentNumber: number;
+      reason: string;
+      scanFileId?: string;
+      userId?: string;
+    },
+    tx: PrismaClientOrTx,
+  ) {
+    const series = await this.seriesRepository.findById(tenantId, seriesId, tx);
+    if (!series) throw new NotFoundException('Serie no encontrada');
+    if (series.modality !== BillingModality.PREPRINTED) {
+      throw new UnprocessableEntityException(
+        'Solo se inutilizan hojas de un talonario de imprenta',
+      );
+    }
+    await this.assertPreprintedNumber(series, params.documentNumber, tx);
+    await this.recordVoidedSheet(
+      tenantId,
+      { ...params, seriesId, sequential: params.documentNumber },
+      tx,
+    );
+    await this.seriesRepository.advanceSuggestedNumber(
+      tenantId,
+      seriesId,
+      params.documentNumber,
+      tx,
+    );
+  }
+
+  async recordVoidedSheet(
+    tenantId: string,
+    params: {
+      seriesId: string;
+      sequential: number;
+      invoiceId?: string;
+      reason: string;
+      scanFileId?: string;
+      userId?: string;
+    },
+    tx: PrismaClientOrTx,
+  ) {
+    const series = await this.seriesRepository.findById(
+      tenantId,
+      params.seriesId,
+      tx,
+    );
+    if (!series) throw new NotFoundException('Serie no encontrada');
+    await this.seriesRepository.createVoided(
+      {
+        tenantId,
+        seriesId: series.id,
+        serieCode: series.serieCode,
+        sequential: params.sequential,
+        invoiceId: params.invoiceId ?? null,
+        reason: params.reason.trim(),
+        scanFileId: params.scanFileId ?? null,
+        voidedById: params.userId ?? null,
+      },
+      tx,
     );
   }
 
@@ -329,7 +479,7 @@ export class BillingSeriesService {
       )
     ) {
       throw new UnprocessableEntityException(
-        `El número ${documentNumber} del talonario ya fue usado en otra factura`,
+        `El número ${documentNumber} del talonario ya fue usado o inutilizado`,
       );
     }
   }

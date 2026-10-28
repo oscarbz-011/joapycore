@@ -177,7 +177,11 @@ describe('PosInvoicingService (PostgreSQL)', () => {
     ).toBe(1);
 
     const receipt = await service.findReceiptBySaleOrder(tenantId, saleOrderId);
-    expect(receipt?.buyer).toEqual({ name: 'Sin Nombre', document: 'X' });
+    expect(receipt?.buyer).toEqual({
+      name: 'Sin Nombre',
+      document: 'X',
+      address: null,
+    });
     expect(receipt?.totals.iva10).toBe(20_000);
   });
 

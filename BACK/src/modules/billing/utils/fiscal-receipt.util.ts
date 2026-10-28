@@ -5,8 +5,27 @@ import type {
 } from '@prisma/client';
 import type { FiscalReceipt } from '../../../common/contracts/billing-gateway.contract';
 import { toNum } from './invoice-items.util';
+import { resolvePreprintedLayout } from './preprinted-layout';
 
 type Numeric = number | { toNumber(): number };
+
+interface ReceiptCustomer {
+  firstName: string;
+  secondFirstName: string | null;
+  lastName: string;
+  secondLastName: string | null;
+  documentType: DocumentType | null;
+  documentNumber: string | null;
+  taxpayerType: TaxpayerType | null;
+  address: string | null;
+}
+
+interface ReceiptBranch {
+  name: string;
+  address: string | null;
+  numeroCasa: string | null;
+  city: string | null;
+}
 
 export interface InvoiceForReceipt {
   id: string;
@@ -32,22 +51,15 @@ export interface InvoiceForReceipt {
   };
   saleOrder: {
     saleType: string;
-    customer: {
-      firstName: string;
-      secondFirstName: string | null;
-      lastName: string;
-      secondLastName: string | null;
-      documentType: DocumentType | null;
-      documentNumber: string | null;
-      taxpayerType: TaxpayerType | null;
-    };
-    branch: {
-      name: string;
-      address: string | null;
-      numeroCasa: string | null;
-      city: string | null;
-    } | null;
+    customer: ReceiptCustomer;
+    branch: ReceiptBranch | null;
   } | null;
+  // Factura de intereses: no tiene venta, el cliente es el del cobro.
+  paymentReceipt?: {
+    customer: ReceiptCustomer;
+    branch: ReceiptBranch | null;
+  } | null;
+  series?: { printLayout: unknown } | null;
   items: {
     description: string;
     quantity: number;
@@ -76,9 +88,10 @@ function firstActivity(value: unknown): string | null {
 // Consumidor final que no se identifica: "Sin Nombre" y una X en RUC y
 // documento (art. 20 del Decreto 6539/05, según el Decreto 10797/13).
 function buyerOf(invoice: InvoiceForReceipt): FiscalReceipt['buyer'] {
-  const customer = invoice.saleOrder?.customer;
+  const customer =
+    invoice.saleOrder?.customer ?? invoice.paymentReceipt?.customer;
   if (invoice.anonymousBuyer || !customer) {
-    return { name: 'Sin Nombre', document: 'X' };
+    return { name: 'Sin Nombre', document: 'X', address: null };
   }
   const name =
     customer.taxpayerType === 'COMPANY'
@@ -94,7 +107,7 @@ function buyerOf(invoice: InvoiceForReceipt): FiscalReceipt['buyer'] {
   const document = customer.documentNumber
     ? `${DOCUMENT_LABELS[customer.documentType ?? 'CI']} ${customer.documentNumber}`
     : 'X';
-  return { name, document };
+  return { name, document, address: customer.address };
 }
 
 export function buildFiscalReceipt(invoice: InvoiceForReceipt): FiscalReceipt {
@@ -133,7 +146,8 @@ export function buildFiscalReceipt(invoice: InvoiceForReceipt): FiscalReceipt {
   });
   totals.ivaTotal = totals.iva5 + totals.iva10;
 
-  const branch = invoice.saleOrder?.branch ?? null;
+  const branch =
+    invoice.saleOrder?.branch ?? invoice.paymentReceipt?.branch ?? null;
   return {
     invoiceId: invoice.id,
     modality: invoice.modality,
@@ -161,5 +175,9 @@ export function buildFiscalReceipt(invoice: InvoiceForReceipt): FiscalReceipt {
     buyer: buyerOf(invoice),
     lines,
     totals,
+    formLayout:
+      invoice.modality === 'PREPRINTED'
+        ? resolvePreprintedLayout(invoice.series?.printLayout)
+        : null,
   };
 }

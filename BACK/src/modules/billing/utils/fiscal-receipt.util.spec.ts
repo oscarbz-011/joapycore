@@ -1,4 +1,5 @@
 import { buildFiscalReceipt, InvoiceForReceipt } from './fiscal-receipt.util';
+import { DEFAULT_PREPRINTED_LAYOUT } from './preprinted-layout';
 
 function makeInvoice(
   overrides: Partial<InvoiceForReceipt> = {},
@@ -37,6 +38,7 @@ function makeInvoice(
         documentType: 'CI',
         documentNumber: '1234567',
         taxpayerType: null,
+        address: 'Calle 1 c/ 2',
       },
       branch: {
         name: 'Central',
@@ -119,6 +121,7 @@ describe('buildFiscalReceipt', () => {
     expect(buildFiscalReceipt(makeInvoice()).buyer).toEqual({
       name: 'María Isabel González',
       document: 'CI 1234567',
+      address: 'Calle 1 c/ 2',
     });
   });
 
@@ -136,12 +139,41 @@ describe('buildFiscalReceipt', () => {
     expect(buildFiscalReceipt(invoice).buyer).toEqual({
       name: 'TIPS S.A.',
       document: 'RUC 80069563-1',
+      address: 'Calle 1 c/ 2',
     });
   });
 
   it('prints "Sin Nombre" and an X for an unidentified final consumer', () => {
     expect(
       buildFiscalReceipt(makeInvoice({ anonymousBuyer: true })).buyer,
-    ).toEqual({ name: 'Sin Nombre', document: 'X' });
+    ).toEqual({ name: 'Sin Nombre', document: 'X', address: null });
+  });
+
+  it('takes the buyer of an interest invoice from the payment receipt', () => {
+    const base = makeInvoice();
+    const receipt = buildFiscalReceipt({
+      ...base,
+      saleOrder: null,
+      paymentReceipt: {
+        customer: base.saleOrder!.customer,
+        branch: base.saleOrder!.branch,
+      },
+    });
+    expect(receipt.buyer.name).toBe('María Isabel González');
+    expect(receipt.issuer.branchName).toBe('Central');
+    expect(receipt.condition).toBe('CONTADO');
+  });
+
+  it('carries the form layout of the series only for a printing-house talonario', () => {
+    expect(buildFiscalReceipt(makeInvoice()).formLayout).toBeNull();
+
+    const layout = buildFiscalReceipt(
+      makeInvoice({
+        modality: 'PREPRINTED',
+        series: { printLayout: { fontSize: 12, items: { maxLines: 15 } } },
+      }),
+    ).formLayout;
+    expect(layout).toMatchObject({ fontSize: 12, items: { maxLines: 15 } });
+    expect(layout?.date).toEqual(DEFAULT_PREPRINTED_LAYOUT.date);
   });
 });
