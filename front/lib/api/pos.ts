@@ -1,5 +1,5 @@
 import { apiClient } from './client';
-import type { BillingModality } from './billing';
+import type { BillingModality, FiscalReceipt } from './billing';
 import type { SaleOrder } from './sales';
 
 export type PosSessionStatus = 'OPEN' | 'CLOSED' | 'DISCREPANCY';
@@ -120,43 +120,7 @@ export interface CreatePosSalePayload {
 }
 
 /** Lo que se imprime de la factura de una venta de caja. */
-export interface PosReceipt {
-  invoiceId: string;
-  modality: BillingModality | null;
-  number: string;
-  timbrado: string | null;
-  timbradoValidFrom: string | null;
-  timbradoValidUntil: string | null;
-  issuedAt: string | null;
-  condition: 'CONTADO' | 'CRÉDITO';
-  issuer: {
-    name: string;
-    fantasyName: string | null;
-    ruc: string | null;
-    address: string | null;
-    city: string | null;
-    phone: string | null;
-    activity: string | null;
-    branchName: string | null;
-    branchAddress: string | null;
-  };
-  buyer: { name: string; document: string };
-  lines: {
-    description: string;
-    quantity: number;
-    unitPrice: number;
-    total: number;
-    ivaRate: number;
-  }[];
-  totals: {
-    exempt: number;
-    taxed5: number;
-    taxed10: number;
-    iva5: number;
-    iva10: number;
-    ivaTotal: number;
-    total: number;
-  };
+export interface PosReceipt extends FiscalReceipt {
   copy: boolean;
   terminalName: string;
   cashierName: string;

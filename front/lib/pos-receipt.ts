@@ -1,5 +1,6 @@
 import type { PosInvoiceSeries, PosPrintFormat, PosReceipt } from './api/pos';
 import { paymentMethodLabel } from './payment-methods';
+import { escapeHtml, printHtmlDocument } from './print-html';
 
 export const PRINT_FORMAT_LABELS: Record<PosPrintFormat, string> = {
   THERMAL_58: 'Térmica 58 mm',
@@ -62,13 +63,6 @@ const PAGE: Record<PosPrintFormat, { page: string; width: string; font: string }
   A4: { page: 'A4', width: '100%', font: '12px' },
   HALF_LETTER: { page: '5.5in 8.5in', width: '100%', font: '11px' },
 };
-
-const escapeHtml = (value: string) =>
-  value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
 
 const gs = (n: number) => new Intl.NumberFormat('es-PY', { maximumFractionDigits: 0 }).format(n || 0);
 
@@ -181,25 +175,7 @@ ${header}<hr>${fiscal}<hr>${items}<hr>${subtotals}<hr>${payments}<hr>${footer}
 </main></body></html>`;
 }
 
-/** Imprime la factura desde un iframe oculto, sin salir de la pantalla de caja. */
+/** Imprime la factura sin salir de la pantalla de caja. */
 export function printReceipt(receipt: PosReceipt): void {
-  const frame = document.createElement('iframe');
-  frame.setAttribute('aria-hidden', 'true');
-  frame.style.position = 'fixed';
-  frame.style.width = '0';
-  frame.style.height = '0';
-  frame.style.border = '0';
-  document.body.appendChild(frame);
-  const doc = frame.contentDocument;
-  const win = frame.contentWindow;
-  if (!doc || !win) {
-    frame.remove();
-    return;
-  }
-  doc.open();
-  doc.write(receiptHtml(receipt));
-  doc.close();
-  win.addEventListener('afterprint', () => frame.remove());
-  win.focus();
-  win.print();
+  printHtmlDocument(receiptHtml(receipt));
 }

@@ -9,6 +9,8 @@ import { billingApi } from '@/lib/api/billing';
 import { seriesCode } from '@/lib/billing-series';
 import { usePermission } from '@/lib/permissions';
 import { BillingSeriesForm } from '../../_form';
+import { PreprintedLayoutEditor } from '@/components/billing/preprinted-layout-editor';
+import { VoidedSheets } from '@/components/billing/voided-sheets';
 
 export default function EditBillingSeriesPage() {
   const { id } = useParams<{ id: string }>();
@@ -46,6 +48,12 @@ export default function EditBillingSeriesPage() {
         </div>
       )}
       {series && <BillingSeriesForm series={series} canManage={canManage} onDone={back} />}
+      {series?.modality === 'PREPRINTED' && (
+        <>
+          <PreprintedLayoutEditor key={series.updatedAt} series={series} canManage={canManage} />
+          <VoidedSheets series={series} canManage={canManage} />
+        </>
+      )}
     </div>
   );
 }

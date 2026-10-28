@@ -2,6 +2,7 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { BillingSeries, BillingSeriesOption } from './api/billing';
+import { STANDARD_PREPRINTED_LAYOUT } from './preprinted-form';
 
 const state = vi.hoisted(() => ({
   permissions: [] as string[],
@@ -45,6 +46,7 @@ function makeSeries(overrides: Partial<BillingSeries> = {}): BillingSeries {
     rangeTo: 500,
     nextNumber: 42,
     isActive: true,
+    printLayout: STANDARD_PREPRINTED_LAYOUT,
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z',
     branch: { id: 'branch-1', name: 'Central' },

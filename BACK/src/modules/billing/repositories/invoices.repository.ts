@@ -178,6 +178,7 @@ export class InvoicesRepository {
         invoicePrefix: true,
         sequential: true,
         pdfFileId: true,
+        modality: true,
         paymentReceipt: {
           select: {
             id: true,

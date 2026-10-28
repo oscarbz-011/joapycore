@@ -3,6 +3,8 @@
 import { RequirePermission } from "@/components/require-permission";
 import { EntityTimeline } from "@/components/communications/entity-timeline";
 import { SeriesNumberingFields } from "@/components/billing/series-numbering-fields";
+import { PreprintedSheetPanel } from "@/components/billing/preprinted-sheet-panel";
+import { printPreprintedForm } from "@/lib/preprinted-form";
 import {
   defaultSeriesId,
   documentNumberError,
@@ -236,6 +238,16 @@ export default function InvoiceDetailPage() {
             }
           : {}),
       }),
+    // Con talonario se imprime sobre la hoja apenas queda emitida.
+    onSuccess: (issued) => {
+      if (issued.modality !== "PREPRINTED") return;
+      void billingApi
+        .printInvoiceForm(issued.id)
+        .then(({ receipt }) => {
+          if (receipt.formLayout) printPreprintedForm(receipt, receipt.formLayout);
+        })
+        .catch(() => undefined);
+    },
     // También se reconcilia después de un error: el POST pudo haber llegado
     // al backend y haberse perdido únicamente la respuesta. Al reconectar,
     // React Query vuelve a consultar y muestra el estado persistido real.
@@ -298,6 +310,14 @@ export default function InvoiceDetailPage() {
   const canIssue =
     (isCredit ? !!form.dueDate : !!form.paymentMethod) && seriesReady;
   const pdfAction = invoicePdfAction(invoice);
+  // Talonario de imprenta: la factura es la hoja preimpresa, sin PDF.
+  const issuesOnSheet = needsSeries
+    ? selectedSeries?.modality === "PREPRINTED"
+    : invoice.modality === "PREPRINTED";
+  const onSheet =
+    invoice.modality === "PREPRINTED" &&
+    invoice.sequential != null &&
+    (invoice.status === "ISSUED" || invoice.status === "PAID");
 
   return (
     <div className="max-w-5xl">
@@ -610,6 +630,14 @@ export default function InvoiceDetailPage() {
                 />
               </div>
 
+              {issuesOnSheet && (
+                <p className="mb-3 text-xs text-muted-foreground">
+                  Poné la hoja del talonario en la impresora antes de emitir:
+                  al emitir se imprimen los datos de la venta sobre ella. No se
+                  genera PDF ni se envía por correo.
+                </p>
+              )}
+
               {issueMutation.isError && (
                 <p className="mb-3 text-xs text-destructive">
                   {apiErrorMessage(
@@ -627,10 +655,14 @@ export default function InvoiceDetailPage() {
                 >
                   <Send size={15} />
                   {issueMutation.isPending
-                    ? "Generando PDF y emitiendo..."
+                    ? issuesOnSheet
+                      ? "Emitiendo..."
+                      : "Generando PDF y emitiendo..."
                     : issueMutation.isError
                       ? "Reintentar emisión"
-                      : "Emitir factura"}
+                      : issuesOnSheet
+                        ? "Emitir e imprimir sobre la hoja"
+                        : "Emitir factura"}
                 </Button>
               </RequirePermission>
             </section>
@@ -713,6 +745,8 @@ export default function InvoiceDetailPage() {
               ) : null}
             </section>
           )}
+
+          {onSheet && <PreprintedSheetPanel invoice={invoice} />}
 
           {/* Cancel zone */}
           {canCancel && (

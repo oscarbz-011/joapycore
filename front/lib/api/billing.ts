@@ -7,6 +7,120 @@ export type BillingModality = "PREPRINTED" | "SELF_PRINTED" | "ELECTRONIC";
 export type BillingDocumentType = "INVOICE" | "CREDIT_NOTE";
 export type { PaymentMethod } from "../payment-methods";
 
+/** Posición sobre la hoja del talonario, en mm desde arriba a la izquierda. */
+export interface FormPoint {
+  x: number;
+  y: number;
+}
+
+/** Dónde va cada dato sobre la hoja preimpresa. En los importes, `x` es el borde derecho. */
+export interface PreprintedLayout {
+  pageWidth: number;
+  pageHeight: number;
+  offsetX: number;
+  offsetY: number;
+  fontSize: number;
+  date: FormPoint;
+  cashMark: FormPoint;
+  creditMark: FormPoint;
+  buyerName: FormPoint;
+  buyerDocument: FormPoint;
+  buyerAddress: FormPoint;
+  items: {
+    top: number;
+    lineHeight: number;
+    maxLines: number;
+    quantityX: number;
+    descriptionX: number;
+    descriptionWidth: number;
+    unitPriceX: number;
+    exemptX: number;
+    taxed5X: number;
+    taxed10X: number;
+  };
+  subtotalsY: number;
+  total: FormPoint;
+  totalInWords: FormPoint;
+  iva5: FormPoint;
+  iva10: FormPoint;
+  ivaTotal: FormPoint;
+}
+
+/** Lo que se imprime de una factura: en papel térmico, en A4 o sobre la hoja del talonario. */
+export interface FiscalReceipt {
+  invoiceId: string;
+  modality: BillingModality | null;
+  number: string;
+  timbrado: string | null;
+  timbradoValidFrom: string | null;
+  timbradoValidUntil: string | null;
+  issuedAt: string | null;
+  condition: "CONTADO" | "CRÉDITO";
+  issuer: {
+    name: string;
+    fantasyName: string | null;
+    ruc: string | null;
+    address: string | null;
+    city: string | null;
+    phone: string | null;
+    activity: string | null;
+    branchName: string | null;
+    branchAddress: string | null;
+  };
+  buyer: { name: string; document: string; address: string | null };
+  lines: {
+    description: string;
+    quantity: number;
+    unitPrice: number;
+    total: number;
+    ivaRate: number;
+  }[];
+  totals: {
+    exempt: number;
+    taxed5: number;
+    taxed10: number;
+    iva5: number;
+    iva10: number;
+    ivaTotal: number;
+    total: number;
+  };
+  formLayout: PreprintedLayout | null;
+}
+
+export interface FormPrintResult {
+  receipt: FiscalReceipt;
+  printCount: number;
+  printedAt: string;
+}
+
+export interface AttachedFile {
+  id: string;
+  originalName: string;
+  mimeType: string;
+}
+
+export interface VoidedSheet {
+  id: string;
+  sequential: number;
+  reason: string;
+  createdAt: string;
+  voidedById: string | null;
+  invoice: { id: string; invoicePrefix: string | null; invoiceNumber: string | null } | null;
+  scanFile: AttachedFile | null;
+}
+
+export interface VoidInvoiceSheetPayload {
+  reason: string;
+  documentNumber?: number;
+  scanFileId?: string;
+}
+
+export interface VoidLooseSheetPayload {
+  documentNumber: number;
+  reason: string;
+  scanFileId?: string;
+}
+
 export interface InvoiceItem {
   id: string;
   description: string;
@@ -53,6 +167,7 @@ export interface InterestInvoice {
   invoicePrefix: string | null;
   sequential: number | null;
   pdfFileId: string | null;
+  modality: BillingModality | null;
   paymentReceipt: {
     id: string;
     receiptNumber: string;
@@ -87,6 +202,11 @@ export interface Invoice {
   // PDF
   pdfUrl: string | null;
   pdfFileId: string | null;
+  // Talonario de imprenta: impresiones sobre la hoja y escaneo de la factura física
+  formPrintCount: number;
+  formPrintedAt: string | null;
+  physicalScanFileId: string | null;
+  physicalScan: AttachedFile | null;
   // SIFEN
   cdc: string | null;
   qrUrl: string | null;
@@ -168,6 +288,7 @@ export interface BillingSeries {
   rangeTo: number;
   nextNumber: number;
   isActive: boolean;
+  printLayout: PreprintedLayout;
   createdAt: string;
   updatedAt: string;
   branch: { id: string; name: string };
@@ -195,6 +316,8 @@ export interface CreateBillingSeriesPayload {
 
 export type UpdateBillingSeriesPayload = Partial<CreateBillingSeriesPayload> & {
   isActive?: boolean;
+  /** null vuelve al diseño estándar. */
+  printLayout?: PreprintedLayout | null;
 };
 
 export function canRetryInvoicePdf(
@@ -216,8 +339,10 @@ export function canPrintInvoicePdf(
 }
 
 export function invoicePdfAction(
-  invoice: Pick<Invoice, "status" | "pdfFileId">,
+  invoice: Pick<Invoice, "status" | "pdfFileId"> & { modality?: BillingModality | null },
 ): "print" | "retry" | null {
+  // Con talonario la factura es la hoja impresa: no tiene PDF.
+  if (invoice.modality === "PREPRINTED") return null;
   if (canPrintInvoicePdf(invoice)) return "print";
   if (canRetryInvoicePdf(invoice)) return "retry";
   return null;
@@ -246,6 +371,22 @@ export const billingApi = {
 
   listCreditNotes: (): Promise<CreditNote[]> =>
     apiClient.get("/billing/credit-notes").then((r) => r.data),
+
+  /** Datos para imprimir sobre la hoja del talonario; registra la impresión. */
+  printInvoiceForm: (invoiceId: string): Promise<FormPrintResult> =>
+    apiClient.post(`/billing/invoices/${invoiceId}/form/print`).then((r) => r.data),
+
+  voidInvoiceSheet: (invoiceId: string, dto: VoidInvoiceSheetPayload): Promise<Invoice> =>
+    apiClient.post(`/billing/invoices/${invoiceId}/sheet/void`, dto).then((r) => r.data),
+
+  setInvoicePhysicalScan: (invoiceId: string, fileId: string | null): Promise<Invoice> =>
+    apiClient.post(`/billing/invoices/${invoiceId}/physical-scan`, { fileId }).then((r) => r.data),
+
+  listVoidedSheets: (seriesId: string): Promise<VoidedSheet[]> =>
+    apiClient.get(`/billing/series/${seriesId}/voided`).then((r) => r.data),
+
+  voidLooseSheet: (seriesId: string, dto: VoidLooseSheetPayload): Promise<VoidedSheet[]> =>
+    apiClient.post(`/billing/series/${seriesId}/voided`, dto).then((r) => r.data),
 
   getSeriesOptions: (invoiceId: string): Promise<BillingSeriesOption[]> =>
     apiClient.get(`/billing/invoices/${invoiceId}/series`).then((r) => r.data),
