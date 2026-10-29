@@ -23,6 +23,8 @@ export class OutboxConsumersRegistry implements OnModuleInit {
   onModuleInit() {
     const seen = new Set<string>();
     for (const wrapper of this.discovery.getProviders()) {
+      // Los providers por request no tienen una instancia que llamar.
+      if (!wrapper.isDependencyTreeStatic()) continue;
       const instance = wrapper.instance as Record<string, unknown> | undefined;
       if (!instance || typeof instance !== 'object') continue;
       const prototype = Object.getPrototypeOf(instance) as object;
@@ -41,8 +43,8 @@ export class OutboxConsumersRegistry implements OnModuleInit {
           seen.add(meta.consumer);
           this.register({
             ...meta,
-            handle: (payload) =>
-              (method as (p: unknown) => unknown).call(instance, payload),
+            handle: (payload: unknown): unknown =>
+              Reflect.apply(method, instance, [payload]) as unknown,
           });
         }
       }

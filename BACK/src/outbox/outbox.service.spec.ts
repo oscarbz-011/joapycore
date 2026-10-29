@@ -179,6 +179,39 @@ describe('OutboxService', () => {
     });
   });
 
+  it('completes the event even if an in-memory observer throws', async () => {
+    const { service, repo, events } = setup();
+    events.emit.mockImplementation(() => {
+      throw new Error('socket caído');
+    });
+
+    await expect(service.dispatch('ev-1')).resolves.toBe(true);
+    expect(repo.markDone).toHaveBeenCalledWith('ev-1');
+  });
+
+  it('retries a consumer whose failure could not be recorded', async () => {
+    const failing = consumer('a', {
+      retry: false,
+      handle: jest.fn().mockRejectedValue(new Error('pdf down')),
+    });
+    const { service, repo } = setup([failing]);
+    repo.recordDelivery.mockRejectedValue(new Error('db down'));
+
+    await expect(service.dispatch('ev-1')).resolves.toBe(false);
+    expect(repo.markFailed).toHaveBeenCalled();
+  });
+
+  it('calls every consumer of an event stored before the deliveries existed', async () => {
+    const { service, repo, consumers } = setup();
+    repo.findDeliveredConsumers.mockResolvedValue([]);
+
+    await service.dispatch('ev-1');
+
+    expect(
+      consumers.every((c) => (c.handle as jest.Mock).mock.calls.length === 1),
+    ).toBe(true);
+  });
+
   it('processes every due event', async () => {
     const { service, repo } = setup();
     repo.findDue.mockResolvedValue(['a', 'b']);

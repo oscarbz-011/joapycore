@@ -93,8 +93,15 @@ export class OutboxService {
     );
     const failures = outcomes.filter((o): o is string => o !== null);
 
-    // Observadores en memoria, como el puente a WebSocket.
-    this.eventEmitter.emit(event.eventName, event.payload);
+    // Observadores en memoria, como el puente a WebSocket. Un fallo acá no
+    // puede cortar el despacho ni el lote del cron.
+    try {
+      this.eventEmitter.emit(event.eventName, event.payload);
+    } catch (error) {
+      this.logger.warn(
+        `No se pudo avisar en memoria el evento ${id}: ${(error as Error).message}`,
+      );
+    }
 
     if (failures.length === 0) {
       await this.outboxRepository.markDone(id);
@@ -133,10 +140,15 @@ export class OutboxService {
       return null;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      await this.outboxRepository.recordDelivery(eventId, consumer.consumer, {
-        failed: consumer.retry,
-        error: message,
-      });
+      try {
+        await this.outboxRepository.recordDelivery(eventId, consumer.consumer, {
+          failed: consumer.retry,
+          error: message,
+        });
+      } catch (recordError) {
+        // Sin el registro no se sabe si se procesó: se reintenta.
+        return `${consumer.consumer}: ${message} (sin registrar: ${(recordError as Error).message})`;
+      }
       if (consumer.retry) return `${consumer.consumer}: ${message}`;
       this.logger.warn(
         `${consumer.consumer} no procesó el evento ${eventId} (sin reintento): ${message}`,
