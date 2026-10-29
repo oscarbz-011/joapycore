@@ -77,6 +77,7 @@ describe('talonario sheet of an invoice', () => {
 
     expect(html).toContain('Hoja N° <span class="font-mono">001-002-0000041</span>');
     expect(html).toContain('Todavía no se imprimió sobre la hoja');
+    expect(html).toContain('Sin imprimir');
     expect(html).toContain('Imprimir sobre la hoja');
     expect(html).toContain('La hoja salió mal');
     expect(html).toContain('Adjuntar escaneo o foto');
@@ -94,6 +95,15 @@ describe('talonario sheet of an invoice', () => {
 
     expect(html).toContain('Impresa 2 veces, la última el 15/06/26');
     expect(html).toContain('factura-41.jpg');
+    expect(html).not.toContain('Sin imprimir');
+  });
+
+  it('offers to print again once the sheet was printed', () => {
+    state.permissions = ['billing:issue'];
+    const html = render(PreprintedSheetPanel, {
+      invoice: { ...SHEET_INVOICE, formPrintCount: 1, formPrintedAt: '2026-06-15T15:00:00.000Z' },
+    });
+    expect(html).toContain('Volver a imprimir sobre la hoja');
   });
 
   it('only shows the data to someone who cannot issue', () => {
@@ -101,6 +111,7 @@ describe('talonario sheet of an invoice', () => {
     expect(html).not.toContain('Imprimir sobre la hoja');
     expect(html).not.toContain('La hoja salió mal');
     expect(html).not.toContain('Adjuntar escaneo');
+    expect(html).toContain('Sin escaneo adjunto.');
   });
 
   it('has no PDF to print or regenerate', () => {

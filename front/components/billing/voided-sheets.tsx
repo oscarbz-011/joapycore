@@ -12,6 +12,7 @@ import { usePagination } from '@/lib/use-pagination';
 import { useTableSort } from '@/lib/use-table-sort';
 import { SortableHeader } from '@/components/sortable-header';
 import { TablePagination } from '@/components/table-pagination';
+import { ScanPicker } from '@/components/billing/scan-picker';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -155,17 +156,15 @@ export function VoidedSheets({ series, canManage }: Readonly<{ series: BillingSe
             </div>
           </div>
           <div className="space-y-1">
-            <Label htmlFor="loose-scan">Escaneo o foto de la hoja (opcional)</Label>
-            {scanName && <p className="text-xs text-foreground">{scanName}</p>}
-            <Input
+            <p className="text-sm font-medium text-foreground">Escaneo o foto de la hoja (opcional)</p>
+            <ScanPicker
               id="loose-scan"
-              type="file"
-              accept="image/*,application/pdf"
-              disabled={upload.isPending}
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) upload.mutate(file);
-                e.target.value = '';
+              fileName={scanName || null}
+              uploading={upload.isPending}
+              onPick={(file) => upload.mutate(file)}
+              onRemove={() => {
+                setScanId(null);
+                setScanName('');
               }}
             />
           </div>

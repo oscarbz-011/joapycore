@@ -2,13 +2,15 @@
 
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { FileImage, Printer, TriangleAlert, X } from 'lucide-react';
+import { Printer, TriangleAlert } from 'lucide-react';
 import { apiErrorMessage } from '@/lib/api/api-error';
 import { billingApi, type Invoice } from '@/lib/api/billing';
 import { filesApi } from '@/lib/api/files';
 import { openPdf } from '@/lib/open-pdf';
 import { usePermission } from '@/lib/permissions';
 import { printPreprintedForm } from '@/lib/preprinted-form';
+import { ScanPicker } from '@/components/billing/scan-picker';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -19,7 +21,7 @@ type SheetInvoice = Pick<
   'id' | 'invoicePrefix' | 'invoiceNumber' | 'formPrintCount' | 'formPrintedAt' | 'physicalScan'
 >;
 
-const SCAN_TYPES = 'image/*,application/pdf';
+const SECTION_LABEL = 'text-xs font-semibold uppercase tracking-wider text-muted-foreground/60';
 
 function printedLabel(invoice: SheetInvoice): string {
   if (invoice.formPrintCount === 0 || !invoice.formPrintedAt) return 'Todavía no se imprimió sobre la hoja';
@@ -52,6 +54,14 @@ export function PreprintedSheetPanel({ invoice }: Readonly<{ invoice: SheetInvoi
     void queryClient.invalidateQueries({ queryKey: ['invoices'] });
   };
   const fail = (fallback: string) => (err: unknown) => setError(apiErrorMessage(err, fallback));
+
+  function closeVoiding() {
+    setVoiding(false);
+    setReason('');
+    setNextSheet('');
+    setVoidScanId(null);
+    setVoidScanName('');
+  }
 
   const print = useMutation({
     mutationFn: () => billingApi.printInvoiceForm(invoice.id),
@@ -96,11 +106,7 @@ export function PreprintedSheetPanel({ invoice }: Readonly<{ invoice: SheetInvoi
       }),
     onSuccess: (updated) => {
       setMoved(`${updated.invoicePrefix ?? ''}${updated.invoiceNumber ?? ''}`);
-      setVoiding(false);
-      setReason('');
-      setNextSheet('');
-      setVoidScanId(null);
-      setVoidScanName('');
+      closeVoiding();
       refresh();
     },
     onError: fail('No se pudo inutilizar la hoja'),
@@ -108,91 +114,83 @@ export function PreprintedSheetPanel({ invoice }: Readonly<{ invoice: SheetInvoi
 
   const busy = print.isPending || voidSheet.isPending || uploadScan.isPending || removeScan.isPending;
   const sheet = `${invoice.invoicePrefix ?? ''}${invoice.invoiceNumber ?? ''}`;
+  const printed = invoice.formPrintCount > 0;
+  const scan = invoice.physicalScan;
+  let printLabel = 'Imprimir sobre la hoja';
+  if (print.isPending) printLabel = 'Preparando…';
+  else if (printed) printLabel = 'Volver a imprimir sobre la hoja';
 
   return (
-    <section className="space-y-4 rounded-xl border border-border bg-card p-5">
-      <div>
-        <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/60">Talonario</h2>
-        <p className="mt-2 text-sm text-foreground">
-          Hoja N° <span className="font-mono">{sheet}</span>
-        </p>
+    <section className="divide-y divide-border rounded-xl border border-border bg-card">
+      <div className="space-y-3 p-5">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h2 className={SECTION_LABEL}>Hoja del talonario</h2>
+            <p className="mt-1.5 text-base font-medium text-foreground">
+              Hoja N° <span className="font-mono">{sheet}</span>
+            </p>
+          </div>
+          <Badge
+            variant="outline"
+            className={
+              printed
+                ? 'shrink-0 bg-accent-subtle text-accent-on border-accent-on/20'
+                : 'shrink-0 bg-warn-subtle text-warn border-warn/30'
+            }
+          >
+            {printed ? 'Impresa' : 'Sin imprimir'}
+          </Badge>
+        </div>
         <p className="text-xs text-muted-foreground">{printedLabel(invoice)}</p>
-      </div>
 
-      {moved && (
-        <p role="status" className="rounded-lg border border-primary/30 bg-primary/5 px-3 py-2 text-xs text-foreground">
-          La factura pasó a la hoja N° <span className="font-mono">{moved}</span>. Poné esa hoja en la impresora y
-          tocá Imprimir sobre la hoja.
-        </p>
-      )}
-
-      {canIssue && (
-        <Button className="w-full" disabled={busy} onClick={() => { setError(''); print.mutate(); }}>
-          <Printer size={15} />
-          {print.isPending ? 'Preparando…' : 'Imprimir sobre la hoja'}
-        </Button>
-      )}
-
-      <div className="space-y-2 border-t border-border pt-4">
-        <p className="text-sm font-medium text-foreground">Factura física escaneada</p>
-        {invoice.physicalScan ? (
-          <div className="flex items-center justify-between gap-2 text-sm">
-            <button
-              type="button"
-              onClick={() => void openPdf(invoice.physicalScan!.id)}
-              className="flex min-w-0 items-center gap-1.5 text-primary hover:underline"
-            >
-              <FileImage size={14} className="shrink-0" />
-              <span className="truncate">{invoice.physicalScan.originalName}</span>
-            </button>
-            {canIssue && (
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => removeScan.mutate()}
-                className="rounded p-1 text-muted-foreground hover:bg-muted/20 hover:text-destructive"
-                aria-label="Quitar el escaneo"
-              >
-                <X size={14} />
-              </button>
-            )}
-          </div>
-        ) : (
-          <p className="text-xs text-muted-foreground">Sin escaneo adjunto.</p>
+        {moved && (
+          <p role="status" className="rounded-lg border border-primary/30 bg-primary/5 px-3 py-2 text-xs text-foreground">
+            La factura pasó a la hoja N° <span className="font-mono">{moved}</span>. Poné esa hoja en la impresora y
+            tocá Imprimir sobre la hoja.
+          </p>
         )}
+
         {canIssue && (
-          <div className="space-y-1">
-            <Label htmlFor="physical-scan" className="text-xs text-muted-foreground">
-              {invoice.physicalScan ? 'Reemplazar por otro escaneo o foto' : 'Adjuntar escaneo o foto'}
-            </Label>
-            <Input
-              id="physical-scan"
-              type="file"
-              accept={SCAN_TYPES}
-              disabled={busy}
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) uploadScan.mutate(file);
-                e.target.value = '';
-              }}
-            />
-            {uploadScan.isPending && <p className="text-xs text-muted-foreground">Subiendo…</p>}
-          </div>
+          <Button
+            className="w-full"
+            disabled={busy}
+            onClick={() => {
+              setError('');
+              print.mutate();
+            }}
+          >
+            <Printer size={15} />
+            {printLabel}
+          </Button>
         )}
       </div>
 
+      <div className="space-y-2 p-5">
+        <h3 className="text-sm font-medium text-foreground">Factura física</h3>
+        <p className="text-xs text-muted-foreground">Escaneo o foto de la hoja impresa, para el control.</p>
+        <ScanPicker
+          id="physical-scan"
+          fileName={scan?.originalName ?? null}
+          uploading={uploadScan.isPending}
+          disabled={busy}
+          onOpen={scan ? () => void openPdf(scan.id) : undefined}
+          onPick={canIssue ? (file) => uploadScan.mutate(file) : undefined}
+          onRemove={canIssue && scan ? () => removeScan.mutate() : undefined}
+        />
+      </div>
+
       {canIssue && (
-        <div className="space-y-3 border-t border-border pt-4">
+        <div className="space-y-3 p-5">
           {voiding ? (
             <>
-              <div className="flex items-start gap-2 text-xs text-warn">
+              <div className="flex items-start gap-2 rounded-lg border border-warn/30 bg-warn-subtle px-3 py-2 text-xs text-warn">
                 <TriangleAlert size={14} className="mt-0.5 shrink-0" />
                 <span>
                   La hoja N° {sheet} queda inutilizada y no se vuelve a usar. Guardá la hoja física (original y
                   copias) para el control.
                 </span>
               </div>
-              <div className="space-y-1">
+              <div className="space-y-1.5">
                 <Label htmlFor="void-reason">Motivo *</Label>
                 <Textarea
                   id="void-reason"
@@ -203,7 +201,7 @@ export function PreprintedSheetPanel({ invoice }: Readonly<{ invoice: SheetInvoi
                   placeholder="Se trabó el papel, salió corrida…"
                 />
               </div>
-              <div className="space-y-1">
+              <div className="space-y-1.5">
                 <Label htmlFor="void-next">Imprimir en la hoja N°</Label>
                 <Input
                   id="void-next"
@@ -213,18 +211,16 @@ export function PreprintedSheetPanel({ invoice }: Readonly<{ invoice: SheetInvoi
                   placeholder="La siguiente del talonario"
                 />
               </div>
-              <div className="space-y-1">
-                <Label htmlFor="void-scan">Escaneo o foto de la hoja inutilizada</Label>
-                {voidScanName && <p className="text-xs text-foreground">{voidScanName}</p>}
-                <Input
+              <div className="space-y-1.5">
+                <p className="text-sm font-medium text-foreground">Escaneo o foto de la hoja inutilizada</p>
+                <ScanPicker
                   id="void-scan"
-                  type="file"
-                  accept={SCAN_TYPES}
-                  disabled={uploadVoidScan.isPending}
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (file) uploadVoidScan.mutate(file);
-                    e.target.value = '';
+                  fileName={voidScanName || null}
+                  uploading={uploadVoidScan.isPending}
+                  onPick={(file) => uploadVoidScan.mutate(file)}
+                  onRemove={() => {
+                    setVoidScanId(null);
+                    setVoidScanName('');
                   }}
                 />
               </div>
@@ -233,29 +229,41 @@ export function PreprintedSheetPanel({ invoice }: Readonly<{ invoice: SheetInvoi
                   variant="destructive"
                   className="flex-1"
                   disabled={reason.trim().length < 3 || busy || uploadVoidScan.isPending}
-                  onClick={() => { setError(''); voidSheet.mutate(); }}
+                  onClick={() => {
+                    setError('');
+                    voidSheet.mutate();
+                  }}
                 >
                   {voidSheet.isPending ? 'Inutilizando…' : 'Inutilizar y pasar a otra hoja'}
                 </Button>
-                <Button variant="outline" onClick={() => setVoiding(false)}>
+                <Button variant="outline" onClick={closeVoiding}>
                   Volver
                 </Button>
               </div>
             </>
           ) : (
-            <button
-              type="button"
-              onClick={() => { setMoved(''); setVoiding(true); }}
-              className="text-sm font-medium text-destructive underline underline-offset-2 hover:opacity-80"
-            >
-              La hoja salió mal
-            </button>
+            <div className="space-y-2">
+              <p className="text-xs text-muted-foreground">
+                ¿Se trabó el papel o salió corrida? Inutilizá la hoja y la factura pasa a la siguiente.
+              </p>
+              <Button
+                variant="destructive"
+                className="w-full"
+                onClick={() => {
+                  setMoved('');
+                  setVoiding(true);
+                }}
+              >
+                <TriangleAlert size={14} />
+                La hoja salió mal
+              </Button>
+            </div>
           )}
         </div>
       )}
 
       {error && (
-        <p role="alert" className="text-xs text-destructive">
+        <p role="alert" className="p-5 text-xs text-destructive">
           {error}
         </p>
       )}
