@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { Search } from 'lucide-react';
+import { ListOrdered, Search } from 'lucide-react';
 import { billingApi, type CreditNote, type InvoiceStatus } from '../../../../lib/api/billing';
 import { formatDatePY } from '../../../../lib/date';
 import {
@@ -17,6 +17,7 @@ import { openPdf } from '../../../../lib/open-pdf';
 import { useTableSort } from '../../../../lib/use-table-sort';
 import { SortableHeader } from '@/components/sortable-header';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
@@ -152,6 +153,7 @@ export default function BillingPage() {
   async function openRow(row: InvoiceRow) {
     setOpenError('');
     if (row.kind === 'SALE') return router.push(`/dashboard/billing/invoices/${row.id}`);
+    if (row.needsNumber) return router.push(`/dashboard/billing/invoices/${row.id}/number`);
     if (!row.pdfFileId) {
       return setOpenError(
         `La factura de intereses ${row.number} no tiene PDF. Generalo desde el recibo de la cuota (botón "Factura int.").`,
@@ -174,11 +176,17 @@ export default function BillingPage() {
           <h1 className="text-[25px] font-extrabold tracking-tight text-foreground">Facturas</h1>
           <p className="mt-1 text-[14px] text-muted-foreground">Al confirmar un pedido se genera un borrador. El cajero lo revisa y lo emite.</p>
         </div>
-        {pendingCount > 0 && (
-          <Badge className="mt-1 bg-warn-subtle text-warn border-warn/30 px-3 py-1">
-            {pendingCount} borrador{pendingCount > 1 ? 'es' : ''} pendiente{pendingCount > 1 ? 's' : ''}
-          </Badge>
-        )}
+        <div className="flex items-center gap-2">
+          {pendingCount > 0 && (
+            <Badge className="bg-warn-subtle text-warn border-warn/30 px-3 py-1">
+              {pendingCount} borrador{pendingCount > 1 ? 'es' : ''} pendiente{pendingCount > 1 ? 's' : ''}
+            </Badge>
+          )}
+          <Button variant="outline" onClick={() => router.push('/dashboard/settings/billing-series')}>
+            <ListOrdered size={15} className="mr-1.5" />
+            Series y timbrados
+          </Button>
+        </div>
       </div>
 
       {/* Tabs */}
@@ -278,7 +286,15 @@ export default function BillingPage() {
                         </td>
                         <td className="px-4 py-3 hidden sm:table-cell text-muted-foreground text-xs">{row.typeLabel}</td>
                         <td className="px-4 py-3 text-muted-foreground">{formatDatePY(row.date, 'local')}</td>
-                        <td className="px-4 py-3"><StatusBadge status={row.status} /></td>
+                        <td className="px-4 py-3">
+                          {row.needsNumber ? (
+                            <Badge variant="outline" className="bg-warn-subtle text-warn border-warn/30">
+                              Sin numerar
+                            </Badge>
+                          ) : (
+                            <StatusBadge status={row.status} />
+                          )}
+                        </td>
                         <td className="px-4 py-3 text-right font-mono font-medium text-foreground">{formatPrice(row.total)}</td>
                       </tr>
                     ))}

@@ -4,13 +4,24 @@ import {
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
-import { BillingSourcesRepository } from '../repositories/billing-sources.repository';
 import { CreditNotesRepository } from '../repositories/credit-notes.repository';
 import { InvoicesRepository } from '../repositories/invoices.repository';
 import type { AuditLogEvent } from '../../../audit/audit-log.event';
+import { AssignInvoiceNumberDto } from '../dto/assign-invoice-number.dto';
 import { IssueInvoiceDto } from '../dto/issue-invoice.dto';
 import { OutboxService } from '../../../outbox/outbox.service';
+import { BillingSeriesService } from './billing-series.service';
+
+// Un número de talonario que otra emisión simultánea usó primero choca
+// contra el índice único de la serie.
+function isDuplicateNumber(error: unknown) {
+  return (
+    error instanceof Prisma.PrismaClientKnownRequestError &&
+    error.code === 'P2002'
+  );
+}
 
 @Injectable()
 export class InvoicesService {
@@ -20,7 +31,7 @@ export class InvoicesService {
     private readonly creditNotesRepository: CreditNotesRepository,
     private readonly eventEmitter: EventEmitter2,
     private readonly outbox: OutboxService,
-    private readonly billingSources: BillingSourcesRepository,
+    private readonly seriesService: BillingSeriesService,
   ) {}
 
   findAll(tenantId: string) {
@@ -39,6 +50,19 @@ export class InvoicesService {
 
   findCreditNotes(tenantId: string) {
     return this.creditNotesRepository.findAll(tenantId);
+  }
+
+  // Series entre las que se puede elegir al emitir esta factura (o al
+  // numerar una factura de intereses que quedó sin número).
+  async findSeriesOptions(tenantId: string, id: string) {
+    const invoice = await this.findOne(tenantId, id);
+    if (invoice.invoiceType === 'INTEREST') {
+      return this.findInterestSeriesOptions(tenantId, id);
+    }
+    return this.seriesService.findIssueOptions(
+      tenantId,
+      invoice.saleOrder?.branchId ?? null,
+    );
   }
 
   async issue(
@@ -90,49 +114,63 @@ export class InvoicesService {
         );
       }
     } else {
+      if (
+        invoice.sequential != null &&
+        dto.documentNumber !== undefined &&
+        dto.documentNumber !== invoice.sequential
+      ) {
+        throw new UnprocessableEntityException(
+          `La factura ya tiene reservado el número ${invoice.sequential}; reintentá con ese número`,
+        );
+      }
+
       // Primero se reservan la numeración y los datos que necesita el PDF,
       // pero la factura sigue PENDING hasta que se guarde el comprobante.
-      await this.prisma.$transaction(async (tx) => {
-        const establecimiento =
-          saleOrder.branch?.codigoEstablecimiento || '001';
-        const puntoExpedicion = saleOrder.branch?.puntoExpedicion || '001';
+      // Si un intento anterior reservó el número y se interrumpió antes del
+      // PDF, se reutiliza para que el reintento sea idempotente.
+      try {
+        await this.prisma.$transaction(async (tx) => {
+          const numbering =
+            invoice.sequential == null
+              ? await this.seriesService.numberForIssue(
+                  tenantId,
+                  {
+                    branchId: saleOrder.branchId ?? null,
+                    seriesId: dto.seriesId,
+                    documentNumber: dto.documentNumber,
+                    at: attemptAt,
+                  },
+                  tx,
+                )
+              : null;
 
-        // Si un intento anterior reservó el número y se interrumpió antes del
-        // PDF, se reutiliza para que el reintento sea idempotente.
-        let sequential = invoice.sequential;
-        if (sequential == null) {
-          const last = await this.invoicesRepository.findLastSequential(
+          const claimed = await this.invoicesRepository.claimIssue(
             tenantId,
-            establecimiento,
-            puntoExpedicion,
+            id,
+            invoice.updatedAt,
+            attemptAt,
+            {
+              dueDate: dto.dueDate ? new Date(dto.dueDate) : undefined,
+              paymentMethod: dto.paymentMethod ?? null,
+              notes: dto.notes,
+              ...(numbering ?? {}),
+            },
             tx,
           );
-          sequential = (last?.sequential ?? 0) + 1;
-        }
-
-        const claimed = await this.invoicesRepository.claimIssue(
-          tenantId,
-          id,
-          invoice.updatedAt,
-          attemptAt,
-          {
-            dueDate: dto.dueDate ? new Date(dto.dueDate) : undefined,
-            paymentMethod: dto.paymentMethod ?? null,
-            establecimiento,
-            puntoExpedicion,
-            sequential,
-            invoiceNumber: String(sequential).padStart(7, '0'),
-            invoicePrefix: `${establecimiento}-${puntoExpedicion}-`,
-            notes: dto.notes,
-          },
-          tx,
-        );
-        if (claimed.count !== 1) {
+          if (claimed.count !== 1) {
+            throw new UnprocessableEntityException(
+              'La factura ya está siendo emitida o cambió de estado. Recargá antes de reintentar.',
+            );
+          }
+        });
+      } catch (error) {
+        if (isDuplicateNumber(error)) {
           throw new UnprocessableEntityException(
-            'La factura ya está siendo emitida o cambió de estado. Recargá antes de reintentar.',
+            `El número ${dto.documentNumber ?? ''} del talonario ya fue usado en otra factura`,
           );
         }
-      });
+        throw error;
+      }
 
       // Los listeners críticos declaran suppressErrors:false para que
       // emitAsync rechace realmente si falla la reprogramación o el renderer.
@@ -277,9 +315,9 @@ export class InvoicesService {
 
   // Factura de intereses moratorios — se crea ya PAID (el interés ya se
   // cobró en el pago que la origina) y sin AR asociada, a diferencia de
-  // issue() que arranca en PENDING y espera un cobro posterior. Numeración
-  // mismo criterio (buscar el último e incrementar), mismo pool
-  // establecimiento/puntoExpedicion que las facturas de venta del tenant.
+  // issue() que arranca en PENDING y espera un cobro posterior. La numera la
+  // serie de impresión propia de la sucursal; si la sucursal factura con
+  // talonario, queda sin número (y sin PDF) hasta que alguien lo cargue.
   async createInterestInvoiceFromReceipt(
     tenantId: string,
     params: {
@@ -300,35 +338,18 @@ export class InvoicesService {
     const total = params.items.reduce((s, i) => s + i.total, 0);
 
     const invoice = await this.prisma.$transaction(async (tx) => {
-      let establecimiento = '001';
-      let puntoExpedicion = '001';
-      if (params.branchId) {
-        const branch = await this.billingSources.findBranchNumbering(
-          tenantId,
-          params.branchId,
-          tx,
-        );
-        establecimiento = branch?.codigoEstablecimiento || '001';
-        puntoExpedicion = branch?.puntoExpedicion || '001';
-      }
-
-      const last = await this.invoicesRepository.findLastSequential(
+      const numbering = await this.seriesService.numberForAutomatic(
         tenantId,
-        establecimiento,
-        puntoExpedicion,
+        params.branchId,
+        params.issuedAt,
         tx,
       );
-      const sequential = (last?.sequential ?? 0) + 1;
 
       return this.invoicesRepository.createInterestInvoice(
         tenantId,
         {
           paymentReceiptId: params.paymentReceiptId,
-          establecimiento,
-          puntoExpedicion,
-          sequential,
-          invoiceNumber: String(sequential).padStart(7, '0'),
-          invoicePrefix: `${establecimiento}-${puntoExpedicion}-`,
+          numbering,
           total,
           issuedAt: params.issuedAt,
           items: params.items,
@@ -337,12 +358,14 @@ export class InvoicesService {
       );
     });
 
-    await this.eventEmitter.emitAsync('invoice.interest.issued', {
-      tenantId,
-      invoiceId: invoice.id,
-      paymentReceiptId: params.paymentReceiptId,
-      total,
-    });
+    if (invoice.sequential != null) {
+      await this.eventEmitter.emitAsync('invoice.interest.issued', {
+        tenantId,
+        invoiceId: invoice.id,
+        paymentReceiptId: params.paymentReceiptId,
+        total,
+      });
+    }
 
     this.eventEmitter.emit('audit.log', {
       tenantId,
@@ -352,6 +375,86 @@ export class InvoicesService {
     } satisfies AuditLogEvent);
 
     return invoice;
+  }
+
+  // Carga el número del talonario (o lo asigna una serie de impresión propia)
+  // a una factura de intereses que se generó sin numerar.
+  async assignInterestNumber(
+    tenantId: string,
+    id: string,
+    dto: AssignInvoiceNumberDto,
+    userId?: string,
+  ) {
+    const invoice = await this.invoicesRepository.findInterestForNumbering(
+      tenantId,
+      id,
+    );
+    if (!invoice) throw new NotFoundException('Invoice not found');
+    if (invoice.sequential != null) {
+      throw new UnprocessableEntityException('La factura ya tiene número');
+    }
+
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        const numbering = await this.seriesService.numberForIssue(
+          tenantId,
+          {
+            branchId: invoice.paymentReceipt?.branchId ?? null,
+            seriesId: dto.seriesId,
+            documentNumber: dto.documentNumber,
+            at: invoice.issuedAt ?? new Date(),
+          },
+          tx,
+        );
+        const assigned = await this.invoicesRepository.assignNumber(
+          tenantId,
+          id,
+          numbering,
+          tx,
+        );
+        if (assigned.count !== 1) {
+          throw new UnprocessableEntityException(
+            'Otra persona numeró la factura al mismo tiempo. Recargá la página.',
+          );
+        }
+      });
+    } catch (error) {
+      if (isDuplicateNumber(error)) {
+        throw new UnprocessableEntityException(
+          `El número ${dto.documentNumber ?? ''} del talonario ya fue usado en otra factura`,
+        );
+      }
+      throw error;
+    }
+
+    await this.eventEmitter.emitAsync('invoice.interest.issued', {
+      tenantId,
+      invoiceId: id,
+      paymentReceiptId: invoice.paymentReceiptId,
+      total: Number(invoice.total),
+    });
+    this.eventEmitter.emit('audit.log', {
+      tenantId,
+      userId,
+      module: 'billing',
+      action: 'invoice.interest.numbered',
+      resourceId: id,
+    } satisfies AuditLogEvent);
+
+    return this.invoicesRepository.findById(tenantId, id);
+  }
+
+  private async findInterestSeriesOptions(tenantId: string, id: string) {
+    const invoice = await this.invoicesRepository.findInterestForNumbering(
+      tenantId,
+      id,
+    );
+    if (!invoice) throw new NotFoundException('Invoice not found');
+    return this.seriesService.findIssueOptions(
+      tenantId,
+      invoice.paymentReceipt?.branchId ?? null,
+      invoice.issuedAt ?? new Date(),
+    );
   }
 
   async cancel(tenantId: string, id: string, reason: string, userId?: string) {

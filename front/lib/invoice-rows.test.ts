@@ -25,6 +25,7 @@ const interest: InterestInvoice = {
   total: '4212',
   invoiceNumber: '0000011',
   invoicePrefix: '001-001-',
+  sequential: 11,
   pdfFileId: 'file-1',
   paymentReceipt: {
     id: 'receipt-1',
@@ -52,6 +53,19 @@ describe('toInvoiceRows', () => {
       typeLabel: 'Crédito · 10c',
       total: 390000,
     });
+  });
+
+  it('flags an interest invoice still waiting for its talonario number', () => {
+    const [unnumbered] = toInvoiceRows(
+      [],
+      [{ ...interest, sequential: null, invoiceNumber: null, invoicePrefix: null, pdfFileId: null }],
+    );
+    const [numbered] = toInvoiceRows([], [interest]);
+    const [sold] = toInvoiceRows([sale], []);
+
+    expect(unnumbered.needsNumber).toBe(true);
+    expect(numbered.needsNumber).toBe(false);
+    expect(sold.needsNumber).toBe(false);
   });
 
   it('keeps an interest invoice even without its receipt data', () => {

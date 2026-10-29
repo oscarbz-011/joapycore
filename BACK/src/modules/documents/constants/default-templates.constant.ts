@@ -58,6 +58,7 @@ export const DEFAULT_INVOICE_TEMPLATE = `<!DOCTYPE html>
         <div><strong>TIMBRADO NRO.:</strong> {{timbrado.numero}}</div>
         <div><strong>Inicio Vigencia:</strong> {{timbrado.inicioVigencia}}</div>
         <div><strong>Fin Vigencia:</strong> {{timbrado.finVigencia}}</div>
+        <div style="color:#b91c1c;font-weight:bold">{{factura.leyendaFiscal}}</div>
       </div>
     </div>
   </div>
@@ -178,6 +179,7 @@ export const DEFAULT_INTEREST_INVOICE_TEMPLATE = `<!DOCTYPE html>
         <div><strong>TIMBRADO NRO.:</strong> {{timbrado.numero}}</div>
         <div><strong>Inicio Vigencia:</strong> {{timbrado.inicioVigencia}}</div>
         <div><strong>Fin Vigencia:</strong> {{timbrado.finVigencia}}</div>
+        <div style="color:#b91c1c;font-weight:bold">{{factura.leyendaFiscal}}</div>
       </div>
     </div>
   </div>

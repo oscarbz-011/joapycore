@@ -10,6 +10,10 @@ import { PdfService } from '../../../files/pdf/pdf.service';
 import { DocumentSourcesRepository } from '../repositories/document-sources.repository';
 import { DEFAULT_INVOICE_TEMPLATE } from '../constants/default-templates.constant';
 import { DocumentsRepository } from '../repositories/documents.repository';
+import {
+  invoiceFiscalVariables,
+  invoiceWatermark,
+} from '../utils/invoice-fiscal.util';
 
 interface InvoicePdfRequestedEvent {
   tenantId: string;
@@ -185,9 +189,7 @@ export class InvoiceOnIssueListener {
       'tenant.direccion': invoice.tenant.address ?? '',
       'tenant.ciudad': invoice.tenant.city ?? '',
       'tenant.telefono': invoice.tenant.phone ?? '',
-      'timbrado.numero': invoice.tenant.timbradoNumero ?? '',
-      'timbrado.inicioVigencia': formatDate(invoice.tenant.timbradoFecha),
-      'timbrado.finVigencia': formatDate(invoice.tenant.timbradoFechaFin),
+      ...invoiceFiscalVariables(invoice),
       'factura.numero': [invoice.invoicePrefix, invoice.invoiceNumber]
         .filter(Boolean)
         .join(''),
@@ -263,6 +265,7 @@ export class InvoiceOnIssueListener {
                 companyName: invoice.tenant.razonSocial ?? invoice.tenant.name,
               },
               'A4',
+              invoiceWatermark(invoice),
             )
           : await this.pdfService.renderHtmlTemplate(
               content,
@@ -274,6 +277,7 @@ export class InvoiceOnIssueListener {
                   : '',
               },
               'A4',
+              invoiceWatermark(invoice),
             );
 
     const fileRecord = await this.filesService.upload(

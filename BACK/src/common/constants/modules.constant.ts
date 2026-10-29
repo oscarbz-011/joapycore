@@ -9,6 +9,8 @@ export interface ModuleDefinition {
   dependencies: string[];
   /** false = visible en el catálogo pero marcado como "Próximamente / Beta". */
   isStable: boolean;
+  /** Se activa y desactiva junto con este addon; no tiene interruptor propio. */
+  bundledWith?: string;
 }
 
 const addonKeys = new Set(
@@ -28,6 +30,7 @@ export const MODULE_CATALOG: Record<string, ModuleDefinition> =
         icon: m.icon,
         dependencies: m.depends.filter((dep) => addonKeys.has(dep)),
         isStable: m.isStable,
+        ...(m.bundledWith ? { bundledWith: m.bundledWith } : {}),
       },
     ]),
   );

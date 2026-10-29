@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { InvoiceStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { PrismaClientOrTx } from '../../../prisma/types';
+import type { SeriesNumbering } from '../types/series-numbering';
 
 @Injectable()
 export class InvoicesRepository {
@@ -22,9 +23,6 @@ export class InvoicesRepository {
           department: true,
           phone: true,
           logoFileId: true,
-          timbradoNumero: true,
-          timbradoFecha: true,
-          timbradoFechaFin: true,
         },
       },
       saleOrder: {
@@ -85,6 +83,7 @@ export class InvoicesRepository {
         total: true,
         invoiceNumber: true,
         invoicePrefix: true,
+        sequential: true,
         pdfFileId: true,
         paymentReceipt: {
           select: {
@@ -145,11 +144,7 @@ export class InvoicesRepository {
     tenantId: string,
     data: {
       paymentReceiptId: string;
-      establecimiento: string;
-      puntoExpedicion: string;
-      sequential: number;
-      invoiceNumber: string;
-      invoicePrefix: string;
+      numbering: SeriesNumbering | null;
       total: number;
       issuedAt: Date;
       items: {
@@ -171,11 +166,7 @@ export class InvoicesRepository {
         status: 'PAID',
         saleOrderId: null,
         paymentReceiptId: data.paymentReceiptId,
-        establecimiento: data.establecimiento,
-        puntoExpedicion: data.puntoExpedicion,
-        sequential: data.sequential,
-        invoiceNumber: data.invoiceNumber,
-        invoicePrefix: data.invoicePrefix,
+        ...(data.numbering ?? {}),
         total: data.total,
         issuedAt: data.issuedAt,
         items: { create: data.items },
@@ -184,17 +175,29 @@ export class InvoicesRepository {
     });
   }
 
-  // Último secuencial usado en un establecimiento/punto de expedición.
-  findLastSequential(
+  findInterestForNumbering(tenantId: string, id: string) {
+    return this.prisma.invoice.findFirst({
+      where: { id, tenantId, invoiceType: 'INTEREST', status: 'PAID' },
+      select: {
+        id: true,
+        sequential: true,
+        issuedAt: true,
+        total: true,
+        paymentReceiptId: true,
+        paymentReceipt: { select: { branchId: true } },
+      },
+    });
+  }
+
+  assignNumber(
     tenantId: string,
-    establecimiento: string,
-    puntoExpedicion: string,
+    id: string,
+    numbering: SeriesNumbering,
     client: PrismaClientOrTx = this.prisma,
   ) {
-    return client.invoice.findFirst({
-      where: { tenantId, establecimiento, puntoExpedicion },
-      orderBy: { sequential: 'desc' },
-      select: { sequential: true },
+    return client.invoice.updateMany({
+      where: { id, tenantId, invoiceType: 'INTEREST', sequential: null },
+      data: numbering,
     });
   }
 

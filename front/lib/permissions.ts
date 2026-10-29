@@ -138,6 +138,7 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
       { key: "billing:read", label: "Ver facturas" },
       { key: "billing:issue", label: "Emitir facturas" },
       { key: "billing:cancel", label: "Cancelar facturas" },
+      { key: "billing:series:manage", label: "Administrar series y timbrados" },
     ],
   },
   {

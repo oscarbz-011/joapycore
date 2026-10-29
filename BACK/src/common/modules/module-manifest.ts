@@ -14,6 +14,8 @@ export interface ModuleManifest {
   icon: string;
   isStable: boolean;
   parent?: string;
+  /** Addon sin interruptor propio: sigue a este otro, que está en depends. */
+  bundledWith?: string;
   /** Los addons se exigen activos; solo se importa código de esta lista. */
   depends: string[];
   /** Solo este módulo escribe estas tablas. */

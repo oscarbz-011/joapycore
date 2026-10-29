@@ -5,6 +5,7 @@ import { CurrentUser } from '../../../common/decorators/current-user.decorator';
 import { Permissions } from '../../../common/decorators/permissions.decorator';
 import { RequiredModule } from '../../../common/decorators/required-module.decorator';
 import type { JwtPayload } from '../../../common/types/jwt-payload.interface';
+import { AssignInvoiceNumberDto } from '../dto/assign-invoice-number.dto';
 import { CancelInvoiceDto } from '../dto/cancel-invoice.dto';
 import { IssueInvoiceDto } from '../dto/issue-invoice.dto';
 import { InvoicesService } from '../services/invoices.service';
@@ -36,6 +37,37 @@ export class InvoicesController {
   @ApiOperation({ summary: 'Obtener factura por ID' })
   findOne(@CurrentTenant() tenantId: string, @Param('id') id: string) {
     return this.invoicesService.findOne(tenantId, id);
+  }
+
+  @Get('invoices/:id/series')
+  @Permissions('billing:read')
+  @ApiOperation({
+    summary: 'Series entre las que se puede elegir para numerar la factura',
+  })
+  findSeriesOptions(
+    @CurrentTenant() tenantId: string,
+    @Param('id') id: string,
+  ) {
+    return this.invoicesService.findSeriesOptions(tenantId, id);
+  }
+
+  @Post('invoices/:id/number')
+  @Permissions('billing:issue')
+  @ApiOperation({
+    summary: 'Numerar una factura de intereses que se generó sin número',
+  })
+  assignNumber(
+    @CurrentTenant() tenantId: string,
+    @CurrentUser() user: JwtPayload,
+    @Param('id') id: string,
+    @Body() dto: AssignInvoiceNumberDto,
+  ) {
+    return this.invoicesService.assignInterestNumber(
+      tenantId,
+      id,
+      dto,
+      user.sub,
+    );
   }
 
   @Post('invoices/:id/issue')

@@ -299,6 +299,20 @@ enum InvoiceType {
   INTEREST
 }
 
+enum BillingDocumentType {
+  INVOICE
+  CREDIT_NOTE
+}
+
+// Quién numera y qué vale como comprobante: PREPRINTED = talonario de
+// imprenta (el número lo carga el usuario), SELF_PRINTED = autoimpresor (lo
+// asigna el sistema), ELECTRONIC = SIFEN.
+enum BillingModality {
+  PREPRINTED
+  SELF_PRINTED
+  ELECTRONIC
+}
+
 enum CreditNoteStatus {
   ISSUED
   APPLIED
@@ -471,12 +485,9 @@ model Tenant {
   currency       String         @default("PYG")
 
   // SIFEN — datos fiscales
-  timbradoNumero        String?   @map("timbrado_numero")
-  timbradoFecha         DateTime? @map("timbrado_fecha")
-  timbradoFechaFin      DateTime? @map("timbrado_fecha_fin")
-  tipoContribuyente     Int?      @map("tipo_contribuyente") // 1=Física 2=Jurídica
-  tipoRegimen           Int?      @map("tipo_regimen") // 8=IVA General, etc.
-  actividadesEconomicas Json?     @map("actividades_economicas") // [{codigo, descripcion}]
+  tipoContribuyente     Int?  @map("tipo_contribuyente") // 1=Física 2=Jurídica
+  tipoRegimen           Int?  @map("tipo_regimen") // 8=IVA General, etc.
+  actividadesEconomicas Json? @map("actividades_economicas") // [{codigo, descripcion}]
 
   // SIFEN — dirección estructurada (códigos SET)
   departamentoCodigo Int?    @map("departamento_codigo")
@@ -558,6 +569,7 @@ model Tenant {
   integrations               TenantIntegration[]
   appEmailMessages           AppEmailMessage[]
   appEmailInboxMessages      AppEmailInboxMessage[]
+  billingSeries              BillingSeries[]
 
   @@map("tenants")
 }
@@ -625,6 +637,7 @@ model Branch {
   purchaseOrders  PurchaseOrder[]
   employees       Employee[]
   posTerminals    PosTerminal[]
+  billingSeries   BillingSeries[]
   paymentReceipts PaymentReceipt[]
 
   @@unique([tenantId, name])
@@ -1775,15 +1788,21 @@ model Invoice {
   // Solo para invoiceType=INTEREST: qué recibo de cobro generó esta factura.
   paymentReceiptId String? @unique @map("payment_receipt_id")
 
-  // Numbering (timbrado / serie) — calculado en el servidor al emitir, nunca
-  // aceptado del cliente. establecimiento/puntoExpedicion/sequential son la
-  // fuente de verdad; invoiceNumber/invoicePrefix son el string formateado
-  // para mostrar/imprimir ("001-002-0000123").
-  establecimiento String? @map("establecimiento")
-  puntoExpedicion String? @map("punto_expedicion")
-  sequential      Int?    @map("sequential")
-  invoiceNumber   String? @map("invoice_number")
-  invoicePrefix   String? @map("invoice_prefix")
+  // Numeración: sale de la serie al emitir. La serie, el timbrado y su
+  // vigencia se copian a la factura para que lo impreso no cambie si después
+  // se edita la serie. invoiceNumber/invoicePrefix son el texto para mostrar
+  // ("001-002-0000123").
+  seriesId           String?          @map("series_id")
+  modality           BillingModality?
+  timbrado           String?
+  timbradoValidFrom  DateTime?        @map("timbrado_valid_from")
+  timbradoValidUntil DateTime?        @map("timbrado_valid_until")
+  serieCode          String           @default("") @map("serie_code")
+  establecimiento    String?          @map("establecimiento")
+  puntoExpedicion    String?          @map("punto_expedicion")
+  sequential         Int?             @map("sequential")
+  invoiceNumber      String?          @map("invoice_number")
+  invoicePrefix      String?          @map("invoice_prefix")
 
   // Payment details (populated on issue)
   paymentMethod PaymentMethod? @map("payment_method")
@@ -1807,12 +1826,50 @@ model Invoice {
   tenant             Tenant              @relation(fields: [tenantId], references: [id])
   saleOrder          SaleOrder?          @relation(fields: [saleOrderId], references: [id])
   paymentReceipt     PaymentReceipt?     @relation(fields: [paymentReceiptId], references: [id])
+  series             BillingSeries?      @relation(fields: [seriesId], references: [id])
   items              InvoiceItem[]
   accountsReceivable AccountsReceivable?
   creditNotes        CreditNote[]
 
-  @@unique([tenantId, establecimiento, puntoExpedicion, sequential])
+  @@unique([seriesId, serieCode, sequential])
+  @@index([tenantId, seriesId])
   @@map("invoices")
+}
+
+// Timbrado o configuración de numeración de un establecimiento y punto de
+// expedición para un tipo de documento. No se borra: se desactiva.
+model BillingSeries {
+  id              String              @id @default(uuid())
+  tenantId        String              @map("tenant_id")
+  branchId        String              @map("branch_id")
+  documentType    BillingDocumentType @default(INVOICE) @map("document_type")
+  modality        BillingModality
+  // Null solo en series migradas de un tenant que no había cargado su
+  // timbrado: emitir queda bloqueado hasta completarlo.
+  timbrado        String?
+  // Días de calendario (medianoche UTC). El timbrado electrónico no vence.
+  validFrom       DateTime?           @map("valid_from")
+  validUntil      DateTime?           @map("valid_until")
+  establecimiento String
+  puntoExpedicion String              @map("punto_expedicion")
+  // Serie de dos letras del timbrado electrónico; vacío mientras no se use.
+  serieCode       String              @default("") @map("serie_code")
+  rangeFrom       Int                 @map("range_from")
+  rangeTo         Int                 @map("range_to")
+  // SELF_PRINTED: el próximo número a asignar. PREPRINTED: el siguiente
+  // sugerido al cargar el número del talonario.
+  nextNumber      Int                 @map("next_number")
+  isActive        Boolean             @default(true) @map("is_active")
+  createdAt       DateTime            @default(now()) @map("created_at")
+  updatedAt       DateTime            @updatedAt @map("updated_at")
+
+  tenant   Tenant    @relation(fields: [tenantId], references: [id])
+  branch   Branch    @relation(fields: [branchId], references: [id])
+  invoices Invoice[]
+
+  @@unique([tenantId, timbrado, establecimiento, puntoExpedicion, documentType, serieCode])
+  @@index([tenantId, branchId, documentType, isActive])
+  @@map("billing_series")
 }
 
 model InvoiceItem {

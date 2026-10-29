@@ -142,28 +142,6 @@ describe('TenantsService', () => {
       expect(result.name).toBe('Nuevo Nombre');
     });
 
-    it('converts timbradoFecha from date string to a Date before persisting', async () => {
-      repo.findById.mockResolvedValue(makeTenant());
-      repo.update.mockResolvedValue(makeTenant());
-
-      await service.update('tenant-1', { timbradoFecha: '2026-07-16' });
-
-      expect(repo.update).toHaveBeenCalledWith(
-        'tenant-1',
-        expect.objectContaining({ timbradoFecha: new Date('2026-07-16') }),
-      );
-    });
-
-    it('omits timbradoFecha entirely when not provided', async () => {
-      repo.findById.mockResolvedValue(makeTenant());
-      repo.update.mockResolvedValue(makeTenant());
-
-      await service.update('tenant-1', { name: 'X' });
-
-      const dataArg = repo.update.mock.calls[0][1];
-      expect(dataArg).not.toHaveProperty('timbradoFecha');
-    });
-
     it('serializes actividadesEconomicas as JSON input when provided', async () => {
       repo.findById.mockResolvedValue(makeTenant());
       repo.update.mockResolvedValue(makeTenant());

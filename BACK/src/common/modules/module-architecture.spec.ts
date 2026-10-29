@@ -126,6 +126,17 @@ describe('Arquitectura modular', () => {
       }
     });
 
+    it('bundles an addon only with an addon it depends on', () => {
+      for (const m of MODULE_REGISTRY.filter((x) => x.bundledWith)) {
+        expect([m.key, m.kind, kindOf.get(m.bundledWith ?? '')]).toEqual([
+          m.key,
+          'addon',
+          'addon',
+        ]);
+        expect(m.depends).toContain(m.bundledWith);
+      }
+    });
+
     it('keeps core modules independent of addons', () => {
       const core = new Set(
         MODULE_REGISTRY.filter((m) => m.kind === 'core').map((m) => m.key),

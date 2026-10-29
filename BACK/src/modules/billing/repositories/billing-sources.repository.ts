@@ -51,14 +51,14 @@ export class BillingSourcesRepository {
     });
   }
 
-  findBranchNumbering(
+  findBranch(
     tenantId: string,
     branchId: string,
     client: PrismaClientOrTx = this.prisma,
   ) {
     return client.branch.findFirst({
       where: { id: branchId, tenantId },
-      select: { codigoEstablecimiento: true, puntoExpedicion: true },
+      select: { id: true, name: true },
     });
   }
 }

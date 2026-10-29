@@ -207,6 +207,11 @@ export const ROUTE_RULES: RouteRule[] = [
     anyPermission: ["sales:combos:read"],
   },
   {
+    prefix: "/dashboard/settings/billing-series",
+    modules: ["billing"],
+    anyPermission: ["billing:read"],
+  },
+  {
     prefix: "/dashboard/settings/pos-terminals",
     modules: ["pos"],
     anyPermission: ["pos:terminals:manage"],
