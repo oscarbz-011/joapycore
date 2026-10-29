@@ -308,7 +308,12 @@ function SaleScreen({ session }: { session: ActivePosSession }) {
   const [payments, setPayments] = useState<PaymentLine[]>([{ key: 'p0', method: 'CASH', amount: 0 }]);
   const [closeOpen, setCloseOpen] = useState(false);
   const [error, setError] = useState('');
-  const [lastSale, setLastSale] = useState<{ saleOrderId: string; number: string; onSheet: boolean } | null>(null);
+  const [lastSale, setLastSale] = useState<{
+    saleOrderId: string;
+    number: string | null;
+    onSheet: boolean;
+  } | null>(null);
+  const [printNotice, setPrintNotice] = useState('');
 
   const suggestedNumber = series && askNumber ? String(series.nextNumber) : '';
   const documentNumber = talonarioNumber || suggestedNumber;
@@ -369,11 +374,12 @@ function SaleScreen({ session }: { session: ActivePosSession }) {
       });
     },
     onSuccess: (result) => {
-      printReceipt(result.receipt);
+      // Primero se limpia la venta: si la impresión falla, el carrito no puede
+      // quedar cargado para cobrarlo dos veces.
       setLastSale({
         saleOrderId: result.saleOrderId,
-        number: result.receipt.number,
-        onSheet: result.receipt.modality === 'PREPRINTED',
+        number: result.receipt?.number ?? null,
+        onSheet: result.receipt?.modality === 'PREPRINTED',
       });
       setCart([]);
       setCustomer(null);
@@ -384,6 +390,16 @@ function SaleScreen({ session }: { session: ActivePosSession }) {
       void queryClient.invalidateQueries({ queryKey: ['products-with-stock'] });
       // El próximo número sugerido del talonario cambia con cada venta.
       void queryClient.invalidateQueries({ queryKey: ['pos-active-session'] });
+      setPrintNotice('');
+      if (!result.receipt) {
+        setPrintNotice('La venta quedó registrada, pero no se pudo preparar la factura. Reimprimila abajo.');
+        return;
+      }
+      try {
+        printReceipt(result.receipt);
+      } catch {
+        setPrintNotice('La venta quedó registrada, pero no se pudo imprimir. Reimprimila abajo.');
+      }
     },
     onError: (err: Error) => {
       setError(apiErrorMessage(err, 'No se pudo completar la venta'));
@@ -395,7 +411,7 @@ function SaleScreen({ session }: { session: ActivePosSession }) {
   }
 
   const reprint = useMutation({
-    mutationFn: (saleOrderId: string) => posApi.getReceipt(saleOrderId, true),
+    mutationFn: (saleOrderId: string) => posApi.reprintReceipt(saleOrderId),
     onSuccess: printReceipt,
     onError: (err: Error) => setError(apiErrorMessage(err, 'No se pudo reimprimir la factura')),
   });
@@ -626,9 +642,15 @@ function SaleScreen({ session }: { session: ActivePosSession }) {
               {saleMutation.isPending ? 'Procesando...' : 'Cobrar y facturar'}
             </Button>
 
+            {printNotice && (
+              <p role="status" className="text-xs text-warn">
+                {printNotice}
+              </p>
+            )}
+
             {lastSale && (
               <div className="flex items-center justify-between gap-2 border-t border-border pt-3 text-xs text-muted-foreground">
-                <span>Última factura N° {lastSale.number}</span>
+                <span>{lastSale.number ? `Última factura N° ${lastSale.number}` : 'Última venta registrada'}</span>
                 <Button
                   variant="ghost"
                   size="sm"

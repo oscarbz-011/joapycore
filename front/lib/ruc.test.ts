@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { rucCheckDigit, rucProblem } from './ruc';
+import { customerRucProblem, rucCheckDigit, rucProblem } from './ruc';
 
 describe('rucCheckDigit', () => {
   it.each([
@@ -24,5 +24,27 @@ describe('rucProblem', () => {
 
   it('rejects a wrong check digit', () => {
     expect(rucProblem('80069563-2')).toBe('El dígito verificador del RUC no es correcto');
+  });
+});
+
+describe('customerRucProblem', () => {
+  const legacy = { documentType: 'RUC', documentNumber: '80012345' };
+
+  it('lets an old RUC stay as it was', () => {
+    expect(customerRucProblem({ ...legacy }, legacy)).toBeNull();
+  });
+
+  it('checks the RUC as soon as it changes', () => {
+    expect(customerRucProblem({ documentType: 'RUC', documentNumber: '80012346' }, legacy)).toMatch(
+      /guion/,
+    );
+  });
+
+  it('checks every RUC of a new customer', () => {
+    expect(customerRucProblem(legacy)).toMatch(/guion/);
+  });
+
+  it('ignores other document types', () => {
+    expect(customerRucProblem({ documentType: 'CI', documentNumber: '1234567' })).toBeNull();
   });
 });

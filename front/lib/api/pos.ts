@@ -132,7 +132,8 @@ export interface PosReceipt extends FiscalReceipt {
 
 export interface PosSaleResult {
   saleOrderId: string;
-  receipt: PosReceipt;
+  /** null si la venta quedó registrada pero no se pudo armar el comprobante. */
+  receipt: PosReceipt | null;
 }
 
 export const posApi = {
@@ -163,11 +164,9 @@ export const posApi = {
   createSale: (dto: CreatePosSalePayload): Promise<PosSaleResult> =>
     apiClient.post('/pos/sales', dto).then((r) => r.data),
 
-  /** `copy`: reimpresión, sale marcada como COPIA. */
-  getReceipt: (saleOrderId: string, copy = false): Promise<PosReceipt> =>
-    apiClient
-      .get(`/pos/sales/${saleOrderId}/receipt`, { params: copy ? { copy: true } : {} })
-      .then((r) => r.data),
+  /** Reimpresión: el servidor siempre la marca como COPIA. */
+  reprintReceipt: (saleOrderId: string): Promise<PosReceipt> =>
+    apiClient.get(`/pos/sales/${saleOrderId}/receipt`).then((r) => r.data),
 
   listSessionSales: (sessionId: string): Promise<PosSaleOrder[]> =>
     apiClient.get('/pos/sales', { params: { sessionId } }).then((r) => r.data),

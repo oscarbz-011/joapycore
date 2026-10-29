@@ -13,12 +13,21 @@ export function printHtmlDocument(html: string): void {
     frame.remove();
     return;
   }
+  // Si el navegador no avisa que terminó de imprimir, el iframe no queda colgado.
+  const cleanup = window.setTimeout(() => frame.remove(), 60_000);
+  win.addEventListener('afterprint', () => {
+    window.clearTimeout(cleanup);
+    frame.remove();
+  });
   doc.open();
   doc.write(html);
   doc.close();
-  win.addEventListener('afterprint', () => frame.remove());
-  win.focus();
-  win.print();
+  // Imprimir recién cuando el contenido se dibujó; antes, algunos navegadores
+  // sacan la hoja en blanco.
+  win.requestAnimationFrame(() => {
+    win.focus();
+    win.print();
+  });
 }
 
 export const escapeHtml = (value: string) =>

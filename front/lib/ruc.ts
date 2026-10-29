@@ -25,3 +25,25 @@ export function rucProblem(value: string): string | null {
   }
   return null;
 }
+
+interface CustomerDocument {
+  documentType?: string | null;
+  documentNumber?: string | null;
+}
+
+/**
+ * Problema del RUC a mostrar en el formulario. Un cliente cargado antes de
+ * validar el RUC se puede editar sin corregirlo mientras no se toque el
+ * documento (el servidor aplica la misma regla).
+ */
+export function customerRucProblem(
+  current: CustomerDocument,
+  initial?: CustomerDocument,
+): string | null {
+  const number = current.documentNumber?.trim();
+  if (current.documentType !== 'RUC' || !number) return null;
+  const unchanged =
+    initial?.documentType === current.documentType &&
+    initial.documentNumber?.trim() === number;
+  return unchanged ? null : rucProblem(number);
+}
