@@ -27,6 +27,7 @@ const interest: InterestInvoice = {
   invoicePrefix: '001-001-',
   sequential: 11,
   pdfFileId: 'file-1',
+  modality: 'SELF_PRINTED',
   paymentReceipt: {
     id: 'receipt-1',
     receiptNumber: '001-001-0000020',
@@ -66,6 +67,16 @@ describe('toInvoiceRows', () => {
     expect(unnumbered.needsNumber).toBe(true);
     expect(numbered.needsNumber).toBe(false);
     expect(sold.needsNumber).toBe(false);
+  });
+
+  it('opens a numbered talonario interest invoice to print it on the sheet', () => {
+    const [onSheet] = toInvoiceRows([], [{ ...interest, modality: 'PREPRINTED', pdfFileId: null }]);
+    const [withPdf] = toInvoiceRows([], [interest]);
+    const [cancelled] = toInvoiceRows([], [{ ...interest, modality: 'PREPRINTED', status: 'CANCELLED' }]);
+
+    expect(onSheet.onSheet).toBe(true);
+    expect(withPdf.onSheet).toBe(false);
+    expect(cancelled.onSheet).toBe(false);
   });
 
   it('keeps an interest invoice even without its receipt data', () => {

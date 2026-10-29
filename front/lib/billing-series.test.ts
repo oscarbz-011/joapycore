@@ -13,6 +13,7 @@ import {
   todayInParaguay,
   validateSeriesForm,
 } from "./billing-series";
+import { STANDARD_PREPRINTED_LAYOUT } from './preprinted-form';
 
 function makeSeries(overrides: Partial<BillingSeries> = {}): BillingSeries {
   return {
@@ -30,6 +31,7 @@ function makeSeries(overrides: Partial<BillingSeries> = {}): BillingSeries {
     rangeTo: 500,
     nextNumber: 42,
     isActive: true,
+    printLayout: STANDARD_PREPRINTED_LAYOUT,
     createdAt: "2026-01-01T00:00:00.000Z",
     updatedAt: "2026-01-01T00:00:00.000Z",
     branch: { id: "branch-1", name: "Central" },

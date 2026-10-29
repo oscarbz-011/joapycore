@@ -3,6 +3,13 @@
 import { RequirePermission } from "@/components/require-permission";
 import { EntityTimeline } from "@/components/communications/entity-timeline";
 import { SeriesNumberingFields } from "@/components/billing/series-numbering-fields";
+import { PreprintedSheetPanel } from "@/components/billing/preprinted-sheet-panel";
+import { printPreprintedForm } from "@/lib/preprinted-form";
+import {
+  invoiceDetailLines,
+  invoiceIvaSummary,
+  ivaRateLabel,
+} from "@/lib/invoice-detail";
 import {
   defaultSeriesId,
   documentNumberError,
@@ -116,13 +123,55 @@ const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
 const TEXTAREA_CLS =
   "w-full min-w-0 rounded-2xl border border-transparent bg-input/50 px-3 py-2 text-sm outline-none resize-none transition-[color,box-shadow,background-color] focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30";
 
+const SECTION_LABEL =
+  "text-xs font-semibold uppercase tracking-wider text-muted-foreground/60";
+
 function InfoRow({ label, value }: { label: string; value: ReactNode }) {
   return (
-    <div className="flex justify-between items-start py-2 border-b border-border last:border-0">
+    <div className="flex justify-between items-start gap-4 py-2 border-b border-border last:border-0">
       <span className="text-sm text-muted-foreground">{label}</span>
-      <span className="text-sm font-medium text-foreground text-right">
+      <span className="min-w-0 wrap-break-word text-sm font-medium text-foreground text-right">
         {value}
       </span>
+    </div>
+  );
+}
+
+function DataGroup({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <div className="px-5 py-4">
+      <h2 className={`${SECTION_LABEL} mb-1`}>{title}</h2>
+      {children}
+    </div>
+  );
+}
+
+function KeyFact({
+  label,
+  value,
+  strong = false,
+}: {
+  label: string;
+  value: string;
+  strong?: boolean;
+}) {
+  return (
+    <div className="bg-card px-5 py-4">
+      <dt className="text-xs text-muted-foreground">{label}</dt>
+      <dd
+        className={`mt-1 truncate text-foreground tabular-nums ${strong ? "text-lg font-bold" : "text-sm font-medium"}`}
+      >
+        {value}
+      </dd>
+    </div>
+  );
+}
+
+function TotalRow({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="flex justify-between gap-4">
+      <dt className="text-muted-foreground">{label}</dt>
+      <dd className="tabular-nums text-foreground">{formatPrice(value)}</dd>
     </div>
   );
 }
@@ -236,6 +285,16 @@ export default function InvoiceDetailPage() {
             }
           : {}),
       }),
+    // Con talonario se imprime sobre la hoja apenas queda emitida.
+    onSuccess: (issued) => {
+      if (issued.modality !== "PREPRINTED") return;
+      void billingApi
+        .printInvoiceForm(issued.id)
+        .then(({ receipt }) => {
+          if (receipt.formLayout) printPreprintedForm(receipt, receipt.formLayout);
+        })
+        .catch(() => undefined);
+    },
     // También se reconcilia después de un error: el POST pudo haber llegado
     // al backend y haberse perdido únicamente la respuesta. Al reconectar,
     // React Query vuelve a consultar y muestra el estado persistido real.
@@ -298,9 +357,33 @@ export default function InvoiceDetailPage() {
   const canIssue =
     (isCredit ? !!form.dueDate : !!form.paymentMethod) && seriesReady;
   const pdfAction = invoicePdfAction(invoice);
+  // Talonario de imprenta: la factura es la hoja preimpresa, sin PDF.
+  const issuesOnSheet = needsSeries
+    ? selectedSeries?.modality === "PREPRINTED"
+    : invoice.modality === "PREPRINTED";
+  const onSheet =
+    invoice.modality === "PREPRINTED" &&
+    invoice.sequential != null &&
+    (invoice.status === "ISSUED" || invoice.status === "PAID");
+
+  const customerName = `${customer.firstName} ${customer.lastName}`.trim();
+  const lines = invoiceDetailLines(invoice.items, Number(invoice.total), isCredit);
+  const iva = invoiceIvaSummary(lines);
+  const conditionLabel = isCredit
+    ? `Crédito${invoice.saleOrder.installments ? ` · ${invoice.saleOrder.installments} cuotas` : ""}`
+    : "Contado";
+  const subtotals = [
+    { label: "Exentas", value: iva.exempt },
+    { label: "Gravadas 5%", value: iva.taxed5 },
+    { label: "Gravadas 10%", value: iva.taxed10 },
+  ].filter((s) => s.value > 0);
+  const ivaRows = [
+    { label: "IVA 5%", value: iva.iva5 },
+    { label: "IVA 10%", value: iva.iva10 },
+  ].filter((s) => s.value > 0);
 
   return (
-    <div className="max-w-5xl">
+    <div className="w-full">
       {/* Back */}
       <button
         type="button"
@@ -312,17 +395,23 @@ export default function InvoiceDetailPage() {
       </button>
 
       {/* Header */}
-      <div className="mb-8 flex items-start justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-3">
+      <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-3">
             <h1 className="text-2xl font-semibold text-foreground">
-              {customer.firstName} {customer.lastName}
+              {invoice.invoiceNumber ? (
+                <>
+                  Factura <span className="font-mono">{invoiceRef}</span>
+                </>
+              ) : (
+                "Borrador de factura"
+              )}
             </h1>
             <StatusBadge status={invoice.status} />
           </div>
           <p className="mt-1 text-sm text-muted-foreground">
-            {customer.email && <span>{customer.email} · </span>}
-            <span className="font-mono">{invoiceRef}</span>
+            {customerName}
+            {invoice.modality && <> · {MODALITY_LABELS[invoice.modality]}</>}
           </p>
         </div>
         {pdfAction === "print" ? (
@@ -331,115 +420,113 @@ export default function InvoiceDetailPage() {
             onClick={() => void openPdf(invoice.pdfFileId!)}
           >
             <Printer size={15} />
-            Imprimir
+            Imprimir / descargar PDF
           </Button>
         ) : pdfAction === "retry" ? (
           <RequirePermission permission="billing:issue">
-            <Button
-              variant="outline"
-              disabled={retryPdfMutation.isPending}
-              onClick={() => retryPdfMutation.mutate()}
-            >
-              <RotateCw
-                size={15}
-                className={retryPdfMutation.isPending ? "animate-spin" : ""}
-              />
-              {retryPdfMutation.isPending ? "Regenerando..." : "Regenerar PDF"}
-            </Button>
+            <div className="flex flex-col items-end gap-1">
+              <Button
+                variant="outline"
+                disabled={retryPdfMutation.isPending}
+                onClick={() => retryPdfMutation.mutate()}
+              >
+                <RotateCw
+                  size={15}
+                  className={retryPdfMutation.isPending ? "animate-spin" : ""}
+                />
+                {retryPdfMutation.isPending ? "Regenerando..." : "Regenerar PDF"}
+              </Button>
+              {retryPdfMutation.isError && (
+                <p role="alert" className="text-xs text-destructive">
+                  {apiErrorMessage(
+                    retryPdfMutation.error,
+                    "No se pudo regenerar el PDF",
+                  )}
+                </p>
+              )}
+            </div>
           </RequirePermission>
         ) : null}
       </div>
 
-      {/* Main grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-6">
-        {/* LEFT: Customer + Items + Timeline */}
-        <div className="space-y-5">
-          {/* Customer */}
-          <section className="rounded-xl border border-border bg-card p-5">
-            <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/60 mb-3">
-              Cliente
-            </h2>
-            <InfoRow
-              label="Nombre"
-              value={`${customer.firstName} ${customer.lastName}`}
-            />
-            {customer.email && <InfoRow label="Email" value={customer.email} />}
-            {customer.documentNumber && (
-              <InfoRow
-                label="Documento"
-                value={`${customer.documentType ?? "C.I."} ${customer.documentNumber}`}
-              />
-            )}
-          </section>
+      {/* Key facts */}
+      <dl className="mb-6 grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-border bg-border md:grid-cols-4">
+        <KeyFact label="Total" value={formatPrice(Number(invoice.total))} strong />
+        <KeyFact label="Condición" value={conditionLabel} />
+        <KeyFact
+          label="Emitida"
+          value={invoice.issuedAt ? formatDatePY(invoice.issuedAt, "local") : "Sin emitir"}
+        />
+        {isCredit ? (
+          <KeyFact
+            label="Vence la 1ª cuota"
+            value={invoice.dueDate ? formatDatePY(invoice.dueDate, "utc") : "—"}
+          />
+        ) : (
+          <KeyFact
+            label="Método de pago"
+            value={invoice.paymentMethod ? PAYMENT_METHOD_LABELS[invoice.paymentMethod] : "—"}
+          />
+        )}
+      </dl>
 
-          {/* Items */}
-          <section className="rounded-xl border border-border bg-card overflow-hidden">
-            <div className="px-5 py-4 border-b border-border">
-              <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/60">
-                Detalle
-              </h2>
+      {/* Main grid */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_380px]">
+        {/* LEFT: detail + communications */}
+        <div className="min-w-0 space-y-6">
+          <section className="overflow-hidden rounded-xl border border-border bg-card">
+            <div className="border-b border-border px-5 py-4">
+              <h2 className={SECTION_LABEL}>Detalle</h2>
             </div>
-            {(() => {
-              const itemsSubtotal = invoice.items.reduce(
-                (s, it) => s + Number(it.total),
-                0,
-              );
-              const invoiceTotal = Number(invoice.total);
-              return (
-                <table className="w-full text-sm">
-                  <thead className="bg-muted/30 text-xs font-semibold uppercase tracking-wider text-muted-foreground/60">
-                    <tr>
-                      <th className="px-5 py-3 text-left">Descripción</th>
-                      <th className="px-5 py-3 text-center w-16">Cant.</th>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-muted/30 text-xs font-semibold uppercase tracking-wider text-muted-foreground/60">
+                  <tr>
+                    <th className="px-5 py-3 text-left">Descripción</th>
+                    <th className="w-20 px-5 py-3 text-right">Cant.</th>
+                    {!isCredit && <th className="px-5 py-3 text-right">P. Unit.</th>}
+                    <th className="w-24 px-5 py-3 text-right">IVA</th>
+                    <th className="px-5 py-3 text-right">Total</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {lines.map((line) => (
+                    <tr key={line.id}>
+                      <td className="px-5 py-3 font-medium text-foreground">{line.description}</td>
+                      <td className="px-5 py-3 text-right tabular-nums text-muted-foreground">{line.quantity}</td>
                       {!isCredit && (
-                        <th className="px-5 py-3 text-right">P. Unit.</th>
+                        <td className="px-5 py-3 text-right tabular-nums text-muted-foreground">
+                          {formatPrice(line.unitPrice)}
+                        </td>
                       )}
-                      <th className="px-5 py-3 text-right">Total</th>
+                      <td className="px-5 py-3 text-right text-muted-foreground">{ivaRateLabel(line.ivaRate)}</td>
+                      <td className="px-5 py-3 text-right font-medium tabular-nums text-foreground">
+                        {formatPrice(line.total)}
+                      </td>
                     </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border">
-                    {invoice.items.map((item) => {
-                      const displayTotal =
-                        isCredit && itemsSubtotal > 0
-                          ? invoiceTotal * (Number(item.total) / itemsSubtotal)
-                          : Number(item.total);
-                      return (
-                        <tr key={item.id}>
-                          <td className="px-5 py-3">
-                            <p className="font-medium text-foreground">
-                              {item.description}
-                            </p>
-                            {item.ivaRate ? (
-                              <p className="text-xs text-muted-foreground/60">
-                                IVA {item.ivaRate}%
-                              </p>
-                            ) : null}
-                          </td>
-                          <td className="px-5 py-3 text-center text-muted-foreground tabular-nums">
-                            {item.quantity}
-                          </td>
-                          {!isCredit && (
-                            <td className="px-5 py-3 text-right text-muted-foreground tabular-nums">
-                              {formatPrice(Number(item.unitPrice))}
-                            </td>
-                          )}
-                          <td className="px-5 py-3 text-right font-medium text-foreground tabular-nums">
-                            {formatPrice(displayTotal)}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              );
-            })()}
-            <div className="flex justify-between items-center px-5 py-4 border-t border-border bg-muted/30">
-              <span className="text-sm font-semibold text-muted-foreground">
-                Total
-              </span>
-              <span className="text-lg font-bold text-foreground tabular-nums">
-                {formatPrice(Number(invoice.total))}
-              </span>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="grid gap-6 border-t border-border bg-muted/20 px-5 py-4 sm:grid-cols-2">
+              <dl className="space-y-1.5 text-sm">
+                <dt className={`${SECTION_LABEL} mb-2`}>Liquidación del IVA</dt>
+                {subtotals.map((s) => (
+                  <TotalRow key={s.label} label={s.label} value={s.value} />
+                ))}
+                {ivaRows.map((s) => (
+                  <TotalRow key={s.label} label={s.label} value={s.value} />
+                ))}
+                <TotalRow label="Total IVA" value={iva.ivaTotal} />
+              </dl>
+              <div className="flex flex-col justify-end sm:items-end">
+                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/60">
+                  Total a pagar
+                </span>
+                <span className="text-2xl font-bold tabular-nums text-foreground">
+                  {formatPrice(Number(invoice.total))}
+                </span>
+              </div>
             </div>
           </section>
 
@@ -452,34 +539,13 @@ export default function InvoiceDetailPage() {
               (invoice.status === "ISSUED" || invoice.status === "PAID")
             }
           />
-
-          {/* Timeline */}
-          <section className="rounded-xl border border-border bg-card p-5">
-            <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/60 mb-3">
-              Historial
-            </h2>
-            <InfoRow
-              label="Creada"
-              value={formatDatePY(invoice.createdAt, "local")}
-            />
-            <InfoRow
-              label="Emitida"
-              value={formatDatePY(invoice.issuedAt, "local")}
-            />
-            <InfoRow
-              label="Vencimiento"
-              value={formatDatePY(invoice.dueDate, "utc")}
-            />
-          </section>
         </div>
 
-        {/* RIGHT: Emission form / info + Actions */}
-        <div className="space-y-5">
-          {isPending ? (
+        {/* RIGHT: actions + data */}
+        <div className="space-y-6">
+          {isPending && (
             <section className="rounded-xl border border-border bg-card p-5">
-              <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/60 mb-4">
-                Emisión
-              </h2>
+              <h2 className={`${SECTION_LABEL} mb-4`}>Emisión</h2>
 
               {/* Payment condition — read-only */}
               <div className="mb-4 space-y-1.5">
@@ -610,6 +676,14 @@ export default function InvoiceDetailPage() {
                 />
               </div>
 
+              {issuesOnSheet && (
+                <p className="mb-3 text-xs text-muted-foreground">
+                  Poné la hoja del talonario en la impresora antes de emitir:
+                  al emitir se imprimen los datos de la venta sobre ella. No se
+                  genera PDF ni se envía por correo.
+                </p>
+              )}
+
               {issueMutation.isError && (
                 <p className="mb-3 text-xs text-destructive">
                   {apiErrorMessage(
@@ -627,100 +701,70 @@ export default function InvoiceDetailPage() {
                 >
                   <Send size={15} />
                   {issueMutation.isPending
-                    ? "Generando PDF y emitiendo..."
+                    ? issuesOnSheet
+                      ? "Emitiendo..."
+                      : "Generando PDF y emitiendo..."
                     : issueMutation.isError
                       ? "Reintentar emisión"
-                      : "Emitir factura"}
+                      : issuesOnSheet
+                        ? "Emitir e imprimir sobre la hoja"
+                        : "Emitir factura"}
                 </Button>
               </RequirePermission>
             </section>
-          ) : (
-            <section className="rounded-xl border border-border bg-card p-5">
-              <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/60 mb-3">
-                Detalles de emisión
-              </h2>
-              <InfoRow
-                label="Condición"
-                value={
-                  invoice.saleOrder.saleType === "CREDIT"
-                    ? `Crédito${invoice.saleOrder.installments ? ` · ${invoice.saleOrder.installments} cuotas` : ""}`
-                    : "Contado"
-                }
-              />
-              {(invoice.invoiceNumber || invoice.invoicePrefix) && (
-                <InfoRow
-                  label="N° Factura"
-                  value={`${invoice.invoicePrefix ?? ""}${invoice.invoiceNumber ?? ""}`}
-                />
-              )}
-              {invoice.timbrado && (
-                <InfoRow label="Timbrado" value={invoice.timbrado} />
-              )}
-              {invoice.timbradoValidUntil && (
-                <InfoRow
-                  label="Vigencia del timbrado"
-                  value={`${formatDatePY(invoice.timbradoValidFrom, "utc")} al ${formatDatePY(invoice.timbradoValidUntil, "utc")}`}
-                />
-              )}
-              {invoice.modality && (
-                <InfoRow
-                  label="Modalidad"
-                  value={MODALITY_LABELS[invoice.modality]}
-                />
-              )}
-              {invoice.notes && <InfoRow label="Notas" value={invoice.notes} />}
-
-              {pdfAction === "print" ? (
-                <div className="mt-4">
-                  <Button
-                    variant="outline"
-                    className="w-full"
-                    onClick={() => void openPdf(invoice.pdfFileId!)}
-                  >
-                    <Printer size={15} />
-                    Imprimir / descargar PDF
-                  </Button>
-                </div>
-              ) : pdfAction === "retry" ? (
-                <RequirePermission permission="billing:issue">
-                  <div className="mt-4">
-                    <Button
-                      variant="outline"
-                      className="w-full"
-                      disabled={retryPdfMutation.isPending}
-                      onClick={() => retryPdfMutation.mutate()}
-                    >
-                      <RotateCw
-                        size={15}
-                        className={
-                          retryPdfMutation.isPending ? "animate-spin" : ""
-                        }
-                      />
-                      {retryPdfMutation.isPending
-                        ? "Regenerando PDF..."
-                        : "Regenerar PDF"}
-                    </Button>
-                    {retryPdfMutation.isError && (
-                      <p className="mt-2 text-xs text-destructive">
-                        {apiErrorMessage(
-                          retryPdfMutation.error,
-                          "No se pudo regenerar el PDF",
-                        )}
-                      </p>
-                    )}
-                  </div>
-                </RequirePermission>
-              ) : null}
-            </section>
           )}
+
+          {onSheet && <PreprintedSheetPanel invoice={invoice} />}
+
+          <section className="divide-y divide-border rounded-xl border border-border bg-card">
+            <DataGroup title="Cliente">
+              <InfoRow label="Nombre" value={customerName} />
+              {customer.documentNumber && (
+                <InfoRow
+                  label="Documento"
+                  value={`${customer.documentType ?? "C.I."} ${customer.documentNumber}`}
+                />
+              )}
+              {customer.email && <InfoRow label="Email" value={customer.email} />}
+            </DataGroup>
+            {(invoice.timbrado || invoice.modality) && (
+              <DataGroup title="Timbrado">
+                {invoice.timbrado && <InfoRow label="N° de timbrado" value={invoice.timbrado} />}
+                {invoice.timbradoValidUntil && (
+                  <InfoRow
+                    label="Vigencia"
+                    value={`${formatDatePY(invoice.timbradoValidFrom, "utc")} al ${formatDatePY(invoice.timbradoValidUntil, "utc")}`}
+                  />
+                )}
+                {invoice.modality && (
+                  <InfoRow label="Modalidad" value={MODALITY_LABELS[invoice.modality]} />
+                )}
+              </DataGroup>
+            )}
+            <DataGroup title="Historial">
+              <InfoRow label="Creada" value={formatDatePY(invoice.createdAt, "local")} />
+              <InfoRow
+                label="Emitida"
+                value={invoice.issuedAt ? formatDatePY(invoice.issuedAt, "local") : "Sin emitir"}
+              />
+              {invoice.dueDate && (
+                <InfoRow label="Vencimiento" value={formatDatePY(invoice.dueDate, "utc")} />
+              )}
+            </DataGroup>
+            {!isPending && invoice.notes && (
+              <DataGroup title="Notas">
+                <p className="text-sm text-foreground whitespace-pre-line">{invoice.notes}</p>
+              </DataGroup>
+            )}
+          </section>
 
           {/* Cancel zone */}
           {canCancel && (
-            <section className="rounded-xl border border-destructive/20 bg-destructive/10 p-5">
+            <section className="rounded-xl border border-border bg-card p-5">
               {!showCancelForm ? (
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between gap-3">
                   <div>
-                    <p className="text-sm font-medium text-destructive">
+                    <p className="text-sm font-medium text-foreground">
                       Cancelar factura
                     </p>
                     <p className="text-xs text-muted-foreground mt-0.5">
@@ -730,13 +774,14 @@ export default function InvoiceDetailPage() {
                     </p>
                   </div>
                   <RequirePermission permission="billing:cancel">
-                    <button
-                      type="button"
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      className="shrink-0"
                       onClick={() => setShowCancelForm(true)}
-                      className="text-sm font-medium text-destructive underline underline-offset-2 hover:opacity-80"
                     >
                       Cancelar
-                    </button>
+                    </Button>
                   </RequirePermission>
                 </div>
               ) : (

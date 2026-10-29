@@ -12,8 +12,12 @@ import { PrismaClientOrTx } from '../../../prisma/types';
 export class BillingSourcesRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  findSaleOrderForInvoicing(tenantId: string, saleOrderId: string) {
-    return this.prisma.saleOrder.findFirst({
+  findSaleOrderForInvoicing(
+    tenantId: string,
+    saleOrderId: string,
+    client: PrismaClientOrTx = this.prisma,
+  ) {
+    return client.saleOrder.findFirst({
       where: { id: saleOrderId, tenantId },
       select: {
         saleType: true,
@@ -23,7 +27,7 @@ export class BillingSourcesRepository {
             unitPrice: true,
             financedUnitPrice: true,
             description: true,
-            product: { select: { name: true } },
+            product: { select: { name: true, ivaTaxRate: true } },
           },
         },
       },

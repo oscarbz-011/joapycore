@@ -1,4 +1,6 @@
-import { Module } from '@nestjs/common';
+import { Global, Module } from '@nestjs/common';
+import { BILLING_GATEWAY } from '../../common/contracts/billing-gateway.contract';
+import { FilesModule } from '../../files/files.module';
 import { BillingSeriesController } from './controllers/billing-series.controller';
 import { InvoicesController } from './controllers/invoices.controller';
 import { BillingOnPaymentListener } from './events/billing-on-payment.listener';
@@ -10,11 +12,20 @@ import { CreditNotesRepository } from './repositories/credit-notes.repository';
 import { InvoicesRepository } from './repositories/invoices.repository';
 import { BillingSeriesService } from './services/billing-series.service';
 import { InvoicesService } from './services/invoices.service';
+import { PosInvoicingService } from './services/pos-invoicing.service';
+import { PreprintedInvoicesService } from './services/preprinted-invoices.service';
 
+// Global solo para exponer BILLING_GATEWAY (lo usa POS sin importar este
+// módulo).
+@Global()
 @Module({
+  imports: [FilesModule],
   controllers: [InvoicesController, BillingSeriesController],
   providers: [
+    PosInvoicingService,
+    { provide: BILLING_GATEWAY, useExisting: PosInvoicingService },
     InvoicesService,
+    PreprintedInvoicesService,
     BillingSeriesService,
     BillingSeriesRepository,
     InvoicesRepository,
@@ -24,5 +35,6 @@ import { InvoicesService } from './services/invoices.service';
     BillingOnPaymentListener,
     InterestInvoiceOnReceiptListener,
   ],
+  exports: [BILLING_GATEWAY],
 })
 export class BillingModule {}

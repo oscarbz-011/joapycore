@@ -12,7 +12,9 @@ import {
   type CreateCustomerPayload,
   type DocumentType,
   type EconomicActivity,
+  type TaxpayerType,
 } from '../../../../../lib/api/sales';
+import { rucProblem } from '@/lib/ruc';
 import { NumericInput } from '../../../../../components/numeric-input';
 import { DeliveryMap } from '../../../../../components/logistics/delivery-map';
 import { Button } from '@/components/ui/button';
@@ -24,7 +26,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/u
 
 const EMPTY_FORM: CreateCustomerPayload = {
   firstName: '', secondFirstName: '', lastName: '', secondLastName: '',
-  documentType: undefined, documentNumber: '', email: '', phone: '',
+  documentType: undefined, documentNumber: '', taxpayerType: 'INDIVIDUAL', email: '', phone: '',
   address: '', city: '', profession: '', monthlyIncome: undefined, notes: '',
   economicActivity: undefined, hasIpsInsurance: undefined,
   employerName: '', supervisorName: '', workPhone: '', workAddress: '', workSeniority: '',
@@ -45,6 +47,7 @@ function fromCustomer(c: Customer): CreateCustomerPayload {
     secondLastName:   c.secondLastName ?? '',
     documentType:     c.documentType ?? undefined,
     documentNumber:   c.documentNumber ?? '',
+    taxpayerType:     c.taxpayerType ?? 'INDIVIDUAL',
     email:            c.email ?? '',
     phone:            c.phone ?? '',
     address:          c.address ?? '',
@@ -125,15 +128,30 @@ export function CustomerForm({ initial, prefill, onDone }: Props) {
     setForm((f) => ({ ...f, [k]: v }));
   }
 
+  const company = form.taxpayerType === 'COMPANY';
+  const rucError =
+    form.documentType === 'RUC' && form.documentNumber?.trim() ? rucProblem(form.documentNumber) : null;
+
+  function setTaxpayerType(type: TaxpayerType) {
+    setForm((f) => ({
+      ...f,
+      taxpayerType: type,
+      ...(type === 'COMPANY'
+        ? { documentType: 'RUC' as const, secondFirstName: '', lastName: '', secondLastName: '' }
+        : {}),
+    }));
+  }
+
   const saveMutation = useMutation({
     mutationFn: () => {
       const payload: CreateCustomerPayload = {
         firstName:        form.firstName.trim(),
-        secondFirstName:  form.secondFirstName?.trim() || undefined,
-        lastName:         form.lastName.trim(),
-        secondLastName:   form.secondLastName?.trim() || undefined,
+        secondFirstName:  company ? undefined : form.secondFirstName?.trim() || undefined,
+        lastName:         company ? '' : form.lastName.trim(),
+        secondLastName:   company ? undefined : form.secondLastName?.trim() || undefined,
         documentType:     form.documentType || undefined,
         documentNumber:   form.documentNumber?.trim() || undefined,
+        taxpayerType:     form.taxpayerType,
         email:            form.email?.trim() || undefined,
         phone:            form.phone?.trim() || undefined,
         address:          form.address?.trim() || undefined,
@@ -194,6 +212,33 @@ export function CustomerForm({ initial, prefill, onDone }: Props) {
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
+              <Label>Tipo de contribuyente</Label>
+              <Select value={form.taxpayerType ?? 'INDIVIDUAL'} onValueChange={(v) => v && setTaxpayerType(v as TaxpayerType)}>
+                <SelectTrigger className="w-full" aria-label="Tipo de contribuyente">
+                  <span className="flex-1 text-left text-sm truncate">{company ? 'Persona jurídica' : 'Persona física'}</span>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="INDIVIDUAL">Persona física</SelectItem>
+                  <SelectItem value="COMPANY">Persona jurídica</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          {company ? (
+            <div className="space-y-1.5">
+              <Label htmlFor="customer-legal-name">Razón social <span className="text-destructive">*</span></Label>
+              <Input
+                id="customer-legal-name"
+                value={form.firstName}
+                onChange={(e) => set('firstName', e.target.value)}
+                required
+                placeholder="Tal como figura en el RUC"
+              />
+            </div>
+          ) : (
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1.5">
               <Label>Primer nombre <span className="text-destructive">*</span></Label>
               <Input value={form.firstName} onChange={(e) => set('firstName', e.target.value)} required placeholder="María" />
             </div>
@@ -210,11 +255,12 @@ export function CustomerForm({ initial, prefill, onDone }: Props) {
               <Input value={form.secondLastName ?? ''} onChange={(e) => set('secondLastName', e.target.value)} placeholder="Rodríguez" />
             </div>
           </div>
+          )}
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <Label>Tipo de documento</Label>
-              <Select value={form.documentType || 'none'} onValueChange={(v) => set('documentType', v && v !== 'none' ? v as DocumentType : undefined)}>
+              <Select disabled={company} value={form.documentType || 'none'} onValueChange={(v) => set('documentType', v && v !== 'none' ? v as DocumentType : undefined)}>
                 <SelectTrigger className="w-full">
                   <span className="flex-1 text-left text-sm truncate">{form.documentType ? docLabel(form.documentType) : '— Seleccionar —'}</span>
                 </SelectTrigger>
@@ -228,7 +274,13 @@ export function CustomerForm({ initial, prefill, onDone }: Props) {
             </div>
             <div className="space-y-1.5">
               <Label>Número de documento</Label>
-              <Input value={form.documentNumber ?? ''} onChange={(e) => set('documentNumber', e.target.value)} placeholder="1234567-8" />
+              <Input
+                value={form.documentNumber ?? ''}
+                onChange={(e) => set('documentNumber', e.target.value)}
+                placeholder={form.documentType === 'RUC' ? '80012345-6' : '1234567'}
+                aria-invalid={rucError ? true : undefined}
+              />
+              {rucError && <p className="text-xs text-destructive">{rucError}</p>}
             </div>
             <div className="space-y-1.5">
               <Label>Profesión</Label>
@@ -501,7 +553,7 @@ export function CustomerForm({ initial, prefill, onDone }: Props) {
             </div>
           )}
 
-          <Button type="submit" disabled={!canSave || saveMutation.isPending} className="shrink-0">
+          <Button type="submit" disabled={!canSave || saveMutation.isPending || rucError !== null} className="shrink-0">
             {saveMutation.isPending ? 'Guardando...' : initial ? 'Guardar cambios' : 'Crear cliente'}
           </Button>
         </div>

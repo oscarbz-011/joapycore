@@ -351,6 +351,21 @@ enum DocumentType {
   PASSPORT
 }
 
+// Persona física o jurídica. En una jurídica, firstName guarda la razón social.
+enum TaxpayerType {
+  INDIVIDUAL
+  COMPANY
+}
+
+// Las térmicas solo se habilitan con el informe de durabilidad del papel
+// (RG 27/19).
+enum PosPrintFormat {
+  THERMAL_58
+  THERMAL_80
+  A4
+  HALF_LETTER
+}
+
 enum Gender {
   MASCULINO
   FEMENINO
@@ -570,6 +585,7 @@ model Tenant {
   appEmailMessages           AppEmailMessage[]
   appEmailInboxMessages      AppEmailInboxMessage[]
   billingSeries              BillingSeries[]
+  billingVoidedNumbers       BillingVoidedNumber[]
 
   @@map("tenants")
 }
@@ -1342,6 +1358,7 @@ model Customer {
   secondLastName  String?       @map("second_last_name")
   documentType    DocumentType? @map("document_type")
   documentNumber  String?       @map("document_number")
+  taxpayerType    TaxpayerType? @map("taxpayer_type")
   email           String?
   phone           String?
   address         String?
@@ -1814,6 +1831,17 @@ model Invoice {
   pdfFileId String?     @unique @map("pdf_file_id")
   pdfFile   FileRecord? @relation("InvoicePdf", fields: [pdfFileId], references: [id])
 
+  // Talonario de imprenta: el comprobante es la hoja preimpresa. Se registra
+  // cuántas veces se imprimió sobre ella y se puede adjuntar su escaneo.
+  formPrintCount     Int         @default(0) @map("form_print_count")
+  formPrintedAt      DateTime?   @map("form_printed_at")
+  physicalScanFileId String?     @unique @map("physical_scan_file_id")
+  physicalScan       FileRecord? @relation("InvoicePhysicalScan", fields: [physicalScanFileId], references: [id])
+
+  // Consumidor final que no se identificó: la factura lleva "Sin Nombre" y
+  // una X en RUC y documento (art. 20 del Decreto 6539/05).
+  anonymousBuyer Boolean @default(false) @map("anonymous_buyer")
+
   // SIFEN / e-billing fields (null until electronic billing integration)
   cdc          String? // Código de Control Digital
   xmlContent   String?   @map("xml_content")
@@ -1823,13 +1851,14 @@ model Invoice {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  tenant             Tenant              @relation(fields: [tenantId], references: [id])
-  saleOrder          SaleOrder?          @relation(fields: [saleOrderId], references: [id])
-  paymentReceipt     PaymentReceipt?     @relation(fields: [paymentReceiptId], references: [id])
-  series             BillingSeries?      @relation(fields: [seriesId], references: [id])
+  tenant             Tenant                @relation(fields: [tenantId], references: [id])
+  saleOrder          SaleOrder?            @relation(fields: [saleOrderId], references: [id])
+  paymentReceipt     PaymentReceipt?       @relation(fields: [paymentReceiptId], references: [id])
+  series             BillingSeries?        @relation(fields: [seriesId], references: [id])
   items              InvoiceItem[]
   accountsReceivable AccountsReceivable?
   creditNotes        CreditNote[]
+  voidedSheets       BillingVoidedNumber[]
 
   @@unique([seriesId, serieCode, sequential])
   @@index([tenantId, seriesId])
@@ -1860,16 +1889,46 @@ model BillingSeries {
   // sugerido al cargar el número del talonario.
   nextNumber      Int                 @map("next_number")
   isActive        Boolean             @default(true) @map("is_active")
+  // Talonario: dónde va cada dato sobre la hoja preimpresa (en mm). Null =
+  // diseño estándar.
+  printLayout     Json?               @map("print_layout")
   createdAt       DateTime            @default(now()) @map("created_at")
   updatedAt       DateTime            @updatedAt @map("updated_at")
 
-  tenant   Tenant    @relation(fields: [tenantId], references: [id])
-  branch   Branch    @relation(fields: [branchId], references: [id])
-  invoices Invoice[]
+  tenant        Tenant                @relation(fields: [tenantId], references: [id])
+  branch        Branch                @relation(fields: [branchId], references: [id])
+  invoices      Invoice[]
+  posTerminals  PosTerminal[]
+  voidedNumbers BillingVoidedNumber[]
 
   @@unique([tenantId, timbrado, establecimiento, puntoExpedicion, documentType, serieCode])
   @@index([tenantId, branchId, documentType, isActive])
   @@map("billing_series")
+}
+
+// Hoja de un talonario de imprenta que no se usó como factura (se arruinó al
+// imprimir, se extravió, etc.). Su número no se puede volver a usar.
+model BillingVoidedNumber {
+  id         String   @id @default(uuid())
+  tenantId   String   @map("tenant_id")
+  seriesId   String   @map("series_id")
+  serieCode  String   @default("") @map("serie_code")
+  sequential Int
+  // La factura que estaba impresa en la hoja, si había una.
+  invoiceId  String?  @map("invoice_id")
+  reason     String
+  scanFileId String?  @unique @map("scan_file_id")
+  voidedById String?  @map("voided_by_id")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  tenant   Tenant        @relation(fields: [tenantId], references: [id])
+  series   BillingSeries @relation(fields: [seriesId], references: [id])
+  invoice  Invoice?      @relation(fields: [invoiceId], references: [id])
+  scanFile FileRecord?   @relation("VoidedSheetScan", fields: [scanFileId], references: [id])
+
+  @@unique([seriesId, serieCode, sequential])
+  @@index([tenantId, seriesId])
+  @@map("billing_voided_numbers")
 }
 
 model InvoiceItem {
@@ -2430,11 +2489,14 @@ model FileRecord {
   visibility   FileVisibility @default(PRIVATE)
   createdAt    DateTime       @default(now()) @map("created_at")
 
-  tenant     Tenant          @relation(fields: [tenantId], references: [id])
-  document   Document?
-  tenantLogo Tenant?         @relation("TenantLogo")
-  invoiceFor Invoice?        @relation("InvoicePdf")
-  receiptFor PaymentReceipt? @relation("ReceiptPdf")
+  tenant            Tenant               @relation(fields: [tenantId], references: [id])
+  document          Document?
+  tenantLogo        Tenant?              @relation("TenantLogo")
+  invoiceFor        Invoice?             @relation("InvoicePdf")
+  invoiceScanFor    Invoice?             @relation("InvoicePhysicalScan")
+  voidedSheetFor    BillingVoidedNumber? @relation("VoidedSheetScan")
+  receiptFor        PaymentReceipt?      @relation("ReceiptPdf")
+  posPaperReportFor PosTerminal?         @relation("PosPaperReport")
 
   @@index([tenantId, module, entityType, entityId])
   @@map("file_records")
@@ -2901,12 +2963,22 @@ model PosTerminal {
   name     String // "Caja 1", "Caja 2"
   isActive Boolean @default(true) @map("is_active")
 
+  // Serie con la que la caja numera sus facturas; sin serie no puede vender.
+  invoiceSeriesId          String?        @map("invoice_series_id")
+  printFormat              PosPrintFormat @default(A4) @map("print_format")
+  // Informe del proveedor sobre la durabilidad del papel térmico y las
+  // condiciones de conservación que se imprimen en la factura.
+  thermalPaperReportFileId String?        @unique @map("thermal_paper_report_file_id")
+  thermalPaperConservation String?        @map("thermal_paper_conservation")
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  tenant   Tenant       @relation(fields: [tenantId], references: [id])
-  branch   Branch       @relation(fields: [branchId], references: [id])
-  sessions PosSession[]
+  tenant             Tenant         @relation(fields: [tenantId], references: [id])
+  branch             Branch         @relation(fields: [branchId], references: [id])
+  invoiceSeries      BillingSeries? @relation(fields: [invoiceSeriesId], references: [id])
+  thermalPaperReport FileRecord?    @relation("PosPaperReport", fields: [thermalPaperReportFileId], references: [id])
+  sessions           PosSession[]
 
   @@unique([tenantId, branchId, name])
   @@map("pos_terminals")

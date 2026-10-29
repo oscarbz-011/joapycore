@@ -3,6 +3,8 @@ import type { ListQuery, Paginated } from '../pagination';
 import type { ProspectPayload } from '../quote-party';
 
 export type DocumentType = 'CI' | 'RUC' | 'PASSPORT';
+/** En una persona jurídica `firstName` guarda la razón social y `lastName` va vacío. */
+export type TaxpayerType = 'INDIVIDUAL' | 'COMPANY';
 export type SaleType = 'CASH' | 'CREDIT';
 export type OrderType = 'STANDARD' | 'QUOTE' | 'WHOLESALE';
 export type MarkupType = 'PERCENTAGE' | 'FIXED';
@@ -144,6 +146,7 @@ export interface Customer {
   secondLastName: string | null;
   documentType: DocumentType | null;
   documentNumber: string | null;
+  taxpayerType: TaxpayerType | null;
   email: string | null;
   phone: string | null;
   address: string | null;
@@ -322,6 +325,7 @@ export interface CreateCustomerPayload {
   secondLastName?: string;
   documentType?: DocumentType;
   documentNumber?: string;
+  taxpayerType?: TaxpayerType;
   email?: string;
   phone?: string;
   address?: string;

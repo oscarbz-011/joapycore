@@ -1,8 +1,11 @@
 'use client';
 
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { Receipt } from 'lucide-react';
+import { useMutation, useQuery } from '@tanstack/react-query';
+import { Printer, Receipt } from 'lucide-react';
+import { apiErrorMessage } from '@/lib/api/api-error';
+import { printReceipt } from '@/lib/pos-receipt';
+import { Button } from '@/components/ui/button';
 import { posApi, type PosPaymentMethod, type PosSaleOrder, type PosTerminal } from '../../../../../lib/api/pos';
 import { useTableSort } from '../../../../../lib/use-table-sort';
 import { SortableHeader } from '@/components/sortable-header';
@@ -65,6 +68,11 @@ export default function PosHistoryPage() {
       }),
   });
 
+  const reprint = useMutation({
+    mutationFn: (saleOrderId: string) => posApi.getReceipt(saleOrderId, true),
+    onSuccess: printReceipt,
+  });
+
   const { sorted, sort, toggle } = useTableSort(sales, POS_SALE_SORT);
   const pagination = usePagination(sorted);
 
@@ -101,6 +109,12 @@ export default function PosHistoryPage() {
         <DatePicker value={to} onChange={setTo} />
       </div>
 
+      {reprint.isError && (
+        <div role="alert" className="mb-4 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          {apiErrorMessage(reprint.error, 'No se pudo reimprimir la factura')}
+        </div>
+      )}
+
       {isLoading ? (
         <div className="py-16 text-center text-sm text-muted-foreground">Cargando...</div>
       ) : sales.length === 0 ? (
@@ -119,6 +133,9 @@ export default function PosHistoryPage() {
                   <SortableHeader label="Ítems" sortKey="items" sort={sort} onSort={toggle} />
                   <SortableHeader label="Pago" sortKey="payment" sort={sort} onSort={toggle} />
                   <SortableHeader label="Total" sortKey="total" sort={sort} onSort={toggle} align="right" />
+                  <th className="px-4 py-3 text-right">
+                    <span className="sr-only">Factura</span>
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
@@ -136,6 +153,17 @@ export default function PosHistoryPage() {
                     </td>
                     <td className="px-4 py-3 text-right font-mono font-medium text-foreground">
                       {formatPrice(saleTotal(sale))}
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        disabled={reprint.isPending}
+                        onClick={() => reprint.mutate(sale.id)}
+                        aria-label={`Reimprimir la factura de la venta del ${formatDateTime(sale.orderDate)}`}
+                      >
+                        <Printer size={13} /> Reimprimir
+                      </Button>
                     </td>
                   </tr>
                 ))}

@@ -2,11 +2,13 @@ import {
   ConflictException,
   Injectable,
   NotFoundException,
+  UnprocessableEntityException,
 } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { CustomersRepository } from '../repositories/customers.repository';
 import { CreateCustomerDto } from '../dto/create-customer.dto';
 import { toTitleCase } from '../../../common/utils/normalize.util';
+import { rucProblem } from '../../../common/utils/ruc.util';
 import type { AuditLogEvent } from '../../../audit/audit-log.event';
 import type { Prisma } from '@prisma/client';
 import {
@@ -77,6 +79,7 @@ export class CustomersService {
   }
 
   async create(tenantId: string, dto: CreateCustomerDto, userId?: string) {
+    this.assertValidRuc(dto.documentType, dto.documentNumber);
     await this.assertDocumentAvailable(
       tenantId,
       dto.documentType ?? null,
@@ -93,8 +96,7 @@ export class CustomersService {
     const customerCode = await this.generateCustomerCode(tenantId);
     const customer = await this.customersRepository.create(tenantId, {
       ...dto,
-      firstName: toTitleCase(dto.firstName),
-      lastName: toTitleCase(dto.lastName),
+      ...this.casedNames(dto, dto.taxpayerType),
       customerCode,
     });
 
@@ -126,6 +128,10 @@ export class CustomersService {
   ) {
     const before = await this.findOne(tenantId, id);
     if (dto.documentNumber !== undefined || dto.documentType !== undefined) {
+      this.assertValidRuc(
+        dto.documentType ?? before.documentType,
+        dto.documentNumber ?? before.documentNumber,
+      );
       await this.assertDocumentAvailable(
         tenantId,
         dto.documentType ?? before.documentType ?? null,
@@ -144,8 +150,7 @@ export class CustomersService {
     }
     const customer = await this.customersRepository.update(tenantId, id, {
       ...dto,
-      ...(dto.firstName ? { firstName: toTitleCase(dto.firstName) } : {}),
-      ...(dto.lastName ? { lastName: toTitleCase(dto.lastName) } : {}),
+      ...this.casedNames(dto, dto.taxpayerType ?? before.taxpayerType),
     });
 
     this.eventEmitter.emit('customer.updated', { tenantId, customerId: id });
@@ -225,6 +230,35 @@ export class CustomersService {
     } satisfies AuditLogEvent);
 
     return customer;
+  }
+
+  // La razón social de una empresa se guarda tal como la registró (ej. "TIPS
+  // S.A."); el nombre de una persona se capitaliza.
+  private casedNames(
+    dto: Partial<Pick<CreateCustomerDto, 'firstName' | 'lastName'>>,
+    taxpayerType: CreateCustomerDto['taxpayerType'] | null,
+  ) {
+    if (taxpayerType === 'COMPANY') {
+      return {
+        ...(dto.firstName ? { firstName: dto.firstName.trim() } : {}),
+        ...(dto.lastName !== undefined ? { lastName: '' } : {}),
+      };
+    }
+    return {
+      ...(dto.firstName ? { firstName: toTitleCase(dto.firstName) } : {}),
+      ...(dto.lastName ? { lastName: toTitleCase(dto.lastName) } : {}),
+    };
+  }
+
+  // Una factura con un RUC mal escrito no sirve al cliente para su crédito
+  // fiscal.
+  private assertValidRuc(
+    documentType: CreateCustomerDto['documentType'] | null,
+    documentNumber: string | null | undefined,
+  ) {
+    if (documentType !== 'RUC' || !documentNumber?.trim()) return;
+    const problem = rucProblem(documentNumber);
+    if (problem) throw new UnprocessableEntityException(problem);
   }
 
   // El mismo documento no puede identificar a dos clientes activos: se

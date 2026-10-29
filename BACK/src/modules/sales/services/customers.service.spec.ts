@@ -206,6 +206,67 @@ describe('CustomersService', () => {
     });
   });
 
+  // ── RUC y tipo de contribuyente ───────────────────────────────────────────
+
+  describe('RUC', () => {
+    it('rejects a RUC with a wrong check digit', async () => {
+      await expect(
+        service.create('tenant-1', {
+          firstName: 'Ana',
+          lastName: 'Pérez',
+          documentType: 'RUC',
+          documentNumber: '80069563-2',
+        }),
+      ).rejects.toThrow('El dígito verificador del RUC no es correcto');
+      expect(customersRepository.create).not.toHaveBeenCalled();
+    });
+
+    it('asks for the check digit after a hyphen', async () => {
+      await expect(
+        service.create('tenant-1', {
+          firstName: 'Ana',
+          lastName: 'Pérez',
+          documentType: 'RUC',
+          documentNumber: '80069563',
+        }),
+      ).rejects.toThrow('separado por un guion');
+    });
+
+    it('keeps the legal name of a company as registered', async () => {
+      customersRepository.findLastCode.mockResolvedValue(null);
+      customersRepository.create.mockResolvedValue(makeCustomer());
+
+      await service.create('tenant-1', {
+        firstName: ' TIPS S.A. ',
+        lastName: 'ignorado',
+        documentType: 'RUC',
+        documentNumber: '80069563-1',
+        taxpayerType: 'COMPANY',
+      });
+
+      expect(customersRepository.create).toHaveBeenCalledWith(
+        'tenant-1',
+        expect.objectContaining({
+          firstName: 'TIPS S.A.',
+          lastName: '',
+          taxpayerType: 'COMPANY',
+        }),
+      );
+    });
+
+    it('validates the RUC only when it changes on update', async () => {
+      customersRepository.findById.mockResolvedValue(
+        makeCustomer({ documentType: 'RUC', documentNumber: '123' }),
+      );
+      customersRepository.update.mockResolvedValue(makeCustomer());
+
+      await service.update('tenant-1', 'cust-1', { phone: '0981' });
+      await expect(
+        service.update('tenant-1', 'cust-1', { documentNumber: '80069563-9' }),
+      ).rejects.toThrow('dígito verificador');
+    });
+  });
+
   // ── documento duplicado ────────────────────────────────────────────────────
 
   describe('document number uniqueness', () => {

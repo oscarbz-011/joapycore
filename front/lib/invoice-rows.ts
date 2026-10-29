@@ -19,6 +19,9 @@ export interface InvoiceRow {
   // Factura de intereses de una sucursal con talonario: espera que alguien
   // le cargue el número.
   needsNumber: boolean;
+  // Factura de intereses de talonario ya numerada: se abre para imprimirla
+  // sobre la hoja, no por un PDF.
+  onSheet: boolean;
 }
 
 function fiscalNumber(invoice: {
@@ -84,6 +87,7 @@ export function toInvoiceRows(
       pdfFileId: null,
       fiscalNumber: fiscalNumber(invoice),
       needsNumber: false,
+      onSheet: false,
     }),
   );
   const interestRows = interests.map((invoice): InvoiceRow => {
@@ -105,6 +109,10 @@ export function toInvoiceRows(
       pdfFileId: invoice.pdfFileId,
       fiscalNumber: fiscalNumber(invoice),
       needsNumber: invoice.sequential == null && invoice.status !== 'CANCELLED',
+      onSheet:
+        invoice.modality === 'PREPRINTED' &&
+        invoice.sequential != null &&
+        invoice.status !== 'CANCELLED',
     };
   });
   return [...saleRows, ...interestRows].sort(compareFiscalOrder);

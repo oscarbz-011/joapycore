@@ -153,7 +153,7 @@ export default function BillingPage() {
   async function openRow(row: InvoiceRow) {
     setOpenError('');
     if (row.kind === 'SALE') return router.push(`/dashboard/billing/invoices/${row.id}`);
-    if (row.needsNumber) return router.push(`/dashboard/billing/invoices/${row.id}/number`);
+    if (row.needsNumber || row.onSheet) return router.push(`/dashboard/billing/invoices/${row.id}/number`);
     if (!row.pdfFileId) {
       return setOpenError(
         `La factura de intereses ${row.number} no tiene PDF. Generalo desde el recibo de la cuota (botón "Factura int.").`,

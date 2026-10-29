@@ -1,4 +1,12 @@
-import { Controller, Get, Post, Body, Query } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Param,
+  ParseBoolPipe,
+  Query,
+} from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CurrentTenant } from '../../../common/decorators/current-tenant.decorator';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
@@ -37,6 +45,24 @@ export class PosSalesController {
     @Query('sessionId') sessionId: string,
   ) {
     return this.posSalesService.listBySession(tenantId, sessionId);
+  }
+
+  @Get(':saleOrderId/receipt')
+  @Permissions('pos:sell')
+  @ApiOperation({
+    summary:
+      'Factura de una venta de caja para imprimir (copy=true: reimpresión)',
+  })
+  receipt(
+    @CurrentTenant() tenantId: string,
+    @CurrentUser() user: JwtPayload,
+    @Param('saleOrderId') saleOrderId: string,
+    @Query('copy', new ParseBoolPipe({ optional: true })) copy?: boolean,
+  ) {
+    return this.posSalesService.receipt(tenantId, saleOrderId, {
+      copy,
+      userId: user.sub,
+    });
   }
 
   @Get('history')

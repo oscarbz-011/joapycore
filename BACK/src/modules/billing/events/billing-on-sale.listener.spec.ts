@@ -11,7 +11,7 @@ function makeItem(overrides: Record<string, unknown> = {}) {
     quantity: 2,
     unitPrice: 500_000,
     financedUnitPrice: null,
-    product: { name: 'Heladera' },
+    product: { name: 'Heladera', ivaTaxRate: 10 },
     ...overrides,
   };
 }
@@ -82,6 +82,60 @@ describe('BillingOnSaleListener', () => {
       expect.objectContaining({ unitPrice: 500_000, total: 1_000_000 }),
       expect.anything(),
     );
+  });
+
+  it('breaks down the IVA included in each item by the product rate', async () => {
+    prisma.saleOrder.findFirst.mockResolvedValue({
+      saleType: 'CASH',
+      items: [
+        makeItem({ quantity: 1, unitPrice: 110_000 }),
+        makeItem({
+          quantity: 2,
+          unitPrice: 52_500,
+          product: { name: 'Arroz', ivaTaxRate: 5 },
+        }),
+        makeItem({
+          quantity: 1,
+          unitPrice: 30_000,
+          product: { name: 'Libro', ivaTaxRate: 0 },
+        }),
+        makeItem({
+          quantity: 1,
+          unitPrice: 22_000,
+          product: null,
+          description: 'Flete',
+        }),
+      ],
+    });
+    await listener.handle({ tenantId: TENANT, saleOrderId: ORDER_ID });
+
+    const items = invoicesRepository.createItem.mock.calls.map((c) => c[0]);
+    expect(items).toEqual([
+      expect.objectContaining({
+        description: 'Heladera',
+        ivaRate: 10,
+        ivaAmount: 10_000,
+        unitPriceWithoutIva: 100_000,
+      }),
+      expect.objectContaining({
+        description: 'Arroz',
+        total: 105_000,
+        ivaRate: 5,
+        ivaAmount: 5_000,
+        unitPriceWithoutIva: 50_000,
+      }),
+      expect.objectContaining({
+        description: 'Libro',
+        ivaRate: 0,
+        ivaAmount: 0,
+        unitPriceWithoutIva: 30_000,
+      }),
+      expect.objectContaining({
+        description: 'Flete',
+        ivaRate: 10,
+        ivaAmount: 2_000,
+      }),
+    ]);
   });
 
   it('uses Loan.totalAmount as the invoice total for a CREDIT sale', async () => {

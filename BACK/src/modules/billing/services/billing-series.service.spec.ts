@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import type { PrismaClientOrTx } from '../../../prisma/types';
+import { DEFAULT_PREPRINTED_LAYOUT } from '../utils/preprinted-layout';
 import { BillingSeriesService, seriesProblem } from './billing-series.service';
 
 const ISSUE_DAY = new Date('2026-06-15T15:00:00.000Z');
@@ -106,7 +107,9 @@ describe('BillingSeriesService', () => {
       claimNextNumber: jest.fn().mockResolvedValue(10),
       advanceSuggestedNumber: jest.fn().mockResolvedValue({ count: 1 }),
       isNumberUsed: jest.fn().mockResolvedValue(false),
-    };
+      createVoided: jest.fn().mockResolvedValue({ id: 'voided-1' }),
+      findVoided: jest.fn().mockResolvedValue([]),
+    } as typeof repo;
     sources = {
       findBranch: jest
         .fn()
@@ -445,6 +448,173 @@ describe('BillingSeriesService', () => {
       await expect(
         service.numberForAutomatic('tenant-1', 'branch-1', ISSUE_DAY, tx),
       ).resolves.toBeNull();
+    });
+  });
+
+  describe('print layout of a talonario', () => {
+    it('always returns the full layout, the standard one when the series has none', async () => {
+      repo.findById.mockResolvedValue(makeSeries({ printLayout: null }));
+      const series = await service.findOne('tenant-1', 'series-1');
+      expect(series.printLayout).toEqual(DEFAULT_PREPRINTED_LAYOUT);
+    });
+
+    it('stores the calibrated layout and resets it with null', async () => {
+      repo.findById.mockResolvedValue(
+        makeSeries({ modality: 'PREPRINTED', printLayout: null }),
+      );
+      const layout = { ...DEFAULT_PREPRINTED_LAYOUT, offsetX: 3 };
+
+      await service.update('tenant-1', 'series-1', { printLayout: layout });
+      expect(repo.update).toHaveBeenLastCalledWith(
+        'tenant-1',
+        'series-1',
+        expect.objectContaining({ printLayout: layout }),
+      );
+
+      await service.update('tenant-1', 'series-1', { printLayout: null });
+      expect(repo.update).toHaveBeenLastCalledWith(
+        'tenant-1',
+        'series-1',
+        expect.objectContaining({ printLayout: Prisma.DbNull }),
+      );
+    });
+
+    it('lets a used series change its layout', async () => {
+      repo.findById.mockResolvedValue(
+        makeSeries({
+          modality: 'PREPRINTED',
+          printLayout: null,
+          _count: { invoices: 3 },
+        }),
+      );
+      await expect(
+        service.update('tenant-1', 'series-1', {
+          printLayout: DEFAULT_PREPRINTED_LAYOUT,
+        }),
+      ).resolves.toBeDefined();
+    });
+
+    it('checks whether the items fit on the sheet', async () => {
+      repo.findById.mockResolvedValue(
+        makeSeries({
+          modality: 'PREPRINTED',
+          printLayout: { items: { maxLines: 2 } },
+        }),
+      );
+      await expect(
+        service.formFitProblem('tenant-1', 'series-1', 2, tx),
+      ).resolves.toBeNull();
+      await expect(
+        service.formFitProblem('tenant-1', 'series-1', 3, tx),
+      ).resolves.toMatch(/admite 2/);
+    });
+  });
+
+  describe('voided sheets', () => {
+    const talonario = makeSeries({ modality: 'PREPRINTED', nextNumber: 42 });
+
+    it('moves an invoice to the next suggested sheet', async () => {
+      repo.findById.mockResolvedValue(talonario);
+
+      const numbering = await service.numberForPreprintedSheet(
+        'tenant-1',
+        { seriesId: 'series-1', at: ISSUE_DAY },
+        tx,
+      );
+
+      expect(numbering).toMatchObject({
+        sequential: 42,
+        invoiceNumber: '0000042',
+      });
+      expect(repo.advanceSuggestedNumber).toHaveBeenCalledWith(
+        'tenant-1',
+        'series-1',
+        42,
+        tx,
+      );
+    });
+
+    it('does not reuse a sheet already used or voided', async () => {
+      repo.findById.mockResolvedValue(talonario);
+      repo.isNumberUsed.mockResolvedValue(true);
+
+      await expect(
+        service.numberForPreprintedSheet(
+          'tenant-1',
+          { seriesId: 'series-1', documentNumber: 41, at: ISSUE_DAY },
+          tx,
+        ),
+      ).rejects.toThrow(
+        'El número 41 del talonario ya fue usado o inutilizado',
+      );
+    });
+
+    it('only voids sheets of a printing-house talonario', async () => {
+      repo.findById.mockResolvedValue(makeSeries());
+      await expect(
+        service.voidLooseSheet(
+          'tenant-1',
+          'series-1',
+          { documentNumber: 5, reason: 'Extraviada' },
+          tx,
+        ),
+      ).rejects.toThrow('Solo se inutilizan hojas de un talonario de imprenta');
+    });
+
+    it('voids a blank sheet and moves the suggestion past it', async () => {
+      repo.findById.mockResolvedValue(talonario);
+
+      await service.voidLooseSheet(
+        'tenant-1',
+        'series-1',
+        {
+          documentNumber: 42,
+          reason: '  Extraviada ',
+          scanFileId: 'file-1',
+          userId: 'user-1',
+        },
+        tx,
+      );
+
+      expect((repo as any).createVoided).toHaveBeenCalledWith(
+        {
+          tenantId: 'tenant-1',
+          seriesId: 'series-1',
+          serieCode: '',
+          sequential: 42,
+          invoiceId: null,
+          reason: 'Extraviada',
+          scanFileId: 'file-1',
+          voidedById: 'user-1',
+        },
+        tx,
+      );
+      expect(repo.advanceSuggestedNumber).toHaveBeenCalledWith(
+        'tenant-1',
+        'series-1',
+        42,
+        tx,
+      );
+    });
+
+    it('rejects a sheet outside the range of the talonario', async () => {
+      repo.findById.mockResolvedValue(talonario);
+      await expect(
+        service.voidLooseSheet(
+          'tenant-1',
+          'series-1',
+          { documentNumber: 900, reason: 'Extraviada' },
+          tx,
+        ),
+      ).rejects.toThrow('fuera del rango');
+      expect((repo as any).createVoided).not.toHaveBeenCalled();
+    });
+
+    it('does not list the voided sheets of a series of another tenant', async () => {
+      repo.findById.mockResolvedValue(null);
+      await expect(
+        service.findVoided('tenant-2', 'series-1'),
+      ).rejects.toBeInstanceOf(NotFoundException);
     });
   });
 });

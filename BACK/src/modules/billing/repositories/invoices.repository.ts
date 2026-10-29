@@ -1,8 +1,98 @@
 import { Injectable } from '@nestjs/common';
-import { InvoiceStatus, Prisma } from '@prisma/client';
+import { InvoiceStatus, PaymentMethod, Prisma } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { PrismaClientOrTx } from '../../../prisma/types';
 import type { SeriesNumbering } from '../types/series-numbering';
+
+// Lo que hace falta para imprimir una factura: en papel térmico, en A4 o
+// sobre la hoja de un talonario.
+const receiptSelect = {
+  id: true,
+  modality: true,
+  invoicePrefix: true,
+  invoiceNumber: true,
+  timbrado: true,
+  timbradoValidFrom: true,
+  timbradoValidUntil: true,
+  issuedAt: true,
+  total: true,
+  anonymousBuyer: true,
+  status: true,
+  invoiceType: true,
+  sequential: true,
+  seriesId: true,
+  formPrintCount: true,
+  formPrintedAt: true,
+  physicalScan: { select: { id: true, originalName: true, mimeType: true } },
+  series: { select: { printLayout: true } },
+  tenant: {
+    select: {
+      name: true,
+      razonSocial: true,
+      nombreFantasia: true,
+      ruc: true,
+      address: true,
+      numeroCasa: true,
+      city: true,
+      phone: true,
+      actividadesEconomicas: true,
+    },
+  },
+  saleOrder: {
+    select: {
+      saleType: true,
+      customer: {
+        select: {
+          firstName: true,
+          secondFirstName: true,
+          lastName: true,
+          secondLastName: true,
+          documentType: true,
+          documentNumber: true,
+          taxpayerType: true,
+          address: true,
+        },
+      },
+      branch: {
+        select: {
+          name: true,
+          address: true,
+          numeroCasa: true,
+          city: true,
+        },
+      },
+    },
+  },
+  paymentReceipt: {
+    select: {
+      customer: {
+        select: {
+          firstName: true,
+          secondFirstName: true,
+          lastName: true,
+          secondLastName: true,
+          documentType: true,
+          documentNumber: true,
+          taxpayerType: true,
+          address: true,
+        },
+      },
+      branch: {
+        select: { name: true, address: true, numeroCasa: true, city: true },
+      },
+    },
+  },
+  items: {
+    select: {
+      description: true,
+      quantity: true,
+      unitPrice: true,
+      total: true,
+      ivaRate: true,
+      ivaAmount: true,
+    },
+  },
+} satisfies Prisma.InvoiceSelect;
 
 @Injectable()
 export class InvoicesRepository {
@@ -56,6 +146,9 @@ export class InvoicesRepository {
         },
       },
       items: true,
+      physicalScan: {
+        select: { id: true, originalName: true, mimeType: true },
+      },
     };
   }
 
@@ -85,6 +178,7 @@ export class InvoicesRepository {
         invoicePrefix: true,
         sequential: true,
         pdfFileId: true,
+        modality: true,
         paymentReceipt: {
           select: {
             id: true,
@@ -172,6 +266,52 @@ export class InvoicesRepository {
         items: { create: data.items },
       },
       include: { items: true },
+    });
+  }
+
+  // Factura de una venta ya cobrada en caja: nace pagada y numerada.
+  createPaid(
+    tenantId: string,
+    data: {
+      saleOrderId: string;
+      numbering: SeriesNumbering;
+      total: number;
+      issuedAt: Date;
+      paymentMethod: PaymentMethod | null;
+      anonymousBuyer: boolean;
+      items: Omit<Prisma.InvoiceItemCreateManyInvoiceInput, 'id'>[];
+    },
+    client: PrismaClientOrTx = this.prisma,
+  ) {
+    return client.invoice.create({
+      data: {
+        tenantId,
+        saleOrderId: data.saleOrderId,
+        invoiceType: 'SALE',
+        status: 'PAID',
+        ...data.numbering,
+        total: data.total,
+        issuedAt: data.issuedAt,
+        paymentMethod: data.paymentMethod,
+        anonymousBuyer: data.anonymousBuyer,
+        items: { create: data.items },
+      },
+      select: { id: true },
+    });
+  }
+
+  findForReceipt(tenantId: string, saleOrderId: string) {
+    return this.prisma.invoice.findFirst({
+      where: { tenantId, saleOrderId },
+      select: receiptSelect,
+    });
+  }
+
+  // Factura de venta o de intereses a imprimir sobre la hoja del talonario.
+  findForForm(tenantId: string, id: string) {
+    return this.prisma.invoice.findFirst({
+      where: { id, tenantId },
+      select: receiptSelect,
     });
   }
 
@@ -314,6 +454,90 @@ export class InvoicesRepository {
         issuedAt: attemptAt,
       },
       data: { status: 'ISSUED' },
+    });
+  }
+
+  /**
+   * Emite una factura de talonario de imprenta: el comprobante es la hoja
+   * preimpresa, así que pasa a ISSUED sin esperar un PDF.
+   */
+  issuePreprinted(
+    tenantId: string,
+    id: string,
+    observedUpdatedAt: Date,
+    attemptAt: Date,
+    data: Partial<Prisma.InvoiceUncheckedUpdateManyInput>,
+    client: PrismaClientOrTx = this.prisma,
+  ) {
+    const staleBefore = new Date(
+      attemptAt.getTime() - InvoicesRepository.STALE_CLAIM_MS,
+    );
+    return client.invoice.updateMany({
+      where: {
+        id,
+        tenantId,
+        status: 'PENDING',
+        pdfFileId: null,
+        updatedAt: observedUpdatedAt,
+        OR: [{ issuedAt: null }, { issuedAt: { lt: staleBefore } }],
+      },
+      data: {
+        ...data,
+        dueDate: data.dueDate ?? null,
+        notes: data.notes ?? null,
+        issuedAt: attemptAt,
+        status: 'ISSUED',
+      },
+    });
+  }
+
+  recordFormPrint(tenantId: string, id: string, at: Date) {
+    return this.prisma.invoice.updateMany({
+      where: {
+        id,
+        tenantId,
+        modality: 'PREPRINTED',
+        sequential: { not: null },
+      },
+      data: { formPrintCount: { increment: 1 }, formPrintedAt: at },
+    });
+  }
+
+  // La factura pasa a otra hoja del talonario: lo impreso y el escaneo eran
+  // de la hoja anterior.
+  moveToSheet(
+    tenantId: string,
+    id: string,
+    fromSequential: number,
+    numbering: SeriesNumbering,
+    client: PrismaClientOrTx,
+  ) {
+    return client.invoice.updateMany({
+      where: {
+        id,
+        tenantId,
+        modality: 'PREPRINTED',
+        sequential: fromSequential,
+        status: { in: ['ISSUED', 'PAID'] },
+      },
+      data: {
+        ...numbering,
+        formPrintCount: 0,
+        formPrintedAt: null,
+        physicalScanFileId: null,
+      },
+    });
+  }
+
+  setPhysicalScan(tenantId: string, id: string, fileId: string | null) {
+    return this.prisma.invoice.updateMany({
+      where: {
+        id,
+        tenantId,
+        modality: 'PREPRINTED',
+        sequential: { not: null },
+      },
+      data: { physicalScanFileId: fileId },
     });
   }
 }

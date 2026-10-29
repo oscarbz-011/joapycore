@@ -112,6 +112,24 @@ describe('PaymentsOnInvoiceListener', () => {
       expect(arRepository.create).not.toHaveBeenCalled();
     });
 
+    it('does not create a receivable for an invoice already paid at the cash register', async () => {
+      arRepository.findByInvoice.mockResolvedValue(null);
+      prisma.invoice.findFirst.mockResolvedValue({
+        total: 220_000,
+        dueDate: null,
+        status: 'PAID',
+        saleOrder: { saleType: 'CASH', loan: null },
+      });
+
+      await listener.handle({
+        tenantId: 'tenant-1',
+        invoiceId: 'inv-1',
+        saleOrderId: 'order-1',
+      });
+
+      expect(arRepository.create).not.toHaveBeenCalled();
+    });
+
     it('skips when invoice is not found', async () => {
       arRepository.findByInvoice.mockResolvedValue(null);
       prisma.invoice.findFirst.mockResolvedValue(null);

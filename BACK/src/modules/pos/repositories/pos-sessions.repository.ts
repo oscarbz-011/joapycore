@@ -22,7 +22,16 @@ export class PosSessionsRepository {
 
   private get include() {
     return {
-      terminal: { select: { id: true, name: true, branchId: true } },
+      terminal: {
+        select: {
+          id: true,
+          name: true,
+          branchId: true,
+          invoiceSeriesId: true,
+          printFormat: true,
+          thermalPaperConservation: true,
+        },
+      },
       cashier: { select: { id: true, firstName: true, lastName: true } },
     };
   }

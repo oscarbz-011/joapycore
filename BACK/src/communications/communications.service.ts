@@ -1,4 +1,5 @@
 import {
+  UnprocessableEntityException,
   BadRequestException,
   HttpException,
   Injectable,
@@ -137,6 +138,14 @@ export class CommunicationsService {
         'INVOICE_NOT_FOUND',
         'Factura no encontrada.',
       );
+    // Con talonario de imprenta la factura es la hoja impresa y se entrega
+    // en papel: no hay nada que mandar por correo.
+    if (invoice.modality === 'PREPRINTED') {
+      if (automatic) return null;
+      throw new UnprocessableEntityException(
+        'La factura de talonario es la hoja impresa: se entrega en papel, no por correo.',
+      );
+    }
     if (!['ISSUED', 'PAID'].includes(invoice.status) || !invoice.pdfFileId) {
       throw knownPreparationFailure(
         new BadRequestException(

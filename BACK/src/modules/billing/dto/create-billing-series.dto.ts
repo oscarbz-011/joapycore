@@ -1,5 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { BillingDocumentType, BillingModality } from '@prisma/client';
+import { Type } from 'class-transformer';
 import {
   IsEnum,
   IsInt,
@@ -8,7 +9,9 @@ import {
   Matches,
   Max,
   Min,
+  ValidateNested,
 } from 'class-validator';
+import { PreprintedLayoutDto } from './preprinted-layout.dto';
 
 export const MAX_DOCUMENT_NUMBER = 9_999_999;
 const CALENDAR_DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -75,4 +78,15 @@ export class CreateBillingSeriesDto {
   @Min(1)
   @Max(MAX_DOCUMENT_NUMBER)
   nextNumber?: number;
+
+  @ApiPropertyOptional({
+    type: PreprintedLayoutDto,
+    nullable: true,
+    description:
+      'Talonario: dónde imprimir cada dato sobre la hoja. Null vuelve al diseño estándar.',
+  })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => PreprintedLayoutDto)
+  printLayout?: PreprintedLayoutDto | null;
 }

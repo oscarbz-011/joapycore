@@ -48,4 +48,26 @@ export class PosSalesRepository {
       orderBy: { createdAt: 'desc' },
     });
   }
+
+  findForReceipt(tenantId: string, saleOrderId: string) {
+    return this.prisma.saleOrder.findFirst({
+      where: { id: saleOrderId, tenantId, channel: 'POS' },
+      select: {
+        id: true,
+        salePayments: { select: { paymentMethod: true, amount: true } },
+        posSession: {
+          select: {
+            terminal: {
+              select: {
+                name: true,
+                printFormat: true,
+                thermalPaperConservation: true,
+              },
+            },
+            cashier: { select: { firstName: true, lastName: true } },
+          },
+        },
+      },
+    });
+  }
 }

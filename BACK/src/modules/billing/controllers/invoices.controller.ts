@@ -8,14 +8,22 @@ import type { JwtPayload } from '../../../common/types/jwt-payload.interface';
 import { AssignInvoiceNumberDto } from '../dto/assign-invoice-number.dto';
 import { CancelInvoiceDto } from '../dto/cancel-invoice.dto';
 import { IssueInvoiceDto } from '../dto/issue-invoice.dto';
+import {
+  PhysicalScanDto,
+  VoidInvoiceSheetDto,
+} from '../dto/preprinted-sheet.dto';
 import { InvoicesService } from '../services/invoices.service';
+import { PreprintedInvoicesService } from '../services/preprinted-invoices.service';
 
 @ApiTags('Billing')
 @ApiBearerAuth()
 @RequiredModule('billing')
 @Controller('billing')
 export class InvoicesController {
-  constructor(private readonly invoicesService: InvoicesService) {}
+  constructor(
+    private readonly invoicesService: InvoicesService,
+    private readonly preprinted: PreprintedInvoicesService,
+  ) {}
 
   @Get('invoices')
   @Permissions('billing:read')
@@ -91,6 +99,48 @@ export class InvoicesController {
     @Param('id') id: string,
   ) {
     return this.invoicesService.retryPdf(tenantId, id, user.sub);
+  }
+
+  @Post('invoices/:id/form/print')
+  @Permissions('billing:issue')
+  @ApiOperation({
+    summary:
+      'Datos para imprimir sobre la hoja del talonario (registra la impresión)',
+  })
+  printForm(
+    @CurrentTenant() tenantId: string,
+    @CurrentUser() user: JwtPayload,
+    @Param('id') id: string,
+  ) {
+    return this.preprinted.print(tenantId, id, user.sub);
+  }
+
+  @Post('invoices/:id/sheet/void')
+  @Permissions('billing:issue')
+  @ApiOperation({
+    summary: 'Inutilizar la hoja del talonario y pasar la factura a otra hoja',
+  })
+  voidSheet(
+    @CurrentTenant() tenantId: string,
+    @CurrentUser() user: JwtPayload,
+    @Param('id') id: string,
+    @Body() dto: VoidInvoiceSheetDto,
+  ) {
+    return this.preprinted.voidSheet(tenantId, id, dto, user.sub);
+  }
+
+  @Post('invoices/:id/physical-scan')
+  @Permissions('billing:issue')
+  @ApiOperation({
+    summary: 'Adjuntar (o quitar) el escaneo o foto de la factura física',
+  })
+  setPhysicalScan(
+    @CurrentTenant() tenantId: string,
+    @CurrentUser() user: JwtPayload,
+    @Param('id') id: string,
+    @Body() dto: PhysicalScanDto,
+  ) {
+    return this.preprinted.setPhysicalScan(tenantId, id, dto.fileId, user.sub);
   }
 
   @Post('invoices/:id/cancel')

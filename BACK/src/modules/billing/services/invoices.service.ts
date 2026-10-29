@@ -12,6 +12,7 @@ import type { AuditLogEvent } from '../../../audit/audit-log.event';
 import { AssignInvoiceNumberDto } from '../dto/assign-invoice-number.dto';
 import { IssueInvoiceDto } from '../dto/issue-invoice.dto';
 import { OutboxService } from '../../../outbox/outbox.service';
+import type { SeriesNumbering } from '../types/series-numbering';
 import { BillingSeriesService } from './billing-series.service';
 
 // Un número de talonario que otra emisión simultánea usó primero choca
@@ -128,8 +129,9 @@ export class InvoicesService {
       // pero la factura sigue PENDING hasta que se guarde el comprobante.
       // Si un intento anterior reservó el número y se interrumpió antes del
       // PDF, se reutiliza para que el reintento sea idempotente.
+      let preprintedEvent: string | null;
       try {
-        await this.prisma.$transaction(async (tx) => {
+        preprintedEvent = await this.prisma.$transaction(async (tx) => {
           const numbering =
             invoice.sequential == null
               ? await this.seriesService.numberForIssue(
@@ -143,6 +145,16 @@ export class InvoicesService {
                   tx,
                 )
               : null;
+
+          if ((numbering?.modality ?? invoice.modality) === 'PREPRINTED') {
+            return this.issuePreprintedInTransaction(tx, tenantId, {
+              invoice,
+              numbering,
+              dto,
+              attemptAt,
+              userId,
+            });
+          }
 
           const claimed = await this.invoicesRepository.claimIssue(
             tenantId,
@@ -162,6 +174,7 @@ export class InvoicesService {
               'La factura ya está siendo emitida o cambió de estado. Recargá antes de reintentar.',
             );
           }
+          return null;
         });
       } catch (error) {
         if (isDuplicateNumber(error)) {
@@ -170,6 +183,18 @@ export class InvoicesService {
           );
         }
         throw error;
+      }
+
+      if (preprintedEvent) {
+        await this.outbox.dispatch(preprintedEvent);
+        this.eventEmitter.emit('audit.log', {
+          tenantId,
+          userId,
+          module: 'billing',
+          action: 'invoice.issued',
+          resourceId: id,
+        } satisfies AuditLogEvent);
+        return this.invoicesRepository.findById(tenantId, id);
       }
 
       // Los listeners críticos declaran suppressErrors:false para que
@@ -253,6 +278,64 @@ export class InvoicesService {
   }
 
   /**
+   * Talonario de imprenta: el comprobante es la hoja preimpresa, así que la
+   * factura se emite sin PDF ni correo y se imprime sobre la hoja. Devuelve
+   * el evento del outbox a despachar después del commit.
+   */
+  private async issuePreprintedInTransaction(
+    tx: Prisma.TransactionClient,
+    tenantId: string,
+    params: {
+      invoice: NonNullable<Awaited<ReturnType<InvoicesRepository['findById']>>>;
+      numbering: SeriesNumbering | null;
+      dto: IssueInvoiceDto;
+      attemptAt: Date;
+      userId?: string;
+    },
+  ) {
+    const { invoice, numbering, dto, attemptAt } = params;
+    const seriesId = numbering?.seriesId ?? invoice.seriesId;
+    if (!seriesId) {
+      throw new UnprocessableEntityException('La factura no tiene serie');
+    }
+    const problem = await this.seriesService.formFitProblem(
+      tenantId,
+      seriesId,
+      invoice.items.length,
+      tx,
+    );
+    if (problem) throw new UnprocessableEntityException(problem);
+
+    const issued = await this.invoicesRepository.issuePreprinted(
+      tenantId,
+      invoice.id,
+      invoice.updatedAt,
+      attemptAt,
+      {
+        dueDate: dto.dueDate ? new Date(dto.dueDate) : undefined,
+        paymentMethod: dto.paymentMethod ?? null,
+        notes: dto.notes,
+        ...numbering,
+      },
+      tx,
+    );
+    if (issued.count !== 1) {
+      throw new UnprocessableEntityException(
+        'La factura ya está siendo emitida o cambió de estado. Recargá antes de reintentar.',
+      );
+    }
+    return this.outbox.enqueue(tx, tenantId, 'invoice.issued', {
+      tenantId,
+      invoiceId: invoice.id,
+      saleOrderId: invoice.saleOrderId,
+      paymentCondition: dto.paymentCondition,
+      total: Number(invoice.total),
+      dueDate: dto.dueDate ?? null,
+      issuedById: params.userId,
+    });
+  }
+
+  /**
    * Recupera facturas históricas que quedaron emitidas sin PDF antes de que
    * la emisión exigiera esa postcondición. No vuelve a publicar
    * invoice.issued, por lo que no duplica stock ni cuentas por cobrar.
@@ -272,6 +355,11 @@ export class InvoicesService {
     if (invoice.status === 'CANCELLED') {
       throw new UnprocessableEntityException(
         'No se puede regenerar el PDF de una factura cancelada',
+      );
+    }
+    if (invoice.modality === 'PREPRINTED') {
+      throw new UnprocessableEntityException(
+        'Una factura de talonario no tiene PDF: se imprime sobre la hoja del talonario',
       );
     }
     if (invoice.pdfFileId) return invoice;
@@ -394,8 +482,9 @@ export class InvoicesService {
       throw new UnprocessableEntityException('La factura ya tiene número');
     }
 
+    let numberedWith: SeriesNumbering['modality'];
     try {
-      await this.prisma.$transaction(async (tx) => {
+      numberedWith = await this.prisma.$transaction(async (tx) => {
         const numbering = await this.seriesService.numberForIssue(
           tenantId,
           {
@@ -417,6 +506,7 @@ export class InvoicesService {
             'Otra persona numeró la factura al mismo tiempo. Recargá la página.',
           );
         }
+        return numbering.modality;
       });
     } catch (error) {
       if (isDuplicateNumber(error)) {
@@ -427,12 +517,15 @@ export class InvoicesService {
       throw error;
     }
 
-    await this.eventEmitter.emitAsync('invoice.interest.issued', {
-      tenantId,
-      invoiceId: id,
-      paymentReceiptId: invoice.paymentReceiptId,
-      total: Number(invoice.total),
-    });
+    // Con talonario el comprobante es la hoja: no se genera el PDF.
+    if (numberedWith !== 'PREPRINTED') {
+      await this.eventEmitter.emitAsync('invoice.interest.issued', {
+        tenantId,
+        invoiceId: id,
+        paymentReceiptId: invoice.paymentReceiptId,
+        total: Number(invoice.total),
+      });
+    }
     this.eventEmitter.emit('audit.log', {
       tenantId,
       userId,

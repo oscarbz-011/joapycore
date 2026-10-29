@@ -15,6 +15,8 @@ import {
 import { formatDatePY } from '@/lib/date';
 import { usePermission } from '@/lib/permissions';
 import { SeriesNumberingFields } from '@/components/billing/series-numbering-fields';
+import { PreprintedSheetPanel } from '@/components/billing/preprinted-sheet-panel';
+import { printPreprintedForm } from '@/lib/preprinted-form';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 
@@ -78,9 +80,18 @@ export default function NumberInterestInvoicePage() {
         seriesId: seriesId || undefined,
         ...(needsDocumentNumber(selected) ? { documentNumber: Number(documentNumber) } : {}),
       }),
-    onSuccess: async () => {
+    onSuccess: async (numbered) => {
       await queryClient.invalidateQueries({ queryKey: ['invoices'] });
-      back();
+      if (numbered.modality !== 'PREPRINTED') return back();
+      // Con talonario se queda en la pantalla: se imprime sobre la hoja y
+      // desde acá se puede reimprimir, inutilizarla o adjuntar el escaneo.
+      await queryClient.invalidateQueries({ queryKey: ['invoice', id] });
+      void billingApi
+        .printInvoiceForm(id)
+        .then(({ receipt }) => {
+          if (receipt.formLayout) printPreprintedForm(receipt, receipt.formLayout);
+        })
+        .catch(() => undefined);
     },
     onError: (err) => setError(apiErrorMessage(err, 'No se pudo numerar la factura')),
   });
@@ -92,9 +103,13 @@ export default function NumberInterestInvoicePage() {
           <ArrowLeft size={18} />
         </Button>
         <div>
-          <h1 className="text-2xl font-semibold text-foreground">Numerar factura de intereses</h1>
+          <h1 className="text-2xl font-semibold text-foreground">
+            {invoice?.sequential != null ? 'Factura de intereses' : 'Numerar factura de intereses'}
+          </h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            La sucursal factura con talonario: completá la hoja y cargá su número.
+            {invoice?.sequential != null
+              ? 'Se imprime sobre la hoja del talonario.'
+              : 'La sucursal factura con talonario: poné la hoja en la impresora y cargá su número.'}
           </p>
         </div>
       </div>
@@ -105,7 +120,13 @@ export default function NumberInterestInvoicePage() {
         <LoadError message="No se pudo cargar la factura." onRetry={() => void refetchInvoice()} />
       )}
 
-      {invoice && invoice.sequential != null && (
+      {invoice && invoice.sequential != null && invoice.modality === 'PREPRINTED' && (
+        <div className="max-w-xl">
+          <PreprintedSheetPanel invoice={invoice} />
+        </div>
+      )}
+
+      {invoice && invoice.sequential != null && invoice.modality !== 'PREPRINTED' && (
         <Card className="p-6 text-sm text-muted-foreground">
           Esta factura ya tiene el número {invoice.invoicePrefix}{invoice.invoiceNumber}.
         </Card>
@@ -158,7 +179,11 @@ export default function NumberInterestInvoicePage() {
                 }}
                 disabled={!selected || Boolean(numberError) || assign.isPending}
               >
-                {assign.isPending ? 'Numerando…' : 'Numerar y generar PDF'}
+                {assign.isPending
+                  ? 'Numerando…'
+                  : selected?.modality === 'PREPRINTED'
+                    ? 'Numerar e imprimir sobre la hoja'
+                    : 'Numerar y generar PDF'}
               </Button>
             )}
           </div>

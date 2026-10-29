@@ -166,6 +166,29 @@ describe('invoice.issued automatic communication', () => {
     );
   });
 
+  describe('printing-house talonario', () => {
+    beforeEach(() => {
+      prisma.invoice.findFirst.mockResolvedValue({
+        ...invoiceFixture('customer@example.test'),
+        pdfFileId: null,
+        modality: 'PREPRINTED',
+      });
+    });
+
+    it('does not email the invoice nor report a failure: it is delivered on paper', async () => {
+      await expect(listener.handle(event)).resolves.toBeUndefined();
+      expect(prisma.communicationMessage.create).not.toHaveBeenCalled();
+      expect(prisma.communicationNotification.upsert).not.toHaveBeenCalled();
+    });
+
+    it('explains why it cannot be sent by hand', async () => {
+      await expect(
+        communications.queueInvoice(tenantId, invoiceId, userId),
+      ).rejects.toThrow('se entrega en papel, no por correo');
+      expect(prisma.communicationMessage.create).not.toHaveBeenCalled();
+    });
+  });
+
   describe('where the emails of a company go out from', () => {
     it('uses the identity the company defined', async () => {
       await expect(communications.sender(tenantId)).resolves.toEqual({

@@ -117,17 +117,43 @@ export class BillingSeriesRepository {
     });
   }
 
-  isNumberUsed(
+  // Usado por una factura o inutilizado: en ambos casos la hoja ya no sirve.
+  async isNumberUsed(
     seriesId: string,
     serieCode: string,
     sequential: number,
     client: PrismaClientOrTx = this.prisma,
   ) {
-    return client.invoice
-      .findFirst({
-        where: { seriesId, serieCode, sequential },
-        select: { id: true },
-      })
-      .then(Boolean);
+    const where = { seriesId, serieCode, sequential };
+    const [invoice, voided] = await Promise.all([
+      client.invoice.findFirst({ where, select: { id: true } }),
+      client.billingVoidedNumber.findFirst({ where, select: { id: true } }),
+    ]);
+    return Boolean(invoice || voided);
+  }
+
+  createVoided(
+    data: Prisma.BillingVoidedNumberUncheckedCreateInput,
+    client: PrismaClientOrTx = this.prisma,
+  ) {
+    return client.billingVoidedNumber.create({ data, select: { id: true } });
+  }
+
+  findVoided(tenantId: string, seriesId: string) {
+    return this.prisma.billingVoidedNumber.findMany({
+      where: { tenantId, seriesId },
+      select: {
+        id: true,
+        sequential: true,
+        reason: true,
+        createdAt: true,
+        voidedById: true,
+        invoice: {
+          select: { id: true, invoicePrefix: true, invoiceNumber: true },
+        },
+        scanFile: { select: { id: true, originalName: true, mimeType: true } },
+      },
+      orderBy: { sequential: 'desc' },
+    });
   }
 }

@@ -760,6 +760,31 @@ describe('SaleOrdersService', () => {
       expect(result).not.toHaveProperty('eventId');
     });
 
+    it('saves inside the transaction it is given and leaves publishing to the caller', async () => {
+      productsRepository.findManyByIds.mockResolvedValue([
+        makeProduct({ isSerialized: false }),
+      ]);
+
+      const result = await service.createPosSaleInTransaction(
+        tx,
+        'tenant-1',
+        baseDto,
+        'session-1',
+        'user-1',
+      );
+
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+      expect(tx.saleOrder.create).toHaveBeenCalled();
+      expect(outbox.enqueue).toHaveBeenCalledWith(
+        tx,
+        'tenant-1',
+        'sale.payment.collected',
+        expect.anything(),
+      );
+      expect(outbox.dispatch).not.toHaveBeenCalled();
+      expect(result.eventIds).toEqual(['event-1']);
+    });
+
     it('rejects the sale when there is not enough stock', async () => {
       productsRepository.findManyByIds.mockResolvedValue([
         makeProduct({ isSerialized: false }),
