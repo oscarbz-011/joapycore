@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { OnEvent } from '@nestjs/event-emitter';
+import { OnDomainEvent } from '../../common/events/on-domain-event.decorator';
 import { TenantStatus, UserStatus } from '@prisma/client';
 import {
   SESSION_INVALIDATE_EVENT,
@@ -54,7 +54,7 @@ export class SessionStateCache {
     return state;
   }
 
-  @OnEvent(SESSION_INVALIDATE_EVENT)
+  @OnDomainEvent(SESSION_INVALIDATE_EVENT)
   invalidate(event: SessionInvalidateEvent): void {
     if (event.userId) this.cache.delete(event.userId);
     if (event.tenantId) {

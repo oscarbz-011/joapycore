@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { OnEvent } from '@nestjs/event-emitter';
+import { OnDomainEvent } from '../../../common/events/on-domain-event.decorator';
 import { TemplateKind } from '@prisma/client';
 import { numberToWordsEs } from '../../../common/utils/number-to-words.util';
 import { DocxTemplateService } from '../../../files/docx/docx-template.service';
@@ -11,12 +11,9 @@ import { DocumentSourcesRepository } from '../repositories/document-sources.repo
 import { DEFAULT_QUOTE_TEMPLATE } from '../constants/default-templates.constant';
 import { quoteAddressee } from '../builders/quote-addressee';
 import { DocumentsRepository } from '../repositories/documents.repository';
+import type { DomainEvents } from '../../../common/events/domain-events';
 
-interface SaleOrderQuotedEvent {
-  tenantId: string;
-  saleOrderId: string;
-  issuedById?: string;
-}
+type SaleOrderQuotedEvent = DomainEvents['sale.order.quote_pdf.requested'];
 
 function formatMoney(value: unknown): string {
   return Number(value).toLocaleString('es-PY', { maximumFractionDigits: 0 });
@@ -50,14 +47,14 @@ export class QuoteOnCreateListener {
     private readonly docxTemplateService: DocxTemplateService,
   ) {}
 
-  @OnEvent('sale.order.quoted')
+  @OnDomainEvent('sale.order.quoted')
   async handle(event: SaleOrderQuotedEvent) {
     await this.generateSafely(event);
   }
 
   // Reintento manual cuando el PDF falló al crear el presupuesto. En un
   // método aparte: EventEmitter2 toma un array de eventos como la ruta de uno.
-  @OnEvent('sale.order.quote_pdf.requested')
+  @OnDomainEvent('sale.order.quote_pdf.requested')
   async handleRetry(event: SaleOrderQuotedEvent) {
     await this.generateSafely(event);
   }

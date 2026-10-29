@@ -5,7 +5,7 @@ import {
   NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
-import { EventEmitter2 } from '@nestjs/event-emitter';
+import { EventBus } from '../../../common/events/event-bus';
 import { OutboxService } from '../../../outbox/outbox.service';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { LogisticsSourcesRepository } from '../repositories/logistics-sources.repository';
@@ -19,7 +19,7 @@ export class DeliveryNotesService {
 
   constructor(
     private readonly repo: DeliveryNotesRepository,
-    private readonly eventEmitter: EventEmitter2,
+    private readonly eventEmitter: EventBus,
     private readonly sources: LogisticsSourcesRepository,
     // Solo para abrir la transacción del cierre.
     private readonly prisma: PrismaService,

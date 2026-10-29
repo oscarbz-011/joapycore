@@ -1,15 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { EventEmitter2, OnEvent } from '@nestjs/event-emitter';
+import { EventBus } from '../../../common/events/event-bus';
+import { OnDomainEvent } from '../../../common/events/on-domain-event.decorator';
 import { AccountsReceivableRepository } from '../repositories/accounts-receivable.repository';
 import { PaymentSourcesRepository } from '../repositories/payment-sources.repository';
+import type { DomainEvents } from '../../../common/events/domain-events';
 
-interface InstallmentPaidEvent {
-  tenantId: string;
-  loanId: string;
-  saleOrderId: string;
-  installmentId: string;
-  amount: number;
-}
+type InstallmentPaidEvent = DomainEvents['installment.paid'];
 
 @Injectable()
 export class PaymentsOnInstallmentListener {
@@ -18,10 +14,10 @@ export class PaymentsOnInstallmentListener {
   constructor(
     private readonly paymentSources: PaymentSourcesRepository,
     private readonly arRepository: AccountsReceivableRepository,
-    private readonly eventEmitter: EventEmitter2,
+    private readonly eventEmitter: EventBus,
   ) {}
 
-  @OnEvent('installment.paid')
+  @OnDomainEvent('installment.paid')
   async handle(event: InstallmentPaidEvent) {
     try {
       // Find invoice for this sale order

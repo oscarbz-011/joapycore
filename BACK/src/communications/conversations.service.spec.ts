@@ -1,5 +1,5 @@
 import { NotFoundException, ServiceUnavailableException } from '@nestjs/common';
-import { EventEmitter2 } from '@nestjs/event-emitter';
+import { EventBus } from '../common/events/event-bus';
 import { ConversationsRepository } from './conversations.repository';
 import { ConversationsService } from './conversations.service';
 
@@ -56,7 +56,7 @@ describe('ConversationsService', () => {
     events = { emit: jest.fn() };
     service = new ConversationsService(
       repository as unknown as ConversationsRepository,
-      events as unknown as EventEmitter2,
+      events as unknown as EventBus,
     );
   });
 

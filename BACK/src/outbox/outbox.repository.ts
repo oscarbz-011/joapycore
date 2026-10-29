@@ -93,4 +93,28 @@ export class OutboxRepository {
       where: { status: 'DONE', processedAt: { lt: cutoff } },
     });
   }
+
+  async findDeliveredConsumers(eventId: string): Promise<string[]> {
+    const rows = await this.prisma.outboxDelivery.findMany({
+      where: { eventId, status: 'DONE' },
+      select: { consumer: true },
+    });
+    return rows.map((r) => r.consumer);
+  }
+
+  /** `error` sin `failed`: falló pero no se reintenta, queda anotado. */
+  recordDelivery(
+    eventId: string,
+    consumer: string,
+    result: { failed: boolean; error?: string },
+  ) {
+    const status = result.failed ? 'FAILED' : 'DONE';
+    const lastError = result.error?.slice(0, 2000) ?? null;
+    const processedAt = result.failed ? null : new Date();
+    return this.prisma.outboxDelivery.upsert({
+      where: { eventId_consumer: { eventId, consumer } },
+      create: { eventId, consumer, status, lastError, processedAt },
+      update: { status, lastError, processedAt, attempts: { increment: 1 } },
+    });
+  }
 }

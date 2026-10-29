@@ -3124,9 +3124,35 @@ model OutboxEvent {
   createdAt     DateTime     @default(now()) @map("created_at")
   processedAt   DateTime?    @map("processed_at")
 
+  deliveries OutboxDelivery[]
+
   @@index([status, nextAttemptAt])
   @@index([tenantId])
   @@map("outbox_events")
+}
+
+// Resultado de cada consumidor de un evento del outbox: un reintento solo
+// vuelve a llamar a los que fallaron.
+model OutboxDelivery {
+  id          String         @id @default(uuid())
+  eventId     String         @map("event_id")
+  consumer    String
+  status      DeliveryStatus
+  attempts    Int            @default(1)
+  lastError   String?        @map("last_error")
+  processedAt DateTime?      @map("processed_at")
+  createdAt   DateTime       @default(now()) @map("created_at")
+  updatedAt   DateTime       @updatedAt @map("updated_at")
+
+  event OutboxEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, consumer])
+  @@map("outbox_deliveries")
+}
+
+enum DeliveryStatus {
+  DONE
+  FAILED
 }
 
 // Lo que salió por el remitente de la plataforma: los correos propios de

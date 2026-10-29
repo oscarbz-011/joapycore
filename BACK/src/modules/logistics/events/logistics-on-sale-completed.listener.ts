@@ -1,16 +1,14 @@
 import { Injectable } from '@nestjs/common';
-import { EventEmitter2, OnEvent } from '@nestjs/event-emitter';
-import { TenantModulesCache } from '../../../tenants/services/tenant-modules.cache';
+import { EventBus } from '../../../common/events/event-bus';
+import { OnDomainEvent } from '../../../common/events/on-domain-event.decorator';
 import { DeliveryNotesRepository } from '../repositories/delivery-notes.repository';
 import {
   AWAITING_DELIVERY,
   LogisticsSourcesRepository,
 } from '../repositories/logistics-sources.repository';
+import type { DomainEvents } from '../../../common/events/domain-events';
 
-interface SaleOrderEvent {
-  tenantId: string;
-  saleOrderId: string;
-}
+type SaleOrderEvent = DomainEvents['sale.payment.collected'];
 
 /**
  * Crea la nota de entrega PENDING cuando un pedido queda listo para entregar:
@@ -21,17 +19,24 @@ interface SaleOrderEvent {
 export class LogisticsOnSaleCompletedListener {
   constructor(
     private readonly deliveryNotesRepository: DeliveryNotesRepository,
-    private readonly eventEmitter: EventEmitter2,
-    private readonly tenantModules: TenantModulesCache,
+    private readonly eventEmitter: EventBus,
     private readonly sources: LogisticsSourcesRepository,
   ) {}
 
-  @OnEvent('sale.order.completed', { suppressErrors: false })
+  @OnDomainEvent('sale.order.completed', {
+    consumer: 'logistics.note-from-order',
+    module: 'logistics',
+    suppressErrors: false,
+  })
   async handle(event: SaleOrderEvent): Promise<void> {
     await this.ensureNote(event);
   }
 
-  @OnEvent('sale.payment.collected', { suppressErrors: false })
+  @OnDomainEvent('sale.payment.collected', {
+    consumer: 'logistics.note-from-payment',
+    module: 'logistics',
+    suppressErrors: false,
+  })
   async handlePaymentCollected(event: SaleOrderEvent): Promise<void> {
     // Las ventas del POS se cobran ya entregadas.
     const status = await this.sources.findOrderStatus(
@@ -42,12 +47,9 @@ export class LogisticsOnSaleCompletedListener {
     await this.ensureNote(event);
   }
 
+  // Sin Logística (module) el outbox no lo llama: la entrega la registra
+  // Ventas y, si se activa después, el listener de activación crea las notas.
   private async ensureNote(event: SaleOrderEvent) {
-    // Sin Logística la entrega la registra Ventas; si se activa después, el
-    // listener de activación crea las notas que falten.
-    if (!(await this.tenantModules.isActive(event.tenantId, 'logistics'))) {
-      return;
-    }
     const note = await this.deliveryNotesRepository.ensurePendingForOrder(
       event.tenantId,
       event.saleOrderId,

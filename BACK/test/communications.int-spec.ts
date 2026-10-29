@@ -1,11 +1,13 @@
 import 'dotenv/config';
 import { ConfigService } from '@nestjs/config';
 import { EventEmitter2 } from '@nestjs/event-emitter';
+import { EventBus } from '../src/common/events/event-bus';
 import { createHash, randomUUID } from 'node:crypto';
 import { NotFoundException } from '@nestjs/common';
 import { Queue } from 'bullmq';
 import Redis from 'ioredis';
 import { PrismaService } from '../src/prisma/prisma.service';
+import { createOutbox } from './support/outbox';
 import { FilesService } from '../src/files/files.service';
 import { IntegrationsService } from '../src/integrations/integrations.service';
 import { CommunicationsRepository } from '../src/communications/communications.repository';
@@ -21,7 +23,6 @@ import {
   redisConnection,
 } from '../src/communications/communications.worker';
 import { OutboxService } from '../src/outbox/outbox.service';
-import { OutboxRepository } from '../src/outbox/outbox.repository';
 
 const url = process.env.COMMUNICATIONS_TEST_DATABASE_URL;
 if (url && !/^\/joapycore_comms_test_[\w-]+$/.test(new URL(url).pathname)) {
@@ -91,7 +92,7 @@ integration(
         repository,
         files as unknown as FilesService,
         transport as unknown as CommunicationsEmailProvider,
-        events,
+        new EventBus(events),
       );
       hub = new CommunicationHubService(
         prisma,
@@ -100,15 +101,15 @@ integration(
             .fn()
             .mockResolvedValue({ fromEmail: 'no-reply@example.test' }),
         } as unknown as IntegrationsService,
-        events,
+        new EventBus(events),
         core,
       );
-      outbox = new OutboxService(new OutboxRepository(prisma), events);
+      const durable = createOutbox(prisma, events);
+      outbox = durable.outbox;
       const listener = new InvoiceCommunicationListener(core);
-      events.on(
+      durable.consume(
         'invoice.issued',
-        // emitAsync must observe the listener promise for transactional Outbox retries.
-        // eslint-disable-next-line @typescript-eslint/no-misused-promises
+        'communications.send-invoice',
         (event: Parameters<InvoiceCommunicationListener['handle']>[0]) =>
           listener.handle(event),
       );
@@ -255,6 +256,10 @@ integration(
         outbox.enqueue(tx, tenantId, 'invoice.issued', {
           tenantId,
           invoiceId: invoice.id,
+          saleOrderId: null,
+          paymentCondition: 'CASH',
+          total: 0,
+          dueDate: null,
           issuedById: userId,
         }),
       );

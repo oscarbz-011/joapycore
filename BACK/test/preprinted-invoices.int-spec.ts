@@ -8,6 +8,7 @@
 import 'dotenv/config';
 import { ConfigService } from '@nestjs/config';
 import { EventEmitter2 } from '@nestjs/event-emitter';
+import { EventBus } from '../src/common/events/event-bus';
 import { NotFoundException } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { PrismaService } from '../src/prisma/prisma.service';
@@ -41,7 +42,7 @@ describe('PreprintedInvoicesService (PostgreSQL)', () => {
       new InvoicesRepository(prisma),
       series,
       files as never,
-      new EventEmitter2(),
+      new EventBus(new EventEmitter2()),
     );
     tenantId = (
       await prisma.tenant.create({

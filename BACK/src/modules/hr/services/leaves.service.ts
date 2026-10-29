@@ -4,7 +4,7 @@ import {
   NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
-import { EventEmitter2 } from '@nestjs/event-emitter';
+import { EventBus } from '../../../common/events/event-bus';
 import { LeaveStatus, Prisma } from '@prisma/client';
 import type { AuditLogEvent } from '../../../audit/audit-log.event';
 import { startOfBusinessDay } from '../../../common/utils/business-date.util';
@@ -17,6 +17,7 @@ import {
 import { EmployeesRepository } from '../repositories/employees.repository';
 import { LeavesRepository } from '../repositories/leaves.repository';
 import { businessDaysBetween, legalVacationDays } from './leave-calc';
+import type { DomainEventName } from '../../../common/events/domain-events';
 
 export interface LeaveBalanceView {
   employeeId: string;
@@ -36,6 +37,13 @@ export interface LeaveBalanceView {
  * registran y aprueban pero no descuentan saldo. El año del saldo es el de la
  * fecha de inicio.
  */
+const LEAVE_EVENT = {
+  PENDING: 'hr.leave.requested',
+  APPROVED: 'hr.leave.approved',
+  REJECTED: 'hr.leave.rejected',
+  CANCELLED: 'hr.leave.cancelled',
+} as const satisfies Record<LeaveStatus, DomainEventName>;
+
 @Injectable()
 export class LeavesService {
   constructor(
@@ -43,7 +51,7 @@ export class LeavesService {
     private readonly prisma: PrismaService,
     private readonly leavesRepository: LeavesRepository,
     private readonly employeesRepository: EmployeesRepository,
-    private readonly eventEmitter: EventEmitter2,
+    private readonly eventEmitter: EventBus,
   ) {}
 
   list(tenantId: string, filters: FilterLeavesDto) {
@@ -238,10 +246,7 @@ export class LeavesService {
     });
 
     const after = await this.getLeave(tenantId, id);
-    this.eventEmitter.emit(`hr.leave.${to.toLowerCase()}`, {
-      tenantId,
-      leaveId: id,
-    });
+    this.eventEmitter.emit(LEAVE_EVENT[to], { tenantId, leaveId: id });
     this.audit(
       tenantId,
       userId,

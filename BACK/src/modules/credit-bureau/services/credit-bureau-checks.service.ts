@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { EventEmitter2 } from '@nestjs/event-emitter';
+import { EventBus } from '../../../common/events/event-bus';
 import { CreditBureauRepository } from '../repositories/credit-bureau.repository';
 import { RecordBureauCheckDto } from '../dto/record-bureau-check.dto';
 import type { AuditLogEvent } from '../../../audit/audit-log.event';
@@ -8,7 +8,7 @@ import type { AuditLogEvent } from '../../../audit/audit-log.event';
 export class CreditBureauChecksService {
   constructor(
     private readonly repo: CreditBureauRepository,
-    private readonly eventEmitter: EventEmitter2,
+    private readonly eventEmitter: EventBus,
   ) {}
 
   async recordCheck(

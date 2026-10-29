@@ -5,7 +5,7 @@ import {
   NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
-import { EventEmitter2 } from '@nestjs/event-emitter';
+import { EventBus } from '../../../common/events/event-bus';
 import { PaymentMethod, Prisma } from '@prisma/client';
 import type { AuditLogEvent } from '../../../audit/audit-log.event';
 import {
@@ -51,7 +51,7 @@ export class PosSalesService {
     private readonly outbox: OutboxService,
     private readonly posSessionsRepository: PosSessionsRepository,
     private readonly posSalesRepository: PosSalesRepository,
-    private readonly eventEmitter: EventEmitter2,
+    private readonly eventEmitter: EventBus,
   ) {}
 
   /**

@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { OnEvent } from '@nestjs/event-emitter';
+import { OnDomainEvent } from '../common/events/on-domain-event.decorator';
 import { AuditRepository } from './audit.repository';
 import type { AuditLogEvent } from './audit-log.event';
 
@@ -9,7 +9,7 @@ export class AuditListener {
 
   constructor(private readonly auditRepository: AuditRepository) {}
 
-  @OnEvent('audit.log', { async: true })
+  @OnDomainEvent('audit.log', { async: true })
   async handle(event: AuditLogEvent) {
     try {
       await this.auditRepository.create(event);

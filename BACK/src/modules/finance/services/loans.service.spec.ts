@@ -2,7 +2,7 @@ import {
   NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
-import { EventEmitter2 } from '@nestjs/event-emitter';
+import { EventBus } from '../../../common/events/event-bus';
 import { Test, TestingModule } from '@nestjs/testing';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { PayInstallmentDto } from '../dto/pay-installment.dto';
@@ -157,7 +157,7 @@ describe('LoansService', () => {
         { provide: PrismaService, useValue: mockPrisma },
         { provide: LoansRepository, useValue: mockLoansRepo },
         { provide: InstallmentsRepository, useValue: mockInstallmentsRepo },
-        { provide: EventEmitter2, useValue: mockEventEmitter },
+        { provide: EventBus, useValue: mockEventEmitter },
         PaymentReceiptsRepository,
         FinanceSourcesRepository,
       ],
@@ -167,7 +167,7 @@ describe('LoansService', () => {
     loansRepo = module.get(LoansRepository);
     installmentsRepo = module.get(InstallmentsRepository);
     prisma = module.get(PrismaService);
-    eventEmitter = module.get(EventEmitter2);
+    eventEmitter = module.get(EventBus);
   });
 
   describe('findOne', () => {

@@ -4,7 +4,7 @@ import {
   NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
-import { EventEmitter2 } from '@nestjs/event-emitter';
+import { EventBus } from '../../../common/events/event-bus';
 import { PosSessionStatus } from '@prisma/client';
 import type { AuditLogEvent } from '../../../audit/audit-log.event';
 import {
@@ -28,7 +28,7 @@ export class PosSessionsService {
   constructor(
     private readonly posSessionsRepository: PosSessionsRepository,
     private readonly posTerminalsService: PosTerminalsService,
-    private readonly eventEmitter: EventEmitter2,
+    private readonly eventEmitter: EventBus,
     @Inject(BILLING_GATEWAY) private readonly billing: BillingGateway,
   ) {}
 

@@ -7,7 +7,7 @@ import {
   NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
-import { EventEmitter2 } from '@nestjs/event-emitter';
+import { EventBus } from '../../../common/events/event-bus';
 import {
   MarkupType,
   OrderChannel,
@@ -88,7 +88,7 @@ export class SaleOrdersService implements SalesGateway {
     @Inject(PRODUCT_CATALOG) private readonly productCatalog: ProductCatalog,
     private readonly guarantorsRepository: GuarantorsRepository,
     private readonly creditEvaluationService: CreditEvaluationService,
-    private readonly eventEmitter: EventEmitter2,
+    private readonly eventEmitter: EventBus,
     @Inject(STOCK_LEDGER) private readonly stockLedger: StockLedger,
     // Eventos críticos (préstamo, factura, nota de entrega) con entrega
     // garantizada: se guardan en la misma transacción que el cambio.

@@ -4,6 +4,7 @@ import {
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
+import { EventBus } from '../common/events/event-bus';
 import { FilesService } from '../files/files.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { CommunicationsEmailProvider } from './communications-email.provider';
@@ -42,7 +43,13 @@ describe('invoice.issued automatic communication', () => {
   const tenantId = 'tenant-a';
   const invoiceId = 'invoice-a';
   const userId = 'user-a';
-  const event = { tenantId, invoiceId, issuedById: userId };
+  const issued = {
+    saleOrderId: 'order-1',
+    paymentCondition: 'CASH' as const,
+    total: 100_000,
+    dueDate: null,
+  };
+  const event = { ...issued, tenantId, invoiceId, issuedById: userId };
   let prisma: {
     communicationSettings: { findUnique: jest.Mock };
     communicationMessage: { findUnique: jest.Mock; create: jest.Mock };
@@ -108,7 +115,7 @@ describe('invoice.issued automatic communication', () => {
       repository,
       files as unknown as FilesService,
       provider as unknown as CommunicationsEmailProvider,
-      new EventEmitter2(),
+      new EventBus(new EventEmitter2()),
     );
     listener = new InvoiceCommunicationListener(communications);
   });
@@ -337,7 +344,7 @@ describe('invoice.issued automatic communication', () => {
 
   it('does not invent a notification owner when the event has no issuing user', async () => {
     await expect(
-      listener.handle({ tenantId, invoiceId }),
+      listener.handle({ ...issued, tenantId, invoiceId }),
     ).resolves.toBeUndefined();
     expect(prisma.communicationNotification.upsert).not.toHaveBeenCalled();
   });

@@ -17,6 +17,9 @@ describe('SalesOnInvoiceListener', () => {
       tenantId: 'tenant-1',
       invoiceId: 'inv-1',
       saleOrderId: 'order-1',
+      paymentCondition: 'CASH',
+      total: 1000,
+      dueDate: null,
     });
 
     expect(prisma.saleOrder.updateMany).toHaveBeenCalledWith({
@@ -29,7 +32,10 @@ describe('SalesOnInvoiceListener', () => {
     await listener.handle({
       tenantId: 'tenant-1',
       invoiceId: 'inv-1',
-      saleOrderId: '',
+      saleOrderId: null,
+      paymentCondition: 'CASH',
+      total: 1000,
+      dueDate: null,
     });
 
     expect(prisma.saleOrder.updateMany).not.toHaveBeenCalled();

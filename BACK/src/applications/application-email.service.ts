@@ -3,7 +3,7 @@ import {
   Injectable,
   ServiceUnavailableException,
 } from '@nestjs/common';
-import { EventEmitter2 } from '@nestjs/event-emitter';
+import { EventBus } from '../common/events/event-bus';
 import type { AuditLogEvent } from '../audit/audit-log.event';
 import { EmailService, TenantSmtpDeliveryError } from '../email/email.service';
 import { ImapConnectionService } from '../integrations/imap-connection.service';
@@ -16,7 +16,7 @@ export class ApplicationEmailService {
   constructor(
     private readonly repository: ApplicationEmailRepository,
     private readonly emailService: EmailService,
-    private readonly eventEmitter: EventEmitter2,
+    private readonly eventEmitter: EventBus,
     private readonly integrationsService: IntegrationsService,
     private readonly imapConnection: ImapConnectionService,
   ) {}

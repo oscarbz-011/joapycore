@@ -22,6 +22,7 @@ export const PLATFORM_TABLES: readonly Prisma.ModelName[] = [
   'AuditLog',
   'FileRecord',
   'OutboxEvent',
+  'OutboxDelivery',
   'PlatformEmailMessage',
   'AppEmailMessage',
   'AppEmailInboxMessage',

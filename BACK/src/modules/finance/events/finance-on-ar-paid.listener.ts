@@ -1,15 +1,12 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { OnEvent } from '@nestjs/event-emitter';
+import { OnDomainEvent } from '../../../common/events/on-domain-event.decorator';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { FinanceSourcesRepository } from '../repositories/finance-sources.repository';
 import { InstallmentsRepository } from '../repositories/installments.repository';
 import { LoansRepository } from '../repositories/loans.repository';
+import type { DomainEvents } from '../../../common/events/domain-events';
 
-interface ArPaidEvent {
-  tenantId: string;
-  arId: string;
-  invoiceId: string;
-}
+type ArPaidEvent = DomainEvents['payment.ar.completed'];
 
 @Injectable()
 export class FinanceOnArPaidListener {
@@ -25,7 +22,7 @@ export class FinanceOnArPaidListener {
 
   // When an AR is paid in full via direct payment (not via individual installments),
   // close all remaining installments on the associated loan.
-  @OnEvent('payment.ar.completed')
+  @OnDomainEvent('payment.ar.completed')
   async handle(event: ArPaidEvent) {
     try {
       const loanId = await this.sources.findLoanIdByInvoice(

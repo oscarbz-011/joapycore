@@ -8,6 +8,7 @@ import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { THROTTLE } from './config/security.config';
 import { EventEmitterModule } from '@nestjs/event-emitter';
+import { EventsModule } from './common/events/events.module';
 import { ScheduleModule } from '@nestjs/schedule';
 import { AuditModule } from './audit/audit.module';
 import { AuthModule } from './auth/auth.module';
@@ -59,6 +60,7 @@ import { CalendarModule } from './calendar/calendar.module';
         'Demasiadas solicitudes. Esperá un momento y volvé a intentar.',
     }),
     EventEmitterModule.forRoot(),
+    EventsModule,
     ScheduleModule.forRoot(),
     PrismaModule,
     OutboxModule,

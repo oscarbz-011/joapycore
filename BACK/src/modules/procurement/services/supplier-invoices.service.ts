@@ -4,7 +4,7 @@ import {
   NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
-import { EventEmitter2 } from '@nestjs/event-emitter';
+import { EventBus } from '../../../common/events/event-bus';
 import type { AuditLogEvent } from '../../../audit/audit-log.event';
 import { FilesService } from '../../../files/files.service';
 import { PrismaService } from '../../../prisma/prisma.service';
@@ -32,7 +32,7 @@ export class SupplierInvoicesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly invoices: SupplierInvoicesRepository,
-    private readonly eventEmitter: EventEmitter2,
+    private readonly eventEmitter: EventBus,
     private readonly filesService: FilesService,
   ) {}
 

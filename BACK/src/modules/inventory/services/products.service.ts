@@ -5,7 +5,7 @@ import {
   NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
-import { EventEmitter2 } from '@nestjs/event-emitter';
+import { EventBus } from '../../../common/events/event-bus';
 import { randomUUID } from 'crypto';
 import {
   MovementReason,
@@ -81,7 +81,7 @@ export class ProductsService {
     private readonly productUnitsRepository: ProductUnitsRepository,
     private readonly productSuppliersRepository: ProductSuppliersRepository,
     private readonly productBatchesRepository: ProductBatchesRepository,
-    private readonly eventEmitter: EventEmitter2,
+    private readonly eventEmitter: EventBus,
     private readonly prisma: PrismaService,
     private readonly warehousesRepository: WarehousesRepository,
     private readonly stockMovementsRepository: StockMovementsRepository,

@@ -4,7 +4,7 @@ import {
   NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
-import { EventEmitter2 } from '@nestjs/event-emitter';
+import { EventBus } from '../../../common/events/event-bus';
 import { BillingDocumentType, Prisma } from '@prisma/client';
 import type {
   BillingGateway,
@@ -30,7 +30,7 @@ export class PosInvoicingService implements BillingGateway {
     private readonly invoicesRepository: InvoicesRepository,
     private readonly billingSources: BillingSourcesRepository,
     private readonly outbox: OutboxService,
-    private readonly eventEmitter: EventEmitter2,
+    private readonly eventEmitter: EventBus,
   ) {}
 
   async findSeries(
@@ -148,7 +148,8 @@ export class PosInvoicingService implements BillingGateway {
       if (
         !invoice?.issuedAt ||
         invoice.pdfFileId ||
-        invoice.modality === 'PREPRINTED'
+        invoice.modality === 'PREPRINTED' ||
+        invoice.status === 'CANCELLED'
       ) {
         return;
       }

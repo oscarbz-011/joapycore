@@ -3,7 +3,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { EventEmitter2 } from '@nestjs/event-emitter';
+import { EventBus } from '../common/events/event-bus';
 import {
   CalendarEventDto,
   CalendarRangeDto,
@@ -36,7 +36,7 @@ function schedule(allDay: boolean, startsAt: Date, endsAt: Date) {
 export class CalendarService {
   constructor(
     private readonly repository: CalendarRepository,
-    private readonly events: EventEmitter2,
+    private readonly events: EventBus,
   ) {}
 
   list(tenantId: string, userId: string, range: CalendarRangeDto) {

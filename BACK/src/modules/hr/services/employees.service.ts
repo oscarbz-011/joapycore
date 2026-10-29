@@ -4,7 +4,7 @@ import {
   NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
-import { EventEmitter2 } from '@nestjs/event-emitter';
+import { EventBus } from '../../../common/events/event-bus';
 import * as bcrypt from 'bcryptjs';
 import { EmployeeAccountsRepository } from '../repositories/employee-accounts.repository';
 import { EmployeesRepository } from '../repositories/employees.repository';
@@ -34,7 +34,7 @@ export class EmployeesService {
     private readonly employeesRepository: EmployeesRepository,
     // Solo para abrir transacciones; los accesos a datos van por repositorios.
     private readonly prisma: PrismaService,
-    private readonly eventEmitter: EventEmitter2,
+    private readonly eventEmitter: EventBus,
     private readonly accounts: EmployeeAccountsRepository,
   ) {}
 

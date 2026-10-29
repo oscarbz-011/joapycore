@@ -8,10 +8,10 @@
 import 'dotenv/config';
 import { ConfigService } from '@nestjs/config';
 import { EventEmitter2 } from '@nestjs/event-emitter';
+import { EventBus } from '../src/common/events/event-bus';
 import { randomUUID } from 'node:crypto';
 import { PrismaService } from '../src/prisma/prisma.service';
-import { OutboxRepository } from '../src/outbox/outbox.repository';
-import { OutboxService } from '../src/outbox/outbox.service';
+import { createOutbox } from './support/outbox';
 import { BillingSeriesRepository } from '../src/modules/billing/repositories/billing-series.repository';
 import { BillingSourcesRepository } from '../src/modules/billing/repositories/billing-sources.repository';
 import { InvoicesRepository } from '../src/modules/billing/repositories/invoices.repository';
@@ -38,8 +38,8 @@ describe('PosInvoicingService (PostgreSQL)', () => {
       new BillingSeriesService(seriesRepository, sources),
       new InvoicesRepository(prisma),
       sources,
-      new OutboxService(new OutboxRepository(prisma), new EventEmitter2()),
-      new EventEmitter2(),
+      createOutbox(prisma).outbox,
+      new EventBus(new EventEmitter2()),
     );
 
     const tenant = await prisma.tenant.create({

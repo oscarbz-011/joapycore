@@ -4,7 +4,7 @@ import {
   NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
-import { EventEmitter2 } from '@nestjs/event-emitter';
+import { EventBus } from '../../../common/events/event-bus';
 import type { AuditLogEvent } from '../../../audit/audit-log.event';
 import { EmailService } from '../../../email/email.service';
 import { FilesService } from '../../../files/files.service';
@@ -21,7 +21,7 @@ export class PurchaseOrderDocumentService {
     private readonly purchaseOrdersRepository: PurchaseOrdersRepository,
     private readonly filesService: FilesService,
     private readonly emailService: EmailService,
-    private readonly eventEmitter: EventEmitter2,
+    private readonly eventEmitter: EventBus,
   ) {}
 
   /** Devuelve la orden con su PDF, generándolo si todavía no existe. */

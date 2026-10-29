@@ -3,7 +3,7 @@ import {
   NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
-import { EventEmitter2 } from '@nestjs/event-emitter';
+import { EventBus } from '../../../common/events/event-bus';
 import { CombosRepository } from '../repositories/combos.repository';
 import { CreateComboDto } from '../dto/create-combo.dto';
 import { UpdateComboDto } from '../dto/update-combo.dto';
@@ -13,7 +13,7 @@ import type { AuditLogEvent } from '../../../audit/audit-log.event';
 export class CombosService {
   constructor(
     private readonly combosRepository: CombosRepository,
-    private readonly eventEmitter: EventEmitter2,
+    private readonly eventEmitter: EventBus,
   ) {}
 
   findAll(tenantId: string, onlyActive = false) {

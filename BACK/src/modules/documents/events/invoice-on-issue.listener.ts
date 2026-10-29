@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { OnEvent } from '@nestjs/event-emitter';
+import { OnDomainEvent } from '../../../common/events/on-domain-event.decorator';
 import { TemplateKind } from '@prisma/client';
 import { numberToWordsEs } from '../../../common/utils/number-to-words.util';
 import { DocxTemplateService } from '../../../files/docx/docx-template.service';
@@ -14,18 +14,9 @@ import {
   invoiceFiscalVariables,
   invoiceWatermark,
 } from '../utils/invoice-fiscal.util';
+import type { DomainEvents } from '../../../common/events/domain-events';
 
-interface InvoicePdfRequestedEvent {
-  tenantId: string;
-  invoiceId: string;
-  saleOrderId: string;
-  paymentCondition?: string;
-  total: number;
-  dueDate: string | null;
-  issuedById?: string;
-  attemptAt: Date;
-  expectedStatus: 'PENDING' | 'ISSUED' | 'PAID';
-}
+type InvoicePdfRequestedEvent = DomainEvents['invoice.pdf.requested'];
 
 function formatMoney(value: unknown): string {
   return Number(value).toLocaleString('es-PY', { maximumFractionDigits: 0 });
@@ -90,7 +81,7 @@ export class InvoiceOnIssueListener {
   // Este listener forma parte de la transacción lógica de emisión. Nest
   // suprime los errores de listeners por defecto; si eso ocurre, emitAsync()
   // resuelve aunque no exista PDF y la factura podría avanzar igualmente.
-  @OnEvent('invoice.pdf.requested', { suppressErrors: false })
+  @OnDomainEvent('invoice.pdf.requested', { suppressErrors: false })
   async handle(event: InvoicePdfRequestedEvent) {
     try {
       await this.generate(event);
@@ -290,7 +281,7 @@ export class InvoiceOnIssueListener {
 
     const fileRecord = await this.filesService.upload(
       event.tenantId,
-      event.issuedById,
+      event.issuedById ?? undefined,
       {
         buffer: pdfBuffer,
         originalname: `factura-${variables['factura.numero'] || invoice.id}.pdf`,

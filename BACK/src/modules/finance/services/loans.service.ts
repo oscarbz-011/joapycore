@@ -3,7 +3,7 @@ import {
   NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
-import { EventEmitter2 } from '@nestjs/event-emitter';
+import { EventBus } from '../../../common/events/event-bus';
 import { PaymentMethod, PaymentReceiptItemKind, Prisma } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { FinanceSourcesRepository } from '../repositories/finance-sources.repository';
@@ -83,7 +83,7 @@ export class LoansService {
     private readonly prisma: PrismaService,
     private readonly loansRepository: LoansRepository,
     private readonly installmentsRepository: InstallmentsRepository,
-    private readonly eventEmitter: EventEmitter2,
+    private readonly eventEmitter: EventBus,
     private readonly receiptsRepository: PaymentReceiptsRepository,
     private readonly sources: FinanceSourcesRepository,
   ) {}

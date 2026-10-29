@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
-import { EventEmitter2, OnEvent } from '@nestjs/event-emitter';
+import { EventBus } from '../../../common/events/event-bus';
+import { OnDomainEvent } from '../../../common/events/on-domain-event.decorator';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { BillingSourcesRepository } from '../repositories/billing-sources.repository';
 import { InvoicesRepository } from '../repositories/invoices.repository';
@@ -8,11 +9,9 @@ import {
   toInvoiceItem,
   toNum,
 } from '../utils/invoice-items.util';
+import type { DomainEvents } from '../../../common/events/domain-events';
 
-interface SaleOrderCompletedEvent {
-  tenantId: string;
-  saleOrderId: string;
-}
+type SaleOrderCompletedEvent = DomainEvents['sale.payment.collected'];
 
 @Injectable()
 export class BillingOnSaleListener {
@@ -20,15 +19,21 @@ export class BillingOnSaleListener {
     // Solo para abrir la transacción; los accesos a datos van por repositorios.
     private readonly prisma: PrismaService,
     private readonly invoicesRepository: InvoicesRepository,
-    private readonly eventEmitter: EventEmitter2,
+    private readonly eventEmitter: EventBus,
     private readonly billingSources: BillingSourcesRepository,
   ) {}
 
   // Credit sales: invoice created when order is confirmed (CONFIRMED status)
   // suppressErrors: false — lo despacha el outbox, que reintenta si falla.
-  @OnEvent('sale.order.completed', { suppressErrors: false })
+  @OnDomainEvent('sale.order.completed', {
+    consumer: 'billing.invoice-from-order',
+    suppressErrors: false,
+  })
   // Cash sales: invoice created when payment is collected (PAYMENT_RECEIVED status)
-  @OnEvent('sale.payment.collected', { suppressErrors: false })
+  @OnDomainEvent('sale.payment.collected', {
+    consumer: 'billing.invoice-from-payment',
+    suppressErrors: false,
+  })
   async handle(event: SaleOrderCompletedEvent) {
     const { tenantId, saleOrderId } = event;
 

@@ -3,7 +3,7 @@ import {
   NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
-import { EventEmitter2 } from '@nestjs/event-emitter';
+import { EventBus } from '../../../common/events/event-bus';
 import type { AuditLogEvent } from '../../../audit/audit-log.event';
 import { PrismaService } from '../../../prisma/prisma.service';
 import type { PrismaClientOrTx } from '../../../prisma/types';
@@ -26,7 +26,7 @@ export class PurchaseOrderAdvancesService {
     private readonly prisma: PrismaService,
     private readonly orders: PurchaseOrdersRepository,
     private readonly supplierPayments: SupplierPaymentsRepository,
-    private readonly eventEmitter: EventEmitter2,
+    private readonly eventEmitter: EventBus,
   ) {}
 
   async balance(tenantId: string, orderId: string, client?: PrismaClientOrTx) {

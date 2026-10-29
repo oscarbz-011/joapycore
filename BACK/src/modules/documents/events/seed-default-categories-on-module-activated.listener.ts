@@ -1,12 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { OnEvent } from '@nestjs/event-emitter';
+import { OnDomainEvent } from '../../../common/events/on-domain-event.decorator';
 import { DEFAULT_DOCUMENT_CATEGORIES } from '../constants/default-categories.constant';
 import { DocumentCategoriesRepository } from '../repositories/document-categories.repository';
+import type { DomainEvents } from '../../../common/events/domain-events';
 
-interface TenantModuleActivatedEvent {
-  tenantId: string;
-  moduleName: string;
-}
+type TenantModuleActivatedEvent = DomainEvents['tenant.module.activated'];
 
 // Precarga categorías de ejemplo la primera vez que un tenant activa el
 // módulo Documentos. Best-effort: nunca debe romper la activación del módulo.
@@ -20,7 +18,7 @@ export class SeedDefaultCategoriesOnModuleActivatedListener {
     private readonly categoriesRepository: DocumentCategoriesRepository,
   ) {}
 
-  @OnEvent('tenant.module.activated')
+  @OnDomainEvent('tenant.module.activated')
   async handle(event: TenantModuleActivatedEvent) {
     if (event.moduleName !== 'documents') return;
 

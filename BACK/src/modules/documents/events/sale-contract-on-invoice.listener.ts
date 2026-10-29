@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { OnEvent } from '@nestjs/event-emitter';
+import { OnDomainEvent } from '../../../common/events/on-domain-event.decorator';
 import { DocType, TemplateKind } from '@prisma/client';
 import { DocxTemplateService } from '../../../files/docx/docx-template.service';
 import { unflattenVariables } from '../../../files/docx/docx-variables.util';
@@ -9,16 +9,9 @@ import type { PdfTableVariable } from '../../../files/pdf/tiptap-to-html.convert
 import { DocumentSourcesRepository } from '../repositories/document-sources.repository';
 import { numberToWordsEs } from '../../../common/utils/number-to-words.util';
 import { DocumentsRepository } from '../repositories/documents.repository';
+import type { DomainEvents } from '../../../common/events/domain-events';
 
-interface InvoiceIssuedEvent {
-  tenantId: string;
-  invoiceId: string;
-  saleOrderId: string;
-  paymentCondition?: string;
-  total: number;
-  dueDate: string | null;
-  issuedById?: string;
-}
+type InvoiceIssuedEvent = DomainEvents['invoice.issued'];
 
 function formatMoney(value: unknown): string {
   return Number(value).toLocaleString('es-PY', { maximumFractionDigits: 0 });
@@ -141,7 +134,7 @@ export class SaleContractOnInvoiceListener {
     private readonly docxTemplateService: DocxTemplateService,
   ) {}
 
-  @OnEvent('invoice.issued')
+  @OnDomainEvent('invoice.issued', { consumer: 'documents.sale-contract' })
   async handle(event: InvoiceIssuedEvent) {
     try {
       await this.generate(event);
@@ -326,7 +319,7 @@ export class SaleContractOnInvoiceListener {
 
     const fileRecord = await this.filesService.upload(
       event.tenantId,
-      event.issuedById,
+      event.issuedById ?? undefined,
       {
         buffer: pdfBuffer,
         originalname: `contrato-${customerName || saleOrder.id}.pdf`,
@@ -348,7 +341,7 @@ export class SaleContractOnInvoiceListener {
       content: template.content ?? undefined,
       variables,
       fileRecordId: fileRecord.id,
-      uploadedById: event.issuedById,
+      uploadedById: event.issuedById ?? undefined,
     });
   }
 }

@@ -1,14 +1,12 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { OnEvent } from '@nestjs/event-emitter';
+import { OnDomainEvent } from '../../../common/events/on-domain-event.decorator';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { StockMovementsRepository } from '../repositories/stock-movements.repository';
 import { StockSourcesRepository } from '../repositories/stock-sources.repository';
 import { StockEntryService } from '../services/stock-entry.service';
+import type { DomainEvents } from '../../../common/events/domain-events';
 
-interface SaleOrderStockOutEvent {
-  tenantId: string;
-  saleOrderId: string;
-}
+type SaleOrderStockOutEvent = DomainEvents['sale.order.stock_out'];
 
 // Consumo FIFO de lotes al entregarse una venta — sales no sabe nada de
 // ProductBatch/usesLots, solo emite `sale.order.stock_out` después de crear
@@ -26,7 +24,10 @@ export class InventoryOnSaleDeliveredListener {
     private readonly stockMovements: StockMovementsRepository,
   ) {}
 
-  @OnEvent('sale.order.stock_out', { suppressErrors: false })
+  @OnDomainEvent('sale.order.stock_out', {
+    consumer: 'inventory.consume-lots',
+    suppressErrors: false,
+  })
   async handle(event: SaleOrderStockOutEvent) {
     try {
       await this.process(event);
