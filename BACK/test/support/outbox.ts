@@ -34,7 +34,7 @@ export function createOutbox(
       consumer,
       retry: options.retry ?? true,
       module: options.module,
-      handle: handle as (payload: unknown) => unknown,
+      handle: handle,
     });
   return { outbox, registry, consume, events };
 }
