@@ -10,7 +10,10 @@ import { CommunicationsService } from './communications.service';
 export class InvoiceCommunicationListener {
   constructor(private readonly communications: CommunicationsService) {}
 
-  @OnDomainEvent('invoice.issued', { suppressErrors: false })
+  @OnDomainEvent('invoice.issued', {
+    consumer: 'communications.send-invoice',
+    suppressErrors: false,
+  })
   async handle(event: DomainEvents['invoice.issued']) {
     await this.communications.queueInvoiceAutomatically(
       event.tenantId,

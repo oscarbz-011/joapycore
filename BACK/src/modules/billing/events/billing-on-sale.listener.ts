@@ -25,9 +25,15 @@ export class BillingOnSaleListener {
 
   // Credit sales: invoice created when order is confirmed (CONFIRMED status)
   // suppressErrors: false — lo despacha el outbox, que reintenta si falla.
-  @OnDomainEvent('sale.order.completed', { suppressErrors: false })
+  @OnDomainEvent('sale.order.completed', {
+    consumer: 'billing.invoice-from-order',
+    suppressErrors: false,
+  })
   // Cash sales: invoice created when payment is collected (PAYMENT_RECEIVED status)
-  @OnDomainEvent('sale.payment.collected', { suppressErrors: false })
+  @OnDomainEvent('sale.payment.collected', {
+    consumer: 'billing.invoice-from-payment',
+    suppressErrors: false,
+  })
   async handle(event: SaleOrderCompletedEvent) {
     const { tenantId, saleOrderId } = event;
 

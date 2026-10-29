@@ -308,6 +308,45 @@ describe('Arquitectura modular', () => {
       'outbox/outbox.service.ts',
     ]);
 
+    it('makes every listener of an outbox event a named consumer', () => {
+      const sources = sourceFiles(SRC).map((file) => ({
+        key: toPosix(file),
+        text: readFileSync(file, 'utf8'),
+      }));
+      const outboxEvents = new Set(
+        sources.flatMap(({ text }) =>
+          [
+            ...text.matchAll(
+              /\.enqueue\(\s*[\w.]+\s*,\s*[\w.]+\s*,\s*'([a-z_.]+)'/g,
+            ),
+          ].map((m) => m[1]),
+        ),
+      );
+      const problems: string[] = [];
+      const consumers = new Map<string, string>();
+      for (const { key, text } of sources) {
+        for (const [, event, options = ''] of text.matchAll(
+          /@OnDomainEvent\(\s*'([a-z_.]+)'\s*(?:,\s*(\{[^}]*\}))?\s*\)/g,
+        )) {
+          const consumer = /consumer:\s*'([^']+)'/.exec(options)?.[1];
+          if (outboxEvents.has(event) && !consumer) {
+            problems.push(
+              `${key}: ${event} viene del outbox y necesita consumer`,
+            );
+          }
+          if (!consumer && /\bmodule:/.test(options)) {
+            problems.push(`${key}: ${event} usa module sin consumer`);
+          }
+          if (consumer && consumers.has(consumer)) {
+            problems.push(`${key}: consumer ${consumer} repetido`);
+          }
+          if (consumer) consumers.set(consumer, key);
+        }
+      }
+      expect(outboxEvents.size).toBeGreaterThan(0);
+      expect(problems).toEqual([]);
+    });
+
     it('emits and listens only through the typed catalog', () => {
       const problems = sourceFiles(SRC).flatMap((file) => {
         const key = toPosix(file);

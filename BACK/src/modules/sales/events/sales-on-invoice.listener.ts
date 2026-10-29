@@ -9,7 +9,10 @@ type InvoiceIssuedEvent = DomainEvents['invoice.issued'];
 export class SalesOnInvoiceListener {
   constructor(private readonly saleOrdersRepository: SaleOrdersRepository) {}
 
-  @OnDomainEvent('invoice.issued', { suppressErrors: false })
+  @OnDomainEvent('invoice.issued', {
+    consumer: 'sales.mark-invoiced',
+    suppressErrors: false,
+  })
   async handle(event: InvoiceIssuedEvent) {
     if (!event.saleOrderId) return;
     // Move the sale order to INVOICED so the seller can see the billing state

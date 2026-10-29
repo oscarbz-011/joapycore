@@ -24,7 +24,10 @@ export class InventoryOnSaleDeliveredListener {
     private readonly stockMovements: StockMovementsRepository,
   ) {}
 
-  @OnDomainEvent('sale.order.stock_out', { suppressErrors: false })
+  @OnDomainEvent('sale.order.stock_out', {
+    consumer: 'inventory.consume-lots',
+    suppressErrors: false,
+  })
   async handle(event: SaleOrderStockOutEvent) {
     try {
       await this.process(event);

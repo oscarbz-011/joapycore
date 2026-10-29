@@ -13,7 +13,10 @@ export class FinanceOnSaleListener {
 
   constructor(private readonly loansService: LoansService) {}
 
-  @OnDomainEvent('sale.credit.approved', { suppressErrors: false })
+  @OnDomainEvent('sale.credit.approved', {
+    consumer: 'finance.loan-from-credit',
+    suppressErrors: false,
+  })
   async handle(event: SaleCreditApprovedEvent) {
     await this.loansService.createFromOrder(event.tenantId, event.saleOrderId);
   }

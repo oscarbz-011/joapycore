@@ -11,7 +11,10 @@ export class SalesOnDeliveryListener {
   constructor(private readonly saleOrdersService: SaleOrdersService) {}
 
   // Llega por el outbox: si falla, el error vuelve para que se reintente.
-  @OnDomainEvent('delivery.note.delivered', { suppressErrors: false })
+  @OnDomainEvent('delivery.note.delivered', {
+    consumer: 'sales.deliver-order',
+    suppressErrors: false,
+  })
   async handle(event: DeliveryNoteDeliveredEvent) {
     await this.saleOrdersService.handleDeliveryConfirmed(
       event.tenantId,

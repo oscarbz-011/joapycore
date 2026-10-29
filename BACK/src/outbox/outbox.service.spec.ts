@@ -1,28 +1,61 @@
+import { OutboxConsumersRegistry } from './outbox-consumers.registry';
+import type { OutboxConsumer } from './outbox-consumers.registry';
 import {
   backoffMs,
   OUTBOX_MAX_ATTEMPTS,
   OutboxService,
 } from './outbox.service';
 
-function setup() {
+const PAYLOAD = { tenantId: 't1', invoiceId: 'i1' };
+
+function consumer(
+  name: string,
+  overrides: Partial<OutboxConsumer> = {},
+): OutboxConsumer {
+  return {
+    event: 'invoice.issued',
+    consumer: name,
+    retry: true,
+    handle: jest.fn().mockResolvedValue(undefined),
+    ...overrides,
+  };
+}
+
+function setup(consumers: OutboxConsumer[] = [consumer('a'), consumer('b')]) {
   const repo = {
     create: jest.fn().mockResolvedValue({ id: 'ev-1' }),
     claim: jest.fn().mockResolvedValue(true),
     findById: jest.fn().mockResolvedValue({
       id: 'ev-1',
+      tenantId: 't1',
       eventName: 'invoice.issued',
-      payload: { tenantId: 't1', invoiceId: 'i1' },
+      payload: PAYLOAD,
       attempts: 1,
     }),
+    findDeliveredConsumers: jest.fn().mockResolvedValue([]),
+    recordDelivery: jest.fn().mockResolvedValue(undefined),
     markDone: jest.fn(),
     markFailed: jest.fn(),
     findDue: jest.fn().mockResolvedValue([]),
     deleteDoneBefore: jest.fn().mockResolvedValue({ count: 0 }),
   };
-  const events = { emitAsync: jest.fn().mockResolvedValue([]) };
-  const service = new OutboxService(repo as never, events as never);
+  const events = { emit: jest.fn() };
+  const registry = new OutboxConsumersRegistry(
+    {} as never,
+    {} as never,
+    {} as never,
+  );
+  consumers.forEach((c) => registry.register(c));
+  const tenantModules = { isActive: jest.fn().mockResolvedValue(true) };
+  const service = new OutboxService(
+    repo as never,
+    events as never,
+    registry,
+    tenantModules as never,
+  );
   jest.spyOn(service['logger'], 'error').mockImplementation(() => undefined);
-  return { service, repo, events };
+  jest.spyOn(service['logger'], 'warn').mockImplementation(() => undefined);
+  return { service, repo, events, tenantModules, consumers };
 }
 
 describe('OutboxService', () => {
@@ -47,45 +80,103 @@ describe('OutboxService', () => {
     );
   });
 
-  it('emits and marks the event done', async () => {
-    const { service, repo, events } = setup();
+  it('delivers to every consumer, records each one and marks the event done', async () => {
+    const { service, repo, events, consumers } = setup();
+
     await expect(service.dispatch('ev-1')).resolves.toBe(true);
-    expect(events.emitAsync).toHaveBeenCalledWith('invoice.issued', {
-      tenantId: 't1',
-      invoiceId: 'i1',
-    });
+
+    for (const c of consumers) {
+      expect(c.handle).toHaveBeenCalledWith(PAYLOAD);
+      expect(repo.recordDelivery).toHaveBeenCalledWith('ev-1', c.consumer, {
+        failed: false,
+      });
+    }
+    expect(events.emit).toHaveBeenCalledWith('invoice.issued', PAYLOAD);
     expect(repo.markDone).toHaveBeenCalledWith('ev-1');
   });
 
-  it('does not emit when another process already claimed the event', async () => {
-    const { service, repo, events } = setup();
+  it('does not deliver when another process already claimed the event', async () => {
+    const { service, repo, consumers } = setup();
     repo.claim.mockResolvedValue(false);
+
     await expect(service.dispatch('ev-1')).resolves.toBe(false);
-    expect(events.emitAsync).not.toHaveBeenCalled();
+    expect(consumers[0].handle).not.toHaveBeenCalled();
   });
 
-  it('schedules a retry with backoff when a listener fails, without throwing', async () => {
-    const { service, repo, events } = setup();
-    events.emitAsync.mockRejectedValue(new Error('db down'));
+  it('schedules a retry when a consumer fails, without blocking the others', async () => {
+    const failing = consumer('a', {
+      handle: jest.fn().mockRejectedValue(new Error('db down')),
+    });
+    const healthy = consumer('b');
+    const { service, repo } = setup([failing, healthy]);
     repo.findById.mockResolvedValue({
       id: 'ev-1',
+      tenantId: 't1',
       eventName: 'invoice.issued',
-      payload: {},
+      payload: PAYLOAD,
       attempts: 3,
     });
 
     await expect(service.dispatch('ev-1')).resolves.toBe(false);
 
+    expect(healthy.handle).toHaveBeenCalled();
+    expect(repo.recordDelivery).toHaveBeenCalledWith('ev-1', 'a', {
+      failed: true,
+      error: 'db down',
+    });
+    expect(repo.recordDelivery).toHaveBeenCalledWith('ev-1', 'b', {
+      failed: false,
+    });
     expect(repo.markDone).not.toHaveBeenCalled();
     const [, message, next] = repo.markFailed.mock.calls[0] as [
       string,
       string,
       Date,
     ];
-    expect(message).toBe('db down');
+    expect(message).toBe('a: db down');
     const delay = next.getTime() - Date.now();
     expect(delay).toBeGreaterThan(backoffMs(3) - 2000);
     expect(delay).toBeLessThanOrEqual(backoffMs(3));
+  });
+
+  it('only calls again the consumers that have not processed the event yet', async () => {
+    const { service, repo, consumers } = setup();
+    repo.findDeliveredConsumers.mockResolvedValue(['a']);
+
+    await expect(service.dispatch('ev-1')).resolves.toBe(true);
+
+    expect(consumers[0].handle).not.toHaveBeenCalled();
+    expect(consumers[1].handle).toHaveBeenCalled();
+  });
+
+  it('records a failure it does not retry and still completes the event', async () => {
+    const bestEffort = consumer('a', {
+      retry: false,
+      handle: jest.fn().mockRejectedValue(new Error('pdf down')),
+    });
+    const { service, repo } = setup([bestEffort]);
+
+    await expect(service.dispatch('ev-1')).resolves.toBe(true);
+
+    expect(repo.recordDelivery).toHaveBeenCalledWith('ev-1', 'a', {
+      failed: false,
+      error: 'pdf down',
+    });
+    expect(repo.markDone).toHaveBeenCalledWith('ev-1');
+  });
+
+  it('skips a consumer whose module is off for the tenant', async () => {
+    const logistics = consumer('logistics.note', { module: 'logistics' });
+    const { service, repo, tenantModules } = setup([logistics]);
+    tenantModules.isActive.mockResolvedValue(false);
+
+    await expect(service.dispatch('ev-1')).resolves.toBe(true);
+
+    expect(tenantModules.isActive).toHaveBeenCalledWith('t1', 'logistics');
+    expect(logistics.handle).not.toHaveBeenCalled();
+    expect(repo.recordDelivery).toHaveBeenCalledWith('ev-1', 'logistics.note', {
+      failed: false,
+    });
   });
 
   it('processes every due event', async () => {

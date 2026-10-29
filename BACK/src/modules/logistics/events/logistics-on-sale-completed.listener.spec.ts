@@ -3,7 +3,6 @@ import { LogisticsOnSaleCompletedListener } from './logistics-on-sale-completed.
 describe('LogisticsOnSaleCompletedListener', () => {
   const setup = (
     created: boolean,
-    logisticsActive = true,
     orderStatus: string | null = 'PAYMENT_RECEIVED',
   ) => {
     const repo = {
@@ -12,19 +11,15 @@ describe('LogisticsOnSaleCompletedListener', () => {
         .mockResolvedValue({ id: 'dn-1', created }),
     };
     const events = { emit: jest.fn() };
-    const tenantModules = {
-      isActive: jest.fn().mockResolvedValue(logisticsActive),
-    };
     const sources = {
       findOrderStatus: jest.fn().mockResolvedValue(orderStatus),
     };
     const listener = new LogisticsOnSaleCompletedListener(
       repo as never,
       events as never,
-      tenantModules as never,
       sources as never,
     );
-    return { listener, repo, events, tenantModules, sources };
+    return { listener, repo, events, sources };
   };
 
   it('creates the pending delivery note and announces it', async () => {
@@ -44,14 +39,6 @@ describe('LogisticsOnSaleCompletedListener', () => {
     expect(events.emit).not.toHaveBeenCalled();
   });
 
-  it('creates nothing when the tenant does not use Logistics', async () => {
-    const { listener, repo, events, tenantModules } = setup(true, false);
-    await listener.handle({ tenantId: 't1', saleOrderId: 'o1' });
-    expect(tenantModules.isActive).toHaveBeenCalledWith('t1', 'logistics');
-    expect(repo.ensurePendingForOrder).not.toHaveBeenCalled();
-    expect(events.emit).not.toHaveBeenCalled();
-  });
-
   // El contado cobrado no pasa por "confirmar": sin esto no tenía nota hasta
   // que el backfill del arranque la creaba.
   it('creates the note when a cash sale is collected', async () => {
@@ -65,7 +52,7 @@ describe('LogisticsOnSaleCompletedListener', () => {
   });
 
   it('ignores POS sales, which are collected already delivered', async () => {
-    const { listener, repo } = setup(true, true, 'DELIVERED');
+    const { listener, repo } = setup(true, 'DELIVERED');
     await listener.handlePaymentCollected({
       tenantId: 't1',
       saleOrderId: 'o1',
@@ -74,7 +61,7 @@ describe('LogisticsOnSaleCompletedListener', () => {
   });
 
   it('ignores a collected sale the tenant cannot see', async () => {
-    const { listener, repo } = setup(true, true, null);
+    const { listener, repo } = setup(true, null);
     await listener.handlePaymentCollected({
       tenantId: 't1',
       saleOrderId: 'o1',

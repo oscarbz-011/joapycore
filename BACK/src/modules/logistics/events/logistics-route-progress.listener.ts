@@ -16,7 +16,9 @@ export class LogisticsRouteProgressListener {
 
   constructor(private readonly routes: DeliveryRoutesService) {}
 
-  @OnDomainEvent('delivery.note.delivered')
+  @OnDomainEvent('delivery.note.delivered', {
+    consumer: 'logistics.route-progress',
+  })
   async handle(event: DeliveryNoteDeliveredEvent) {
     try {
       await this.routes.stopDelivered(

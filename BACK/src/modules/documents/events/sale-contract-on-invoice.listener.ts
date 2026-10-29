@@ -134,7 +134,7 @@ export class SaleContractOnInvoiceListener {
     private readonly docxTemplateService: DocxTemplateService,
   ) {}
 
-  @OnDomainEvent('invoice.issued')
+  @OnDomainEvent('invoice.issued', { consumer: 'documents.sale-contract' })
   async handle(event: InvoiceIssuedEvent) {
     try {
       await this.generate(event);

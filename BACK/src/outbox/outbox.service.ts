@@ -6,6 +6,11 @@ import type {
   DomainEventName,
   DomainEvents,
 } from '../common/events/domain-events';
+import { TenantModulesCache } from '../tenants/services/tenant-modules.cache';
+import {
+  OutboxConsumersRegistry,
+  type OutboxConsumer,
+} from './outbox-consumers.registry';
 import { OutboxRepository } from './outbox.repository';
 
 export const OUTBOX_MAX_ATTEMPTS = 10;
@@ -34,11 +39,12 @@ export function backoffMs(attempts: number): number {
  *   // …commit…
  *   await outbox.dispatch(eventId);   // o void outbox.dispatch(eventId)
  *
- * El evento queda guardado en la misma transacción que lo origina. Se despacha
- * con emitAsync; si algún listener lanza, se reintenta con backoff exponencial
- * desde el cron. La entrega es "al menos una vez": los listeners de estos
- * eventos tienen que ser idempotentes y declarar `suppressErrors: false` para
- * que el fallo llegue hasta acá.
+ * El evento queda guardado en la misma transacción que lo origina. Cada
+ * consumidor (`@OnDomainEvent(…, { consumer })`) se llama por separado y su
+ * resultado queda en outbox_deliveries: si uno falla, el reintento con
+ * backoff solo vuelve a llamar a ese. La entrega es "al menos una vez": los
+ * consumidores tienen que ser idempotentes, y solo se reintentan los que
+ * declaran `suppressErrors: false`.
  */
 @Injectable()
 export class OutboxService {
@@ -47,6 +53,8 @@ export class OutboxService {
   constructor(
     private readonly outboxRepository: OutboxRepository,
     private readonly eventEmitter: EventEmitter2,
+    private readonly consumers: OutboxConsumersRegistry,
+    private readonly tenantModules: TenantModulesCache,
   ) {}
 
   async enqueue<K extends DomainEventName>(
@@ -72,24 +80,68 @@ export class OutboxService {
     const event = await this.outboxRepository.findById(id);
     if (!event) return false;
 
-    try {
-      await this.eventEmitter.emitAsync(event.eventName, event.payload);
+    const delivered = new Set(
+      await this.outboxRepository.findDeliveredConsumers(id),
+    );
+    const pending = this.consumers
+      .consumersOf(event.eventName)
+      .filter((c) => !delivered.has(c.consumer));
+    const outcomes = await Promise.all(
+      pending.map((consumer) =>
+        this.deliver(id, event.tenantId, consumer, event.payload),
+      ),
+    );
+    const failures = outcomes.filter((o): o is string => o !== null);
+
+    // Observadores en memoria, como el puente a WebSocket.
+    this.eventEmitter.emit(event.eventName, event.payload);
+
+    if (failures.length === 0) {
       await this.outboxRepository.markDone(id);
       return true;
+    }
+    const message = failures.join('; ');
+    const exhausted = event.attempts >= OUTBOX_MAX_ATTEMPTS;
+    this.logger.error(
+      `Evento ${event.eventName} (${id}) falló en el intento ${event.attempts}${
+        exhausted ? ' — sin más reintentos, requiere revisión' : ''
+      }: ${message}`,
+    );
+    await this.outboxRepository.markFailed(
+      id,
+      message,
+      new Date(now.getTime() + backoffMs(event.attempts)),
+    );
+    return false;
+  }
+
+  /** Devuelve el error si el consumidor falló y hay que reintentarlo. */
+  private async deliver(
+    eventId: string,
+    tenantId: string,
+    consumer: OutboxConsumer,
+    payload: unknown,
+  ): Promise<string | null> {
+    try {
+      const skip =
+        consumer.module &&
+        !(await this.tenantModules.isActive(tenantId, consumer.module));
+      if (!skip) await consumer.handle(payload);
+      await this.outboxRepository.recordDelivery(eventId, consumer.consumer, {
+        failed: false,
+      });
+      return null;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      const exhausted = event.attempts >= OUTBOX_MAX_ATTEMPTS;
-      this.logger.error(
-        `Evento ${event.eventName} (${id}) falló en el intento ${event.attempts}${
-          exhausted ? ' — sin más reintentos, requiere revisión' : ''
-        }: ${message}`,
+      await this.outboxRepository.recordDelivery(eventId, consumer.consumer, {
+        failed: consumer.retry,
+        error: message,
+      });
+      if (consumer.retry) return `${consumer.consumer}: ${message}`;
+      this.logger.warn(
+        `${consumer.consumer} no procesó el evento ${eventId} (sin reintento): ${message}`,
       );
-      await this.outboxRepository.markFailed(
-        id,
-        message,
-        new Date(now.getTime() + backoffMs(event.attempts)),
-      );
-      return false;
+      return null;
     }
   }
 

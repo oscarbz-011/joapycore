@@ -25,9 +25,9 @@ import { CustomersRepository } from '../src/modules/sales/repositories/customers
 import { SaleOrdersRepository } from '../src/modules/sales/repositories/sale-orders.repository';
 import { SalesSourcesRepository } from '../src/modules/sales/repositories/sales-sources.repository';
 import { SaleOrdersService } from '../src/modules/sales/services/sale-orders.service';
-import { OutboxRepository } from '../src/outbox/outbox.repository';
 import { OutboxService } from '../src/outbox/outbox.service';
 import { PrismaService } from '../src/prisma/prisma.service';
+import { createOutbox } from './support/outbox';
 import { TenantModulesRepository } from '../src/tenants/repositories/tenant-modules.repository';
 import { TenantModulesCache } from '../src/tenants/services/tenant-modules.cache';
 
@@ -44,7 +44,8 @@ describe('Entrega → descuento de stock (PostgreSQL)', () => {
     prisma = new PrismaService(new ConfigService(process.env));
     await prisma.$connect();
     events = new EventEmitter2();
-    outbox = new OutboxService(new OutboxRepository(prisma), events);
+    const durable = createOutbox(prisma, events);
+    outbox = durable.outbox;
     jest.spyOn(outbox['logger'], 'error').mockImplementation(() => undefined);
     tenantModules = new TenantModulesCache(new TenantModulesRepository(prisma));
     sales = new SaleOrdersService(
@@ -73,10 +74,12 @@ describe('Entrega → descuento de stock (PostgreSQL)', () => {
       outbox,
     );
     const listener = new SalesOnDeliveryListener(sales);
-    // Mismo contrato que @OnEvent con suppressErrors: false: emitAsync espera
-    // la promesa y el outbox se entera si falla.
-    // eslint-disable-next-line @typescript-eslint/no-misused-promises
-    events.on('delivery.note.delivered', (event) => listener.handle(event));
+    durable.consume(
+      'delivery.note.delivered',
+      'sales.deliver-order',
+      (event: Parameters<SalesOnDeliveryListener['handle']>[0]) =>
+        listener.handle(event),
+    );
   });
 
   afterAll(async () => {

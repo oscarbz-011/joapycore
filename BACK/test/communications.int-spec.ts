@@ -7,6 +7,7 @@ import { NotFoundException } from '@nestjs/common';
 import { Queue } from 'bullmq';
 import Redis from 'ioredis';
 import { PrismaService } from '../src/prisma/prisma.service';
+import { createOutbox } from './support/outbox';
 import { FilesService } from '../src/files/files.service';
 import { IntegrationsService } from '../src/integrations/integrations.service';
 import { CommunicationsRepository } from '../src/communications/communications.repository';
@@ -22,7 +23,6 @@ import {
   redisConnection,
 } from '../src/communications/communications.worker';
 import { OutboxService } from '../src/outbox/outbox.service';
-import { OutboxRepository } from '../src/outbox/outbox.repository';
 
 const url = process.env.COMMUNICATIONS_TEST_DATABASE_URL;
 if (url && !/^\/joapycore_comms_test_[\w-]+$/.test(new URL(url).pathname)) {
@@ -104,12 +104,12 @@ integration(
         new EventBus(events),
         core,
       );
-      outbox = new OutboxService(new OutboxRepository(prisma), events);
+      const durable = createOutbox(prisma, events);
+      outbox = durable.outbox;
       const listener = new InvoiceCommunicationListener(core);
-      events.on(
+      durable.consume(
         'invoice.issued',
-        // emitAsync must observe the listener promise for transactional Outbox retries.
-        // eslint-disable-next-line @typescript-eslint/no-misused-promises
+        'communications.send-invoice',
         (event: Parameters<InvoiceCommunicationListener['handle']>[0]) =>
           listener.handle(event),
       );
