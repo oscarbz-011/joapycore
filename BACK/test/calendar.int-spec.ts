@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import { ConfigService } from '@nestjs/config';
 import { EventEmitter2 } from '@nestjs/event-emitter';
+import { EventBus } from '../src/common/events/event-bus';
 import { NotFoundException } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { PrismaService } from '../src/prisma/prisma.service';
@@ -51,7 +52,7 @@ integration('Calendar (isolated PostgreSQL)', () => {
     await prisma.$connect();
     service = new CalendarService(
       new CalendarRepository(prisma),
-      new EventEmitter2(),
+      new EventBus(new EventEmitter2()),
     );
     await prisma.tenant.createMany({
       data: [

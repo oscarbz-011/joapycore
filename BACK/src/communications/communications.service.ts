@@ -6,7 +6,7 @@ import {
   NotFoundException,
   ServiceUnavailableException,
 } from '@nestjs/common';
-import { EventEmitter2 } from '@nestjs/event-emitter';
+import { EventBus } from '../common/events/event-bus';
 import { createHash } from 'node:crypto';
 import type { CommunicationMessage } from '@prisma/client';
 import type { AuditLogEvent } from '../audit/audit-log.event';
@@ -66,7 +66,7 @@ export class CommunicationsService {
     private readonly repository: CommunicationsRepository,
     private readonly files: FilesService,
     private readonly provider: CommunicationsEmailProvider,
-    private readonly events: EventEmitter2,
+    private readonly events: EventBus,
   ) {}
 
   /**

@@ -1,16 +1,14 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { OnEvent } from '@nestjs/event-emitter';
+import { OnDomainEvent } from '../../../common/events/on-domain-event.decorator';
 import { TemplateKind } from '@prisma/client';
 import {
   DEFAULT_INVOICE_TEMPLATE,
   DEFAULT_PAYMENT_RECEIPT_TEMPLATE,
 } from '../constants/default-templates.constant';
 import { DocumentsRepository } from '../repositories/documents.repository';
+import type { DomainEvents } from '../../../common/events/domain-events';
 
-interface TenantRegisteredEvent {
-  tenantId: string;
-  industry?: string;
-}
+type TenantRegisteredEvent = DomainEvents['tenant.registered'];
 
 // Siembra las plantillas de factura y recibo de dinero como documentos
 // reales y editables desde el módulo Documentos — así el tenant puede
@@ -25,7 +23,7 @@ export class SeedBillingTemplatesOnTenantRegisteredListener {
 
   constructor(private readonly documentsRepository: DocumentsRepository) {}
 
-  @OnEvent('tenant.registered')
+  @OnDomainEvent('tenant.registered')
   async handle(event: TenantRegisteredEvent) {
     try {
       await this.documentsRepository.create({

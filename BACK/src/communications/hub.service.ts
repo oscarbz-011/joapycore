@@ -4,7 +4,7 @@ import {
   NotFoundException,
   ServiceUnavailableException,
 } from '@nestjs/common';
-import { EventEmitter2 } from '@nestjs/event-emitter';
+import { EventBus } from '../common/events/event-bus';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { IntegrationsService } from '../integrations/integrations.service';
@@ -48,7 +48,7 @@ export class CommunicationHubService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly integrations: IntegrationsService,
-    private readonly events: EventEmitter2,
+    private readonly events: EventBus,
     private readonly core: CommunicationsService,
   ) {}
 

@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { OnEvent } from '@nestjs/event-emitter';
+import { OnDomainEvent } from '../../../common/events/on-domain-event.decorator';
 import { TemplateKind } from '@prisma/client';
 import { numberToWordsEs } from '../../../common/utils/number-to-words.util';
 import { DocxTemplateService } from '../../../files/docx/docx-template.service';
@@ -14,13 +14,9 @@ import {
   invoiceFiscalVariables,
   invoiceWatermark,
 } from '../utils/invoice-fiscal.util';
+import type { DomainEvents } from '../../../common/events/domain-events';
 
-interface InterestInvoiceIssuedEvent {
-  tenantId: string;
-  invoiceId: string;
-  paymentReceiptId: string;
-  total: number;
-}
+type InterestInvoiceIssuedEvent = DomainEvents['invoice.interest.issued'];
 
 function formatMoney(value: unknown): string {
   return Number(value).toLocaleString('es-PY', { maximumFractionDigits: 0 });
@@ -62,7 +58,7 @@ export class InterestInvoiceOnIssueListener {
     private readonly docxTemplateService: DocxTemplateService,
   ) {}
 
-  @OnEvent('invoice.interest.issued')
+  @OnDomainEvent('invoice.interest.issued')
   async handle(event: InterestInvoiceIssuedEvent) {
     try {
       await this.generate(event);
@@ -75,7 +71,7 @@ export class InterestInvoiceOnIssueListener {
 
   // Reintento manual desde el recibo: regenera la factura de intereses de
   // ese cobro si existe y quedó sin PDF.
-  @OnEvent('payment.receipt.pdf.requested')
+  @OnDomainEvent('payment.receipt.pdf.requested')
   async handleRetry(event: { tenantId: string; receiptId: string }) {
     const invoice = await this.sources.findInterestInvoiceByReceipt(
       event.tenantId,

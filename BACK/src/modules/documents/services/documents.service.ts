@@ -7,7 +7,7 @@ import {
   NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
-import { EventEmitter2 } from '@nestjs/event-emitter';
+import { EventBus } from '../../../common/events/event-bus';
 import { DocVisibility, Prisma } from '@prisma/client';
 import type { AuditLogEvent } from '../../../audit/audit-log.event';
 import { EmailService } from '../../../email/email.service';
@@ -34,7 +34,7 @@ export class DocumentsService {
     private readonly filesService: FilesService,
     private readonly emailService: EmailService,
     private readonly sources: DocumentSourcesRepository,
-    private readonly eventEmitter: EventEmitter2,
+    private readonly eventEmitter: EventBus,
     private readonly docxTemplateService: DocxTemplateService,
   ) {}
 

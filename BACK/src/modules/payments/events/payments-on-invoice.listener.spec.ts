@@ -51,6 +51,9 @@ describe('PaymentsOnInvoiceListener', () => {
         tenantId: 'tenant-1',
         invoiceId: 'inv-1',
         saleOrderId: 'order-1',
+        paymentCondition: 'CASH',
+        total: 1000,
+        dueDate: null,
       });
 
       expect(arRepository.create).toHaveBeenCalledWith(
@@ -74,6 +77,9 @@ describe('PaymentsOnInvoiceListener', () => {
         tenantId: 'tenant-1',
         invoiceId: 'inv-1',
         saleOrderId: 'order-1',
+        paymentCondition: 'CASH',
+        total: 1000,
+        dueDate: null,
       });
 
       expect(arRepository.create).toHaveBeenCalledWith(
@@ -93,6 +99,9 @@ describe('PaymentsOnInvoiceListener', () => {
         tenantId: 'tenant-1',
         invoiceId: 'inv-1',
         saleOrderId: 'order-1',
+        paymentCondition: 'CASH',
+        total: 1000,
+        dueDate: null,
       });
 
       expect(arRepository.create).toHaveBeenCalledWith(
@@ -107,6 +116,9 @@ describe('PaymentsOnInvoiceListener', () => {
         tenantId: 'tenant-1',
         invoiceId: 'inv-1',
         saleOrderId: 'order-1',
+        paymentCondition: 'CASH',
+        total: 1000,
+        dueDate: null,
       });
 
       expect(arRepository.create).not.toHaveBeenCalled();
@@ -125,6 +137,9 @@ describe('PaymentsOnInvoiceListener', () => {
         tenantId: 'tenant-1',
         invoiceId: 'inv-1',
         saleOrderId: 'order-1',
+        paymentCondition: 'CASH',
+        total: 1000,
+        dueDate: null,
       });
 
       expect(arRepository.create).not.toHaveBeenCalled();
@@ -138,6 +153,9 @@ describe('PaymentsOnInvoiceListener', () => {
         tenantId: 'tenant-1',
         invoiceId: 'inv-1',
         saleOrderId: 'order-1',
+        paymentCondition: 'CASH',
+        total: 1000,
+        dueDate: null,
       });
 
       expect(arRepository.create).not.toHaveBeenCalled();

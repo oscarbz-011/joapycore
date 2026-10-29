@@ -1,11 +1,9 @@
 import { Injectable } from '@nestjs/common';
-import { OnEvent } from '@nestjs/event-emitter';
+import { OnDomainEvent } from '../../../common/events/on-domain-event.decorator';
 import { DeliveryNotesService } from '../services/delivery-notes.service';
+import type { DomainEvents } from '../../../common/events/domain-events';
 
-interface TenantModuleActivatedEvent {
-  tenantId: string;
-  moduleName: string;
-}
+type TenantModuleActivatedEvent = DomainEvents['tenant.module.activated'];
 
 /**
  * Mientras Logística estuvo apagada, Ventas entregó los pedidos por su cuenta
@@ -16,7 +14,7 @@ interface TenantModuleActivatedEvent {
 export class LogisticsOnModuleActivatedListener {
   constructor(private readonly deliveryNotes: DeliveryNotesService) {}
 
-  @OnEvent('tenant.module.activated')
+  @OnDomainEvent('tenant.module.activated')
   async handle(event: TenantModuleActivatedEvent): Promise<void> {
     if (event.moduleName !== 'logistics') return;
     await this.deliveryNotes.syncWithSales(event.tenantId);

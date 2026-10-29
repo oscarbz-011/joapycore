@@ -1,12 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { OnEvent } from '@nestjs/event-emitter';
+import { OnDomainEvent } from '../../../common/events/on-domain-event.decorator';
 import { BillingSourcesRepository } from '../repositories/billing-sources.repository';
 import { InvoicesService } from '../services/invoices.service';
+import type { DomainEvents } from '../../../common/events/domain-events';
 
-interface PaymentReceiptCreatedEvent {
-  tenantId: string;
-  receiptId: string;
-}
+type PaymentReceiptCreatedEvent = DomainEvents['payment.receipt.created'];
 
 const IVA_RATE = 10;
 
@@ -36,7 +34,7 @@ export class InterestInvoiceOnReceiptListener {
     private readonly invoicesService: InvoicesService,
   ) {}
 
-  @OnEvent('payment.receipt.created')
+  @OnDomainEvent('payment.receipt.created')
   async handle(event: PaymentReceiptCreatedEvent) {
     try {
       await this.process(event);

@@ -1,18 +1,12 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { OnEvent } from '@nestjs/event-emitter';
+import { OnDomainEvent } from '../../../common/events/on-domain-event.decorator';
 import { MovementReason, StockMovementType } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { StockMovementsRepository } from '../repositories/stock-movements.repository';
 import { StockEntryService } from '../services/stock-entry.service';
+import type { DomainEvents } from '../../../common/events/domain-events';
 
-interface ProductionOrderCompletedEvent {
-  tenantId: string;
-  productionOrderId: string;
-  productId: string;
-  quantity: number;
-  warehouseId: string;
-  consumed: { productId: string; quantity: number }[];
-}
+type ProductionOrderCompletedEvent = DomainEvents['production.order.completed'];
 
 // Único lugar donde una orden de producción se convierte en stock real: sale
 // la materia prima consumida y entra el producto fabricado. Producción solo
@@ -29,7 +23,7 @@ export class InventoryOnProductionListener {
     private readonly stockMovements: StockMovementsRepository,
   ) {}
 
-  @OnEvent('production.order.completed')
+  @OnDomainEvent('production.order.completed')
   async handle(event: ProductionOrderCompletedEvent) {
     try {
       await this.process(event);
@@ -81,7 +75,7 @@ export class InventoryOnProductionListener {
           productId: event.productId,
           quantity: event.quantity,
           reason: MovementReason.PRODUCTION_IN,
-          warehouseId: event.warehouseId,
+          warehouseId: event.warehouseId ?? undefined,
           referenceId: productionOrderId,
         },
         tx,

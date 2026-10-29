@@ -1,18 +1,15 @@
 import { Injectable } from '@nestjs/common';
-import { OnEvent } from '@nestjs/event-emitter';
-import { Industry } from '@prisma/client';
+import { OnDomainEvent } from '../../../common/events/on-domain-event.decorator';
 import { CategoriesRepository } from '../repositories/categories.repository';
+import type { DomainEvents } from '../../../common/events/domain-events';
 
-interface TenantRegisteredEvent {
-  tenantId: string;
-  industry: Industry | null | undefined;
-}
+type TenantRegisteredEvent = DomainEvents['tenant.registered'];
 
 @Injectable()
 export class InventoryOnTenantListener {
   constructor(private readonly categoriesRepository: CategoriesRepository) {}
 
-  @OnEvent('tenant.registered')
+  @OnDomainEvent('tenant.registered')
   async handle(event: TenantRegisteredEvent) {
     await this.categoriesRepository.seedDefaults(
       event.tenantId,

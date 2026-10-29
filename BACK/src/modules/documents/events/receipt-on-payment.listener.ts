@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { OnEvent } from '@nestjs/event-emitter';
+import { OnDomainEvent } from '../../../common/events/on-domain-event.decorator';
 import { TemplateKind } from '@prisma/client';
 import { numberToWordsEs } from '../../../common/utils/number-to-words.util';
 import { DocxTemplateService } from '../../../files/docx/docx-template.service';
@@ -10,11 +10,9 @@ import { PdfService } from '../../../files/pdf/pdf.service';
 import { DocumentSourcesRepository } from '../repositories/document-sources.repository';
 import { DEFAULT_PAYMENT_RECEIPT_TEMPLATE } from '../constants/default-templates.constant';
 import { DocumentsRepository } from '../repositories/documents.repository';
+import type { DomainEvents } from '../../../common/events/domain-events';
 
-interface PaymentReceiptCreatedEvent {
-  tenantId: string;
-  receiptId: string;
-}
+type PaymentReceiptCreatedEvent = DomainEvents['payment.receipt.pdf.requested'];
 
 const PAYMENT_METHOD_LABELS: Record<string, string> = {
   CASH: 'Efectivo',
@@ -55,14 +53,14 @@ export class ReceiptOnPaymentListener {
     private readonly docxTemplateService: DocxTemplateService,
   ) {}
 
-  @OnEvent('payment.receipt.created')
+  @OnDomainEvent('payment.receipt.created')
   async handle(event: PaymentReceiptCreatedEvent) {
     await this.generateSafely(event);
   }
 
   // Reintento manual cuando el PDF falló al cobrar. Va en un método aparte:
   // EventEmitter2 toma un array de eventos como la ruta de uno solo.
-  @OnEvent('payment.receipt.pdf.requested')
+  @OnDomainEvent('payment.receipt.pdf.requested')
   async handleRetry(event: PaymentReceiptCreatedEvent) {
     await this.generateSafely(event);
   }

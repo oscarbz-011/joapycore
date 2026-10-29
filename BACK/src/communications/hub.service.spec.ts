@@ -4,7 +4,7 @@ import {
   ServiceUnavailableException,
   ValidationPipe,
 } from '@nestjs/common';
-import { EventEmitter2 } from '@nestjs/event-emitter';
+import { EventBus } from '../common/events/event-bus';
 import { PrismaService } from '../prisma/prisma.service';
 import { IntegrationsService } from '../integrations/integrations.service';
 import { CommunicationsService } from './communications.service';
@@ -77,7 +77,7 @@ describe('CommunicationHubService isolation and controls', () => {
     service = new CommunicationHubService(
       prisma as unknown as PrismaService,
       integrations as unknown as IntegrationsService,
-      events as unknown as EventEmitter2,
+      events as unknown as EventBus,
       core as unknown as CommunicationsService,
     );
   });

@@ -3,7 +3,7 @@ import {
   NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
-import { EventEmitter2 } from '@nestjs/event-emitter';
+import { EventBus } from '../../../common/events/event-bus';
 import { startOfBusinessDay } from '../../../common/utils/business-date.util';
 import type { AuditLogEvent } from '../../../audit/audit-log.event';
 import { CollectionRoutesRepository } from '../repositories/collection-routes.repository';
@@ -34,7 +34,7 @@ export class CobranzasService {
     private readonly agreementsRepo: PaymentAgreementsRepository,
     private readonly notesRepo: CollectionNotesRepository,
     private readonly delinquencyReportsRepo: DelinquencyReportsRepository,
-    private readonly eventEmitter: EventEmitter2,
+    private readonly eventEmitter: EventBus,
   ) {}
 
   // ── Morosos ────────────────────────────────────────────────────────────────

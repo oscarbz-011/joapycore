@@ -1,13 +1,10 @@
 import { Injectable } from '@nestjs/common';
-import { OnEvent } from '@nestjs/event-emitter';
+import { OnDomainEvent } from '../../../common/events/on-domain-event.decorator';
 import { AccountsReceivableRepository } from '../repositories/accounts-receivable.repository';
 import { PaymentSourcesRepository } from '../repositories/payment-sources.repository';
+import type { DomainEvents } from '../../../common/events/domain-events';
 
-interface InvoiceIssuedEvent {
-  tenantId: string;
-  invoiceId: string;
-  saleOrderId: string;
-}
+type InvoiceIssuedEvent = DomainEvents['invoice.issued'];
 
 @Injectable()
 export class PaymentsOnInvoiceListener {
@@ -16,7 +13,7 @@ export class PaymentsOnInvoiceListener {
     private readonly arRepository: AccountsReceivableRepository,
   ) {}
 
-  @OnEvent('invoice.cancelled')
+  @OnDomainEvent('invoice.cancelled')
   async handleCancelled(event: { tenantId: string; invoiceId: string }) {
     const ar = await this.arRepository.findByInvoice(
       event.tenantId,
@@ -26,7 +23,7 @@ export class PaymentsOnInvoiceListener {
     await this.arRepository.updateStatus(ar.id, 'CANCELLED');
   }
 
-  @OnEvent('invoice.issued', { suppressErrors: false })
+  @OnDomainEvent('invoice.issued', { suppressErrors: false })
   async handle(event: InvoiceIssuedEvent) {
     // Idempotency: skip if an AR already exists for this invoice.
     // Prevents duplicate accounts receivable if the event fires more than once.

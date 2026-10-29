@@ -99,7 +99,7 @@ describe('SaleContractOnInvoiceListener', () => {
     tenantId: TENANT,
     invoiceId: 'invoice-1',
     saleOrderId: SALE_ORDER_ID,
-    paymentCondition: 'CREDIT',
+    paymentCondition: 'CREDIT' as const,
     total: 5000000,
     dueDate: null,
     issuedById: 'user-1',

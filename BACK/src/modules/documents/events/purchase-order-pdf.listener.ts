@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { OnEvent } from '@nestjs/event-emitter';
+import { OnDomainEvent } from '../../../common/events/on-domain-event.decorator';
 import { TemplateKind } from '@prisma/client';
 import { DocxTemplateService } from '../../../files/docx/docx-template.service';
 import { unflattenVariables } from '../../../files/docx/docx-variables.util';
@@ -9,12 +9,10 @@ import { buildPurchaseOrderVariables } from '../builders/purchase-order-variable
 import { DEFAULT_PURCHASE_ORDER_TEMPLATE } from '../constants/default-templates.constant';
 import { DocumentSourcesRepository } from '../repositories/document-sources.repository';
 import { DocumentsRepository } from '../repositories/documents.repository';
+import type { DomainEvents } from '../../../common/events/domain-events';
 
-interface PurchaseOrderPdfRequestedEvent {
-  tenantId: string;
-  purchaseOrderId: string;
-  requestedById?: string;
-}
+type PurchaseOrderPdfRequestedEvent =
+  DomainEvents['purchase.order.pdf.requested'];
 
 // Genera el PDF de la orden de compra, el documento que se le manda al
 // proveedor. Nunca bloquea a quien lo pide: si Puppeteer o la plantilla
@@ -31,7 +29,7 @@ export class PurchaseOrderPdfListener {
     private readonly docxTemplateService: DocxTemplateService,
   ) {}
 
-  @OnEvent('purchase.order.pdf.requested')
+  @OnDomainEvent('purchase.order.pdf.requested')
   async handle(event: PurchaseOrderPdfRequestedEvent) {
     try {
       await this.generate(event);

@@ -6,7 +6,7 @@ import {
   NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
-import { EventEmitter2 } from '@nestjs/event-emitter';
+import { EventBus } from '../../../common/events/event-bus';
 import type { AuditLogEvent } from '../../../audit/audit-log.event';
 import { startOfBusinessDay } from '../../../common/utils/business-date.util';
 import {
@@ -161,7 +161,7 @@ export class DeliveryRoutesService {
     private readonly routes: DeliveryRoutesRepository,
     private readonly sources: LogisticsSourcesRepository,
     private readonly trackingEvents: DeliveryTrackingEventsRepository,
-    private readonly eventEmitter: EventEmitter2,
+    private readonly eventEmitter: EventBus,
   ) {}
 
   async list(tenantId: string, query: ListDeliveryRoutesDto) {

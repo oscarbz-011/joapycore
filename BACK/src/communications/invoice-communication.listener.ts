@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
-import { OnEvent } from '@nestjs/event-emitter';
+import { OnDomainEvent } from '../common/events/on-domain-event.decorator';
+import type { DomainEvents } from '../common/events/domain-events';
 import { CommunicationsService } from './communications.service';
 
 // invoice.issued is already committed through the business Outbox. Transient
@@ -9,16 +10,12 @@ import { CommunicationsService } from './communications.service';
 export class InvoiceCommunicationListener {
   constructor(private readonly communications: CommunicationsService) {}
 
-  @OnEvent('invoice.issued', { suppressErrors: false })
-  async handle(event: {
-    tenantId: string;
-    invoiceId: string;
-    issuedById?: string;
-  }) {
+  @OnDomainEvent('invoice.issued', { suppressErrors: false })
+  async handle(event: DomainEvents['invoice.issued']) {
     await this.communications.queueInvoiceAutomatically(
       event.tenantId,
       event.invoiceId,
-      event.issuedById,
+      event.issuedById ?? undefined,
     );
   }
 }

@@ -298,4 +298,31 @@ describe('Arquitectura modular', () => {
       expect(actual).toEqual(known);
     });
   });
+
+  describe('eventos', () => {
+    // Solo estos manejan nombres que no se conocen al compilar: el bus mismo,
+    // el puente a WebSocket (escucha todo) y el outbox (despacha lo guardado).
+    const RAW_EMITTER_ALLOWED = new Set([
+      'common/events/event-bus.ts',
+      'notifications/listeners/ws-bridge.listener.ts',
+      'outbox/outbox.service.ts',
+    ]);
+
+    it('emits and listens only through the typed catalog', () => {
+      const problems = sourceFiles(SRC).flatMap((file) => {
+        const key = toPosix(file);
+        const text = readFileSync(file, 'utf8');
+        const code = text.replace(/\/\/.*$/gm, '');
+        const found: string[] = [];
+        if (!RAW_EMITTER_ALLOWED.has(key) && /\bEventEmitter2\b/.test(code)) {
+          found.push(`${key}: EventEmitter2 (usar EventBus)`);
+        }
+        if (/@OnEvent\(/.test(code)) {
+          found.push(`${key}: @OnEvent (usar @OnDomainEvent)`);
+        }
+        return found;
+      });
+      expect(problems).toEqual([]);
+    });
+  });
 });

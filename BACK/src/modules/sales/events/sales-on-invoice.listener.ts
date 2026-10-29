@@ -1,18 +1,15 @@
 import { Injectable } from '@nestjs/common';
-import { OnEvent } from '@nestjs/event-emitter';
+import { OnDomainEvent } from '../../../common/events/on-domain-event.decorator';
 import { SaleOrdersRepository } from '../repositories/sale-orders.repository';
+import type { DomainEvents } from '../../../common/events/domain-events';
 
-interface InvoiceIssuedEvent {
-  tenantId: string;
-  invoiceId: string;
-  saleOrderId: string;
-}
+type InvoiceIssuedEvent = DomainEvents['invoice.issued'];
 
 @Injectable()
 export class SalesOnInvoiceListener {
   constructor(private readonly saleOrdersRepository: SaleOrdersRepository) {}
 
-  @OnEvent('invoice.issued', { suppressErrors: false })
+  @OnDomainEvent('invoice.issued', { suppressErrors: false })
   async handle(event: InvoiceIssuedEvent) {
     if (!event.saleOrderId) return;
     // Move the sale order to INVOICED so the seller can see the billing state

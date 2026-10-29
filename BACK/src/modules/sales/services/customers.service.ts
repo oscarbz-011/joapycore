@@ -4,7 +4,7 @@ import {
   NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
-import { EventEmitter2 } from '@nestjs/event-emitter';
+import { EventBus } from '../../../common/events/event-bus';
 import { CustomersRepository } from '../repositories/customers.repository';
 import { CreateCustomerDto } from '../dto/create-customer.dto';
 import { toTitleCase } from '../../../common/utils/normalize.util';
@@ -53,7 +53,7 @@ const CUSTOMER_ORDER: Record<string, (direction: Direction) => CustomerOrder> =
 export class CustomersService {
   constructor(
     private readonly customersRepository: CustomersRepository,
-    private readonly eventEmitter: EventEmitter2,
+    private readonly eventEmitter: EventBus,
   ) {}
 
   findAll(tenantId: string) {

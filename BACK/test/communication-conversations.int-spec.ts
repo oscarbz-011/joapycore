@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import { ConfigService } from '@nestjs/config';
 import { EventEmitter2 } from '@nestjs/event-emitter';
+import { EventBus } from '../src/common/events/event-bus';
 import { NotFoundException } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import type { CommunicationMessageStatus } from '@prisma/client';
@@ -60,7 +61,7 @@ integration('Communication conversations (isolated PostgreSQL)', () => {
     await prisma.$connect();
     service = new ConversationsService(
       new ConversationsRepository(prisma),
-      new EventEmitter2(),
+      new EventBus(new EventEmitter2()),
     );
     for (const id of [tenantA, tenantB]) {
       await prisma.tenant.create({ data: { id, name: `Conversations ${id}` } });

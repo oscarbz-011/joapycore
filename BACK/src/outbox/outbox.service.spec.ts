@@ -31,10 +31,11 @@ describe('OutboxService', () => {
     const tx = {};
     const when = new Date('2026-09-13T12:00:00Z');
 
+    // La fecha prueba la ida y vuelta por JSON, aunque el evento no la lleve.
     await service.enqueue(tx as never, 't1', 'sale.order.completed', {
       saleOrderId: 'o1',
       when,
-    });
+    } as never);
 
     expect(repo.create).toHaveBeenCalledWith(
       {

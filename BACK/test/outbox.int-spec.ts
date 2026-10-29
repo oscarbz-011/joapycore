@@ -11,6 +11,7 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import { randomUUID } from 'node:crypto';
 import { OutboxRepository } from '../src/outbox/outbox.repository';
 import { OutboxService } from '../src/outbox/outbox.service';
+import type { DomainEventName } from '../src/common/events/domain-events';
 import { PrismaService } from '../src/prisma/prisma.service';
 
 describe('OutboxService (PostgreSQL)', () => {
@@ -18,7 +19,8 @@ describe('OutboxService (PostgreSQL)', () => {
   let events: EventEmitter2;
   let outbox: OutboxService;
   const tenantId = `outbox-test-${randomUUID()}`;
-  const eventName = `test.outbox.${randomUUID()}`;
+  // Un nombre fuera del catálogo: el test prueba la mecánica del outbox.
+  const eventName = `test.outbox.${randomUUID()}` as DomainEventName;
 
   beforeAll(async () => {
     prisma = new PrismaService(new ConfigService(process.env));
@@ -46,7 +48,7 @@ describe('OutboxService (PostgreSQL)', () => {
     });
 
     const id = await prisma.$transaction((tx) =>
-      outbox.enqueue(tx, tenantId, eventName, { value: 42 }),
+      outbox.enqueue(tx, tenantId, eventName, { value: 42 } as never),
     );
 
     await expect(outbox.dispatch(id)).resolves.toBe(false);
@@ -77,7 +79,9 @@ describe('OutboxService (PostgreSQL)', () => {
     let enqueued: string | undefined;
     await expect(
       prisma.$transaction(async (tx) => {
-        enqueued = await outbox.enqueue(tx, tenantId, eventName, { value: 1 });
+        enqueued = await outbox.enqueue(tx, tenantId, eventName, {
+          value: 1,
+        } as never);
         throw new Error('rollback');
       }),
     ).rejects.toThrow('rollback');

@@ -8,6 +8,7 @@
 import 'dotenv/config';
 import { ConfigService } from '@nestjs/config';
 import { EventEmitter2 } from '@nestjs/event-emitter';
+import { EventBus } from '../src/common/events/event-bus';
 import { randomUUID } from 'node:crypto';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { EmployeesRepository } from '../src/modules/hr/repositories/employees.repository';
@@ -61,7 +62,7 @@ describe('LeavesService (PostgreSQL)', () => {
       prisma,
       new LeavesRepository(prisma),
       new EmployeesRepository(prisma),
-      new EventEmitter2(),
+      new EventBus(new EventEmitter2()),
     );
     await cleanup();
   });

@@ -3,7 +3,7 @@ import {
   NotFoundException,
   ServiceUnavailableException,
 } from '@nestjs/common';
-import { EventEmitter2 } from '@nestjs/event-emitter';
+import { EventBus } from '../common/events/event-bus';
 import {
   ContactType,
   ConversationsRepository,
@@ -51,7 +51,7 @@ function contactOf(type: ContactType, customer: CustomerRow) {
 export class ConversationsService {
   constructor(
     private readonly repository: ConversationsRepository,
-    private readonly events: EventEmitter2,
+    private readonly events: EventBus,
   ) {}
 
   private async requireEnabled(tenantId: string) {

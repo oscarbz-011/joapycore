@@ -1,17 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { OnEvent } from '@nestjs/event-emitter';
+import { OnDomainEvent } from '../../../common/events/on-domain-event.decorator';
 import { LoansService } from '../services/loans.service';
+import type { DomainEvents } from '../../../common/events/domain-events';
 
-interface SaleCreditApprovedEvent {
-  tenantId: string;
-  saleOrderId: string;
-}
+type SaleCreditApprovedEvent = DomainEvents['sale.credit.approved'];
 
-interface InvoiceDueDateSelectedEvent {
-  tenantId: string;
-  saleOrderId: string;
-  dueDate: string;
-}
+type InvoiceDueDateSelectedEvent = DomainEvents['invoice.duedate.selected'];
 
 @Injectable()
 export class FinanceOnSaleListener {
@@ -19,7 +13,7 @@ export class FinanceOnSaleListener {
 
   constructor(private readonly loansService: LoansService) {}
 
-  @OnEvent('sale.credit.approved', { suppressErrors: false })
+  @OnDomainEvent('sale.credit.approved', { suppressErrors: false })
   async handle(event: SaleCreditApprovedEvent) {
     await this.loansService.createFromOrder(event.tenantId, event.saleOrderId);
   }
@@ -31,7 +25,7 @@ export class FinanceOnSaleListener {
   // imprime la fecha correcta de la primera cuota.
   // La reprogramación es parte del flujo crítico de emisión: el PDF debe
   // reflejar la misma primera fecha de vencimiento que quedó en las cuotas.
-  @OnEvent('invoice.duedate.selected', { suppressErrors: false })
+  @OnDomainEvent('invoice.duedate.selected', { suppressErrors: false })
   async handleDueDateSelected(event: InvoiceDueDateSelectedEvent) {
     try {
       await this.loansService.rescheduleInstallments(

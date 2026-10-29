@@ -3,7 +3,7 @@ import {
   NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
-import { EventEmitter2 } from '@nestjs/event-emitter';
+import { EventBus } from '../../../common/events/event-bus';
 import { Prisma } from '@prisma/client';
 import type { AuditLogEvent } from '../../../audit/audit-log.event';
 import { FilesService } from '../../../files/files.service';
@@ -32,7 +32,7 @@ export class PreprintedInvoicesService {
     private readonly invoicesRepository: InvoicesRepository,
     private readonly seriesService: BillingSeriesService,
     private readonly filesService: FilesService,
-    private readonly eventEmitter: EventEmitter2,
+    private readonly eventEmitter: EventBus,
   ) {}
 
   /** Datos para imprimir sobre la hoja; cada llamada cuenta como impresión. */

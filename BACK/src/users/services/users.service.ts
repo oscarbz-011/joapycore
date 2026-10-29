@@ -9,7 +9,7 @@ import {
 import * as bcrypt from 'bcryptjs';
 import { Prisma } from '@prisma/client';
 import { UserStatus } from '@prisma/client';
-import { EventEmitter2 } from '@nestjs/event-emitter';
+import { EventBus } from '../../common/events/event-bus';
 import { RolesRepository } from '../repositories/roles.repository';
 import { UsersRepository } from '../repositories/users.repository';
 import type { AuditLogEvent } from '../../audit/audit-log.event';
@@ -41,7 +41,7 @@ export class UsersService {
   constructor(
     private readonly usersRepository: UsersRepository,
     private readonly rolesRepository: RolesRepository,
-    private readonly eventEmitter: EventEmitter2,
+    private readonly eventEmitter: EventBus,
   ) {}
 
   async list(tenantId: string) {

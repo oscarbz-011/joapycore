@@ -9,7 +9,7 @@ import { RolesRepository } from '../repositories/roles.repository';
 import { AssignPermissionsDto } from '../dto/assign-permissions.dto';
 import { CreateRoleDto } from '../dto/create-role.dto';
 import { UpdateRoleDto } from '../dto/update-role.dto';
-import { EventEmitter2 } from '@nestjs/event-emitter';
+import { EventBus } from '../../common/events/event-bus';
 import {
   SESSION_INVALIDATE_EVENT,
   type SessionInvalidateEvent,
@@ -19,7 +19,7 @@ import {
 export class RolesService {
   constructor(
     private readonly rolesRepository: RolesRepository,
-    private readonly eventEmitter: EventEmitter2,
+    private readonly eventEmitter: EventBus,
   ) {}
 
   // Cambiar un rol afecta a todos los usuarios que lo tienen: se descarta el

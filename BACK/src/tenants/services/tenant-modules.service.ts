@@ -3,7 +3,7 @@ import {
   Injectable,
   UnprocessableEntityException,
 } from '@nestjs/common';
-import { EventEmitter2 } from '@nestjs/event-emitter';
+import { EventBus } from '../../common/events/event-bus';
 import {
   ALL_TENANT_MODULES,
   MODULE_CATALOG,
@@ -16,7 +16,7 @@ export class TenantModulesService {
   constructor(
     private readonly tenantModulesRepository: TenantModulesRepository,
     private readonly tenantModulesCache: TenantModulesCache,
-    private readonly eventEmitter: EventEmitter2,
+    private readonly eventEmitter: EventBus,
   ) {}
 
   async list(tenantId: string) {

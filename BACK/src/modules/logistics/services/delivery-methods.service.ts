@@ -5,7 +5,7 @@ import {
   NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
-import { EventEmitter2 } from '@nestjs/event-emitter';
+import { EventBus } from '../../../common/events/event-bus';
 import type { AuditLogEvent } from '../../../audit/audit-log.event';
 import {
   DecideSellerDeliveryDto,
@@ -74,7 +74,7 @@ export class DeliveryMethodsService {
     private readonly sources: LogisticsSourcesRepository,
     private readonly trackingEvents: DeliveryTrackingEventsRepository,
     private readonly deliveryNotesService: DeliveryNotesService,
-    private readonly eventEmitter: EventEmitter2,
+    private readonly eventEmitter: EventBus,
   ) {}
 
   /** La entrega de un pedido, para logística o para el vendedor del pedido. */

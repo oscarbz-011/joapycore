@@ -1,4 +1,4 @@
-import { EventEmitter2 } from '@nestjs/event-emitter';
+import { EventBus } from '../../../common/events/event-bus';
 import { PaymentsOnInstallmentListener } from './payments-on-installment.listener';
 import { AccountsReceivableRepository } from '../repositories/accounts-receivable.repository';
 import { PaymentSourcesRepository } from '../repositories/payment-sources.repository';
@@ -75,7 +75,7 @@ describe('PaymentsOnInstallmentListener', () => {
     listener = new PaymentsOnInstallmentListener(
       new PaymentSourcesRepository(prisma as any),
       arRepository as any,
-      eventEmitter as unknown as EventEmitter2,
+      eventEmitter as unknown as EventBus,
     );
   });
 

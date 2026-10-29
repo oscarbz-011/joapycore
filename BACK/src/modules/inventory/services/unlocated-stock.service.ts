@@ -3,7 +3,7 @@ import {
   NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
-import { EventEmitter2 } from '@nestjs/event-emitter';
+import { EventBus } from '../../../common/events/event-bus';
 import { MovementReason, Prisma, StockMovementType } from '@prisma/client';
 import { randomUUID } from 'crypto';
 import { PrismaService } from '../../../prisma/prisma.service';
@@ -34,7 +34,7 @@ export class UnlocatedStockService {
     private readonly productUnitsRepository: ProductUnitsRepository,
     private readonly stockMovementsRepository: StockMovementsRepository,
     private readonly warehousesRepository: WarehousesRepository,
-    private readonly eventEmitter: EventEmitter2,
+    private readonly eventEmitter: EventBus,
   ) {}
 
   async assign(tenantId: string, dto: AssignUnlocatedStockDto) {

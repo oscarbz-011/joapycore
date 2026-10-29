@@ -1,12 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { OnEvent } from '@nestjs/event-emitter';
+import { OnDomainEvent } from '../../../common/events/on-domain-event.decorator';
 import { DeliveryRoutesService } from '../services/delivery-routes.service';
+import type { DomainEvents } from '../../../common/events/domain-events';
 
-interface DeliveryNoteDeliveredEvent {
-  tenantId: string;
-  deliveryNoteId: string;
-  userId?: string;
-}
+type DeliveryNoteDeliveredEvent = DomainEvents['delivery.note.delivered'];
 
 /**
  * Una entrega se puede marcar entregada desde varios lugares (el repartidor,
@@ -19,7 +16,7 @@ export class LogisticsRouteProgressListener {
 
   constructor(private readonly routes: DeliveryRoutesService) {}
 
-  @OnEvent('delivery.note.delivered')
+  @OnDomainEvent('delivery.note.delivered')
   async handle(event: DeliveryNoteDeliveredEvent) {
     try {
       await this.routes.stopDelivered(

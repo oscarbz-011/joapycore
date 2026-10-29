@@ -3,7 +3,7 @@ import {
   NotFoundException,
   ValidationPipe,
 } from '@nestjs/common';
-import { EventEmitter2 } from '@nestjs/event-emitter';
+import { EventBus } from '../common/events/event-bus';
 import {
   CalendarEventDto,
   CalendarRangeDto,
@@ -51,7 +51,7 @@ describe('CalendarService', () => {
     events = { emit: jest.fn() };
     service = new CalendarService(
       repository as unknown as CalendarRepository,
-      events as unknown as EventEmitter2,
+      events as unknown as EventBus,
     );
   });
 

@@ -2,6 +2,10 @@ import { Injectable, Logger } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { Prisma } from '@prisma/client';
+import type {
+  DomainEventName,
+  DomainEvents,
+} from '../common/events/domain-events';
 import { OutboxRepository } from './outbox.repository';
 
 export const OUTBOX_MAX_ATTEMPTS = 10;
@@ -45,11 +49,11 @@ export class OutboxService {
     private readonly eventEmitter: EventEmitter2,
   ) {}
 
-  async enqueue(
+  async enqueue<K extends DomainEventName>(
     client: Prisma.TransactionClient,
     tenantId: string,
-    eventName: string,
-    payload: object,
+    eventName: K,
+    payload: DomainEvents[K],
   ): Promise<string> {
     // Ida y vuelta por JSON: el payload que reciben los listeners es el mismo
     // en el primer intento y en los reintentos (fechas y decimales como texto).

@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import { ConfigService } from '@nestjs/config';
 import { EventEmitter2 } from '@nestjs/event-emitter';
+import { EventBus } from '../src/common/events/event-bus';
 import { createHash, randomUUID } from 'node:crypto';
 import { NotFoundException } from '@nestjs/common';
 import { Queue } from 'bullmq';
@@ -91,7 +92,7 @@ integration(
         repository,
         files as unknown as FilesService,
         transport as unknown as CommunicationsEmailProvider,
-        events,
+        new EventBus(events),
       );
       hub = new CommunicationHubService(
         prisma,
@@ -100,7 +101,7 @@ integration(
             .fn()
             .mockResolvedValue({ fromEmail: 'no-reply@example.test' }),
         } as unknown as IntegrationsService,
-        events,
+        new EventBus(events),
         core,
       );
       outbox = new OutboxService(new OutboxRepository(prisma), events);
@@ -255,6 +256,10 @@ integration(
         outbox.enqueue(tx, tenantId, 'invoice.issued', {
           tenantId,
           invoiceId: invoice.id,
+          saleOrderId: null,
+          paymentCondition: 'CASH',
+          total: 0,
+          dueDate: null,
           issuedById: userId,
         }),
       );

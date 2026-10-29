@@ -1325,6 +1325,7 @@ describe('InvoiceOnIssueListener', () => {
         tenantId: 'tenant-1',
         invoiceId: 'inv-1',
         saleOrderId: 'order-1',
+        paymentCondition: 'CASH',
         total: 2500000,
         dueDate: null,
         attemptAt: new Date('2026-09-23T12:00:00.000Z'),

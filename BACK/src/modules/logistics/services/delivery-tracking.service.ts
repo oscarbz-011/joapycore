@@ -4,7 +4,7 @@ import {
   NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
-import { EventEmitter2 } from '@nestjs/event-emitter';
+import { EventBus } from '../../../common/events/event-bus';
 import { DeliveryAssignmentMode, DeliveryNoteStatus } from '@prisma/client';
 import { LogisticsSourcesRepository } from '../repositories/logistics-sources.repository';
 import { DeliveryNotesRepository } from '../repositories/delivery-notes.repository';
@@ -29,7 +29,7 @@ export class DeliveryTrackingService {
     private readonly deliveryNotesRepository: DeliveryNotesRepository,
     private readonly trackingEventsRepository: DeliveryTrackingEventsRepository,
     private readonly deliveryNotesService: DeliveryNotesService,
-    private readonly eventEmitter: EventEmitter2,
+    private readonly eventEmitter: EventBus,
     private readonly deliveryRoutesService: DeliveryRoutesService,
   ) {}
 

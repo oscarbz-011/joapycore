@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { OnEvent } from '@nestjs/event-emitter';
+import { OnDomainEvent } from '../../../common/events/on-domain-event.decorator';
 import { PurchaseReceiptsRepository } from '../repositories/purchase-receipts.repository';
 import { AccountsPayableRepository } from '../repositories/accounts-payable.repository';
 import { PurchaseOrdersRepository } from '../repositories/purchase-orders.repository';
@@ -9,13 +9,9 @@ import {
   advanceToApply,
   payableStatusAfterAdvance,
 } from '../advance.util';
+import type { DomainEvents } from '../../../common/events/domain-events';
 
-interface PurchaseReceiptCreatedEvent {
-  tenantId: string;
-  purchaseOrderId: string;
-  purchaseReceiptId: string;
-  warehouseId?: string;
-}
+type PurchaseReceiptCreatedEvent = DomainEvents['purchase.receipt.created'];
 
 const DAY_MS = 86_400_000;
 
@@ -34,7 +30,7 @@ export class ProcurementOnReceiptListener {
     private readonly prisma: PrismaService,
   ) {}
 
-  @OnEvent('purchase.receipt.created')
+  @OnDomainEvent('purchase.receipt.created')
   async handle(event: PurchaseReceiptCreatedEvent) {
     try {
       await this.process(event);

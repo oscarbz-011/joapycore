@@ -10,6 +10,7 @@ import 'dotenv/config';
 import { UnprocessableEntityException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { EventEmitter2 } from '@nestjs/event-emitter';
+import { EventBus } from '../src/common/events/event-bus';
 import { randomUUID } from 'node:crypto';
 import { ProductUnitsRepository } from '../src/modules/inventory/repositories/product-units.repository';
 import { StockLocationsRepository } from '../src/modules/inventory/repositories/stock-locations.repository';
@@ -52,7 +53,7 @@ describe('Entrega → descuento de stock (PostgreSQL)', () => {
       { findManyByIds: jest.fn() },
       {} as never,
       {} as never,
-      events,
+      new EventBus(events),
       new StockLedgerService(
         new StockMovementsRepository(prisma),
         new ProductUnitsRepository(prisma),
@@ -66,7 +67,7 @@ describe('Entrega → descuento de stock (PostgreSQL)', () => {
     );
     notes = new DeliveryNotesService(
       new DeliveryNotesRepository(prisma),
-      events,
+      new EventBus(events),
       new LogisticsSourcesRepository(prisma),
       prisma,
       outbox,

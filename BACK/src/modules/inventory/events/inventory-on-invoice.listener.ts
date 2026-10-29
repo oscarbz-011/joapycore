@@ -1,14 +1,12 @@
 import { Injectable } from '@nestjs/common';
-import { OnEvent } from '@nestjs/event-emitter';
+import { OnDomainEvent } from '../../../common/events/on-domain-event.decorator';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { ProductUnitsRepository } from '../repositories/product-units.repository';
 import { StockMovementsRepository } from '../repositories/stock-movements.repository';
 import { StockSourcesRepository } from '../repositories/stock-sources.repository';
+import type { DomainEvents } from '../../../common/events/domain-events';
 
-interface InvoiceCancelledEvent {
-  tenantId: string;
-  invoiceId: string;
-}
+type InvoiceCancelledEvent = DomainEvents['invoice.cancelled'];
 
 @Injectable()
 export class InventoryOnInvoiceListener {
@@ -20,7 +18,7 @@ export class InventoryOnInvoiceListener {
     private readonly productUnits: ProductUnitsRepository,
   ) {}
 
-  @OnEvent('invoice.cancelled')
+  @OnDomainEvent('invoice.cancelled')
   async handle(event: InvoiceCancelledEvent) {
     const { tenantId, invoiceId } = event;
 

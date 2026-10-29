@@ -1,18 +1,14 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { OnEvent } from '@nestjs/event-emitter';
+import { OnDomainEvent } from '../../../common/events/on-domain-event.decorator';
 import { MovementReason } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { ProductUnitsRepository } from '../repositories/product-units.repository';
 import { StockMovementsRepository } from '../repositories/stock-movements.repository';
 import { StockSourcesRepository } from '../repositories/stock-sources.repository';
 import { StockEntryService } from '../services/stock-entry.service';
+import type { DomainEvents } from '../../../common/events/domain-events';
 
-interface PurchaseReceiptCreatedEvent {
-  tenantId: string;
-  purchaseOrderId: string;
-  purchaseReceiptId: string;
-  warehouseId: string;
-}
+type PurchaseReceiptCreatedEvent = DomainEvents['purchase.receipt.created'];
 
 // Único lugar donde una recepción de compra se convierte en stock real —
 // procurement solo emite el evento, nunca toca StockMovement/ProductUnit/
@@ -30,7 +26,7 @@ export class InventoryOnPurchaseReceiptListener {
     private readonly productUnits: ProductUnitsRepository,
   ) {}
 
-  @OnEvent('purchase.receipt.created')
+  @OnDomainEvent('purchase.receipt.created')
   async handle(event: PurchaseReceiptCreatedEvent) {
     try {
       await this.process(event);

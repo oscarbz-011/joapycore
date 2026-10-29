@@ -3,7 +3,7 @@ import {
   NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
-import { EventEmitter2 } from '@nestjs/event-emitter';
+import { EventBus } from '../../../common/events/event-bus';
 import { Prisma } from '@prisma/client';
 import { normalizePriceTiers } from '../commercial-terms.util';
 import {
@@ -47,7 +47,7 @@ export class SupplierCatalogService {
   constructor(
     private readonly repository: SupplierCatalogRepository,
     private readonly parser: CatalogParserService,
-    private readonly eventEmitter: EventEmitter2,
+    private readonly eventEmitter: EventBus,
   ) {}
 
   async findBySupplier(

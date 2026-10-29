@@ -4,7 +4,7 @@ import {
   NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
-import { EventEmitter2 } from '@nestjs/event-emitter';
+import { EventBus } from '../../../common/events/event-bus';
 import { ProductStatus, PurchaseOrderStatus } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
 import type { PrismaClientOrTx } from '../../../prisma/types';
@@ -54,7 +54,7 @@ export class PurchaseOrdersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly purchaseOrdersRepository: PurchaseOrdersRepository,
-    private readonly eventEmitter: EventEmitter2,
+    private readonly eventEmitter: EventBus,
   ) {}
 
   findAll(tenantId: string) {

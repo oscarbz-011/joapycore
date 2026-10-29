@@ -3,7 +3,7 @@ import {
   NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
-import { EventEmitter2 } from '@nestjs/event-emitter';
+import { EventBus } from '../../../common/events/event-bus';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { CreditNotesRepository } from '../repositories/credit-notes.repository';
@@ -30,7 +30,7 @@ export class InvoicesService {
     private readonly prisma: PrismaService,
     private readonly invoicesRepository: InvoicesRepository,
     private readonly creditNotesRepository: CreditNotesRepository,
-    private readonly eventEmitter: EventEmitter2,
+    private readonly eventEmitter: EventBus,
     private readonly outbox: OutboxService,
     private readonly seriesService: BillingSeriesService,
   ) {}
@@ -200,7 +200,11 @@ export class InvoicesService {
       // Los listeners críticos declaran suppressErrors:false para que
       // emitAsync rechace realmente si falla la reprogramación o el renderer.
       try {
-        if (dto.paymentCondition === 'CREDIT' && dto.dueDate) {
+        if (
+          dto.paymentCondition === 'CREDIT' &&
+          dto.dueDate &&
+          invoice.saleOrderId
+        ) {
           await this.eventEmitter.emitAsync('invoice.duedate.selected', {
             tenantId,
             saleOrderId: invoice.saleOrderId,
