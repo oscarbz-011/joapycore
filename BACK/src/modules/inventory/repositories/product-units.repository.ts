@@ -18,6 +18,24 @@ export class ProductUnitsRepository {
     });
   }
 
+  // En stock en el depósito y sin asignar a una venta.
+  findFreeInWarehouse(
+    tenantId: string,
+    warehouseId: string,
+    client: PrismaClientOrTx = this.prisma,
+  ) {
+    return client.productUnit.findMany({
+      where: {
+        tenantId,
+        warehouseId,
+        status: 'IN_STOCK',
+        saleOrderItemId: null,
+      },
+      select: { productId: true, serialNumber: true },
+      orderBy: { serialNumber: 'asc' },
+    });
+  }
+
   findBySerial(tenantId: string, productId: string, serialNumber: string) {
     return this.prisma.productUnit.findUnique({
       where: {

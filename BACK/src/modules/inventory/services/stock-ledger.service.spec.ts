@@ -370,4 +370,33 @@ describe('StockLedgerService', () => {
       ).rejects.toThrow('inactivo');
     });
   });
+
+  it('lists what a warehouse has, with its free serial numbers', async () => {
+    const ledger = new StockLedgerService(
+      {
+        sumByWarehouse: jest.fn().mockResolvedValue(
+          new Map([
+            ['p-rice', 5],
+            ['p-tv', 2],
+            ['p-gone', 0],
+          ]),
+        ),
+      } as any,
+      {
+        findFreeInWarehouse: jest.fn().mockResolvedValue([
+          { productId: 'p-tv', serialNumber: 'SN-1' },
+          { productId: 'p-tv', serialNumber: 'SN-2' },
+        ]),
+      } as any,
+      {} as any,
+      {} as any,
+      {} as any,
+    );
+    await expect(
+      ledger.availableIn({} as any, 'tenant-1', 'wh-a'),
+    ).resolves.toEqual([
+      { productId: 'p-rice', quantity: 5, serialNumbers: [] },
+      { productId: 'p-tv', quantity: 2, serialNumbers: ['SN-1', 'SN-2'] },
+    ]);
+  });
 });

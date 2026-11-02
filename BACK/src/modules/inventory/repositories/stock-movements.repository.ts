@@ -27,6 +27,20 @@ export class StockMovementsRepository {
     return client.stockMovement.delete({ where: { id } });
   }
 
+  /** Saldo de cada producto en un depósito (incluye las reservas, que restan). */
+  async sumByWarehouse(
+    tenantId: string,
+    warehouseId: string,
+    client: PrismaClientOrTx = this.prisma,
+  ): Promise<Map<string, number>> {
+    const rows = await client.stockMovement.groupBy({
+      by: ['productId'],
+      where: { tenantId, warehouseId },
+      _sum: { quantity: true },
+    });
+    return new Map(rows.map((r) => [r.productId, r._sum.quantity ?? 0]));
+  }
+
   /** ¿Existe algún movimiento que cumpla el filtro? (chequeos de idempotencia) */
   async exists(
     where: Prisma.StockMovementWhereInput,

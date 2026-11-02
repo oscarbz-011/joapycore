@@ -40,6 +40,14 @@ export interface StockTransfer {
   lines: TransferLine[];
 }
 
+/** Lo que hay disponible de un producto en un depósito. */
+export interface AvailableStock {
+  productId: string;
+  quantity: number;
+  /** N/S en stock y sin asignar a una venta (solo serializados). */
+  serialNumbers: string[];
+}
+
 /** Ítem ya guardado del que se pueden liberar reservas. */
 export interface ReservedItem {
   id: string;
@@ -131,4 +139,10 @@ export interface StockLedger {
     tenantId: string,
     transfer: StockTransfer,
   ): Promise<void>;
+  /** Productos con saldo positivo en el depósito. */
+  availableIn(
+    tx: Prisma.TransactionClient,
+    tenantId: string,
+    warehouseId: string,
+  ): Promise<AvailableStock[]>;
 }

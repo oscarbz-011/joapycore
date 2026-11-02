@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 import type {
+  AvailableStock,
   ReservedItem,
   ReturnableItem,
   ReturnLine,
@@ -367,6 +368,31 @@ export class StockLedgerService implements StockLedger {
         );
       }
     }
+  }
+
+  async availableIn(
+    tx: Prisma.TransactionClient,
+    tenantId: string,
+    warehouseId: string,
+  ): Promise<AvailableStock[]> {
+    const [balances, units] = await Promise.all([
+      this.stockMovements.sumByWarehouse(tenantId, warehouseId, tx),
+      this.productUnits.findFreeInWarehouse(tenantId, warehouseId, tx),
+    ]);
+    const serials = new Map<string, string[]>();
+    for (const unit of units) {
+      serials.set(unit.productId, [
+        ...(serials.get(unit.productId) ?? []),
+        unit.serialNumber,
+      ]);
+    }
+    return [...balances]
+      .filter(([, quantity]) => quantity > 0)
+      .map(([productId, quantity]) => ({
+        productId,
+        quantity,
+        serialNumbers: serials.get(productId) ?? [],
+      }));
   }
 
   private async writeMovements(

@@ -34,6 +34,7 @@ import { RemissionNotesRepository } from '../repositories/remission-notes.reposi
 import {
   buildSaleLines,
   buildTransferLines,
+  goodsDescription,
   type RemissionLine,
   remitableItems,
   transportDates,
@@ -181,6 +182,42 @@ export class RemissionNotesService {
       })),
       series,
     };
+  }
+
+  /** Lo que se puede trasladar desde un depósito: saldo y N/S libres. */
+  async transferStock(tenantId: string, warehouseId: string) {
+    const [warehouse] = await this.sources.findWarehousesForRemission(
+      tenantId,
+      [warehouseId],
+    );
+    if (!warehouse) throw new NotFoundException('Depósito no encontrado');
+    const available = await this.prisma.$transaction((tx) =>
+      this.stockLedger.availableIn(tx, tenantId, warehouseId),
+    );
+    const products = await this.sources.findProductsForRemission(
+      tenantId,
+      available.map((a) => a.productId),
+    );
+    const byId = new Map(products.map((p) => [p.id, p]));
+    return available
+      .flatMap((stock) => {
+        const product = byId.get(stock.productId);
+        if (!product) return [];
+        return [
+          {
+            productId: product.id,
+            description: goodsDescription(product),
+            unit: product.unit,
+            isSerialized: product.isSerialized,
+            quantity: product.isSerialized
+              ? stock.serialNumbers.length
+              : stock.quantity,
+            serialNumbers: product.isSerialized ? stock.serialNumbers : [],
+          },
+        ];
+      })
+      .filter((row) => row.quantity > 0)
+      .sort((a, b) => a.description.localeCompare(b.description, 'es'));
   }
 
   /** Lo que se puede enviar de una factura y con qué serie. */

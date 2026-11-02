@@ -272,6 +272,25 @@ describe('RemissionNotesService (PostgreSQL)', () => {
     expect(note.events.map((e) => e.type)).toEqual(['REMISSION_NOTE_ISSUED']);
   });
 
+  it('lists what the origin has before the transfer', async () => {
+    const stock = await service.transferStock(tenantId, fromWarehouse);
+    expect(stock).toEqual([
+      expect.objectContaining({
+        productId: rice,
+        quantity: 10,
+        isSerialized: false,
+      }),
+      expect.objectContaining({
+        productId: tv,
+        quantity: 2,
+        serialNumbers: [serial(1), serial(2)],
+      }),
+    ]);
+    await expect(
+      service.transferStock(otherTenantId, fromWarehouse),
+    ).rejects.toThrow('Depósito no encontrado');
+  });
+
   it('saves nothing when the origin does not have the goods', async () => {
     await expect(
       service.issueTransfer(

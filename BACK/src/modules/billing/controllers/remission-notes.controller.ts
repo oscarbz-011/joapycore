@@ -5,6 +5,7 @@ import {
   Param,
   ParseUUIDPipe,
   Post,
+  Query,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CurrentTenant } from '../../../common/decorators/current-tenant.decorator';
@@ -41,6 +42,16 @@ export class RemissionNotesController {
   })
   transferOptions(@CurrentTenant() tenantId: string) {
     return this.remissions.transferOptions(tenantId);
+  }
+
+  @Get('remission-notes/transfer-stock')
+  @Permissions('billing:issue', 'inventory:movements:create')
+  @ApiOperation({ summary: 'Mercadería disponible en el depósito de origen' })
+  transferStock(
+    @CurrentTenant() tenantId: string,
+    @Query('warehouseId', ParseUUIDPipe) warehouseId: string,
+  ) {
+    return this.remissions.transferStock(tenantId, warehouseId);
   }
 
   @Post('remission-notes/transfer')

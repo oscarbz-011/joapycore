@@ -547,6 +547,35 @@ describe('RemissionNotesService', () => {
     });
   });
 
+  it('lists what can leave the origin, counting serialized goods by their free units', async () => {
+    (stockLedger as any).availableIn = jest.fn().mockResolvedValue([
+      { productId: 'p-tv', quantity: 3, serialNumbers: ['SN-1', 'SN-2'] },
+      { productId: 'p-rice', quantity: 8, serialNumbers: [] },
+    ]);
+    await expect(service.transferStock('tenant-1', 'wh-a')).resolves.toEqual([
+      {
+        productId: 'p-rice',
+        description: 'Arroz',
+        unit: 'kg',
+        isSerialized: false,
+        quantity: 8,
+        serialNumbers: [],
+      },
+      {
+        productId: 'p-tv',
+        description: 'Televisor LG',
+        unit: 'unidad',
+        isSerialized: true,
+        quantity: 2,
+        serialNumbers: ['SN-1', 'SN-2'],
+      },
+    ]);
+    sources.findWarehousesForRemission.mockResolvedValue([]);
+    await expect(
+      service.transferStock('tenant-1', 'wh-x'),
+    ).rejects.toBeInstanceOf(NotFoundException);
+  });
+
   it('offers the warehouses with the address of their branch', async () => {
     sources.findWarehousesForRemission.mockResolvedValue([
       {
