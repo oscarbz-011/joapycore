@@ -15,6 +15,7 @@ import { randomUUID } from 'node:crypto';
 import { ProductUnitsRepository } from '../src/modules/inventory/repositories/product-units.repository';
 import { StockLocationsRepository } from '../src/modules/inventory/repositories/stock-locations.repository';
 import { StockSourcesRepository } from '../src/modules/inventory/repositories/stock-sources.repository';
+import { ProductsRepository } from '../src/modules/inventory/repositories/products.repository';
 import { StockMovementsRepository } from '../src/modules/inventory/repositories/stock-movements.repository';
 import { StockLedgerService } from '../src/modules/inventory/services/stock-ledger.service';
 import { DeliveryNotesRepository } from '../src/modules/logistics/repositories/delivery-notes.repository';
@@ -61,6 +62,7 @@ describe('Entrega → descuento de stock (PostgreSQL)', () => {
         new ProductUnitsRepository(prisma),
         new StockLocationsRepository(prisma),
         new StockSourcesRepository(prisma),
+        new ProductsRepository(prisma),
       ),
       outbox,
       new CreditSourcesRepository(prisma),

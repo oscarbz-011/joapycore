@@ -315,6 +315,56 @@ export class InvoicesRepository {
     });
   }
 
+  // Lo que hace falta para enviar la mercadería con una nota de remisión.
+  findForRemission(
+    tenantId: string,
+    id: string,
+    client: PrismaClientOrTx = this.prisma,
+  ) {
+    return client.invoice.findFirst({
+      where: { id, tenantId },
+      select: {
+        id: true,
+        status: true,
+        invoiceType: true,
+        anonymousBuyer: true,
+        invoicePrefix: true,
+        invoiceNumber: true,
+        timbrado: true,
+        issuedAt: true,
+        series: { select: { branchId: true } },
+        saleOrder: {
+          select: {
+            branchId: true,
+            customer: {
+              select: {
+                id: true,
+                firstName: true,
+                secondFirstName: true,
+                lastName: true,
+                secondLastName: true,
+                documentType: true,
+                documentNumber: true,
+                taxpayerType: true,
+                address: true,
+                city: true,
+              },
+            },
+          },
+        },
+        items: {
+          select: {
+            id: true,
+            description: true,
+            quantity: true,
+            saleOrderItemId: true,
+          },
+          orderBy: { id: 'asc' },
+        },
+      },
+    });
+  }
+
   // Lo que hace falta para acreditar o anular una factura.
   findForCredit(
     tenantId: string,

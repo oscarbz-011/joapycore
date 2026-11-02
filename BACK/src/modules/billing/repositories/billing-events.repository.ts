@@ -10,9 +10,10 @@ const eventSelect = {
   userId: true,
   createdAt: true,
   creditNoteId: true,
+  remissionNoteId: true,
 } satisfies Prisma.BillingDocumentEventSelect;
 
-/** Historial fiscal de facturas y notas de crédito. */
+/** Historial fiscal de facturas, notas de crédito y notas de remisión. */
 @Injectable()
 export class BillingEventsRepository {
   constructor(private readonly prisma: PrismaService) {}
@@ -23,6 +24,7 @@ export class BillingEventsRepository {
       type: BillingEventType;
       invoiceId?: string | null;
       creditNoteId?: string | null;
+      remissionNoteId?: string | null;
       userId?: string | null;
       detail?: Prisma.InputJsonValue;
     },
@@ -34,6 +36,7 @@ export class BillingEventsRepository {
         type: data.type,
         invoiceId: data.invoiceId ?? null,
         creditNoteId: data.creditNoteId ?? null,
+        remissionNoteId: data.remissionNoteId ?? null,
         userId: data.userId ?? null,
         detail: data.detail,
       },
@@ -52,6 +55,14 @@ export class BillingEventsRepository {
   findByCreditNote(tenantId: string, creditNoteId: string) {
     return this.prisma.billingDocumentEvent.findMany({
       where: { tenantId, creditNoteId },
+      select: eventSelect,
+      orderBy: { createdAt: 'asc' },
+    });
+  }
+
+  findByRemissionNote(tenantId: string, remissionNoteId: string) {
+    return this.prisma.billingDocumentEvent.findMany({
+      where: { tenantId, remissionNoteId },
       select: eventSelect,
       orderBy: { createdAt: 'asc' },
     });

@@ -17,6 +17,8 @@ export const billingManifest = defineModule({
     'CustomerCreditEntry',
     'BillingRefund',
     'BillingDocumentEvent',
+    'RemissionNote',
+    'RemissionNoteItem',
     'BillingSeries',
     'BillingVoidedNumber',
   ],

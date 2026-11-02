@@ -302,6 +302,35 @@ enum InvoiceType {
 enum BillingDocumentType {
   INVOICE
   CREDIT_NOTE
+  REMISSION_NOTE
+}
+
+// Motivos de traslado del art. 32 del Decreto 6539/05 (los mismos que usa la
+// nota de remisión electrónica).
+enum RemissionMotive {
+  SALE
+  CONSIGNMENT
+  EXPORT
+  PURCHASE
+  IMPORT
+  RETURN
+  BRANCH_TRANSFER
+  TRANSFORMATION
+  REPAIR
+  MOBILE_ISSUER
+  EXHIBITION
+  TRADE_FAIR
+  OTHER
+}
+
+enum RemissionNoteStatus {
+  ISSUED
+  VOIDED
+}
+
+enum TransportType {
+  OWN
+  THIRD_PARTY
 }
 
 // Quién numera y qué vale como comprobante: PREPRINTED = talonario de
@@ -343,6 +372,7 @@ enum BillingEventType {
   SCAN_REMOVED
   VOIDED
   CREDIT_NOTE_ISSUED
+  REMISSION_NOTE_ISSUED
   REFUNDED
   CUSTOMER_CREDITED
 }
@@ -618,6 +648,7 @@ model Tenant {
   customerCreditEntries      CustomerCreditEntry[]
   billingRefunds             BillingRefund[]
   billingDocumentEvents      BillingDocumentEvent[]
+  remissionNotes             RemissionNote[]
 
   @@map("tenants")
 }
@@ -687,6 +718,7 @@ model Branch {
   posTerminals    PosTerminal[]
   billingSeries   BillingSeries[]
   paymentReceipts PaymentReceipt[]
+  remissionNotes  RemissionNote[]
 
   @@unique([tenantId, name])
   @@map("branches")
@@ -711,6 +743,8 @@ model Warehouse {
   purchaseReceipts PurchaseReceipt[]
   productionOrders ProductionOrder[]
   productUnits     ProductUnit[]
+  remissionsOut    RemissionNote[]   @relation("RemissionFromWarehouse")
+  remissionsIn     RemissionNote[]   @relation("RemissionToWarehouse")
 
   @@unique([tenantId, name])
   @@map("warehouses")
@@ -944,6 +978,7 @@ model Product {
   category             Category?             @relation(fields: [categoryId], references: [id])
   brand                Brand?                @relation(fields: [brandId], references: [id])
   units                ProductUnit[]
+  remissionItems       RemissionNoteItem[]
   productBatches       ProductBatch[]
   stockMovements       StockMovement[]
   purchaseOrderItems   PurchaseOrderItem[]
@@ -1451,6 +1486,7 @@ model Customer {
   paymentReceipts    PaymentReceipt[]
   delinquencyReports DelinquencyReport[]
   creditNotes        CreditNote[]
+  remissionNotes     RemissionNote[]
   creditEntries      CustomerCreditEntry[]
 
   @@unique([tenantId, customerCode])
@@ -1899,6 +1935,7 @@ model Invoice {
   items              InvoiceItem[]
   accountsReceivable AccountsReceivable?
   creditNotes        CreditNote[]
+  remissionNotes     RemissionNote[]
   voidedSheets       BillingVoidedNumber[]
   events             BillingDocumentEvent[]
   refunds            BillingRefund[]
@@ -1939,12 +1976,13 @@ model BillingSeries {
   createdAt       DateTime            @default(now()) @map("created_at")
   updatedAt       DateTime            @updatedAt @map("updated_at")
 
-  tenant        Tenant                @relation(fields: [tenantId], references: [id])
-  branch        Branch                @relation(fields: [branchId], references: [id])
-  invoices      Invoice[]
-  creditNotes   CreditNote[]
-  posTerminals  PosTerminal[]
-  voidedNumbers BillingVoidedNumber[]
+  tenant         Tenant                @relation(fields: [tenantId], references: [id])
+  branch         Branch                @relation(fields: [branchId], references: [id])
+  invoices       Invoice[]
+  creditNotes    CreditNote[]
+  remissionNotes RemissionNote[]
+  posTerminals   PosTerminal[]
+  voidedNumbers  BillingVoidedNumber[]
 
   @@unique([tenantId, timbrado, establecimiento, puntoExpedicion, documentType, serieCode])
   @@index([tenantId, branchId, documentType, isActive])
@@ -1993,8 +2031,9 @@ model InvoiceItem {
   // devuelve una nota de crédito.
   saleOrderItemId String? @map("sale_order_item_id")
 
-  invoice         Invoice          @relation(fields: [invoiceId], references: [id])
+  invoice         Invoice             @relation(fields: [invoiceId], references: [id])
   creditNoteItems CreditNoteItem[]
+  remissionItems  RemissionNoteItem[]
 
   @@index([invoiceId])
   @@map("invoice_items")
@@ -2124,22 +2163,127 @@ model BillingRefund {
 
 // Historial fiscal de una factura o nota de crédito.
 model BillingDocumentEvent {
-  id           String           @id @default(uuid())
-  tenantId     String           @map("tenant_id")
-  invoiceId    String?          @map("invoice_id")
-  creditNoteId String?          @map("credit_note_id")
-  type         BillingEventType
-  detail       Json?
-  userId       String?          @map("user_id")
-  createdAt    DateTime         @default(now()) @map("created_at")
+  id              String           @id @default(uuid())
+  tenantId        String           @map("tenant_id")
+  invoiceId       String?          @map("invoice_id")
+  creditNoteId    String?          @map("credit_note_id")
+  remissionNoteId String?          @map("remission_note_id")
+  type            BillingEventType
+  detail          Json?
+  userId          String?          @map("user_id")
+  createdAt       DateTime         @default(now()) @map("created_at")
 
-  tenant     Tenant      @relation(fields: [tenantId], references: [id])
-  invoice    Invoice?    @relation(fields: [invoiceId], references: [id])
-  creditNote CreditNote? @relation(fields: [creditNoteId], references: [id])
+  tenant        Tenant         @relation(fields: [tenantId], references: [id])
+  invoice       Invoice?       @relation(fields: [invoiceId], references: [id])
+  creditNote    CreditNote?    @relation(fields: [creditNoteId], references: [id])
+  remissionNote RemissionNote? @relation(fields: [remissionNoteId], references: [id])
 
   @@index([tenantId, invoiceId, createdAt])
   @@index([tenantId, creditNoteId, createdAt])
+  @@index([tenantId, remissionNoteId, createdAt])
   @@map("billing_document_events")
+}
+
+// Nota de remisión (arts. 30–48 del Decreto 6539/05): sustenta el traslado de
+// mercadería. Obligatoria entre sucursales; en una venta es opcional si la
+// mercadería viaja con la factura (art. 38).
+model RemissionNote {
+  id           String              @id @default(uuid())
+  tenantId     String              @map("tenant_id")
+  branchId     String              @map("branch_id")
+  motive       RemissionMotive
+  motiveDetail String?             @map("motive_detail")
+  status       RemissionNoteStatus @default(ISSUED)
+
+  invoiceId       String? @map("invoice_id")
+  fromWarehouseId String? @map("from_warehouse_id")
+  toWarehouseId   String? @map("to_warehouse_id")
+
+  customerId        String? @map("customer_id")
+  recipientName     String  @map("recipient_name")
+  recipientDocument String  @map("recipient_document")
+
+  originAddress         String  @map("origin_address")
+  originCity            String? @map("origin_city")
+  originDepartment      String? @map("origin_department")
+  destinationAddress    String  @map("destination_address")
+  destinationCity       String? @map("destination_city")
+  destinationDepartment String? @map("destination_department")
+
+  transportType      TransportType @map("transport_type")
+  vehicleBrand       String        @map("vehicle_brand")
+  vehiclePlate       String        @map("vehicle_plate")
+  trailerPlate       String?       @map("trailer_plate")
+  carrierName        String        @map("carrier_name")
+  carrierRuc         String        @map("carrier_ruc")
+  carrierAddress     String        @map("carrier_address")
+  driverName         String        @map("driver_name")
+  driverDocument     String        @map("driver_document")
+  driverAddress      String        @map("driver_address")
+  // Días de calendario (medianoche UTC), como la vigencia del timbrado.
+  transportStartDate DateTime      @map("transport_start_date")
+  transportEndDate   DateTime      @map("transport_end_date")
+  notes              String?
+
+  seriesId           String          @map("series_id")
+  modality           BillingModality
+  timbrado           String
+  timbradoValidFrom  DateTime?       @map("timbrado_valid_from")
+  timbradoValidUntil DateTime?       @map("timbrado_valid_until")
+  serieCode          String          @default("") @map("serie_code")
+  establecimiento    String
+  puntoExpedicion    String          @map("punto_expedicion")
+  sequential         Int
+  numberPrefix       String          @map("number_prefix")
+  number             String
+
+  issuedAt   DateTime  @default(now()) @map("issued_at")
+  issuedById String?   @map("issued_by_id")
+  voidedAt   DateTime? @map("voided_at")
+  voidReason String?   @map("void_reason")
+  voidedById String?   @map("voided_by_id")
+
+  pdfFileId          String?     @unique @map("pdf_file_id")
+  pdfFile            FileRecord? @relation("RemissionNotePdf", fields: [pdfFileId], references: [id])
+  physicalScanFileId String?     @unique @map("physical_scan_file_id")
+  physicalScan       FileRecord? @relation("RemissionNotePhysicalScan", fields: [physicalScanFileId], references: [id])
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  tenant        Tenant                 @relation(fields: [tenantId], references: [id])
+  branch        Branch                 @relation(fields: [branchId], references: [id])
+  series        BillingSeries          @relation(fields: [seriesId], references: [id])
+  invoice       Invoice?               @relation(fields: [invoiceId], references: [id])
+  customer      Customer?              @relation(fields: [customerId], references: [id])
+  fromWarehouse Warehouse?             @relation("RemissionFromWarehouse", fields: [fromWarehouseId], references: [id])
+  toWarehouse   Warehouse?             @relation("RemissionToWarehouse", fields: [toWarehouseId], references: [id])
+  items         RemissionNoteItem[]
+  events        BillingDocumentEvent[]
+
+  @@unique([seriesId, serieCode, sequential])
+  @@index([tenantId, issuedAt])
+  @@index([invoiceId])
+  @@map("remission_notes")
+}
+
+model RemissionNoteItem {
+  id              String   @id @default(uuid())
+  remissionNoteId String   @map("remission_note_id")
+  productId       String?  @map("product_id")
+  invoiceItemId   String?  @map("invoice_item_id")
+  description     String
+  unit            String
+  quantity        Int
+  serialNumbers   String[] @default([]) @map("serial_numbers")
+
+  remissionNote RemissionNote @relation(fields: [remissionNoteId], references: [id])
+  product       Product?      @relation(fields: [productId], references: [id])
+  invoiceItem   InvoiceItem?  @relation(fields: [invoiceItemId], references: [id])
+
+  @@index([remissionNoteId])
+  @@index([invoiceItemId])
+  @@map("remission_note_items")
 }
 
 // ─── Payments ─────────────────────────────────────────────────────────────────
@@ -2670,6 +2814,8 @@ model FileRecord {
   voidedSheetFor    BillingVoidedNumber? @relation("VoidedSheetScan")
   creditNotePdfFor  CreditNote?          @relation("CreditNotePdf")
   creditNoteScanFor CreditNote?          @relation("CreditNotePhysicalScan")
+  remissionPdfFor   RemissionNote?       @relation("RemissionNotePdf")
+  remissionScanFor  RemissionNote?       @relation("RemissionNotePhysicalScan")
   receiptFor        PaymentReceipt?      @relation("ReceiptPdf")
   posPaperReportFor PosTerminal[]        @relation("PosPaperReport")
 

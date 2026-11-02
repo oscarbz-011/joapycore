@@ -43,6 +43,15 @@ const present = <T extends { printLayout: Prisma.JsonValue }>(series: T) => ({
   printLayout: resolvePreprintedLayout(series.printLayout),
 });
 
+const DOCUMENT_NAMES: Record<
+  BillingDocumentType,
+  { one: string; many: string }
+> = {
+  INVOICE: { one: 'la factura', many: 'facturas' },
+  CREDIT_NOTE: { one: 'la nota de crédito', many: 'notas de crédito' },
+  REMISSION_NOTE: { one: 'la nota de remisión', many: 'notas de remisión' },
+};
+
 const formatDay = (value: Date) =>
   value.toISOString().slice(0, 10).split('-').reverse().join('/');
 
@@ -122,7 +131,8 @@ export class BillingSeriesService {
 
   async update(tenantId: string, id: string, dto: UpdateBillingSeriesDto) {
     const current = await this.findOne(tenantId, id);
-    const used = current._count.invoices + current._count.creditNotes > 0;
+    const { invoices, creditNotes, remissionNotes } = current._count;
+    const used = invoices + creditNotes + remissionNotes > 0;
 
     if (used) {
       const locked: Exclude<keyof UpdateBillingSeriesDto, 'printLayout'>[] = [
@@ -352,9 +362,7 @@ export class BillingSeriesService {
     if (series.modality === BillingModality.PREPRINTED) {
       if (params.documentNumber === undefined) {
         throw new UnprocessableEntityException(
-          documentType === BillingDocumentType.CREDIT_NOTE
-            ? 'Cargá el número del talonario de la nota de crédito'
-            : 'Cargá el número del talonario de la factura',
+          `Cargá el número del talonario de ${DOCUMENT_NAMES[documentType].one}`,
         );
       }
       await this.assertPreprintedNumber(series, params.documentNumber, tx);
@@ -411,8 +419,8 @@ export class BillingSeriesService {
     },
     tx: PrismaClientOrTx,
   ) {
-    const isCreditNote =
-      params.documentType === BillingDocumentType.CREDIT_NOTE;
+    const names = DOCUMENT_NAMES[params.documentType];
+    const isInvoice = params.documentType === BillingDocumentType.INVOICE;
     if (params.seriesId) {
       const series = await this.seriesRepository.findById(
         tenantId,
@@ -425,9 +433,9 @@ export class BillingSeriesService {
         (params.branchId && series.branchId !== params.branchId)
       ) {
         throw new UnprocessableEntityException(
-          isCreditNote
-            ? 'La serie elegida no es de notas de crédito de la sucursal de la factura'
-            : 'La serie elegida no corresponde a la sucursal de la venta',
+          isInvoice
+            ? 'La serie elegida no corresponde a la sucursal de la venta'
+            : `La serie elegida no es de ${names.many} de la sucursal que emite`,
         );
       }
       const problem = seriesProblem(series, params.at);
@@ -445,9 +453,9 @@ export class BillingSeriesService {
     if (usable.length === 1) return usable[0];
     if (usable.length > 1) {
       throw new UnprocessableEntityException(
-        isCreditNote
-          ? 'La sucursal tiene más de una serie de notas de crédito vigente: elegí cuál usar'
-          : 'La sucursal tiene más de una serie vigente: elegí con cuál facturar',
+        isInvoice
+          ? 'La sucursal tiene más de una serie vigente: elegí con cuál facturar'
+          : `La sucursal tiene más de una serie de ${names.many} vigente: elegí cuál usar`,
       );
     }
     if (candidates.length === 1) {
@@ -458,7 +466,7 @@ export class BillingSeriesService {
     const branch = params.branchId
       ? await this.billingSources.findBranch(tenantId, params.branchId, tx)
       : null;
-    const kind = isCreditNote ? 'notas de crédito' : 'facturas';
+    const kind = names.many;
     throw new UnprocessableEntityException(
       branch
         ? `No hay una serie de ${kind} vigente para la sucursal ${branch.name}. Cargala en Configuración → Facturación.`

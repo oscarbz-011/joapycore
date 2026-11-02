@@ -10,6 +10,7 @@ import type {
   ReturnLine,
   StockLedger,
   StockLine,
+  StockTransfer,
 } from '../../../common/contracts/stock-ledger.contract';
 import {
   aggregateDemands,
@@ -17,6 +18,7 @@ import {
   type StockDemand,
 } from '../../../common/utils/stock-availability.util';
 import { ProductUnitsRepository } from '../repositories/product-units.repository';
+import { ProductsRepository } from '../repositories/products.repository';
 import { StockMovementsRepository } from '../repositories/stock-movements.repository';
 import { StockLocationsRepository } from '../repositories/stock-locations.repository';
 import { StockSourcesRepository } from '../repositories/stock-sources.repository';
@@ -32,6 +34,7 @@ export class StockLedgerService implements StockLedger {
     private readonly productUnits: ProductUnitsRepository,
     private readonly stockLocations: StockLocationsRepository,
     private readonly stockSources: StockSourcesRepository,
+    private readonly products: ProductsRepository,
   ) {}
 
   /**
@@ -270,6 +273,99 @@ export class StockLedgerService implements StockLedger {
         },
         tx,
       );
+    }
+  }
+
+  async transfer(
+    tx: Prisma.TransactionClient,
+    tenantId: string,
+    transfer: StockTransfer,
+  ): Promise<void> {
+    const { fromWarehouseId, toWarehouseId } = transfer;
+    if (fromWarehouseId === toWarehouseId) {
+      throw new UnprocessableEntityException(
+        'Los depósitos de origen y destino deben ser distintos',
+      );
+    }
+    await this.assertActiveWarehouse(tx, tenantId, fromWarehouseId);
+    await this.assertActiveWarehouse(tx, tenantId, toWarehouseId);
+
+    const lines = transfer.lines.filter((l) => l.quantity > 0);
+    if (lines.length === 0) {
+      throw new UnprocessableEntityException('El traslado no tiene mercadería');
+    }
+    const products = await this.products.findForTransfer(
+      tenantId,
+      [...new Set(lines.map((l) => l.productId))],
+      tx,
+    );
+    const byId = new Map(products.map((p) => [p.id, p]));
+    if (lines.some((l) => !byId.has(l.productId))) {
+      throw new NotFoundException('Uno de los productos no existe');
+    }
+
+    const counted = lines.filter((l) => !byId.get(l.productId)?.isSerialized);
+    if (counted.length > 0) {
+      const demands: StockDemand[] = counted.map((l) => ({
+        productId: l.productId,
+        warehouseId: fromWarehouseId,
+        quantity: l.quantity,
+        name: byId.get(l.productId)?.name ?? '',
+      }));
+      await this.stockMovements.lockProducts(
+        tx,
+        tenantId,
+        demands.map((d) => d.productId),
+      );
+      const available = await this.stockMovements.sumByProductsAndWarehouse(
+        tenantId,
+        demands,
+        tx,
+      );
+      assertDemandsCovered(aggregateDemands(demands), available);
+    }
+
+    for (const line of lines) {
+      const product = byId.get(line.productId);
+      if (product?.isSerialized) {
+        const serials = [...new Set(line.serialNumbers)];
+        if (serials.length !== line.quantity) {
+          throw new UnprocessableEntityException(
+            `Elegí un número de serie por cada unidad de ${product.name}`,
+          );
+        }
+        const moved = await this.productUnits.moveInStockUnits(
+          tenantId,
+          line.productId,
+          serials,
+          fromWarehouseId,
+          toWarehouseId,
+          tx,
+        );
+        if (moved !== line.quantity) {
+          throw new UnprocessableEntityException(
+            `Algún número de serie de ${product.name} no está disponible en el depósito de origen`,
+          );
+        }
+      }
+      for (const [warehouseId, type, quantity] of [
+        [fromWarehouseId, 'OUT', -line.quantity],
+        [toWarehouseId, 'IN', line.quantity],
+      ] as const) {
+        await this.stockMovements.create(
+          {
+            tenantId,
+            productId: line.productId,
+            warehouseId,
+            type,
+            reason: 'TRANSFER',
+            quantity,
+            referenceId: transfer.referenceId,
+            notes: transfer.notes,
+          },
+          tx,
+        );
+      }
     }
   }
 

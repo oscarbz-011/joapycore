@@ -27,6 +27,7 @@ import { ProductUnitsRepository } from '../src/modules/inventory/repositories/pr
 import { StockLocationsRepository } from '../src/modules/inventory/repositories/stock-locations.repository';
 import { StockMovementsRepository } from '../src/modules/inventory/repositories/stock-movements.repository';
 import { StockSourcesRepository } from '../src/modules/inventory/repositories/stock-sources.repository';
+import { ProductsRepository } from '../src/modules/inventory/repositories/products.repository';
 import { StockLedgerService } from '../src/modules/inventory/services/stock-ledger.service';
 import { AccountsReceivableRepository } from '../src/modules/payments/repositories/accounts-receivable.repository';
 import { ReceivablesService } from '../src/modules/payments/services/receivables.service';
@@ -56,6 +57,7 @@ describe('CreditNotesService (PostgreSQL)', () => {
       new ProductUnitsRepository(prisma),
       new StockLocationsRepository(prisma),
       new StockSourcesRepository(prisma),
+      new ProductsRepository(prisma),
     );
     service = new CreditNotesService(
       prisma,
@@ -324,7 +326,9 @@ describe('CreditNotesService (PostgreSQL)', () => {
       }),
     ).rejects.toThrow('Factura no encontrada');
     await expect(
-      service.voidInvoice(otherTenantId, invoiceId, { reason: 'Error de carga' }),
+      service.voidInvoice(otherTenantId, invoiceId, {
+        reason: 'Error de carga',
+      }),
     ).rejects.toThrow('Factura no encontrada');
     const invoice = await prisma.invoice.findUniqueOrThrow({
       where: { id: invoiceId },

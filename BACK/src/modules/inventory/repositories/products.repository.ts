@@ -13,6 +13,7 @@ import {
   normalizeSearch,
 } from '../../../common/pagination/pagination';
 import { PrismaService } from '../../../prisma/prisma.service';
+import { PrismaClientOrTx } from '../../../prisma/types';
 
 export interface ProductFilters {
   categoryId?: string;
@@ -71,6 +72,17 @@ export class ProductsRepository {
   findManyByIds(tenantId: string, ids: string[]) {
     return this.prisma.product.findMany({
       where: { tenantId, id: { in: ids }, deletedAt: null },
+    });
+  }
+
+  findForTransfer(
+    tenantId: string,
+    ids: string[],
+    client: PrismaClientOrTx = this.prisma,
+  ) {
+    return client.product.findMany({
+      where: { tenantId, id: { in: ids }, deletedAt: null },
+      select: { id: true, name: true, isSerialized: true },
     });
   }
 

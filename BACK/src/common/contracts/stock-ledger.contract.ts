@@ -24,6 +24,22 @@ export interface ReturnableItem {
   soldSerials: string[];
 }
 
+/** Mercadería que pasa de un depósito a otro. */
+export interface TransferLine {
+  productId: string;
+  quantity: number;
+  serialNumbers: string[];
+}
+
+export interface StockTransfer {
+  /** Documento que respalda el traslado (la nota de remisión). */
+  referenceId: string;
+  fromWarehouseId: string;
+  toWarehouseId: string;
+  notes: string;
+  lines: TransferLine[];
+}
+
 /** Ítem ya guardado del que se pueden liberar reservas. */
 export interface ReservedItem {
   id: string;
@@ -105,5 +121,14 @@ export interface StockLedger {
     tenantId: string,
     referenceId: string,
     lines: ReturnLine[],
+  ): Promise<void>;
+  /**
+   * Saca la mercadería del depósito de origen y la ingresa en el de destino:
+   * un OUT y un IN por línea, y los serializados cambian de depósito.
+   */
+  transfer(
+    tx: Prisma.TransactionClient,
+    tenantId: string,
+    transfer: StockTransfer,
   ): Promise<void>;
 }
