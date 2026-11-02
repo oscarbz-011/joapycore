@@ -76,11 +76,7 @@ describe('InvoicesService', () => {
     findInterestForNumbering: jest.Mock;
     assignNumber: jest.Mock;
   };
-  let creditNotesRepository: {
-    findAll: jest.Mock;
-    create: jest.Mock;
-    generateNumber: jest.Mock;
-  };
+  let events: { record: jest.Mock; findByInvoice: jest.Mock };
   let eventEmitter: { emit: jest.Mock; emitAsync: jest.Mock };
   let outbox: { enqueue: jest.Mock; dispatch: jest.Mock };
   let prisma: { $transaction: jest.Mock };
@@ -105,10 +101,9 @@ describe('InvoicesService', () => {
       findInterestForNumbering: jest.fn(),
       assignNumber: jest.fn().mockResolvedValue({ count: 1 }),
     };
-    creditNotesRepository = {
-      findAll: jest.fn().mockResolvedValue([]),
-      create: jest.fn().mockResolvedValue({}),
-      generateNumber: jest.fn().mockResolvedValue('NC-0001'),
+    events = {
+      record: jest.fn().mockResolvedValue({ id: 'event-1' }),
+      findByInvoice: jest.fn().mockResolvedValue([]),
     };
     eventEmitter = {
       emit: jest.fn(),
@@ -131,7 +126,7 @@ describe('InvoicesService', () => {
     service = new InvoicesService(
       prisma as any,
       invoicesRepository as any,
-      creditNotesRepository as any,
+      events as any,
       eventEmitter as any,
       outbox as any,
       seriesService as any,
@@ -917,7 +912,6 @@ describe('InvoicesService', () => {
         service.cancel('tenant-1', 'inv-1', 'customer request'),
       ).rejects.toBeInstanceOf(UnprocessableEntityException);
 
-      expect(creditNotesRepository.create).not.toHaveBeenCalled();
       expect(eventEmitter.emit).not.toHaveBeenCalledWith(
         'invoice.cancelled',
         expect.anything(),
@@ -949,7 +943,6 @@ describe('InvoicesService', () => {
       await issuance;
 
       expect(cancellation.status).toBe('rejected');
-      expect(creditNotesRepository.create).not.toHaveBeenCalled();
       expect(eventEmitter.emit).not.toHaveBeenCalledWith(
         'invoice.cancelled',
         expect.anything(),
@@ -991,9 +984,7 @@ describe('InvoicesService', () => {
         'PENDING',
         expect.any(Date),
         expect.any(Date),
-        expect.anything(),
       );
-      expect(creditNotesRepository.create).not.toHaveBeenCalled();
       expect(eventEmitter.emit).toHaveBeenCalledWith(
         'invoice.cancelled',
         expect.objectContaining({ tenantId: 'tenant-1', invoiceId: 'inv-1' }),
@@ -1001,45 +992,16 @@ describe('InvoicesService', () => {
       expect(result?.status).toBe('CANCELLED');
     });
 
-    it('cancels an ISSUED invoice and generates a credit note', async () => {
-      const cancelled = makeInvoice({ status: 'CANCELLED' });
-      invoicesRepository.findById
-        .mockResolvedValueOnce(makeInvoice({ status: 'ISSUED' }))
-        .mockResolvedValueOnce(cancelled);
-
-      await service.cancel(
-        'tenant-1',
-        'inv-1',
-        'cliente solicitó cambio de producto',
-      );
-
-      expect(invoicesRepository.cancelIfAllowed).toHaveBeenCalled();
-      expect(creditNotesRepository.generateNumber).toHaveBeenCalledWith(
-        'tenant-1',
-      );
-      expect(creditNotesRepository.create).toHaveBeenCalledWith(
-        expect.objectContaining({
-          tenantId: 'tenant-1',
-          invoiceId: 'inv-1',
-          reason: 'cliente solicitó cambio de producto',
-          number: 'NC-0001',
-        }),
-        expect.anything(),
-      );
-    });
-
-    it('does not create a credit note when an issued invoice changes before cancellation commits', async () => {
+    it('does not cancel an issued invoice: it is voided or credited instead', async () => {
       invoicesRepository.findById.mockResolvedValue(
         makeInvoice({ status: 'ISSUED' }),
       );
-      invoicesRepository.cancelIfAllowed.mockResolvedValue({ count: 0 });
 
       await expect(
-        service.cancel('tenant-1', 'inv-1', 'customer request'),
-      ).rejects.toBeInstanceOf(UnprocessableEntityException);
+        service.cancel('tenant-1', 'inv-1', 'cliente solicitó cambio'),
+      ).rejects.toThrow('anulala o emití una nota de crédito');
 
-      expect(creditNotesRepository.generateNumber).not.toHaveBeenCalled();
-      expect(creditNotesRepository.create).not.toHaveBeenCalled();
+      expect(invoicesRepository.cancelIfAllowed).not.toHaveBeenCalled();
       expect(eventEmitter.emit).not.toHaveBeenCalledWith(
         'invoice.cancelled',
         expect.anything(),

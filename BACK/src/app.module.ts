@@ -26,6 +26,8 @@ import { WarehousesModule } from './modules/warehouses/warehouses.module';
 import { HrModule } from './modules/hr/hr.module';
 import { InventoryModule } from './modules/inventory/inventory.module';
 import { InventoryContractsModule } from './modules/inventory/inventory-contracts.module';
+import { PaymentsContractsModule } from './modules/payments/payments-contracts.module';
+import { FinanceContractsModule } from './modules/finance/finance-contracts.module';
 import { PaymentsModule } from './modules/payments/payments.module';
 import { PosModule } from './modules/pos/pos.module';
 import { ProcurementModule } from './modules/procurement/procurement.module';
@@ -70,6 +72,8 @@ import { CalendarModule } from './calendar/calendar.module';
     AuditModule,
     InventoryModule,
     InventoryContractsModule,
+    PaymentsContractsModule,
+    FinanceContractsModule,
     ProcurementModule,
     ProductionModule,
     SalesModule,

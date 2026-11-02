@@ -12,6 +12,7 @@ import {
   VoidInvoiceSheetDto,
   VoidLooseSheetDto,
 } from '../dto/preprinted-sheet.dto';
+import { BillingEventsRepository } from '../repositories/billing-events.repository';
 import { InvoicesRepository } from '../repositories/invoices.repository';
 import { buildFiscalReceipt } from '../utils/fiscal-receipt.util';
 import { BillingSeriesService } from './billing-series.service';
@@ -33,6 +34,7 @@ export class PreprintedInvoicesService {
     private readonly seriesService: BillingSeriesService,
     private readonly filesService: FilesService,
     private readonly eventEmitter: EventBus,
+    private readonly events: BillingEventsRepository,
   ) {}
 
   /** Datos para imprimir sobre la hoja; cada llamada cuenta como impresión. */
@@ -40,6 +42,13 @@ export class PreprintedInvoicesService {
     const invoice = await this.findPrintable(tenantId, id);
     const printedAt = new Date();
     await this.invoicesRepository.recordFormPrint(tenantId, id, printedAt);
+    await this.events.record({
+      tenantId,
+      invoiceId: id,
+      type: 'FORM_PRINTED',
+      userId,
+      detail: { printNumber: invoice.formPrintCount + 1 },
+    });
     this.audit(tenantId, userId, 'invoice.form.printed', id, {
       sheet: invoice.sequential,
       printNumber: invoice.formPrintCount + 1,
@@ -100,6 +109,20 @@ export class PreprintedInvoicesService {
           },
           tx,
         );
+        await this.events.record(
+          {
+            tenantId,
+            invoiceId: id,
+            type: 'SHEET_VOIDED',
+            userId,
+            detail: {
+              voidedSheet: fromSequential,
+              movedTo: numbering.sequential,
+              reason: dto.reason,
+            },
+          },
+          tx,
+        );
       });
     } catch (error) {
       if (isDuplicate(error)) {
@@ -126,6 +149,12 @@ export class PreprintedInvoicesService {
     await this.findPrintable(tenantId, id);
     if (fileId) await this.assertFile(tenantId, fileId);
     await this.invoicesRepository.setPhysicalScan(tenantId, id, fileId);
+    await this.events.record({
+      tenantId,
+      invoiceId: id,
+      type: fileId ? 'SCAN_ATTACHED' : 'SCAN_REMOVED',
+      userId,
+    });
     this.audit(
       tenantId,
       userId,

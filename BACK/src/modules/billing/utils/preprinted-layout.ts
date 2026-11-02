@@ -17,6 +17,7 @@ export const DEFAULT_PREPRINTED_LAYOUT: PreprintedLayout = {
   buyerName: { x: 45, y: 45 },
   buyerDocument: { x: 150, y: 45 },
   buyerAddress: { x: 30, y: 52 },
+  relatedDocument: { x: 30, y: 59 },
   items: {
     top: 66,
     lineHeight: 5,
@@ -44,6 +45,7 @@ const POINTS = [
   'buyerName',
   'buyerDocument',
   'buyerAddress',
+  'relatedDocument',
   'total',
   'totalInWords',
   'iva5',
@@ -99,7 +101,11 @@ export function resolvePreprintedLayout(value: unknown): PreprintedLayout {
 export function formFitProblem(
   layout: PreprintedLayout,
   itemCount: number,
+  document: 'invoice' | 'creditNote' = 'invoice',
 ): string | null {
   if (itemCount <= layout.items.maxLines) return null;
+  if (document === 'creditNote') {
+    return `La nota de crédito tiene ${itemCount} ítems y la hoja del talonario admite ${layout.items.maxLines}. Acreditá en más de una nota o ajustá el diseño de impresión de la serie.`;
+  }
   return `La factura tiene ${itemCount} ítems y la hoja del talonario admite ${layout.items.maxLines}. Dividí la venta en más de una factura o ajustá el diseño de impresión de la serie.`;
 }

@@ -14,6 +14,7 @@ import { randomUUID } from 'node:crypto';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { BillingSeriesRepository } from '../src/modules/billing/repositories/billing-series.repository';
 import { BillingSourcesRepository } from '../src/modules/billing/repositories/billing-sources.repository';
+import { BillingEventsRepository } from '../src/modules/billing/repositories/billing-events.repository';
 import { InvoicesRepository } from '../src/modules/billing/repositories/invoices.repository';
 import { BillingSeriesService } from '../src/modules/billing/services/billing-series.service';
 import { PreprintedInvoicesService } from '../src/modules/billing/services/preprinted-invoices.service';
@@ -43,6 +44,7 @@ describe('PreprintedInvoicesService (PostgreSQL)', () => {
       series,
       files as never,
       new EventBus(new EventEmitter2()),
+      new BillingEventsRepository(prisma),
     );
     tenantId = (
       await prisma.tenant.create({
@@ -87,6 +89,7 @@ describe('PreprintedInvoicesService (PostgreSQL)', () => {
 
   afterEach(async () => {
     const where = { tenantId };
+    await prisma.billingDocumentEvent.deleteMany({ where });
     await prisma.billingVoidedNumber.deleteMany({ where });
     await prisma.invoice.deleteMany({ where });
     await prisma.billingSeries.deleteMany({ where });

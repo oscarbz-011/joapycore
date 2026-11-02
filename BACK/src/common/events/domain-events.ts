@@ -64,6 +64,10 @@ export interface DomainEvents {
     total: number;
   };
   'invoice.cancelled': Tenant & { invoiceId: string };
+  'credit-note.pdf.requested': Tenant & {
+    creditNoteId: string;
+    requestedById: string | null;
+  };
 
   'payment.ar.completed': Tenant & { arId: string; invoiceId: string };
   'payment.ap.completed': Tenant & { apId: string; purchaseReceiptId: string };

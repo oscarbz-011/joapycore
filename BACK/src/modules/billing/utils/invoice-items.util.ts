@@ -20,6 +20,7 @@ export function effectiveUnitPrice(item: {
 const DEFAULT_IVA_RATE = 10;
 
 export interface SaleItemForInvoice {
+  id?: string;
   quantity: number;
   unitPrice: Numeric;
   financedUnitPrice?: Numeric | null;
@@ -46,5 +47,6 @@ export function toInvoiceItem(item: SaleItemForInvoice) {
     ivaRate,
     ivaAmount,
     unitPriceWithoutIva: Math.round((unitPrice * 100) / (100 + ivaRate)),
+    saleOrderItemId: item.id ?? null,
   };
 }

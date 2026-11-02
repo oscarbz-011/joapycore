@@ -57,6 +57,8 @@ export interface PreprintedLayout {
   buyerName: FormPoint;
   buyerDocument: FormPoint;
   buyerAddress: FormPoint;
+  /** Nota de crédito: la factura que modifica. */
+  relatedDocument: FormPoint;
   items: {
     top: number;
     lineHeight: number;
@@ -108,6 +110,8 @@ export interface FiscalReceipt {
     branchAddress: string | null;
   };
   buyer: { name: string; document: string; address: string | null };
+  /** Nota de crédito: la factura que modifica ("001-001-0000009 del 28/10/26"). */
+  relatedDocument: string | null;
   lines: FiscalReceiptLine[];
   totals: {
     exempt: number;

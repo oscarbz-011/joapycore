@@ -23,6 +23,7 @@ export class BillingSourcesRepository {
         saleType: true,
         items: {
           select: {
+            id: true,
             quantity: true,
             unitPrice: true,
             financedUnitPrice: true,

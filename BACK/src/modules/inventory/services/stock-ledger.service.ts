@@ -6,6 +6,8 @@ import {
 import type { Prisma } from '@prisma/client';
 import type {
   ReservedItem,
+  ReturnableItem,
+  ReturnLine,
   StockLedger,
   StockLine,
 } from '../../../common/contracts/stock-ledger.contract';
@@ -17,6 +19,7 @@ import {
 import { ProductUnitsRepository } from '../repositories/product-units.repository';
 import { StockMovementsRepository } from '../repositories/stock-movements.repository';
 import { StockLocationsRepository } from '../repositories/stock-locations.repository';
+import { StockSourcesRepository } from '../repositories/stock-sources.repository';
 
 /**
  * Implementación de StockLedger: operaciones de stock que Ventas y POS usan
@@ -28,6 +31,7 @@ export class StockLedgerService implements StockLedger {
     private readonly stockMovements: StockMovementsRepository,
     private readonly productUnits: ProductUnitsRepository,
     private readonly stockLocations: StockLocationsRepository,
+    private readonly stockSources: StockSourcesRepository,
   ) {}
 
   /**
@@ -188,6 +192,85 @@ export class StockLedgerService implements StockLedger {
     saleItemId: string,
   ): Promise<void> {
     await this.productUnits.markSoldBySaleItem(tenantId, saleItemId, tx);
+  }
+
+  async findReturnable(
+    tx: Prisma.TransactionClient,
+    tenantId: string,
+    saleItemIds: string[],
+  ): Promise<Map<string, ReturnableItem>> {
+    const result = new Map<string, ReturnableItem>();
+    if (saleItemIds.length === 0) return result;
+    const [items, units] = await Promise.all([
+      this.stockSources.findSaleItemsForReturn(tenantId, saleItemIds, tx),
+      this.productUnits.findSoldBySaleItems(tenantId, saleItemIds, tx),
+    ]);
+    for (const item of items) {
+      result.set(item.id, {
+        stocked: item.productId !== null,
+        isSerialized: Boolean(item.product?.isSerialized),
+        soldSerials: units
+          .filter((u) => u.saleOrderItemId === item.id)
+          .map((u) => u.serialNumber),
+      });
+    }
+    return result;
+  }
+
+  async restockReturn(
+    tx: Prisma.TransactionClient,
+    tenantId: string,
+    referenceId: string,
+    lines: ReturnLine[],
+  ): Promise<void> {
+    const wanted = lines.filter((l) => l.quantity > 0);
+    if (wanted.length === 0) return;
+    const items = await this.stockSources.findSaleItemsForReturn(
+      tenantId,
+      wanted.map((l) => l.saleItemId),
+      tx,
+    );
+    const byId = new Map(items.map((i) => [i.id, i]));
+
+    for (const line of wanted) {
+      const item = byId.get(line.saleItemId);
+      if (!item?.productId) {
+        throw new UnprocessableEntityException(
+          'Uno de los ítems devueltos no mueve stock',
+        );
+      }
+      if (item.product?.isSerialized) {
+        if (line.serialNumbers.length !== line.quantity) {
+          throw new UnprocessableEntityException(
+            'Elegí un número de serie por cada unidad que vuelve al stock',
+          );
+        }
+        const restored = await this.productUnits.restoreSoldSerials(
+          tenantId,
+          item.id,
+          line.serialNumbers,
+          tx,
+        );
+        if (restored !== line.quantity) {
+          throw new UnprocessableEntityException(
+            'Algún número de serie no corresponde a esta venta o ya volvió al stock',
+          );
+        }
+        continue;
+      }
+      await this.stockMovements.create(
+        {
+          tenantId,
+          productId: item.productId,
+          warehouseId: item.warehouseId,
+          type: 'IN',
+          reason: 'CUSTOMER_RETURN',
+          quantity: line.quantity,
+          referenceId,
+        },
+        tx,
+      );
+    }
   }
 
   private async writeMovements(

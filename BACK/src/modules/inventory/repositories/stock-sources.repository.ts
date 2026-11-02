@@ -12,6 +12,23 @@ import { PrismaClientOrTx } from '../../../prisma/types';
 export class StockSourcesRepository {
   constructor(private readonly prisma: PrismaService) {}
 
+  findSaleItemsForReturn(
+    tenantId: string,
+    saleItemIds: string[],
+    client: PrismaClientOrTx = this.prisma,
+  ) {
+    return client.saleOrderItem.findMany({
+      where: { id: { in: saleItemIds }, saleOrder: { tenantId } },
+      select: {
+        id: true,
+        productId: true,
+        quantity: true,
+        warehouseId: true,
+        product: { select: { isSerialized: true } },
+      },
+    });
+  }
+
   findInvoiceItemsForReversal(tenantId: string, invoiceId: string) {
     return this.prisma.invoice.findFirst({
       where: { id: invoiceId, tenantId },

@@ -6,6 +6,7 @@ import { ProductsRepository } from './repositories/products.repository';
 import { StockMovementsRepository } from './repositories/stock-movements.repository';
 import { StockLedgerService } from './services/stock-ledger.service';
 import { StockLocationsRepository } from './repositories/stock-locations.repository';
+import { StockSourcesRepository } from './repositories/stock-sources.repository';
 
 /**
  * Lo que Inventario ofrece a otros módulos, por contrato. Es global para que
@@ -19,6 +20,7 @@ import { StockLocationsRepository } from './repositories/stock-locations.reposit
     ProductUnitsRepository,
     StockMovementsRepository,
     StockLocationsRepository,
+    StockSourcesRepository,
     StockLedgerService,
     { provide: PRODUCT_CATALOG, useExisting: ProductsRepository },
     { provide: STOCK_LEDGER, useExisting: StockLedgerService },

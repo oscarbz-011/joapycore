@@ -173,11 +173,65 @@ export function buildFiscalReceipt(invoice: InvoiceForReceipt): FiscalReceipt {
         : null,
     },
     buyer: buyerOf(invoice),
+    relatedDocument: null,
     lines,
     totals,
     formLayout:
       invoice.modality === 'PREPRINTED'
         ? resolvePreprintedLayout(invoice.series?.printLayout)
         : null,
+  };
+}
+
+export interface CreditNoteForReceipt {
+  id: string;
+  modality: BillingModality | null;
+  numberPrefix: string | null;
+  number: string | null;
+  timbrado: string | null;
+  timbradoValidFrom: Date | null;
+  timbradoValidUntil: Date | null;
+  issuedAt: Date;
+  total: Numeric;
+  series?: { printLayout: unknown } | null;
+  items: InvoiceForReceipt['items'];
+  invoice: Omit<InvoiceForReceipt, 'series' | 'items'>;
+}
+
+const shortDate = (value: Date | null) =>
+  value
+    ? value.toLocaleDateString('es-PY', {
+        day: '2-digit',
+        month: '2-digit',
+        year: '2-digit',
+        timeZone: 'America/Asuncion',
+      })
+    : '';
+
+/** Lo que se imprime de una nota de crédito: el emisor y el comprador de la factura. */
+export function buildCreditNoteReceipt(
+  note: CreditNoteForReceipt,
+): FiscalReceipt {
+  const receipt = buildFiscalReceipt({
+    ...note.invoice,
+    id: note.id,
+    modality: note.modality,
+    invoicePrefix: note.numberPrefix,
+    invoiceNumber: note.number,
+    timbrado: note.timbrado,
+    timbradoValidFrom: note.timbradoValidFrom,
+    timbradoValidUntil: note.timbradoValidUntil,
+    issuedAt: note.issuedAt,
+    total: note.total,
+    series: note.series,
+    items: note.items,
+  });
+  const invoiceNumber = `${note.invoice.invoicePrefix ?? ''}${note.invoice.invoiceNumber ?? ''}`;
+  const issued = shortDate(note.invoice.issuedAt);
+  return {
+    ...receipt,
+    relatedDocument: issued
+      ? `Factura ${invoiceNumber} del ${issued}`
+      : `Factura ${invoiceNumber}`,
   };
 }
