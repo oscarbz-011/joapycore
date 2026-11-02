@@ -7,7 +7,8 @@ import { apiErrorMessage } from '@/lib/api/api-error';
 import { useState } from 'react';
 import Link from 'next/link';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeftRight, Plus, Search, X } from 'lucide-react';
+import { ArrowLeftRight, Plus, Search, Truck, X } from 'lucide-react';
+import { useActiveModules } from '@/lib/use-active-modules';
 import { NumericInput } from '../../../../../components/numeric-input';
 import {
   inventoryApi,
@@ -19,7 +20,7 @@ import {
   type MovementForm,
 } from '../../../../../lib/inventory-movement';
 import { StockTransferDialog } from '@/components/inventory/stock-transfer-dialog';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
@@ -309,6 +310,7 @@ function NewMovementModal({ onClose }: { onClose: () => void }) {
 export default function MovementsPage() {
   const [showNew, setShowNew] = useState(false);
   const [showTransfer, setShowTransfer] = useState(false);
+  const { hasModule } = useActiveModules();
   const [reasonFilter, setReasonFilter] = useState<MovementReason | ''>('');
 
   // El servidor filtra, busca y pagina: así se llega a todo el historial y no
@@ -336,6 +338,15 @@ export default function MovementsPage() {
               <ArrowLeftRight size={15} />
               Trasladar entre depósitos
             </Button>
+            {hasModule('billing') && (
+              <Link
+                href="/dashboard/billing/remission-notes/new"
+                className={cn(buttonVariants({ variant: 'outline' }))}
+              >
+                <Truck size={15} />
+                Traslado entre sucursales
+              </Link>
+            )}
             <Button onClick={() => setShowNew(true)}>
               <Plus size={15} />
               Nuevo movimiento

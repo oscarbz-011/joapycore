@@ -120,3 +120,30 @@ export function buildTransferRequest(
     }),
   };
 }
+
+interface WarehouseBranch {
+  id: string;
+  branchId: string | null;
+}
+
+/**
+ * Entre depósitos de distintas sucursales la mercadería viaja con nota de
+ * remisión (art. 30 del Decreto 6539/05): ese traslado se hace desde
+ * Facturación, no como movimiento de inventario.
+ */
+export function needsRemissionNote(
+  warehouses: WarehouseBranch[],
+  fromId: string,
+  toId: string,
+): boolean {
+  if (!fromId || !toId || fromId === UNLOCATED_SOURCE) return false;
+  const from = warehouses.find((w) => w.id === fromId);
+  const to = warehouses.find((w) => w.id === toId);
+  if (!from || !to) return false;
+  return (from.branchId ?? null) !== (to.branchId ?? null);
+}
+
+export function remissionTransferHref(fromId: string, toId: string): string {
+  const params = new URLSearchParams({ from: fromId, to: toId });
+  return `/dashboard/billing/remission-notes/new?${params.toString()}`;
+}

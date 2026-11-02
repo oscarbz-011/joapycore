@@ -198,3 +198,11 @@ describe("issue helpers", () => {
     expect(documentNumberError("41", series)).toBeNull();
   });
 });
+
+describe("remission note series", () => {
+  it("counts remission notes as used numbers and names the document", async () => {
+    const { seriesUsage, DOCUMENT_TYPE_LABELS } = await import("./billing-series");
+    expect(seriesUsage({ _count: { invoices: 0, creditNotes: 1, remissionNotes: 2 } })).toBe(3);
+    expect(DOCUMENT_TYPE_LABELS.REMISSION_NOTE).toBe("Nota de remisión");
+  });
+});
