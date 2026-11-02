@@ -101,6 +101,7 @@ export function remitableItems(
   saleItems: SaleItemForRemission[],
   remitted: Map<string, number>,
   soldSerials: Map<string, string[]>,
+  sentSerials: Map<string, string[]> = new Map(),
 ): RemitableItem[] {
   const bySaleItem = new Map(saleItems.map((s) => [s.id, s]));
   return items.flatMap((item) => {
@@ -119,7 +120,10 @@ export function remitableItems(
         remitted: already,
         remitable: Math.max(item.quantity - already, 0),
         isSerialized: sale.product.isSerialized,
-        soldSerials: soldSerials.get(sale.id) ?? [],
+        soldSerials: (soldSerials.get(sale.id) ?? []).filter(
+          (serial) =>
+            !(sentSerials.get(item.invoiceItemId) ?? []).includes(serial),
+        ),
       },
     ];
   });

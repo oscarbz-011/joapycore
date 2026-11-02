@@ -130,6 +130,7 @@ describe('RemissionNotesService', () => {
       createWithItems: jest.fn().mockResolvedValue({ id: 'ignored' }),
       findById: jest.fn().mockResolvedValue({ id: 'rn-1', status: 'ISSUED' }),
       remittedQuantities: jest.fn().mockResolvedValue(new Map()),
+      remittedSerials: jest.fn().mockResolvedValue(new Map()),
       voidIfIssued: jest.fn().mockResolvedValue({ count: 1 }),
       findAll: jest.fn(),
       findByInvoice: jest.fn(),

@@ -114,6 +114,25 @@ describe('remitableItems', () => {
   });
 });
 
+describe('serial numbers already sent', () => {
+  it('does not offer a serial number that left in another note', () => {
+    const [tv] = remitableItems(
+      INVOICE_ITEMS,
+      SALE_ITEMS,
+      new Map([['ii-tv', 1]]),
+      new Map([['soi-tv', ['SN-1', 'SN-2']]]),
+      new Map([['ii-tv', ['SN-1']]]),
+    );
+    expect(tv.soldSerials).toEqual(['SN-2']);
+    expect(() =>
+      buildSaleLines(
+        [{ invoiceItemId: 'ii-tv', quantity: 1, serialNumbers: ['SN-1'] }],
+        [tv],
+      ),
+    ).toThrow('no corresponde');
+  });
+});
+
 describe('buildSaleLines', () => {
   const available = remitableItems(
     INVOICE_ITEMS,

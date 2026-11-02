@@ -522,8 +522,9 @@ export class RemissionNotesService {
     const saleItemIds = invoice.items
       .map((i) => i.saleOrderItemId)
       .filter((v): v is string => v !== null);
-    const [remitted, saleItems, serials] = await Promise.all([
+    const [remitted, sent, saleItems, serials] = await Promise.all([
       this.notes.remittedQuantities(tenantId, invoice.id, client),
+      this.notes.remittedSerials(tenantId, invoice.id, client),
       this.sources.findSaleItemsForRemission(tenantId, saleItemIds, client),
       this.sources.findSerialsBySaleItems(tenantId, saleItemIds, client),
     ]);
@@ -536,6 +537,7 @@ export class RemissionNotesService {
       saleItems,
       remitted,
       serials,
+      sent,
     );
   }
 

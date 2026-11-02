@@ -490,5 +490,78 @@ describe('RemissionNotesService (PostgreSQL)', () => {
         'REMISSION_NOTE_ISSUED',
       ]);
     });
+    it('does not offer again a serial number that already left', async () => {
+      const customer = await prisma.customer.create({
+        data: { tenantId, firstName: 'Ana', lastName: 'Gómez' },
+        select: { id: true },
+      });
+      const order = await prisma.saleOrder.create({
+        data: {
+          tenantId,
+          customerId: customer.id,
+          branchId: branchA,
+          status: 'CONFIRMED',
+          orderDate: new Date(),
+          total: 2_000_000,
+          items: {
+            create: [
+              {
+                productId: tv,
+                warehouseId: fromWarehouse,
+                quantity: 2,
+                unitPrice: 1_000_000,
+              },
+            ],
+          },
+        },
+        select: { items: { select: { id: true } }, id: true },
+      });
+      await prisma.productUnit.updateMany({
+        where: { tenantId, productId: tv },
+        data: { saleOrderItemId: order.items[0].id },
+      });
+      const invoice = await prisma.invoice.create({
+        data: {
+          tenantId,
+          saleOrderId: order.id,
+          status: 'ISSUED',
+          total: 2_000_000,
+          issuedAt: new Date(),
+          items: {
+            create: [
+              {
+                description: 'Televisor',
+                quantity: 2,
+                unitPrice: 1_000_000,
+                total: 2_000_000,
+                saleOrderItemId: order.items[0].id,
+              },
+            ],
+          },
+        },
+        select: { id: true, items: { select: { id: true } } },
+      });
+
+      await service.issueForSale(tenantId, invoice.id, {
+        recipientName: 'Ana Gómez',
+        recipientDocument: 'CI 7654321',
+        items: [
+          {
+            invoiceItemId: invoice.items[0].id,
+            quantity: 1,
+            serialNumbers: [serial(1)],
+          },
+        ],
+        origin,
+        destination,
+        transport,
+      });
+
+      const options = await service.saleOptions(tenantId, invoice.id);
+      expect(options.items[0]).toMatchObject({
+        remitable: 1,
+        soldSerials: [serial(2)],
+      });
+    });
   });
 });

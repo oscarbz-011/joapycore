@@ -187,6 +187,34 @@ export class RemissionNotesRepository {
     );
   }
 
+  /** N/S de cada ítem de la factura que ya salieron en una nota vigente. */
+  async remittedSerials(
+    tenantId: string,
+    invoiceId: string,
+    client: PrismaClientOrTx = this.prisma,
+  ): Promise<Map<string, string[]>> {
+    const rows = await client.remissionNoteItem.findMany({
+      where: {
+        remissionNote: {
+          tenantId,
+          invoiceId,
+          status: RemissionNoteStatus.ISSUED,
+        },
+        invoiceItemId: { not: null },
+      },
+      select: { invoiceItemId: true, serialNumbers: true },
+    });
+    const result = new Map<string, string[]>();
+    for (const row of rows) {
+      if (!row.invoiceItemId) continue;
+      result.set(row.invoiceItemId, [
+        ...(result.get(row.invoiceItemId) ?? []),
+        ...row.serialNumbers,
+      ]);
+    }
+    return result;
+  }
+
   createWithItems(
     data: Omit<Prisma.RemissionNoteUncheckedCreateInput, 'items'>,
     items: Omit<
