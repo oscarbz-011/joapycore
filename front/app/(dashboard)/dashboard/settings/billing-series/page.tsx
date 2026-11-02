@@ -10,6 +10,7 @@ import {
   SERIES_STATUS_LABELS,
   seriesStatus,
   type SeriesStatus,
+  DOCUMENT_TYPE_LABELS,
 } from '@/lib/billing-series';
 import { formatDatePY } from '@/lib/date';
 import { usePermission } from '@/lib/permissions';
@@ -20,11 +21,6 @@ import { TablePagination } from '@/components/table-pagination';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-
-const DOCUMENT_TYPE_LABELS: Record<BillingSeries['documentType'], string> = {
-  INVOICE: 'Factura',
-  CREDIT_NOTE: 'Nota de crédito',
-};
 
 const STATUS_CLASS: Record<SeriesStatus, string> = {
   active: 'bg-accent-subtle text-accent-on border-accent-on/20',

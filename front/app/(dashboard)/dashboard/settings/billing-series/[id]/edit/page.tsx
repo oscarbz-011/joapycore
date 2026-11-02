@@ -6,7 +6,7 @@ import { ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { apiErrorMessage } from '@/lib/api/api-error';
 import { billingApi } from '@/lib/api/billing';
-import { seriesCode } from '@/lib/billing-series';
+import { seriesCode, seriesUsage } from '@/lib/billing-series';
 import { usePermission } from '@/lib/permissions';
 import { BillingSeriesForm } from '../../_form';
 import { PreprintedLayoutEditor } from '@/components/billing/preprinted-layout-editor';
@@ -35,7 +35,7 @@ export default function EditBillingSeriesPage() {
           </h1>
           {series && (
             <p className="mt-1 text-sm text-muted-foreground">
-              {series.branch.name} · {series._count.invoices} factura(s) numeradas
+              {series.branch.name} · {seriesUsage(series)} documento(s) numerados
             </p>
           )}
         </div>

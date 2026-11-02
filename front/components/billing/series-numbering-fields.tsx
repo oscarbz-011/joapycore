@@ -26,6 +26,7 @@ export function SeriesNumberingFields({
   onDocumentNumberChange,
   documentNumberError,
   disabled,
+  documentLabel = 'facturas',
 }: {
   options: BillingSeriesOption[];
   isLoading: boolean;
@@ -35,6 +36,8 @@ export function SeriesNumberingFields({
   onDocumentNumberChange: (value: string) => void;
   documentNumberError?: string | null;
   disabled?: boolean;
+  /** "facturas" o "notas de crédito", para el aviso sin serie. */
+  documentLabel?: string;
 }) {
   const usable = usableOptions(options);
   const selected = usable.find((o) => o.id === seriesId);
@@ -47,7 +50,7 @@ export function SeriesNumberingFields({
     const reason = options.length === 1 ? options[0].problem : null;
     return (
       <div role="alert" className="rounded-lg border border-warn/30 bg-warn-subtle px-4 py-3 text-sm text-warn">
-        {reason ?? 'La sucursal no tiene una serie de facturas vigente.'}{' '}
+        {reason ?? `La sucursal no tiene una serie de ${documentLabel} vigente.`}{' '}
         <Link href="/dashboard/settings/billing-series" className="font-medium underline">
           Ir a series y timbrados
         </Link>

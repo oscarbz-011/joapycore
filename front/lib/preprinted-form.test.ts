@@ -72,4 +72,12 @@ describe('preprintedFormHtml', () => {
     expect(html).toContain('Licuadora &lt;Pro&gt;');
     expect(html).not.toContain('<Pro>');
   });
+
+  it('prints the invoice a credit note modifies, only on a credit note', () => {
+    const credit = preprintedFormHtml(sampleFiscalReceipt('CREDIT_NOTE'), layout);
+    expect(credit).toContain('Factura 001-001-0000000 del 01/01/26');
+    expect(credit).toContain(`top:${layout.relatedDocument.y}mm`);
+    const invoice = preprintedFormHtml(sampleFiscalReceipt(), layout);
+    expect(invoice).not.toContain('del 01/01/26');
+  });
 });
