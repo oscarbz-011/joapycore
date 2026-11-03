@@ -91,7 +91,7 @@ export interface ProductUnit {
   id: string;
   serialNumber: string;
   warehouseId: string | null;
-  status: 'IN_STOCK' | 'SOLD' | 'RESERVED' | 'DAMAGED' | 'ADJUSTED_OUT';
+  status: 'IN_STOCK' | 'IN_TRANSIT' | 'SOLD' | 'RESERVED' | 'DAMAGED' | 'ADJUSTED_OUT';
 }
 
 export interface ProductFilters {

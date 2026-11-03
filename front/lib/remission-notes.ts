@@ -1,7 +1,10 @@
 import type {
+  ReceiveRemissionPayload,
   RemissionCompany,
   RemissionMotive,
   RemissionNote,
+  RemissionNoteItem,
+  RemissionTransitStatus,
   RemissionPlace,
   RemissionTransportPayload,
   RemitableItem,
@@ -244,7 +247,68 @@ export function salePayloadItems(items: RemitableItem[], lines: Record<string, G
     });
 }
 
-/** La nota se emite cuando la mercadería todavía no salió: un traslado anulado devuelve el stock. */
-export function canVoidRemission(note: Pick<RemissionNote, 'status'>): boolean {
-  return note.status === 'ISSUED';
+export const TRANSIT_STATUS_LABELS: Record<RemissionTransitStatus, string> = {
+  IN_TRANSIT: 'En tránsito',
+  RECEIVED: 'Recibida',
+  RECEIVED_WITH_DIFFERENCES: 'Recibida con faltantes',
+};
+
+/** Una venta se anula mientras está vigente; un traslado, solo mientras está en tránsito. */
+export function canVoidRemission(note: Pick<RemissionNote, 'status' | 'transitStatus'>): boolean {
+  return note.status === 'ISSUED' && (note.transitStatus === null || note.transitStatus === 'IN_TRANSIT');
+}
+
+export function canReceiveRemission(note: Pick<RemissionNote, 'status' | 'transitStatus'>): boolean {
+  return note.status === 'ISSUED' && note.transitStatus === 'IN_TRANSIT';
+}
+
+type DispatchedItem = Pick<RemissionNoteItem, 'id' | 'description' | 'quantity' | 'serialNumbers'>;
+
+const isSerializedItem = (item: DispatchedItem) => item.serialNumbers.length > 0;
+
+/** Por defecto llegó todo lo despachado: se desmarca o se corrige lo que falta. */
+export function fullReception(items: DispatchedItem[]): Record<string, GoodsDraftLine> {
+  return Object.fromEntries(
+    items.map((item) => [item.id, { quantity: item.quantity, serialNumbers: [...item.serialNumbers] }]),
+  );
+}
+
+export function missingUnits(items: DispatchedItem[], lines: Record<string, GoodsDraftLine>): number {
+  return items.reduce(
+    (sum, item) => sum + Math.max(item.quantity - lineQuantity(lines[item.id], isSerializedItem(item)), 0),
+    0,
+  );
+}
+
+export function receptionProblem(
+  items: DispatchedItem[],
+  lines: Record<string, GoodsDraftLine>,
+  notes: string,
+): string | null {
+  for (const item of items) {
+    const received = lineQuantity(lines[item.id], isSerializedItem(item));
+    if (received > item.quantity) {
+      return `De ${item.description} se despacharon ${item.quantity}: no pueden llegar más`;
+    }
+  }
+  if (missingUnits(items, lines) > 0 && notes.trim().length < 5) {
+    return 'Falta mercadería: explicá la diferencia en las observaciones';
+  }
+  return null;
+}
+
+export function receptionPayload(
+  items: DispatchedItem[],
+  lines: Record<string, GoodsDraftLine>,
+  notes: string,
+): ReceiveRemissionPayload {
+  return {
+    items: items.map((item) => {
+      const line = lines[item.id] ?? { quantity: 0, serialNumbers: [] };
+      return isSerializedItem(item)
+        ? { itemId: item.id, receivedQuantity: line.serialNumbers.length, receivedSerials: line.serialNumbers }
+        : { itemId: item.id, receivedQuantity: line.quantity };
+    }),
+    ...(notes.trim() ? { notes: notes.trim() } : {}),
+  };
 }

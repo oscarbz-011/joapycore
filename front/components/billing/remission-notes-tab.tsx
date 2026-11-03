@@ -11,6 +11,7 @@ import {
   remissionDestination,
   remissionNoteNumber,
   remissionOrigin,
+  TRANSIT_STATUS_LABELS,
 } from '@/lib/remission-notes';
 import { useTableSort } from '@/lib/use-table-sort';
 import { usePagination } from '@/lib/use-pagination';
@@ -31,6 +32,7 @@ const SORT = {
   destination: remissionDestination,
   invoice: invoiceNumber,
   start: (note: RemissionNote) => new Date(note.transportStartDate),
+  transit: (note: RemissionNote) => (note.transitStatus ? TRANSIT_STATUS_LABELS[note.transitStatus] : ''),
   status: (note: RemissionNote) => note.status,
 };
 
@@ -42,6 +44,7 @@ export function RemissionNotesTab() {
   });
   const { sorted, sort, toggle } = useTableSort(notes, SORT);
   const pagination = usePagination(sorted);
+  const inTransit = notes.filter((n) => n.status === 'ISSUED' && n.transitStatus === 'IN_TRANSIT').length;
 
   const newTransfer = (
     <RequirePermission permission="billing:issue">
@@ -76,7 +79,14 @@ export function RemissionNotesTab() {
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-end">{newTransfer}</div>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="text-sm text-muted-foreground">
+          {inTransit === 0
+            ? 'No hay traslados en tránsito.'
+            : `${inTransit} ${inTransit === 1 ? 'traslado en tránsito' : 'traslados en tránsito'}: se reciben desde el detalle de la nota.`}
+        </p>
+        {newTransfer}
+      </div>
       <Card className="overflow-hidden p-0">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -88,6 +98,7 @@ export function RemissionNotesTab() {
                 <SortableHeader label="Llega a" sortKey="destination" sort={sort} onSort={toggle} />
                 <SortableHeader label="Factura" sortKey="invoice" sort={sort} onSort={toggle} />
                 <SortableHeader label="Inicio del traslado" sortKey="start" sort={sort} onSort={toggle} />
+                <SortableHeader label="Recepción" sortKey="transit" sort={sort} onSort={toggle} />
                 <SortableHeader label="Estado" sortKey="status" sort={sort} onSort={toggle} />
               </tr>
             </thead>
@@ -107,6 +118,9 @@ export function RemissionNotesTab() {
                   </td>
                   <td className="whitespace-nowrap px-4 py-3 text-muted-foreground">
                     {formatDatePY(note.transportStartDate, 'utc')}
+                  </td>
+                  <td className="whitespace-nowrap px-4 py-3 text-muted-foreground">
+                    {note.status === 'ISSUED' && note.transitStatus ? TRANSIT_STATUS_LABELS[note.transitStatus] : '—'}
                   </td>
                   <td className="px-4 py-3">
                     <Badge variant={note.status === 'VOIDED' ? 'destructive' : 'outline'}>

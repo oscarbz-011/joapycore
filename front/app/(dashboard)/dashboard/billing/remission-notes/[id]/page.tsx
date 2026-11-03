@@ -4,7 +4,7 @@ import { type ReactNode, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Printer, RotateCw } from 'lucide-react';
+import { ArrowLeft, PackageCheck, Printer, RotateCw } from 'lucide-react';
 import { apiErrorMessage } from '@/lib/api/api-error';
 import { filesApi } from '@/lib/api/files';
 import { type RemissionNoteDetail, remissionNotesApi } from '@/lib/api/remission-notes';
@@ -14,9 +14,11 @@ import { formatDatePY } from '@/lib/date';
 import { openPdf } from '@/lib/open-pdf';
 import { usePermission } from '@/lib/permissions';
 import {
+  canReceiveRemission,
   canVoidRemission,
   REMISSION_MOTIVE_LABELS,
   remissionNoteNumber,
+  TRANSIT_STATUS_LABELS,
   TRANSPORT_TYPE_LABELS,
 } from '@/lib/remission-notes';
 import { ScanPicker } from '@/components/billing/scan-picker';
@@ -89,6 +91,48 @@ function SheetPanel({ note }: Readonly<{ note: RemissionNoteDetail }>) {
   );
 }
 
+const TRANSIT_CLASS = {
+  IN_TRANSIT: 'bg-warn-subtle text-warn border-warn/30',
+  RECEIVED: 'bg-accent-subtle text-accent-on border-accent-on/20',
+  RECEIVED_WITH_DIFFERENCES: 'bg-destructive/10 text-destructive border-destructive/30',
+} as const;
+
+/** Traslado: en tránsito hasta que el destino registra lo que llegó. */
+function ReceptionPanel({ note }: Readonly<{ note: RemissionNoteDetail }>) {
+  const router = useRouter();
+  const canReceive = usePermission('inventory:movements:create');
+  if (!note.transitStatus) return null;
+  return (
+    <section className="space-y-3 rounded-xl border border-border bg-card p-5">
+      <div className="flex items-start justify-between gap-3">
+        <h2 className={SECTION_LABEL}>Recepción en el destino</h2>
+        <Badge variant="outline" className={TRANSIT_CLASS[note.transitStatus]}>
+          {TRANSIT_STATUS_LABELS[note.transitStatus]}
+        </Badge>
+      </div>
+      {note.transitStatus === 'IN_TRANSIT' ? (
+        <>
+          <p className="text-xs text-muted-foreground">
+            La mercadería salió de {note.fromWarehouse?.name ?? 'el origen'} y todavía no entró a{' '}
+            {note.toWarehouse?.name ?? 'el destino'}: no está disponible en ninguno de los dos.
+          </p>
+          {canReceive && canReceiveRemission(note) && (
+            <Button className="w-full" onClick={() => router.push(`/dashboard/billing/remission-notes/${note.id}/receive`)}>
+              <PackageCheck size={15} />
+              Registrar recepción
+            </Button>
+          )}
+        </>
+      ) : (
+        <>
+          <InfoRow label="Recibida" value={formatDatePY(note.receivedAt, 'local')} />
+          {note.receptionNotes && <InfoRow label="Observaciones" value={note.receptionNotes} />}
+        </>
+      )}
+    </section>
+  );
+}
+
 function VoidPanel({ note }: Readonly<{ note: RemissionNoteDetail }>) {
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
@@ -111,7 +155,7 @@ function VoidPanel({ note }: Readonly<{ note: RemissionNoteDetail }>) {
         <h2 className="text-sm font-medium text-foreground">Anular la nota</h2>
         <p className="mt-0.5 text-xs text-muted-foreground">
           {isTransfer
-            ? 'Si la mercadería no salió, la nota se anula y vuelve al depósito de origen.'
+            ? 'Mientras está en tránsito: la nota se anula y la mercadería vuelve al depósito de origen.'
             : 'Si el envío no se hizo, la nota se anula. No mueve stock.'}
         </p>
       </div>
@@ -194,6 +238,7 @@ export default function RemissionNoteDetailPage() {
 
   const onSheet = note.modality === 'PREPRINTED';
   const voided = note.status === 'VOIDED';
+  const received = note.transitStatus === 'RECEIVED' || note.transitStatus === 'RECEIVED_WITH_DIFFERENCES';
   const motive =
     note.motive === 'OTHER' && note.motiveDetail ? `Otros: ${note.motiveDetail}` : REMISSION_MOTIVE_LABELS[note.motive];
 
@@ -268,6 +313,8 @@ export default function RemissionNoteDetailPage() {
                     <th className="px-5 py-3 text-left">Unidad</th>
                     <th className="px-5 py-3 text-right">Cantidad</th>
                     <th className="px-5 py-3 text-left">N° de serie</th>
+                    {received && <th className="px-5 py-3 text-right">Llegó</th>}
+                    {received && <th className="px-5 py-3 text-right">Faltó</th>}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
@@ -279,6 +326,14 @@ export default function RemissionNoteDetailPage() {
                       <td className="px-5 py-3 font-mono text-xs text-muted-foreground">
                         {item.serialNumbers.length > 0 ? item.serialNumbers.join(', ') : '—'}
                       </td>
+                      {received && (
+                        <td className="px-5 py-3 text-right tabular-nums text-foreground">{item.receivedQuantity ?? 0}</td>
+                      )}
+                      {received && (
+                        <td className="px-5 py-3 text-right tabular-nums text-muted-foreground">
+                          {item.quantity - (item.receivedQuantity ?? 0) || '—'}
+                        </td>
+                      )}
                     </tr>
                   ))}
                 </tbody>
@@ -318,6 +373,7 @@ export default function RemissionNoteDetailPage() {
         </div>
 
         <div className="space-y-6">
+          <ReceptionPanel note={note} />
           {onSheet && <SheetPanel note={note} />}
 
           <section className="divide-y divide-border rounded-xl border border-border bg-card">

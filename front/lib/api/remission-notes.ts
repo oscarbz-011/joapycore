@@ -22,6 +22,8 @@ export type RemissionMotive =
   | 'OTHER';
 export type RemissionNoteStatus = 'ISSUED' | 'VOIDED';
 export type TransportType = 'OWN' | 'THIRD_PARTY';
+/** Solo traslados entre depósitos; null en una venta. */
+export type RemissionTransitStatus = 'IN_TRANSIT' | 'RECEIVED' | 'RECEIVED_WITH_DIFFERENCES';
 
 interface WarehouseRef {
   id: string;
@@ -35,6 +37,8 @@ export interface RemissionNote {
   numberPrefix: string;
   motive: RemissionMotive;
   status: RemissionNoteStatus;
+  transitStatus: RemissionTransitStatus | null;
+  receivedAt: string | null;
   modality: BillingModality;
   issuedAt: string;
   recipientName: string;
@@ -56,6 +60,8 @@ export interface RemissionNoteItem {
   unit: string;
   quantity: number;
   serialNumbers: string[];
+  receivedQuantity: number | null;
+  receivedSerials: string[];
 }
 
 export interface RemissionNoteDetail extends RemissionNote {
@@ -86,6 +92,8 @@ export interface RemissionNoteDetail extends RemissionNote {
   issuedById: string | null;
   voidedAt: string | null;
   voidReason: string | null;
+  receivedById: string | null;
+  receptionNotes: string | null;
   pdfFileId: string | null;
   physicalScan: AttachedFile | null;
   items: RemissionNoteItem[];
@@ -177,6 +185,11 @@ export interface IssueSaleRemissionPayload extends RemissionIssuePayload {
   items: { invoiceItemId: string; quantity: number; serialNumbers?: string[] }[];
 }
 
+export interface ReceiveRemissionPayload {
+  items: { itemId: string; receivedQuantity: number; receivedSerials?: string[] }[];
+  notes?: string;
+}
+
 export const remissionNotesApi = {
   list: (): Promise<RemissionNote[]> =>
     apiClient.get('/billing/remission-notes').then((r) => r.data),
@@ -203,6 +216,9 @@ export const remissionNotesApi = {
 
   issueForSale: (invoiceId: string, dto: IssueSaleRemissionPayload): Promise<RemissionNoteDetail> =>
     apiClient.post(`/billing/invoices/${invoiceId}/remission-notes`, dto).then((r) => r.data),
+
+  receive: (id: string, dto: ReceiveRemissionPayload): Promise<RemissionNoteDetail> =>
+    apiClient.post(`/billing/remission-notes/${id}/receive`, dto).then((r) => r.data),
 
   void: (id: string, reason: string): Promise<RemissionNoteDetail> =>
     apiClient.post(`/billing/remission-notes/${id}/void`, { reason }).then((r) => r.data),

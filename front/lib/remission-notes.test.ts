@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import type { RemitableItem, TransferStockRow } from './api/remission-notes';
 import {
+  canReceiveRemission,
   canVoidRemission,
+  fullReception,
+  missingUnits,
+  receptionPayload,
+  receptionProblem,
   emptyRemissionDraft,
   remissionDestination,
   remissionDraftProblem,
@@ -55,9 +60,18 @@ describe('labels', () => {
     expect(remissionOrigin(sale)).toBe('Centro');
   });
 
-  it('voids only a valid note', () => {
-    expect(canVoidRemission({ status: 'ISSUED' })).toBe(true);
-    expect(canVoidRemission({ status: 'VOIDED' })).toBe(false);
+  it('voids a sale while valid and a transfer only while in transit', () => {
+    expect(canVoidRemission({ status: 'ISSUED', transitStatus: null })).toBe(true);
+    expect(canVoidRemission({ status: 'ISSUED', transitStatus: 'IN_TRANSIT' })).toBe(true);
+    expect(canVoidRemission({ status: 'ISSUED', transitStatus: 'RECEIVED' })).toBe(false);
+    expect(canVoidRemission({ status: 'VOIDED', transitStatus: null })).toBe(false);
+  });
+
+  it('receives only a transfer in transit', () => {
+    expect(canReceiveRemission({ status: 'ISSUED', transitStatus: 'IN_TRANSIT' })).toBe(true);
+    expect(canReceiveRemission({ status: 'ISSUED', transitStatus: 'RECEIVED_WITH_DIFFERENCES' })).toBe(false);
+    expect(canReceiveRemission({ status: 'VOIDED', transitStatus: 'IN_TRANSIT' })).toBe(false);
+    expect(canReceiveRemission({ status: 'ISSUED', transitStatus: null })).toBe(false);
   });
 
   it('uses the day in Paraguay', () => {
@@ -174,5 +188,46 @@ describe('sale lines', () => {
       { invoiceItemId: 'ii-rice', quantity: 6 },
       { invoiceItemId: 'ii-tv', quantity: 1, serialNumbers: ['SN-9'] },
     ]);
+  });
+});
+
+describe('reception', () => {
+  const ITEMS_SENT = [
+    { id: 'it-rice', description: 'Arroz', quantity: 5, serialNumbers: [] },
+    { id: 'it-tv', description: 'Televisor', quantity: 2, serialNumbers: ['SN-1', 'SN-2'] },
+  ];
+
+  it('starts with everything arrived', () => {
+    const lines = fullReception(ITEMS_SENT);
+    expect(missingUnits(ITEMS_SENT, lines)).toBe(0);
+    expect(receptionProblem(ITEMS_SENT, lines, '')).toBeNull();
+    expect(receptionPayload(ITEMS_SENT, lines, '')).toEqual({
+      items: [
+        { itemId: 'it-rice', receivedQuantity: 5 },
+        { itemId: 'it-tv', receivedQuantity: 2, receivedSerials: ['SN-1', 'SN-2'] },
+      ],
+    });
+  });
+
+  it('counts what is missing and asks to explain it', () => {
+    const lines = {
+      'it-rice': { quantity: 3, serialNumbers: [] },
+      'it-tv': { quantity: 0, serialNumbers: ['SN-2'] },
+    };
+    expect(missingUnits(ITEMS_SENT, lines)).toBe(3);
+    expect(receptionProblem(ITEMS_SENT, lines, '')).toContain('explicá la diferencia');
+    expect(receptionProblem(ITEMS_SENT, lines, 'Faltó una caja')).toBeNull();
+    expect(receptionPayload(ITEMS_SENT, lines, ' Faltó una caja ')).toEqual({
+      items: [
+        { itemId: 'it-rice', receivedQuantity: 3 },
+        { itemId: 'it-tv', receivedQuantity: 1, receivedSerials: ['SN-2'] },
+      ],
+      notes: 'Faltó una caja',
+    });
+  });
+
+  it('does not accept more than was sent', () => {
+    const lines = { ...fullReception(ITEMS_SENT), 'it-rice': { quantity: 6, serialNumbers: [] } };
+    expect(receptionProblem(ITEMS_SENT, lines, '')).toContain('no pueden llegar más');
   });
 });

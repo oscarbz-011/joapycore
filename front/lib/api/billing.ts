@@ -19,6 +19,7 @@ export type BillingEventType =
   | "VOIDED"
   | "CREDIT_NOTE_ISSUED"
   | "REMISSION_NOTE_ISSUED"
+  | "REMISSION_RECEIVED"
   | "REFUNDED"
   | "CUSTOMER_CREDITED";
 export type { PaymentMethod } from "../payment-methods";

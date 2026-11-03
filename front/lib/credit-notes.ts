@@ -23,6 +23,7 @@ export const BILLING_EVENT_LABELS: Record<BillingEventType, string> = {
   VOIDED: 'Anulada',
   CREDIT_NOTE_ISSUED: 'Nota de crédito emitida',
   REMISSION_NOTE_ISSUED: 'Nota de remisión emitida',
+  REMISSION_RECEIVED: 'Mercadería recibida en el destino',
   REFUNDED: 'Dinero devuelto',
   CUSTOMER_CREDITED: 'Saldo a favor del cliente',
 };
@@ -63,6 +64,10 @@ export function billingEventDetail(event: Pick<BillingEvent, 'type' | 'detail'>)
         .join(' · ');
     case 'VOIDED':
       return typeof detail.reason === 'string' ? detail.reason : '';
+    case 'REMISSION_RECEIVED':
+      return detail.differences === true
+        ? ['Con faltantes', typeof detail.notes === 'string' ? detail.notes : ''].filter(Boolean).join(' · ')
+        : 'Llegó completa';
     case 'REMISSION_NOTE_ISSUED':
     case 'NUMBERED':
       return typeof detail.number === 'string' ? detail.number : '';

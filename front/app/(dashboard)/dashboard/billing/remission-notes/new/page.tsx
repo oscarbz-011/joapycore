@@ -221,7 +221,8 @@ function NewTransferRemission() {
       <div>
         <h1 className="text-2xl font-semibold text-foreground">Traslado entre sucursales</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          La mercadería sale del depósito de origen con su nota de remisión y entra al de destino al emitirla.
+          La mercadería sale del depósito de origen con su nota de remisión y queda en tránsito hasta que en el destino
+          se registre lo que llegó.
         </p>
       </div>
 
@@ -395,7 +396,7 @@ function NewTransferRemission() {
             <RequirePermission permission="billing:issue">
               <Button className="w-full" disabled={Boolean(problem) || issue.isPending} onClick={submit}>
                 <Send size={15} />
-                {issue.isPending ? 'Emitiendo…' : 'Emitir nota y trasladar'}
+                {issue.isPending ? 'Emitiendo…' : 'Emitir nota y despachar'}
               </Button>
             </RequirePermission>
           </Card>

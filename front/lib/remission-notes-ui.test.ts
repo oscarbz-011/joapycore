@@ -39,6 +39,7 @@ vi.mock('@tanstack/react-query', () => ({
 const { default: TransferPage } = await import('@/app/(dashboard)/dashboard/billing/remission-notes/new/page');
 const { default: SalePage } = await import('@/app/(dashboard)/dashboard/billing/invoices/[id]/remission-note/page');
 const { default: DetailPage } = await import('@/app/(dashboard)/dashboard/billing/remission-notes/[id]/page');
+const { default: ReceivePage } = await import('@/app/(dashboard)/dashboard/billing/remission-notes/[id]/receive/page');
 const { RemissionNotesTab } = await import('@/components/billing/remission-notes-tab');
 
 function render<P extends object>(type: ComponentType<P>, props: P): string {
@@ -110,7 +111,8 @@ describe('transfer between branches', () => {
     expect(html).toContain('Arroz');
     expect(html).toContain('SN-1');
     expect(html).toContain('Elegí qué mercadería se traslada');
-    expect(html).toContain('Emitir nota y trasladar');
+    expect(html).toContain('Emitir nota y despachar');
+    expect(html).toContain('queda en tránsito');
   });
 
   it('asks to put the origin warehouse in a branch', () => {
@@ -125,7 +127,7 @@ describe('transfer between branches', () => {
   it('hides the issue button without permission', () => {
     state.permissions = ['billing:read'];
     state.data['remission-notes/transfer-options'] = TRANSFER_OPTIONS;
-    expect(render(TransferPage, {})).not.toContain('Emitir nota y trasladar</button>');
+    expect(render(TransferPage, {})).not.toContain('Emitir nota y despachar</button>');
   });
 });
 
@@ -190,6 +192,8 @@ const NOTE: RemissionNoteDetail = {
   numberPrefix: '001-003-',
   motive: 'BRANCH_TRANSFER',
   status: 'ISSUED',
+  transitStatus: 'IN_TRANSIT',
+  receivedAt: null,
   modality: 'SELF_PRINTED',
   issuedAt: '2026-11-03T13:00:00.000Z',
   recipientName: 'Electro SA',
@@ -228,6 +232,8 @@ const NOTE: RemissionNoteDetail = {
   issuedById: 'me',
   voidedAt: null,
   voidReason: null,
+  receivedById: null,
+  receptionNotes: null,
   pdfFileId: 'file-1',
   physicalScan: null,
   items: [
@@ -239,6 +245,19 @@ const NOTE: RemissionNoteDetail = {
       unit: 'unidad',
       quantity: 1,
       serialNumbers: ['SN-1'],
+      receivedQuantity: null,
+      receivedSerials: [],
+    },
+    {
+      id: 'rni-2',
+      productId: 'p-rice',
+      invoiceItemId: null,
+      description: 'Arroz',
+      unit: 'kg',
+      quantity: 10,
+      serialNumbers: [],
+      receivedQuantity: null,
+      receivedSerials: [],
     },
   ],
   events: [
@@ -267,6 +286,36 @@ describe('detail', () => {
     expect(html).toContain('Nota de remisión emitida');
     expect(html).toContain('Imprimir / descargar PDF');
     expect(html).toContain('Anular nota de remisión');
+    expect(html).toContain('En tránsito');
+    expect(html).toContain('no está disponible en ninguno de los dos');
+  });
+
+  it('offers to receive a transfer only with inventory permission', () => {
+    state.data['remission-note'] = NOTE;
+    state.permissions = ['billing:read', 'inventory:movements:create'];
+    expect(render(DetailPage, {})).toContain('Registrar recepción');
+    state.permissions = ['billing:read'];
+    expect(render(DetailPage, {})).not.toContain('Registrar recepción');
+  });
+
+  it('shows what arrived and what was missing, and no longer voids it', () => {
+    state.data['remission-note'] = {
+      ...NOTE,
+      transitStatus: 'RECEIVED_WITH_DIFFERENCES',
+      receivedAt: '2026-11-04T15:00:00.000Z',
+      receptionNotes: 'Faltaron 2 bolsas',
+      items: [
+        { ...NOTE.items[0], receivedQuantity: 1, receivedSerials: ['SN-1'] },
+        { ...NOTE.items[1], receivedQuantity: 8 },
+      ],
+    };
+    const html = render(DetailPage, {});
+    expect(html).toContain('Recibida con faltantes');
+    expect(html).toContain('Faltaron 2 bolsas');
+    expect(html).toContain('Faltó');
+    expect(html).toMatch(/>8<\/td><td[^>]*>2<\/td>/);
+    expect(html).not.toContain('Anular nota de remisión');
+    expect(html).not.toContain('Registrar recepción');
   });
 
   it('asks for the scan of a talonario note and does not void without permission', () => {
@@ -305,5 +354,41 @@ describe('list', () => {
   it('explains when there are none', () => {
     state.data['remission-notes'] = [];
     expect(render(RemissionNotesTab, {})).toContain('obligatorias para trasladar mercadería entre sucursales');
+  });
+});
+
+describe('reception', () => {
+  it('starts with everything arrived and lets the serial numbers be unchecked', () => {
+    state.permissions = ['billing:read', 'inventory:movements:create'];
+    state.data['remission-note'] = NOTE;
+    const html = render(ReceivePage, {});
+    expect(html).toContain('Recibir mercadería');
+    expect(html).toContain('De Central a Depósito Capiatá');
+    expect(html).toContain('Llegó todo lo despachado');
+    expect(html).toContain('Números de serie que llegaron (1 de 1)');
+    expect(html).toContain('value="10"');
+    expect(html).toContain('Confirmar recepción');
+  });
+
+  it('does not receive twice', () => {
+    state.data['remission-note'] = { ...NOTE, transitStatus: 'RECEIVED' };
+    const html = render(ReceivePage, {});
+    expect(html).toContain('ya está recibida');
+    expect(html).not.toContain('Confirmar recepción');
+  });
+
+  it('hides the button without inventory permission', () => {
+    state.permissions = ['billing:read'];
+    state.data['remission-note'] = NOTE;
+    expect(render(ReceivePage, {})).not.toContain('Confirmar recepción</button>');
+  });
+});
+
+describe('list in transit', () => {
+  it('counts the transfers waiting at their destination', () => {
+    state.data['remission-notes'] = [NOTE as RemissionNote, { ...NOTE, id: 'rn-2', transitStatus: 'RECEIVED' } as RemissionNote];
+    const html = render(RemissionNotesTab, {});
+    expect(html).toContain('1 traslado en tránsito');
+    expect(html).toContain('Recibida');
   });
 });
