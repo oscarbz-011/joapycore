@@ -11,6 +11,7 @@ import {
   Prisma,
   RemissionMotive,
   RemissionNoteStatus,
+  RemissionTransitStatus,
 } from '@prisma/client';
 import { randomUUID } from 'crypto';
 import type { AuditLogEvent } from '../../../audit/audit-log.event';
@@ -25,6 +26,7 @@ import { PrismaService } from '../../../prisma/prisma.service';
 import {
   IssueSaleRemissionDto,
   IssueTransferRemissionDto,
+  ReceiveRemissionDto,
   VoidRemissionDto,
 } from '../dto/remission-note.dto';
 import { BillingEventsRepository } from '../repositories/billing-events.repository';
@@ -32,6 +34,7 @@ import { BillingSourcesRepository } from '../repositories/billing-sources.reposi
 import { InvoicesRepository } from '../repositories/invoices.repository';
 import { RemissionNotesRepository } from '../repositories/remission-notes.repository';
 import {
+  buildReception,
   buildSaleLines,
   buildTransferLines,
   goodsDescription,
@@ -327,9 +330,10 @@ export class RemissionNotesService {
           invoiceId: null,
           fromWarehouseId: from.id,
           toWarehouseId: to.id,
+          transitStatus: RemissionTransitStatus.IN_TRANSIT,
           lines,
         });
-        await this.stockLedger.transfer(tx, tenantId, {
+        await this.stockLedger.dispatch(tx, tenantId, {
           referenceId: note.id,
           fromWarehouseId: from.id,
           toWarehouseId: to.id,
@@ -395,6 +399,7 @@ export class RemissionNotesService {
           invoiceId: invoice.id,
           fromWarehouseId: null,
           toWarehouseId: null,
+          transitStatus: null,
           lines,
         });
       }),
@@ -405,8 +410,99 @@ export class RemissionNotesService {
   }
 
   /**
-   * Anula una nota vigente. Si era un traslado, la mercadería vuelve al
-   * depósito de origen: si ya no está en el destino, no se puede anular.
+   * Registra lo que llegó al depósito de destino: entra al stock y lo que
+   * falta queda como faltante del traslado, con su explicación.
+   */
+  async receive(
+    tenantId: string,
+    id: string,
+    dto: ReceiveRemissionDto,
+    userId?: string,
+  ) {
+    const at = new Date();
+    const notes = dto.notes?.trim() || null;
+    let differences = false;
+    await this.prisma.$transaction(async (tx) => {
+      const note = await this.notes.findById(tenantId, id, tx);
+      if (!note) throw new NotFoundException('Nota de remisión no encontrada');
+      if (
+        note.motive !== RemissionMotive.BRANCH_TRANSFER ||
+        !note.toWarehouse
+      ) {
+        throw new UnprocessableEntityException(
+          'Solo un traslado entre depósitos se recibe en el destino',
+        );
+      }
+      if (note.status === RemissionNoteStatus.VOIDED) {
+        throw new UnprocessableEntityException('La nota está anulada');
+      }
+      if (note.transitStatus !== RemissionTransitStatus.IN_TRANSIT) {
+        throw new UnprocessableEntityException(
+          'La mercadería de esta nota ya se recibió',
+        );
+      }
+      const plan = buildReception(note.items, dto.items, notes ?? undefined);
+      differences = plan.hasDifferences;
+
+      const marked = await this.notes.markReceived(
+        tenantId,
+        id,
+        {
+          transitStatus: plan.hasDifferences
+            ? RemissionTransitStatus.RECEIVED_WITH_DIFFERENCES
+            : RemissionTransitStatus.RECEIVED,
+          at,
+          userId: userId ?? null,
+          notes,
+        },
+        tx,
+      );
+      if (marked.count !== 1) {
+        throw new ConflictException(
+          'La nota cambió mientras se registraba la recepción. Recargá e intentá de nuevo.',
+        );
+      }
+      for (const item of plan.items) {
+        await this.notes.setItemReceived(
+          tenantId,
+          item.itemId,
+          { quantity: item.quantity, serialNumbers: item.serialNumbers },
+          tx,
+        );
+      }
+      await this.stockLedger.receive(tx, tenantId, {
+        referenceId: note.id,
+        warehouseId: note.toWarehouse.id,
+        notes: `Recepción de la nota de remisión ${note.numberPrefix}${note.number}`,
+        lines: plan.received,
+        lostSerials: plan.lost,
+      });
+      await this.events.record(
+        {
+          tenantId,
+          remissionNoteId: id,
+          type: BillingEventType.REMISSION_RECEIVED,
+          userId,
+          detail: { differences: plan.hasDifferences, notes },
+        },
+        tx,
+      );
+    });
+
+    this.eventBus.emit('audit.log', {
+      tenantId,
+      userId,
+      module: 'billing',
+      action: 'remission-note.received',
+      resourceId: id,
+      after: { differences },
+    } satisfies AuditLogEvent);
+    return this.findOne(tenantId, id);
+  }
+
+  /**
+   * Anula una nota vigente. Un traslado solo mientras está en tránsito: la
+   * mercadería vuelve al depósito de origen.
    */
   async voidNote(
     tenantId: string,
@@ -422,10 +518,20 @@ export class RemissionNotesService {
       if (note.status === RemissionNoteStatus.VOIDED) {
         throw new UnprocessableEntityException('La nota ya está anulada');
       }
+      const isTransfer = note.motive === RemissionMotive.BRANCH_TRANSFER;
+      if (
+        isTransfer &&
+        note.transitStatus !== RemissionTransitStatus.IN_TRANSIT
+      ) {
+        throw new UnprocessableEntityException(
+          'La mercadería ya se recibió en el destino: para devolverla, emití una nota de remisión de vuelta',
+        );
+      }
       const voided = await this.notes.voidIfIssued(
         tenantId,
         id,
         { reason, at, userId: userId ?? null },
+        isTransfer,
         tx,
       );
       if (voided.count !== 1) {
@@ -433,15 +539,10 @@ export class RemissionNotesService {
           'La nota cambió mientras se anulaba. Recargá e intentá de nuevo.',
         );
       }
-      if (
-        note.motive === RemissionMotive.BRANCH_TRANSFER &&
-        note.fromWarehouse &&
-        note.toWarehouse
-      ) {
-        await this.stockLedger.transfer(tx, tenantId, {
+      if (isTransfer && note.fromWarehouse) {
+        await this.stockLedger.receive(tx, tenantId, {
           referenceId: note.id,
-          fromWarehouseId: note.toWarehouse.id,
-          toWarehouseId: note.fromWarehouse.id,
+          warehouseId: note.fromWarehouse.id,
           notes: `Anulación de la nota de remisión ${note.numberPrefix}${note.number}`,
           lines: note.items
             .filter((item) => item.productId)
@@ -450,6 +551,7 @@ export class RemissionNotesService {
               quantity: item.quantity,
               serialNumbers: item.serialNumbers,
             })),
+          lostSerials: [],
         });
       }
       await this.events.record(
@@ -566,6 +668,7 @@ export class RemissionNotesService {
       invoiceId: string | null;
       fromWarehouseId: string | null;
       toWarehouseId: string | null;
+      transitStatus: RemissionTransitStatus | null;
       lines: RemissionLine[];
     },
   ) {
@@ -593,6 +696,7 @@ export class RemissionNotesService {
         invoiceId: params.invoiceId,
         fromWarehouseId: params.fromWarehouseId,
         toWarehouseId: params.toWarehouseId,
+        transitStatus: params.transitStatus,
         customerId: params.recipient.customerId,
         recipientName: params.recipient.name,
         recipientDocument: params.recipient.document,

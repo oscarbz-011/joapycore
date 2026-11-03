@@ -254,3 +254,115 @@ export function buildTransferLines(
     };
   });
 }
+
+export interface DispatchedItem {
+  id: string;
+  productId: string | null;
+  description: string;
+  quantity: number;
+  serialNumbers: string[];
+}
+
+export interface ReceptionPlan {
+  received: { productId: string; quantity: number; serialNumbers: string[] }[];
+  lost: { productId: string; serialNumbers: string[] }[];
+  items: { itemId: string; quantity: number; serialNumbers: string[] }[];
+  hasDifferences: boolean;
+}
+
+/**
+ * Lo que llegó de cada ítem despachado. Lo que falta no entra al destino:
+ * queda como faltante del traslado y hay que explicarlo.
+ */
+export function buildReception(
+  dispatched: DispatchedItem[],
+  requested: {
+    itemId: string;
+    receivedQuantity: number;
+    receivedSerials?: string[];
+  }[],
+  notes: string | undefined,
+): ReceptionPlan {
+  const byItem = new Map<string, (typeof requested)[number]>();
+  for (const req of requested) {
+    if (byItem.has(req.itemId)) {
+      throw new UnprocessableEntityException(
+        'Un ítem está repetido en la recepción',
+      );
+    }
+    if (!dispatched.some((item) => item.id === req.itemId)) {
+      throw new UnprocessableEntityException(
+        'Uno de los ítems no es de esta nota',
+      );
+    }
+    byItem.set(req.itemId, req);
+  }
+
+  const plan: ReceptionPlan = {
+    received: [],
+    lost: [],
+    items: [],
+    hasDifferences: false,
+  };
+  for (const item of dispatched) {
+    if (!item.productId) continue;
+    const req = byItem.get(item.id);
+    if (!req) {
+      throw new UnprocessableEntityException(
+        `Indicá cuánto llegó de "${item.description}"`,
+      );
+    }
+    if (req.receivedQuantity > item.quantity) {
+      throw new UnprocessableEntityException(
+        `De "${item.description}" se despacharon ${item.quantity}: no pueden llegar más`,
+      );
+    }
+    const serialized = item.serialNumbers.length > 0;
+    const serials = (req.receivedSerials ?? [])
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (serialized) {
+      const unique = new Set(serials);
+      if (
+        unique.size !== serials.length ||
+        unique.size !== req.receivedQuantity
+      ) {
+        throw new UnprocessableEntityException(
+          `Marcá un número de serie por cada unidad de "${item.description}" que llegó`,
+        );
+      }
+      if (serials.some((s) => !item.serialNumbers.includes(s))) {
+        throw new UnprocessableEntityException(
+          `Algún número de serie no se despachó con "${item.description}"`,
+        );
+      }
+      const missing = item.serialNumbers.filter((s) => !unique.has(s));
+      if (missing.length > 0)
+        plan.lost.push({ productId: item.productId, serialNumbers: missing });
+    } else if (serials.length > 0) {
+      throw new UnprocessableEntityException(
+        `"${item.description}" no se controla por número de serie`,
+      );
+    }
+    if (req.receivedQuantity < item.quantity) plan.hasDifferences = true;
+    if (req.receivedQuantity > 0) {
+      plan.received.push({
+        productId: item.productId,
+        quantity: req.receivedQuantity,
+        serialNumbers: serials,
+      });
+    }
+    plan.items.push({
+      itemId: item.id,
+      quantity: req.receivedQuantity,
+      serialNumbers: serials,
+    });
+  }
+
+  if (plan.hasDifferences && (notes?.trim().length ?? 0) < 5) {
+    throw new UnprocessableEntityException(
+      'Falta mercadería: explicá la diferencia en las observaciones de la recepción',
+    );
+  }
+  return plan;
+}

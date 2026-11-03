@@ -222,19 +222,23 @@ describe('StockLedgerService', () => {
     });
   });
 
-  describe('transfer', () => {
+  describe('dispatch and receive', () => {
     const tx = {} as any;
     let movements: {
       create: jest.Mock;
       lockProducts: jest.Mock;
       sumByProductsAndWarehouse: jest.Mock;
     };
-    let units: { moveInStockUnits: jest.Mock };
+    let units: {
+      dispatchUnits: jest.Mock;
+      receiveUnits: jest.Mock;
+      loseInTransit: jest.Mock;
+    };
     let locations: { findById: jest.Mock };
     let products: { findForTransfer: jest.Mock };
     let ledger: StockLedgerService;
 
-    const transfer = (lines: any[]) => ({
+    const dispatch = (lines: any[]) => ({
       referenceId: 'rn-1',
       fromWarehouseId: 'wh-a',
       toWarehouseId: 'wh-b',
@@ -250,7 +254,11 @@ describe('StockLedgerService', () => {
           .fn()
           .mockResolvedValue(new Map([['p-rice::wh-a', 10]])),
       };
-      units = { moveInStockUnits: jest.fn().mockResolvedValue(2) };
+      units = {
+        dispatchUnits: jest.fn().mockResolvedValue(2),
+        receiveUnits: jest.fn().mockResolvedValue(1),
+        loseInTransit: jest.fn().mockResolvedValue(1),
+      };
       locations = {
         findById: jest.fn().mockImplementation((_t: string, id: string) => ({
           id,
@@ -272,11 +280,11 @@ describe('StockLedgerService', () => {
       );
     });
 
-    it('moves counted and serialized goods with an OUT and an IN each', async () => {
-      await ledger.transfer(
+    it('takes the goods out of the origin and leaves them in transit', async () => {
+      await ledger.dispatch(
         tx,
         'tenant-1',
-        transfer([
+        dispatch([
           { productId: 'p-rice', quantity: 4, serialNumbers: [] },
           { productId: 'p-tv', quantity: 2, serialNumbers: ['SN-1', 'SN-2'] },
         ]),
@@ -284,7 +292,7 @@ describe('StockLedgerService', () => {
       expect(movements.lockProducts).toHaveBeenCalledWith(tx, 'tenant-1', [
         'p-rice',
       ]);
-      expect(units.moveInStockUnits).toHaveBeenCalledWith(
+      expect(units.dispatchUnits).toHaveBeenCalledWith(
         'tenant-1',
         'p-tv',
         ['SN-1', 'SN-2'],
@@ -292,7 +300,7 @@ describe('StockLedgerService', () => {
         'wh-b',
         tx,
       );
-      expect(movements.create).toHaveBeenCalledTimes(4);
+      expect(movements.create).toHaveBeenCalledTimes(2);
       expect(movements.create).toHaveBeenCalledWith(
         expect.objectContaining({
           productId: 'p-rice',
@@ -304,35 +312,30 @@ describe('StockLedgerService', () => {
         }),
         tx,
       );
-      expect(movements.create).toHaveBeenCalledWith(
-        expect.objectContaining({
-          productId: 'p-tv',
-          warehouseId: 'wh-b',
-          type: 'IN',
-          quantity: 2,
-        }),
+      expect(movements.create).not.toHaveBeenCalledWith(
+        expect.objectContaining({ type: 'IN' }),
         tx,
       );
     });
 
     it('rejects more than the origin has', async () => {
       await expect(
-        ledger.transfer(
+        ledger.dispatch(
           tx,
           'tenant-1',
-          transfer([{ productId: 'p-rice', quantity: 11, serialNumbers: [] }]),
+          dispatch([{ productId: 'p-rice', quantity: 11, serialNumbers: [] }]),
         ),
       ).rejects.toBeInstanceOf(UnprocessableEntityException);
       expect(movements.create).not.toHaveBeenCalled();
     });
 
-    it('rejects a serial number that is not in the origin', async () => {
-      units.moveInStockUnits.mockResolvedValue(1);
+    it('rejects a serial number that is not free in the origin', async () => {
+      units.dispatchUnits.mockResolvedValue(1);
       await expect(
-        ledger.transfer(
+        ledger.dispatch(
           tx,
           'tenant-1',
-          transfer([
+          dispatch([
             { productId: 'p-tv', quantity: 2, serialNumbers: ['SN-1', 'SN-9'] },
           ]),
         ),
@@ -347,14 +350,14 @@ describe('StockLedgerService', () => {
       [{ productId: 'p-gone', quantity: 1, serialNumbers: [] }, 'no existe'],
     ])('rejects %j', async (line, message) => {
       await expect(
-        ledger.transfer(tx, 'tenant-1', transfer([line])),
+        ledger.dispatch(tx, 'tenant-1', dispatch([line])),
       ).rejects.toThrow(message);
     });
 
     it('rejects the same warehouse and an inactive one', async () => {
       await expect(
-        ledger.transfer(tx, 'tenant-1', {
-          ...transfer([
+        ledger.dispatch(tx, 'tenant-1', {
+          ...dispatch([
             { productId: 'p-rice', quantity: 1, serialNumbers: [] },
           ]),
           toWarehouseId: 'wh-a',
@@ -362,12 +365,63 @@ describe('StockLedgerService', () => {
       ).rejects.toThrow('distintos');
       locations.findById.mockResolvedValueOnce({ id: 'wh-a', isActive: false });
       await expect(
-        ledger.transfer(
+        ledger.dispatch(
           tx,
           'tenant-1',
-          transfer([{ productId: 'p-rice', quantity: 1, serialNumbers: [] }]),
+          dispatch([{ productId: 'p-rice', quantity: 1, serialNumbers: [] }]),
         ),
       ).rejects.toThrow('inactivo');
+    });
+
+    it('puts what arrived in the destination and writes off what did not', async () => {
+      await ledger.receive(tx, 'tenant-1', {
+        referenceId: 'rn-1',
+        warehouseId: 'wh-b',
+        notes: 'Recepción',
+        lines: [
+          { productId: 'p-rice', quantity: 3, serialNumbers: [] },
+          { productId: 'p-tv', quantity: 1, serialNumbers: ['SN-1'] },
+        ],
+        lostSerials: [{ productId: 'p-tv', serialNumbers: ['SN-2'] }],
+      });
+      expect(units.receiveUnits).toHaveBeenCalledWith(
+        'tenant-1',
+        'p-tv',
+        ['SN-1'],
+        'wh-b',
+        tx,
+      );
+      expect(units.loseInTransit).toHaveBeenCalledWith(
+        'tenant-1',
+        'p-tv',
+        ['SN-2'],
+        tx,
+      );
+      expect(movements.create).toHaveBeenCalledTimes(2);
+      expect(movements.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          productId: 'p-rice',
+          warehouseId: 'wh-b',
+          type: 'IN',
+          reason: 'TRANSFER',
+          quantity: 3,
+          referenceId: 'rn-1',
+        }),
+        tx,
+      );
+    });
+
+    it('rejects a serial number that is not in transit', async () => {
+      units.receiveUnits.mockResolvedValue(0);
+      await expect(
+        ledger.receive(tx, 'tenant-1', {
+          referenceId: 'rn-1',
+          warehouseId: 'wh-b',
+          notes: 'Recepción',
+          lines: [{ productId: 'p-tv', quantity: 1, serialNumbers: ['SN-9'] }],
+          lostSerials: [],
+        }),
+      ).rejects.toThrow('no está en tránsito');
     });
   });
 

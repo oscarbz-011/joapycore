@@ -239,7 +239,12 @@ describe('RemissionNotesService (PostgreSQL)', () => {
     return sum._sum.quantity ?? 0;
   }
 
-  it('numbers the note and moves the goods to the other branch in one go', async () => {
+  const unitOf = (n: number) =>
+    prisma.productUnit.findFirst({
+      where: { tenantId, serialNumber: serial(n) },
+    });
+
+  it('takes the goods out of the origin and leaves them in transit until they arrive', async () => {
     const note = await service.issueTransfer(
       tenantId,
       transfer([
@@ -255,21 +260,102 @@ describe('RemissionNotesService (PostgreSQL)', () => {
       status: 'ISSUED',
       recipientName: 'Electro SA',
       recipientDocument: 'RUC 80000001-1',
+      transitStatus: 'IN_TRANSIT',
       branch: { id: branchA },
     });
     expect(note.items).toHaveLength(2);
     expect(await stockAt(rice, fromWarehouse)).toBe(6);
+    expect(await stockAt(rice, toWarehouse)).toBe(0);
+    expect(await stockAt(tv, toWarehouse)).toBe(0);
+    expect(await unitOf(1)).toMatchObject({ status: 'IN_TRANSIT' });
+    const inTransit = await service.transferStock(tenantId, fromWarehouse);
+    expect(inTransit.find((r) => r.productId === tv)?.serialNumbers).toEqual([
+      serial(2),
+    ]);
+
+    const riceItem = note.items.find((i) => i.productId === rice);
+    const tvItem = note.items.find((i) => i.productId === tv);
+    const received = await service.receive(tenantId, note.id, {
+      items: [
+        { itemId: riceItem?.id as string, receivedQuantity: 4 },
+        {
+          itemId: tvItem?.id as string,
+          receivedQuantity: 1,
+          receivedSerials: [serial(1)],
+        },
+      ],
+    });
+
+    expect(received).toMatchObject({ transitStatus: 'RECEIVED' });
     expect(await stockAt(rice, toWarehouse)).toBe(4);
     expect(await stockAt(tv, toWarehouse)).toBe(1);
-    const unit = await prisma.productUnit.findFirst({
-      where: { tenantId, serialNumber: serial(1) },
+    expect(await unitOf(1)).toMatchObject({
+      status: 'IN_STOCK',
+      warehouseId: toWarehouse,
     });
-    expect(unit?.warehouseId).toBe(toWarehouse);
-    const movements = await prisma.stockMovement.count({
-      where: { tenantId, referenceId: note.id },
+    expect(
+      await prisma.stockMovement.count({
+        where: { tenantId, referenceId: note.id },
+      }),
+    ).toBe(4);
+    expect(received.events.map((e) => e.type)).toEqual([
+      'REMISSION_NOTE_ISSUED',
+      'REMISSION_RECEIVED',
+    ]);
+    await expect(
+      service.receive(tenantId, note.id, {
+        items: [
+          { itemId: riceItem?.id as string, receivedQuantity: 4 },
+          {
+            itemId: tvItem?.id as string,
+            receivedQuantity: 1,
+            receivedSerials: [serial(1)],
+          },
+        ],
+      }),
+    ).rejects.toThrow('ya se recibió');
+    await expect(
+      service.voidNote(tenantId, note.id, { reason: 'Ya llegó' }),
+    ).rejects.toThrow('ya se recibió en el destino');
+  });
+
+  it('enters only what arrived and writes off the missing serial numbers', async () => {
+    const note = await service.issueTransfer(
+      tenantId,
+      transfer([
+        { productId: rice, quantity: 5 },
+        { productId: tv, quantity: 2, serialNumbers: [serial(1), serial(2)] },
+      ]),
+    );
+    const riceItem = note.items.find((i) => i.productId === rice);
+    const tvItem = note.items.find((i) => i.productId === tv);
+
+    const received = await service.receive(tenantId, note.id, {
+      items: [
+        { itemId: riceItem?.id as string, receivedQuantity: 3 },
+        {
+          itemId: tvItem?.id as string,
+          receivedQuantity: 1,
+          receivedSerials: [serial(2)],
+        },
+      ],
+      notes: 'Llegaron 2 bolsas rotas y faltó un televisor',
     });
-    expect(movements).toBe(4);
-    expect(note.events.map((e) => e.type)).toEqual(['REMISSION_NOTE_ISSUED']);
+
+    expect(received).toMatchObject({
+      transitStatus: 'RECEIVED_WITH_DIFFERENCES',
+      receptionNotes: 'Llegaron 2 bolsas rotas y faltó un televisor',
+    });
+    expect(
+      received.items.find((i) => i.productId === rice)?.receivedQuantity,
+    ).toBe(3);
+    expect(await stockAt(rice, fromWarehouse)).toBe(5);
+    expect(await stockAt(rice, toWarehouse)).toBe(3);
+    expect(await unitOf(1)).toMatchObject({ status: 'ADJUSTED_OUT' });
+    expect(await unitOf(2)).toMatchObject({
+      status: 'IN_STOCK',
+      warehouseId: toWarehouse,
+    });
   });
 
   it('lists what the origin has before the transfer', async () => {
@@ -323,10 +409,10 @@ describe('RemissionNotesService (PostgreSQL)', () => {
     expect(voided.status).toBe('VOIDED');
     expect(await stockAt(rice, fromWarehouse)).toBe(10);
     expect(await stockAt(rice, toWarehouse)).toBe(0);
-    const unit = await prisma.productUnit.findFirst({
-      where: { tenantId, serialNumber: serial(2) },
+    expect(await unitOf(2)).toMatchObject({
+      status: 'IN_STOCK',
+      warehouseId: fromWarehouse,
     });
-    expect(unit?.warehouseId).toBe(fromWarehouse);
     await expect(
       service.voidNote(tenantId, note.id, { reason: 'Otra vez' }),
     ).rejects.toThrow('ya está anulada');
@@ -371,7 +457,12 @@ describe('RemissionNotesService (PostgreSQL)', () => {
     await expect(
       service.voidNote(otherTenantId, note.id, { reason: 'No es mía' }),
     ).rejects.toThrow('no encontrada');
-    expect(await stockAt(rice, toWarehouse)).toBe(1);
+    await expect(
+      service.receive(otherTenantId, note.id, {
+        items: [{ itemId: note.items[0].id, receivedQuantity: 1 }],
+      }),
+    ).rejects.toThrow('no encontrada');
+    expect(await stockAt(rice, toWarehouse)).toBe(0);
   });
 
   describe('sale', () => {

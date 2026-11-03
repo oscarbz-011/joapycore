@@ -1,4 +1,5 @@
 import {
+  buildReception,
   buildSaleLines,
   buildTransferLines,
   goodsDescription,
@@ -264,5 +265,84 @@ describe('buildTransferLines', () => {
     ],
   ])('rejects %j', (requested, message) => {
     expect(() => buildTransferLines(requested, products)).toThrow(message);
+  });
+});
+
+describe('buildReception', () => {
+  const dispatched = [
+    {
+      id: 'it-rice',
+      productId: 'p-rice',
+      description: 'Arroz',
+      quantity: 3,
+      serialNumbers: [],
+    },
+    {
+      id: 'it-tv',
+      productId: 'p-tv',
+      description: 'Televisor',
+      quantity: 2,
+      serialNumbers: ['SN-1', 'SN-2'],
+    },
+  ];
+
+  it('lists what arrived and the serial numbers that did not', () => {
+    const plan = buildReception(
+      dispatched,
+      [
+        { itemId: 'it-rice', receivedQuantity: 0 },
+        { itemId: 'it-tv', receivedQuantity: 1, receivedSerials: ['SN-2'] },
+      ],
+      'Se perdió en el camino',
+    );
+    expect(plan).toEqual({
+      received: [{ productId: 'p-tv', quantity: 1, serialNumbers: ['SN-2'] }],
+      lost: [{ productId: 'p-tv', serialNumbers: ['SN-1'] }],
+      items: [
+        { itemId: 'it-rice', quantity: 0, serialNumbers: [] },
+        { itemId: 'it-tv', quantity: 1, serialNumbers: ['SN-2'] },
+      ],
+      hasDifferences: true,
+    });
+  });
+
+  it.each([
+    [
+      [{ itemId: 'it-rice', receivedQuantity: 3 }],
+      'Indicá cuánto llegó de "Televisor"',
+    ],
+    [
+      [
+        { itemId: 'it-rice', receivedQuantity: 4 },
+        { itemId: 'it-tv', receivedQuantity: 0 },
+      ],
+      'no pueden llegar más',
+    ],
+    [[{ itemId: 'it-x', receivedQuantity: 1 }], 'no es de esta nota'],
+    [
+      [
+        { itemId: 'it-rice', receivedQuantity: 3 },
+        { itemId: 'it-rice', receivedQuantity: 3 },
+      ],
+      'repetido',
+    ],
+    [
+      [
+        { itemId: 'it-rice', receivedQuantity: 3 },
+        { itemId: 'it-tv', receivedQuantity: 2, receivedSerials: ['SN-1'] },
+      ],
+      'un número de serie por cada unidad',
+    ],
+    [
+      [
+        { itemId: 'it-rice', receivedQuantity: 3 },
+        { itemId: 'it-tv', receivedQuantity: 1, receivedSerials: ['SN-9'] },
+      ],
+      'no se despachó',
+    ],
+  ])('rejects %j', (requested, message) => {
+    expect(() => buildReception(dispatched, requested, 'explicación')).toThrow(
+      message,
+    );
   });
 });

@@ -122,7 +122,7 @@ describe('RemissionNotesService', () => {
   let series: { numberForIssue: jest.Mock; findIssueOptions: jest.Mock };
   let outbox: { enqueue: jest.Mock; dispatch: jest.Mock };
   let eventBus: { emit: jest.Mock };
-  let stockLedger: { transfer: jest.Mock };
+  let stockLedger: { dispatch: jest.Mock; receive: jest.Mock };
 
   beforeEach(() => {
     prisma = { $transaction: jest.fn((fn: (t: unknown) => unknown) => fn(tx)) };
@@ -132,6 +132,8 @@ describe('RemissionNotesService', () => {
       remittedQuantities: jest.fn().mockResolvedValue(new Map()),
       remittedSerials: jest.fn().mockResolvedValue(new Map()),
       voidIfIssued: jest.fn().mockResolvedValue({ count: 1 }),
+      markReceived: jest.fn().mockResolvedValue({ count: 1 }),
+      setItemReceived: jest.fn(),
       findAll: jest.fn(),
       findByInvoice: jest.fn(),
     };
@@ -219,7 +221,7 @@ describe('RemissionNotesService', () => {
       dispatch: jest.fn(),
     };
     eventBus = { emit: jest.fn() };
-    stockLedger = { transfer: jest.fn() };
+    stockLedger = { dispatch: jest.fn(), receive: jest.fn() };
     service = new RemissionNotesService(
       prisma as any,
       notes as any,
@@ -260,6 +262,7 @@ describe('RemissionNotesService', () => {
           fromWarehouseId: 'wh-a',
           toWarehouseId: 'wh-b',
           vehiclePlate: 'AAA123',
+          transitStatus: 'IN_TRANSIT',
           number: '0000007',
           numberPrefix: '001-002-',
           timbrado: '12345678',
@@ -276,7 +279,7 @@ describe('RemissionNotesService', () => {
           serialNumbers: ['SN-1'],
         }),
       ]);
-      expect(stockLedger.transfer).toHaveBeenCalledWith(tx, 'tenant-1', {
+      expect(stockLedger.dispatch).toHaveBeenCalledWith(tx, 'tenant-1', {
         referenceId: note.id,
         fromWarehouseId: 'wh-a',
         toWarehouseId: 'wh-b',
@@ -321,7 +324,7 @@ describe('RemissionNotesService', () => {
       await expect(
         service.issueTransfer('tenant-1', transferDto() as any),
       ).rejects.toBeInstanceOf(NotFoundException);
-      expect(stockLedger.transfer).not.toHaveBeenCalled();
+      expect(stockLedger.dispatch).not.toHaveBeenCalled();
     });
 
     it('asks for the branch of the origin warehouse', async () => {
@@ -402,7 +405,7 @@ describe('RemissionNotesService', () => {
           serialNumbers: ['SN-2'],
         }),
       ]);
-      expect(stockLedger.transfer).not.toHaveBeenCalled();
+      expect(stockLedger.dispatch).not.toHaveBeenCalled();
       expect(events.record).toHaveBeenCalledWith(
         expect.objectContaining({
           invoiceId: 'inv-1',
@@ -472,6 +475,7 @@ describe('RemissionNotesService', () => {
       id: 'rn-1',
       status: 'ISSUED',
       motive: 'BRANCH_TRANSFER',
+      transitStatus: 'IN_TRANSIT',
       numberPrefix: '001-002-',
       number: '0000007',
       invoice: null,
@@ -498,14 +502,15 @@ describe('RemissionNotesService', () => {
           reason: 'El camión no salió',
           userId: 'user-1',
         }),
+        true,
         tx,
       );
-      expect(stockLedger.transfer).toHaveBeenCalledWith(tx, 'tenant-1', {
+      expect(stockLedger.receive).toHaveBeenCalledWith(tx, 'tenant-1', {
         referenceId: 'rn-1',
-        fromWarehouseId: 'wh-b',
-        toWarehouseId: 'wh-a',
+        warehouseId: 'wh-a',
         notes: 'Anulación de la nota de remisión 001-002-0000007',
         lines: [{ productId: 'p-tv', quantity: 1, serialNumbers: ['SN-1'] }],
+        lostSerials: [],
       });
       expect(events.record).toHaveBeenCalledWith(
         expect.objectContaining({ remissionNoteId: 'rn-1', type: 'VOIDED' }),
@@ -520,7 +525,7 @@ describe('RemissionNotesService', () => {
         invoice: { id: 'inv-1' },
       });
       await service.voidNote('tenant-1', 'rn-1', { reason: 'Se reprogramó' });
-      expect(stockLedger.transfer).not.toHaveBeenCalled();
+      expect(stockLedger.receive).not.toHaveBeenCalled();
       expect(events.record).toHaveBeenCalledWith(
         expect.objectContaining({ invoiceId: 'inv-1', type: 'VOIDED' }),
         tx,
@@ -537,13 +542,163 @@ describe('RemissionNotesService', () => {
       await expect(
         service.voidNote('tenant-1', 'rn-1', { reason: 'Otra vez' }),
       ).rejects.toBeInstanceOf(ConflictException);
-      expect(stockLedger.transfer).not.toHaveBeenCalled();
+      expect(stockLedger.receive).not.toHaveBeenCalled();
+    });
+
+    it('does not void a transfer that already arrived', async () => {
+      notes.findById.mockResolvedValue({
+        ...transferNote,
+        transitStatus: 'RECEIVED',
+      });
+      await expect(
+        service.voidNote('tenant-1', 'rn-1', { reason: 'Otra vez' }),
+      ).rejects.toThrow('ya se recibió en el destino');
+      expect(notes.voidIfIssued).not.toHaveBeenCalled();
     });
 
     it('rejects a note of another company', async () => {
       notes.findById.mockResolvedValue(null);
       await expect(
         service.voidNote('tenant-1', 'rn-x', { reason: 'No existe' }),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
+  });
+
+  describe('reception', () => {
+    const inTransit = {
+      id: 'rn-1',
+      status: 'ISSUED',
+      motive: 'BRANCH_TRANSFER',
+      transitStatus: 'IN_TRANSIT',
+      numberPrefix: '001-002-',
+      number: '0000007',
+      invoice: null,
+      fromWarehouse: { id: 'wh-a' },
+      toWarehouse: { id: 'wh-b' },
+      items: [
+        {
+          id: 'it-rice',
+          productId: 'p-rice',
+          description: 'Arroz',
+          quantity: 3,
+          serialNumbers: [],
+        },
+        {
+          id: 'it-tv',
+          productId: 'p-tv',
+          description: 'Televisor',
+          quantity: 2,
+          serialNumbers: ['SN-1', 'SN-2'],
+        },
+      ],
+    };
+    const all = [
+      { itemId: 'it-rice', receivedQuantity: 3 },
+      {
+        itemId: 'it-tv',
+        receivedQuantity: 2,
+        receivedSerials: ['SN-1', 'SN-2'],
+      },
+    ];
+
+    beforeEach(() => notes.findById.mockResolvedValue(inTransit));
+
+    it('puts everything in the destination when it all arrived', async () => {
+      await service.receive('tenant-1', 'rn-1', { items: all }, 'user-2');
+      expect(notes.markReceived).toHaveBeenCalledWith(
+        'tenant-1',
+        'rn-1',
+        expect.objectContaining({
+          transitStatus: 'RECEIVED',
+          userId: 'user-2',
+          notes: null,
+        }),
+        tx,
+      );
+      expect(notes.setItemReceived).toHaveBeenCalledWith(
+        'tenant-1',
+        'it-tv',
+        { quantity: 2, serialNumbers: ['SN-1', 'SN-2'] },
+        tx,
+      );
+      expect(stockLedger.receive).toHaveBeenCalledWith(tx, 'tenant-1', {
+        referenceId: 'rn-1',
+        warehouseId: 'wh-b',
+        notes: 'Recepción de la nota de remisión 001-002-0000007',
+        lines: [
+          { productId: 'p-rice', quantity: 3, serialNumbers: [] },
+          { productId: 'p-tv', quantity: 2, serialNumbers: ['SN-1', 'SN-2'] },
+        ],
+        lostSerials: [],
+      });
+      expect(events.record).toHaveBeenCalledWith(
+        expect.objectContaining({
+          remissionNoteId: 'rn-1',
+          type: 'REMISSION_RECEIVED',
+        }),
+        tx,
+      );
+    });
+
+    it('records what is missing with its explanation', async () => {
+      await service.receive('tenant-1', 'rn-1', {
+        items: [
+          { itemId: 'it-rice', receivedQuantity: 2 },
+          { itemId: 'it-tv', receivedQuantity: 1, receivedSerials: ['SN-2'] },
+        ],
+        notes: 'Faltó una bolsa y un televisor',
+      });
+      expect(notes.markReceived).toHaveBeenCalledWith(
+        'tenant-1',
+        'rn-1',
+        expect.objectContaining({ transitStatus: 'RECEIVED_WITH_DIFFERENCES' }),
+        tx,
+      );
+      expect(stockLedger.receive).toHaveBeenCalledWith(
+        tx,
+        'tenant-1',
+        expect.objectContaining({
+          lines: [
+            { productId: 'p-rice', quantity: 2, serialNumbers: [] },
+            { productId: 'p-tv', quantity: 1, serialNumbers: ['SN-2'] },
+          ],
+          lostSerials: [{ productId: 'p-tv', serialNumbers: ['SN-1'] }],
+        }),
+      );
+    });
+
+    it('asks to explain a difference', async () => {
+      await expect(
+        service.receive('tenant-1', 'rn-1', {
+          items: [{ itemId: 'it-rice', receivedQuantity: 2 }, all[1]],
+        }),
+      ).rejects.toThrow('explicá la diferencia');
+      expect(stockLedger.receive).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      [{ ...inTransit, transitStatus: 'RECEIVED' }, 'ya se recibió'],
+      [{ ...inTransit, status: 'VOIDED' }, 'anulada'],
+      [{ ...inTransit, motive: 'SALE', toWarehouse: null }, 'Solo un traslado'],
+    ])('rejects a note that cannot be received (%#)', async (note, message) => {
+      notes.findById.mockResolvedValue(note);
+      await expect(
+        service.receive('tenant-1', 'rn-1', { items: all }),
+      ).rejects.toThrow(message);
+    });
+
+    it('loses the race against another reception', async () => {
+      notes.markReceived.mockResolvedValue({ count: 0 });
+      await expect(
+        service.receive('tenant-1', 'rn-1', { items: all }),
+      ).rejects.toBeInstanceOf(ConflictException);
+      expect(stockLedger.receive).not.toHaveBeenCalled();
+    });
+
+    it('rejects a note of another company', async () => {
+      notes.findById.mockResolvedValue(null);
+      await expect(
+        service.receive('tenant-1', 'rn-x', { items: all }),
       ).rejects.toBeInstanceOf(NotFoundException);
     });
   });

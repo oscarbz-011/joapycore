@@ -1,5 +1,9 @@
 import { Injectable } from '@nestjs/common';
-import { Prisma, RemissionNoteStatus } from '@prisma/client';
+import {
+  Prisma,
+  RemissionNoteStatus,
+  RemissionTransitStatus,
+} from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { PrismaClientOrTx } from '../../../prisma/types';
 
@@ -15,6 +19,8 @@ const listSelect = {
   numberPrefix: true,
   motive: true,
   status: true,
+  transitStatus: true,
+  receivedAt: true,
   modality: true,
   issuedAt: true,
   recipientName: true,
@@ -64,6 +70,8 @@ const detailSelect = {
   voidedAt: true,
   voidReason: true,
   voidedById: true,
+  receivedById: true,
+  receptionNotes: true,
   pdfFileId: true,
   physicalScan: { select: fileSelect },
   items: {
@@ -75,6 +83,8 @@ const detailSelect = {
       unit: true,
       quantity: true,
       serialNumbers: true,
+      receivedQuantity: true,
+      receivedSerials: true,
     },
     orderBy: { description: 'asc' },
   },
@@ -229,20 +239,71 @@ export class RemissionNotesRepository {
     });
   }
 
-  // Solo una nota vigente se anula; el count dice si otra anulación ganó.
+  // Solo una nota vigente se anula (un traslado, mientras está en tránsito);
+  // el count dice si otra anulación o la recepción ganó.
   voidIfIssued(
     tenantId: string,
     id: string,
     data: { reason: string; at: Date; userId: string | null },
+    onlyInTransit: boolean,
     client: PrismaClientOrTx,
   ) {
     return client.remissionNote.updateMany({
-      where: { id, tenantId, status: RemissionNoteStatus.ISSUED },
+      where: {
+        id,
+        tenantId,
+        status: RemissionNoteStatus.ISSUED,
+        ...(onlyInTransit
+          ? { transitStatus: RemissionTransitStatus.IN_TRANSIT }
+          : {}),
+      },
       data: {
         status: RemissionNoteStatus.VOIDED,
         voidReason: data.reason,
         voidedAt: data.at,
         voidedById: data.userId,
+      },
+    });
+  }
+
+  markReceived(
+    tenantId: string,
+    id: string,
+    data: {
+      transitStatus: RemissionTransitStatus;
+      at: Date;
+      userId: string | null;
+      notes: string | null;
+    },
+    client: PrismaClientOrTx,
+  ) {
+    return client.remissionNote.updateMany({
+      where: {
+        id,
+        tenantId,
+        status: RemissionNoteStatus.ISSUED,
+        transitStatus: RemissionTransitStatus.IN_TRANSIT,
+      },
+      data: {
+        transitStatus: data.transitStatus,
+        receivedAt: data.at,
+        receivedById: data.userId,
+        receptionNotes: data.notes,
+      },
+    });
+  }
+
+  setItemReceived(
+    tenantId: string,
+    itemId: string,
+    received: { quantity: number; serialNumbers: string[] },
+    client: PrismaClientOrTx,
+  ) {
+    return client.remissionNoteItem.updateMany({
+      where: { id: itemId, remissionNote: { tenantId } },
+      data: {
+        receivedQuantity: received.quantity,
+        receivedSerials: received.serialNumbers,
       },
     });
   }

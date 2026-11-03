@@ -29,6 +29,8 @@ enum UserStatus {
 
 enum ProductUnitStatus {
   IN_STOCK
+  // Despachada con una nota de remisión, todavía sin recibir en el destino.
+  IN_TRANSIT
   SOLD
   RETURNED
   DAMAGED
@@ -333,6 +335,14 @@ enum TransportType {
   THIRD_PARTY
 }
 
+// Traslado entre depósitos: sale del origen al emitir la nota y entra al
+// destino recién cuando allá se confirma lo que llegó.
+enum RemissionTransitStatus {
+  IN_TRANSIT
+  RECEIVED
+  RECEIVED_WITH_DIFFERENCES
+}
+
 // Quién numera y qué vale como comprobante: PREPRINTED = talonario de
 // imprenta (el número lo carga el usuario), SELF_PRINTED = autoimpresor (lo
 // asigna el sistema), ELECTRONIC = SIFEN.
@@ -373,6 +383,7 @@ enum BillingEventType {
   VOIDED
   CREDIT_NOTE_ISSUED
   REMISSION_NOTE_ISSUED
+  REMISSION_RECEIVED
   REFUNDED
   CUSTOMER_CREDITED
 }
@@ -2195,6 +2206,11 @@ model RemissionNote {
   motiveDetail String?             @map("motive_detail")
   status       RemissionNoteStatus @default(ISSUED)
 
+  transitStatus  RemissionTransitStatus? @map("transit_status")
+  receivedAt     DateTime?               @map("received_at")
+  receivedById   String?                 @map("received_by_id")
+  receptionNotes String?                 @map("reception_notes")
+
   invoiceId       String? @map("invoice_id")
   fromWarehouseId String? @map("from_warehouse_id")
   toWarehouseId   String? @map("to_warehouse_id")
@@ -2263,19 +2279,23 @@ model RemissionNote {
 
   @@unique([seriesId, serieCode, sequential])
   @@index([tenantId, issuedAt])
+  @@index([tenantId, transitStatus])
   @@index([invoiceId])
   @@map("remission_notes")
 }
 
 model RemissionNoteItem {
-  id              String   @id @default(uuid())
-  remissionNoteId String   @map("remission_note_id")
-  productId       String?  @map("product_id")
-  invoiceItemId   String?  @map("invoice_item_id")
-  description     String
-  unit            String
-  quantity        Int
-  serialNumbers   String[] @default([]) @map("serial_numbers")
+  id               String   @id @default(uuid())
+  remissionNoteId  String   @map("remission_note_id")
+  productId        String?  @map("product_id")
+  invoiceItemId    String?  @map("invoice_item_id")
+  description      String
+  unit             String
+  quantity         Int
+  serialNumbers    String[] @default([]) @map("serial_numbers")
+  // Lo que llegó al destino; null mientras el traslado está en tránsito.
+  receivedQuantity Int?     @map("received_quantity")
+  receivedSerials  String[] @default([]) @map("received_serials")
 
   remissionNote RemissionNote @relation(fields: [remissionNoteId], references: [id])
   product       Product?      @relation(fields: [productId], references: [id])

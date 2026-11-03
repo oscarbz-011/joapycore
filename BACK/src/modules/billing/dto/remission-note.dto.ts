@@ -235,3 +235,41 @@ export class VoidRemissionDto {
   @MaxLength(300)
   reason!: string;
 }
+
+export class ReceivedItemDto {
+  @ApiProperty({ description: 'Ítem de la nota' })
+  @IsUUID()
+  itemId!: string;
+
+  @ApiProperty({ example: 2, description: 'Unidades que llegaron' })
+  @IsInt()
+  @Min(0)
+  receivedQuantity!: number;
+
+  @ApiPropertyOptional({ type: [String], description: 'N/S que llegaron' })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(MAX_SERIALS)
+  @IsString({ each: true })
+  receivedSerials?: string[];
+}
+
+/** Lo que llegó al depósito de destino. */
+export class ReceiveRemissionDto {
+  @ApiProperty({ type: [ReceivedItemDto] })
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(MAX_ITEMS)
+  @ValidateNested({ each: true })
+  @Type(() => ReceivedItemDto)
+  items!: ReceivedItemDto[];
+
+  @ApiPropertyOptional({
+    example: 'Llegó una caja abierta',
+    description: 'Obligatoria si falta algo',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  notes?: string;
+}

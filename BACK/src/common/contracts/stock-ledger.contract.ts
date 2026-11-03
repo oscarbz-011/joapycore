@@ -31,13 +31,24 @@ export interface TransferLine {
   serialNumbers: string[];
 }
 
-export interface StockTransfer {
+export interface StockDispatch {
   /** Documento que respalda el traslado (la nota de remisión). */
   referenceId: string;
   fromWarehouseId: string;
   toWarehouseId: string;
   notes: string;
   lines: TransferLine[];
+}
+
+export interface StockReception {
+  referenceId: string;
+  /** Donde entra lo que llegó: el destino, o el origen si se anula el traslado. */
+  warehouseId: string;
+  notes: string;
+  /** Lo que llegó. */
+  lines: TransferLine[];
+  /** N/S despachados que no llegaron. */
+  lostSerials: { productId: string; serialNumbers: string[] }[];
 }
 
 /** Lo que hay disponible de un producto en un depósito. */
@@ -131,13 +142,19 @@ export interface StockLedger {
     lines: ReturnLine[],
   ): Promise<void>;
   /**
-   * Saca la mercadería del depósito de origen y la ingresa en el de destino:
-   * un OUT y un IN por línea, y los serializados cambian de depósito.
+   * Saca la mercadería del depósito de origen (un OUT por línea) y la deja en
+   * tránsito: los serializados pasan a IN_TRANSIT hasta que se reciban.
    */
-  transfer(
+  dispatch(
     tx: Prisma.TransactionClient,
     tenantId: string,
-    transfer: StockTransfer,
+    dispatch: StockDispatch,
+  ): Promise<void>;
+  /** Ingresa lo que llegó de un traslado en tránsito (un IN por línea). */
+  receive(
+    tx: Prisma.TransactionClient,
+    tenantId: string,
+    reception: StockReception,
   ): Promise<void>;
   /** Productos con saldo positivo en el depósito. */
   availableIn(

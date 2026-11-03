@@ -17,6 +17,7 @@ import { PhysicalScanDto } from '../dto/preprinted-sheet.dto';
 import {
   IssueSaleRemissionDto,
   IssueTransferRemissionDto,
+  ReceiveRemissionDto,
   VoidRemissionDto,
 } from '../dto/remission-note.dto';
 import { RemissionNotesService } from '../services/remission-notes.service';
@@ -76,6 +77,21 @@ export class RemissionNotesController {
     @Param('id', ParseUUIDPipe) id: string,
   ) {
     return this.remissions.findOne(tenantId, id);
+  }
+
+  @Post('remission-notes/:id/receive')
+  @Permissions('inventory:movements:create')
+  @ApiOperation({
+    summary:
+      'Registrar lo que llegó al depósito de destino de un traslado en tránsito',
+  })
+  receive(
+    @CurrentTenant() tenantId: string,
+    @CurrentUser() user: JwtPayload,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: ReceiveRemissionDto,
+  ) {
+    return this.remissions.receive(tenantId, id, dto, user.sub);
   }
 
   @Post('remission-notes/:id/void')
