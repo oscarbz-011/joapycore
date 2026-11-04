@@ -15,6 +15,7 @@ import type {
 import { OutboxService } from '../../../outbox/outbox.service';
 import { BillingSeriesRepository } from '../repositories/billing-series.repository';
 import { BillingSourcesRepository } from '../repositories/billing-sources.repository';
+import { BillingEventsRepository } from '../repositories/billing-events.repository';
 import { InvoicesRepository } from '../repositories/invoices.repository';
 import { buildFiscalReceipt } from '../utils/fiscal-receipt.util';
 import { toInvoiceItem } from '../utils/invoice-items.util';
@@ -31,6 +32,7 @@ export class PosInvoicingService implements BillingGateway {
     private readonly billingSources: BillingSourcesRepository,
     private readonly outbox: OutboxService,
     private readonly eventEmitter: EventBus,
+    private readonly events: BillingEventsRepository,
   ) {}
 
   async findSeries(
@@ -103,6 +105,15 @@ export class PosInvoicingService implements BillingGateway {
       tx,
     );
 
+    await this.events.record(
+      {
+        tenantId,
+        invoiceId: invoice.id,
+        type: 'ISSUED',
+        userId: input.issuedById,
+      },
+      tx,
+    );
     const eventId = await this.outbox.enqueue(tx, tenantId, 'invoice.issued', {
       tenantId,
       invoiceId: invoice.id,
@@ -125,6 +136,7 @@ export class PosInvoicingService implements BillingGateway {
       invoiceId,
       new Date(),
     );
+    await this.events.record({ tenantId, invoiceId, type: 'FORM_PRINTED' });
   }
 
   async findReceiptBySaleOrder(

@@ -6,6 +6,16 @@ import { SeriesNumberingFields } from "@/components/billing/series-numbering-fie
 import { PreprintedSheetPanel } from "@/components/billing/preprinted-sheet-panel";
 import { printPreprintedForm } from "@/lib/preprinted-form";
 import {
+  BILLING_EVENT_LABELS,
+  billingEventDetail,
+  canCreditInvoice,
+  canVoidInvoice,
+  CREDIT_NOTE_KIND_LABELS,
+  creditNoteNumber,
+  invoiceCreditState,
+  type InvoiceCreditState,
+} from "@/lib/credit-notes";
+import {
   invoiceDetailLines,
   invoiceIvaSummary,
   ivaRateLabel,
@@ -78,16 +88,27 @@ const STATUS_CLASS: Partial<Record<InvoiceStatus, string>> = {
   PAID: "bg-accent-subtle text-accent-on border-accent-on/20",
 };
 
-function StatusBadge({ status }: { status: InvoiceStatus }) {
+function StatusBadge({
+  status,
+  voided,
+}: {
+  status: InvoiceStatus;
+  voided: boolean;
+}) {
   return (
     <Badge
       variant={status === "CANCELLED" ? "destructive" : "outline"}
       className={STATUS_CLASS[status]}
     >
-      {STATUS_LABEL[status]}
+      {voided ? "Anulada" : STATUS_LABEL[status]}
     </Badge>
   );
 }
+
+const CREDIT_BADGE: Record<Exclude<InvoiceCreditState, "none">, string> = {
+  partial: "Acreditada en parte",
+  full: "Acreditada",
+};
 
 // ── Row helper ─────────────────────────────────────────────────────────────────
 
@@ -244,6 +265,24 @@ export default function InvoiceDetailPage() {
     setForm((f) => ({ ...f, dueDate: computeFirstDueDateISO(day) }));
   }
 
+  const emitted = Boolean(invoice) && invoice?.status !== "PENDING";
+  const { data: invoiceEvents = [] } = useQuery({
+    queryKey: ["invoice", id, "events"],
+    queryFn: () => billingApi.listInvoiceEvents(id),
+    enabled: emitted,
+  });
+  const { data: invoiceCreditNotes = [] } = useQuery({
+    queryKey: ["invoice", id, "credit-notes"],
+    queryFn: () => billingApi.listInvoiceCreditNotes(id),
+    enabled: emitted,
+  });
+  const customerId = invoice?.saleOrder?.customer?.id;
+  const { data: customerCredit } = useQuery({
+    queryKey: ["customer-credit", customerId],
+    queryFn: () => billingApi.getCustomerCredit(customerId as string),
+    enabled: Boolean(customerId),
+  });
+
   const [showCancelForm, setShowCancelForm] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
   const [chosenSeriesId, setChosenSeriesId] = useState("");
@@ -348,7 +387,10 @@ export default function InvoiceDetailPage() {
   }
 
   const isPending = invoice.status === "PENDING";
-  const canCancel = invoice.status === "PENDING" || invoice.status === "ISSUED";
+  const canCancel = invoice.status === "PENDING";
+  const creditState = invoiceCreditState(invoice);
+  const canCredit = canCreditInvoice(invoice);
+  const canVoid = canVoidInvoice(invoice);
   const customer = invoice.saleOrder.customer;
   const invoiceRef = invoice.invoiceNumber
     ? `${invoice.invoicePrefix ?? ""}${invoice.invoiceNumber}`
@@ -407,7 +449,10 @@ export default function InvoiceDetailPage() {
                 "Borrador de factura"
               )}
             </h1>
-            <StatusBadge status={invoice.status} />
+            <StatusBadge status={invoice.status} voided={Boolean(invoice.voidedAt)} />
+            {creditState !== "none" && (
+              <Badge variant="outline">{CREDIT_BADGE[creditState]}</Badge>
+            )}
           </div>
           <p className="mt-1 text-sm text-muted-foreground">
             {customerName}
@@ -529,6 +574,44 @@ export default function InvoiceDetailPage() {
               </div>
             </div>
           </section>
+
+          {invoiceCreditNotes.length > 0 && (
+            <section className="overflow-hidden rounded-xl border border-border bg-card">
+              <div className="border-b border-border px-5 py-4">
+                <h2 className={SECTION_LABEL}>Notas de crédito</h2>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-muted/30 text-xs font-semibold uppercase tracking-wider text-muted-foreground/60">
+                    <tr>
+                      <th className="px-5 py-3 text-left">N° Nota</th>
+                      <th className="px-5 py-3 text-left">Tipo</th>
+                      <th className="px-5 py-3 text-left">Motivo</th>
+                      <th className="px-5 py-3 text-left">Fecha</th>
+                      <th className="px-5 py-3 text-right">Total</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {invoiceCreditNotes.map((note) => (
+                      <tr
+                        key={note.id}
+                        onClick={() => router.push(`/dashboard/billing/credit-notes/${note.id}`)}
+                        className="cursor-pointer transition-colors hover:bg-muted/20"
+                      >
+                        <td className="px-5 py-3 font-mono text-xs text-foreground">{creditNoteNumber(note)}</td>
+                        <td className="px-5 py-3 text-muted-foreground">{CREDIT_NOTE_KIND_LABELS[note.kind]}</td>
+                        <td className="max-w-xs truncate px-5 py-3 text-muted-foreground">{note.reason}</td>
+                        <td className="px-5 py-3 text-muted-foreground">{formatDatePY(note.issuedAt, "local")}</td>
+                        <td className="px-5 py-3 text-right font-medium tabular-nums text-foreground">
+                          {formatPrice(Number(note.total))}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          )}
 
           <EntityTimeline
             entityType="INVOICE"
@@ -726,6 +809,9 @@ export default function InvoiceDetailPage() {
                 />
               )}
               {customer.email && <InfoRow label="Email" value={customer.email} />}
+              {customerCredit && customerCredit.balance > 0 && (
+                <InfoRow label="Saldo a favor" value={formatPrice(customerCredit.balance)} />
+              )}
             </DataGroup>
             {(invoice.timbrado || invoice.modality) && (
               <DataGroup title="Timbrado">
@@ -743,20 +829,72 @@ export default function InvoiceDetailPage() {
             )}
             <DataGroup title="Historial">
               <InfoRow label="Creada" value={formatDatePY(invoice.createdAt, "local")} />
-              <InfoRow
-                label="Emitida"
-                value={invoice.issuedAt ? formatDatePY(invoice.issuedAt, "local") : "Sin emitir"}
-              />
+              {invoiceEvents.length === 0 && (
+                <InfoRow
+                  label="Emitida"
+                  value={invoice.issuedAt ? formatDatePY(invoice.issuedAt, "local") : "Sin emitir"}
+                />
+              )}
+              {invoiceEvents.map((event) => (
+                <div key={event.id} className="border-b border-border py-2 last:border-0">
+                  <div className="flex items-start justify-between gap-4">
+                    <span className="text-sm text-muted-foreground">{BILLING_EVENT_LABELS[event.type]}</span>
+                    <span className="text-right text-sm font-medium text-foreground">
+                      {formatDatePY(event.createdAt, "local")}
+                    </span>
+                  </div>
+                  {billingEventDetail(event) && (
+                    <p className="text-xs text-muted-foreground">{billingEventDetail(event)}</p>
+                  )}
+                </div>
+              ))}
               {invoice.dueDate && (
                 <InfoRow label="Vencimiento" value={formatDatePY(invoice.dueDate, "utc")} />
               )}
             </DataGroup>
+            {invoice.voidReason && (
+              <DataGroup title="Anulación">
+                <p className="text-sm text-foreground whitespace-pre-line">{invoice.voidReason}</p>
+              </DataGroup>
+            )}
             {!isPending && invoice.notes && (
               <DataGroup title="Notas">
                 <p className="text-sm text-foreground whitespace-pre-line">{invoice.notes}</p>
               </DataGroup>
             )}
           </section>
+
+          {(canCredit || canVoid) && (
+            <RequirePermission permission="billing:cancel">
+              <section className="space-y-3 rounded-xl border border-border bg-card p-5">
+                <div>
+                  <h2 className={SECTION_LABEL}>Corregir la factura</h2>
+                  <p className="mt-1.5 text-xs text-muted-foreground">
+                    Una devolución, un descuento o una anulación se hace con una nota de crédito. Si la empresa
+                    conserva el original y todas las copias, la factura se puede anular.
+                  </p>
+                </div>
+                {canCredit && (
+                  <Button
+                    className="w-full"
+                    variant="outline"
+                    onClick={() => router.push(`/dashboard/billing/invoices/${invoice.id}/credit-note`)}
+                  >
+                    Emitir nota de crédito
+                  </Button>
+                )}
+                {canVoid && (
+                  <Button
+                    className="w-full"
+                    variant="destructive"
+                    onClick={() => router.push(`/dashboard/billing/invoices/${invoice.id}/void`)}
+                  >
+                    Anular factura
+                  </Button>
+                )}
+              </section>
+            </RequirePermission>
+          )}
 
           {/* Cancel zone */}
           {canCancel && (
@@ -765,12 +903,10 @@ export default function InvoiceDetailPage() {
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <p className="text-sm font-medium text-foreground">
-                      Cancelar factura
+                      Descartar borrador
                     </p>
                     <p className="text-xs text-muted-foreground mt-0.5">
-                      {invoice.status === "ISSUED"
-                        ? "Se generará una nota de crédito."
-                        : "Se descartará el borrador."}
+                      La factura todavía no se emitió.
                     </p>
                   </div>
                   <RequirePermission permission="billing:cancel">
@@ -780,7 +916,7 @@ export default function InvoiceDetailPage() {
                       className="shrink-0"
                       onClick={() => setShowCancelForm(true)}
                     >
-                      Cancelar
+                      Descartar
                     </Button>
                   </RequirePermission>
                 </div>
@@ -792,9 +928,7 @@ export default function InvoiceDetailPage() {
                       className="mt-0.5 shrink-0 text-destructive"
                     />
                     <p className="text-xs text-destructive">
-                      {invoice.status === "ISSUED"
-                        ? "Al cancelar una factura emitida se generará automáticamente una nota de crédito."
-                        : "Esta acción descartará el borrador. No se generará nota de crédito."}
+                      El borrador se descarta y no se numera.
                     </p>
                   </div>
                   <div className="space-y-1.5 mb-3">
@@ -825,11 +959,7 @@ export default function InvoiceDetailPage() {
                         cancelMutation.isPending
                       }
                     >
-                      {cancelMutation.isPending
-                        ? "Cancelando..."
-                        : invoice.status === "ISSUED"
-                          ? "Cancelar y emitir nota de crédito"
-                          : "Confirmar cancelación"}
+                      {cancelMutation.isPending ? "Descartando..." : "Descartar borrador"}
                     </Button>
                     <Button
                       variant="outline"

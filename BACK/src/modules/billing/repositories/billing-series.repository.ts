@@ -5,7 +5,7 @@ import { PrismaClientOrTx } from '../../../prisma/types';
 
 const seriesInclude = {
   branch: { select: { id: true, name: true } },
-  _count: { select: { invoices: true } },
+  _count: { select: { invoices: true, creditNotes: true } },
 } satisfies Prisma.BillingSeriesInclude;
 
 @Injectable()
@@ -117,7 +117,7 @@ export class BillingSeriesRepository {
     });
   }
 
-  // Usado por una factura o inutilizado: en ambos casos la hoja ya no sirve.
+  // Usado por un documento o inutilizado: en ambos casos la hoja ya no sirve.
   async isNumberUsed(
     seriesId: string,
     serieCode: string,
@@ -125,11 +125,12 @@ export class BillingSeriesRepository {
     client: PrismaClientOrTx = this.prisma,
   ) {
     const where = { seriesId, serieCode, sequential };
-    const [invoice, voided] = await Promise.all([
+    const [invoice, creditNote, voided] = await Promise.all([
       client.invoice.findFirst({ where, select: { id: true } }),
+      client.creditNote.findFirst({ where, select: { id: true } }),
       client.billingVoidedNumber.findFirst({ where, select: { id: true } }),
     ]);
-    return Boolean(invoice || voided);
+    return Boolean(invoice || creditNote || voided);
   }
 
   createVoided(

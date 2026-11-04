@@ -113,6 +113,7 @@ describe("validateSeriesForm", () => {
   it("sends numbers and omits an empty next number", () => {
     expect(formToPayload(valid)).toEqual({
       branchId: "branch-1",
+      documentType: "INVOICE",
       modality: "PREPRINTED",
       timbrado: "12345678",
       validFrom: "2026-01-01",
@@ -123,6 +124,11 @@ describe("validateSeriesForm", () => {
       rangeTo: 500,
     });
     expect(formToPayload({ ...valid, nextNumber: "37" }).nextNumber).toBe(37);
+  });
+
+  it("keeps the document type of the series", () => {
+    expect(seriesToForm(makeSeries({ documentType: "CREDIT_NOTE" })).documentType).toBe("CREDIT_NOTE");
+    expect(formToPayload({ ...valid, documentType: "CREDIT_NOTE" }).documentType).toBe("CREDIT_NOTE");
   });
 
   it("round-trips a stored series", () => {
@@ -136,6 +142,10 @@ describe("validateSeriesForm", () => {
 });
 
 describe("lockedFields", () => {
+  it("counts the credit notes a series numbered as use", () => {
+    expect(lockedFields(makeSeries({ _count: { invoices: 0, creditNotes: 2 } })).has("modality")).toBe(true);
+  });
+
   it("locks nothing while the series has not numbered invoices", () => {
     expect(lockedFields(makeSeries()).size).toBe(0);
   });
@@ -143,6 +153,7 @@ describe("lockedFields", () => {
   it("locks the numbering once used, but lets a missing timbrado be completed", () => {
     const used = lockedFields(makeSeries({ _count: { invoices: 3 } }));
     expect(used.has("timbrado")).toBe(true);
+    expect(used.has("documentType")).toBe(true);
     expect(used.has("validUntil")).toBe(false);
     expect(used.has("rangeTo")).toBe(false);
 

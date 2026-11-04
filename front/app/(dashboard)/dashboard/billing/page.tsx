@@ -5,6 +5,13 @@ import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { ListOrdered, Search } from 'lucide-react';
 import { billingApi, type CreditNote, type InvoiceStatus } from '../../../../lib/api/billing';
+import {
+  CREDIT_NOTE_KIND_LABELS,
+  creditNoteCustomerName,
+  creditNoteInvoiceNumber,
+  creditNoteNumber,
+} from '@/lib/credit-notes';
+import { apiErrorMessage } from '@/lib/api/api-error';
 import { formatDatePY } from '../../../../lib/date';
 import {
   compareFiscalOrder,
@@ -66,12 +73,11 @@ const INVOICE_SORT = {
   total: (row: InvoiceRow) => row.total,
 };
 
-const creditNoteCustomer = (note: CreditNote) =>
-  `${note.invoice.saleOrder.customer.firstName} ${note.invoice.saleOrder.customer.lastName}`;
-
 const CREDIT_NOTE_SORT = {
-  number: (note: CreditNote) => note.number,
-  customer: creditNoteCustomer,
+  number: creditNoteNumber,
+  invoice: creditNoteInvoiceNumber,
+  customer: creditNoteCustomerName,
+  kind: (note: CreditNote) => CREDIT_NOTE_KIND_LABELS[note.kind],
   reason: (note: CreditNote) => note.reason,
   date: (note: CreditNote) => new Date(note.issuedAt),
   total: (note: CreditNote) => Number(note.total),
@@ -80,11 +86,26 @@ const CREDIT_NOTE_SORT = {
 // ── Credit notes tab ───────────────────────────────────────────────────────────
 
 function CreditNotesTab() {
-  const { data: notes = [], isLoading } = useQuery({ queryKey: ['credit-notes'], queryFn: billingApi.listCreditNotes });
+  const router = useRouter();
+  const { data: notes = [], isLoading, error } = useQuery({ queryKey: ['credit-notes'], queryFn: billingApi.listCreditNotes });
   const { sorted, sort, toggle } = useTableSort(notes, CREDIT_NOTE_SORT);
   const pagination = usePagination(sorted);
   if (isLoading) return <div className="py-16 text-center text-sm text-muted-foreground">Cargando...</div>;
-  if (notes.length === 0) return <div className="py-16 text-center"><p className="text-sm text-muted-foreground">No hay notas de crédito emitidas.</p></div>;
+  if (error) {
+    return (
+      <p role="alert" className="py-16 text-center text-sm text-destructive">
+        {apiErrorMessage(error, 'No se pudieron cargar las notas de crédito')}
+      </p>
+    );
+  }
+  if (notes.length === 0) {
+    return (
+      <div className="py-16 text-center">
+        <p className="text-sm text-muted-foreground">No hay notas de crédito emitidas.</p>
+        <p className="mt-1 text-xs text-muted-foreground">Se emiten desde el detalle de una factura.</p>
+      </div>
+    );
+  }
 
   return (
     <Card className="overflow-hidden p-0">
@@ -93,7 +114,9 @@ function CreditNotesTab() {
           <thead className="border-b border-border bg-muted/30 text-xs font-bold uppercase tracking-wider text-muted-foreground">
             <tr>
               <SortableHeader label="N° Nota" sortKey="number" sort={sort} onSort={toggle} />
+              <SortableHeader label="Factura" sortKey="invoice" sort={sort} onSort={toggle} />
               <SortableHeader label="Cliente" sortKey="customer" sort={sort} onSort={toggle} />
+              <SortableHeader label="Tipo" sortKey="kind" sort={sort} onSort={toggle} />
               <SortableHeader label="Motivo" sortKey="reason" sort={sort} onSort={toggle} />
               <SortableHeader label="Fecha" sortKey="date" sort={sort} onSort={toggle} />
               <SortableHeader label="Total" sortKey="total" sort={sort} onSort={toggle} align="right" />
@@ -101,12 +124,15 @@ function CreditNotesTab() {
           </thead>
           <tbody className="divide-y divide-border">
             {pagination.items.map((note: CreditNote) => (
-              <tr key={note.id} className="hover:bg-muted/20 transition-colors">
-                <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{note.number ?? `NC-${note.id.slice(0, 6).toUpperCase()}`}</td>
-                <td className="px-4 py-3">
-                  <div className="font-medium text-foreground">{note.invoice.saleOrder.customer.firstName} {note.invoice.saleOrder.customer.lastName}</div>
-                  {note.invoice.saleOrder.customer.email && <div className="text-xs text-muted-foreground">{note.invoice.saleOrder.customer.email}</div>}
-                </td>
+              <tr
+                key={note.id}
+                onClick={() => router.push(`/dashboard/billing/credit-notes/${note.id}`)}
+                className="cursor-pointer hover:bg-muted/20 transition-colors"
+              >
+                <td className="px-4 py-3 font-mono text-xs text-foreground">{creditNoteNumber(note)}</td>
+                <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{creditNoteInvoiceNumber(note)}</td>
+                <td className="px-4 py-3 font-medium text-foreground">{creditNoteCustomerName(note)}</td>
+                <td className="px-4 py-3 text-muted-foreground">{CREDIT_NOTE_KIND_LABELS[note.kind]}</td>
                 <td className="px-4 py-3 text-muted-foreground max-w-xs truncate">{note.reason}</td>
                 <td className="px-4 py-3 text-muted-foreground">{formatDatePY(note.issuedAt, 'local')}</td>
                 <td className="px-4 py-3 text-right font-mono font-medium text-foreground">{formatPrice(Number(note.total))}</td>

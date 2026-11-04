@@ -1,4 +1,5 @@
 import type {
+  BillingDocumentType,
   BillingModality,
   BillingSeries,
   BillingSeriesOption,
@@ -78,6 +79,7 @@ export function seriesStatus(
 
 export interface SeriesForm {
   branchId: string;
+  documentType: BillingDocumentType;
   modality: BillingModality;
   timbrado: string;
   validFrom: string;
@@ -94,6 +96,7 @@ export type SeriesFormErrors = Partial<Record<keyof SeriesForm, string>>;
 export function emptySeriesForm(): SeriesForm {
   return {
     branchId: "",
+    documentType: "INVOICE",
     modality: "PREPRINTED",
     timbrado: "",
     validFrom: "",
@@ -109,6 +112,7 @@ export function emptySeriesForm(): SeriesForm {
 export function seriesToForm(series: BillingSeries): SeriesForm {
   return {
     branchId: series.branchId,
+    documentType: series.documentType,
     modality: series.modality,
     timbrado: series.timbrado ?? "",
     validFrom: series.validFrom?.slice(0, 10) ?? "",
@@ -125,12 +129,23 @@ export function seriesToForm(series: BillingSeries): SeriesForm {
  * Campos que ya no se pueden cambiar porque la serie numeró facturas. El
  * timbrado y su inicio se pueden completar solo si faltaban.
  */
+/** Documentos que ya numeró la serie (facturas o notas de crédito). */
+export function seriesUsage(series: Pick<BillingSeries, "_count">): number {
+  return series._count.invoices + (series._count.creditNotes ?? 0);
+}
+
+export const DOCUMENT_TYPE_LABELS: Record<BillingDocumentType, string> = {
+  INVOICE: "Factura",
+  CREDIT_NOTE: "Nota de crédito",
+};
+
 export function lockedFields(
   series: BillingSeries | undefined,
 ): Set<keyof SeriesForm> {
-  if (!series || series._count.invoices === 0) return new Set();
+  if (!series || seriesUsage(series) === 0) return new Set();
   const locked = new Set<keyof SeriesForm>([
     "branchId",
+    "documentType",
     "modality",
     "establecimiento",
     "puntoExpedicion",
@@ -183,6 +198,7 @@ export function validateSeriesForm(form: SeriesForm): SeriesFormErrors {
 export function formToPayload(form: SeriesForm): CreateBillingSeriesPayload {
   return {
     branchId: form.branchId,
+    documentType: form.documentType,
     modality: form.modality,
     timbrado: form.timbrado,
     validFrom: form.validFrom,

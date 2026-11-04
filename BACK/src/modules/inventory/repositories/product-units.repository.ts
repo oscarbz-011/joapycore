@@ -193,6 +193,41 @@ export class ProductUnitsRepository {
     });
   }
 
+  findSoldBySaleItems(
+    tenantId: string,
+    saleOrderItemIds: string[],
+    client: PrismaClientOrTx = this.prisma,
+  ) {
+    return client.productUnit.findMany({
+      where: {
+        tenantId,
+        saleOrderItemId: { in: saleOrderItemIds },
+        status: 'SOLD',
+      },
+      select: { saleOrderItemId: true, serialNumber: true },
+      orderBy: { serialNumber: 'asc' },
+    });
+  }
+
+  /** Devolución: solo las unidades elegidas vuelven a stock. */
+  async restoreSoldSerials(
+    tenantId: string,
+    saleOrderItemId: string,
+    serialNumbers: string[],
+    client: PrismaClientOrTx = this.prisma,
+  ): Promise<number> {
+    const result = await client.productUnit.updateMany({
+      where: {
+        tenantId,
+        saleOrderItemId,
+        serialNumber: { in: serialNumbers },
+        status: 'SOLD',
+      },
+      data: { status: 'IN_STOCK', saleOrderItemId: null },
+    });
+    return result.count;
+  }
+
   /** Anulación: las unidades vuelven a stock y se desvinculan de la venta. */
   restoreBySaleItem(
     tenantId: string,

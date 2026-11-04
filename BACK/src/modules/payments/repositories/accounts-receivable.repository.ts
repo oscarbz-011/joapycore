@@ -109,6 +109,29 @@ export class AccountsReceivableRepository {
     });
   }
 
+  findOpenByInvoice(
+    tenantId: string,
+    invoiceId: string,
+    client: PrismaClientOrTx,
+  ) {
+    return client.accountsReceivable.findFirst({
+      where: { tenantId, invoiceId, status: { not: 'CANCELLED' } },
+      select: { id: true, amount: true, paidAmount: true },
+    });
+  }
+
+  updateAmountAndStatus(
+    id: string,
+    amount: number,
+    status: 'PENDING' | 'PARTIAL' | 'PAID',
+    client: PrismaClientOrTx,
+  ) {
+    return client.accountsReceivable.update({
+      where: { id },
+      data: { amount, status },
+    });
+  }
+
   // Kept for backwards compat with existing tests
   updateAmounts(
     id: string,

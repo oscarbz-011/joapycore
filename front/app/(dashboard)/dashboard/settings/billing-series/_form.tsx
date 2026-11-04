@@ -4,8 +4,15 @@ import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiErrorMessage } from '@/lib/api/api-error';
 import { branchesApi } from '@/lib/api/branches';
-import { billingApi, type BillingModality, type BillingSeries } from '@/lib/api/billing';
 import {
+  billingApi,
+  type BillingDocumentType,
+  type BillingModality,
+  type BillingSeries,
+} from '@/lib/api/billing';
+import {
+  DOCUMENT_TYPE_LABELS,
+  seriesUsage,
   emptySeriesForm,
   formToPayload,
   lockedFields,
@@ -52,7 +59,7 @@ export function BillingSeriesForm({
   const [errors, setErrors] = useState<SeriesFormErrors>({});
   const [error, setError] = useState('');
   const locked = lockedFields(series);
-  const used = (series?._count.invoices ?? 0) > 0;
+  const used = series ? seriesUsage(series) > 0 : false;
 
   const { data: branches = [], isLoading: loadingBranches } = useQuery({
     queryKey: ['branches'],
@@ -97,7 +104,7 @@ export function BillingSeriesForm({
     <form onSubmit={submit} className="space-y-6" noValidate>
       {used && (
         <div className="rounded-lg border border-border bg-muted/20 px-4 py-3 text-sm text-muted-foreground">
-          Esta serie ya numeró {series?._count.invoices} factura(s): solo se puede cambiar el fin de vigencia,
+          Esta serie ya numeró {series ? seriesUsage(series) : 0} documento(s): solo se puede cambiar el fin de vigencia,
           el fin del rango y si está activa. Para un timbrado nuevo, creá otra serie.
         </div>
       )}
@@ -124,6 +131,27 @@ export function BillingSeriesForm({
               </SelectContent>
             </Select>
             <FieldError message={errors.branchId} />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="series-document-type">Documento <span className="text-destructive">*</span></Label>
+            <Select
+              value={form.documentType}
+              onValueChange={(v) => v && set('documentType', v as BillingDocumentType)}
+              disabled={disabled('documentType')}
+            >
+              <SelectTrigger id="series-document-type" className="w-full">
+                <span className="flex-1 truncate text-left text-sm">{DOCUMENT_TYPE_LABELS[form.documentType]}</span>
+              </SelectTrigger>
+              <SelectContent>
+                {(Object.keys(DOCUMENT_TYPE_LABELS) as BillingDocumentType[]).map((t) => (
+                  <SelectItem key={t} value={t}>{DOCUMENT_TYPE_LABELS[t]}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              Las notas de crédito llevan su propio timbrado y numeración.
+            </p>
           </div>
 
           <div className="space-y-1.5">

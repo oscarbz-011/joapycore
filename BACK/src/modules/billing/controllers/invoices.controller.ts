@@ -145,9 +145,7 @@ export class InvoicesController {
 
   @Post('invoices/:id/cancel')
   @Permissions('billing:cancel')
-  @ApiOperation({
-    summary: 'Cancelar factura (genera nota de crédito si estaba emitida)',
-  })
+  @ApiOperation({ summary: 'Descartar un borrador de factura' })
   cancel(
     @CurrentTenant() tenantId: string,
     @CurrentUser() user: JwtPayload,
@@ -157,10 +155,10 @@ export class InvoicesController {
     return this.invoicesService.cancel(tenantId, id, dto.reason, user.sub);
   }
 
-  @Get('credit-notes')
+  @Get('invoices/:id/events')
   @Permissions('billing:read')
-  @ApiOperation({ summary: 'Listar notas de crédito' })
-  findCreditNotes(@CurrentTenant() tenantId: string) {
-    return this.invoicesService.findCreditNotes(tenantId);
+  @ApiOperation({ summary: 'Historial fiscal de la factura' })
+  findEvents(@CurrentTenant() tenantId: string, @Param('id') id: string) {
+    return this.invoicesService.findEvents(tenantId, id);
   }
 }

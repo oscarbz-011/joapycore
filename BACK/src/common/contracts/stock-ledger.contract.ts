@@ -10,6 +10,20 @@ export interface StockLine {
   isSerialized: boolean;
 }
 
+/** Mercadería devuelta por el cliente que vuelve al stock. */
+export interface ReturnLine {
+  saleItemId: string;
+  quantity: number;
+  serialNumbers: string[];
+}
+
+/** Qué se puede reingresar de una línea de venta. */
+export interface ReturnableItem {
+  stocked: boolean;
+  isSerialized: boolean;
+  soldSerials: string[];
+}
+
 /** Ítem ya guardado del que se pueden liberar reservas. */
 export interface ReservedItem {
   id: string;
@@ -75,5 +89,21 @@ export interface StockLedger {
     tx: Prisma.TransactionClient,
     tenantId: string,
     saleItemId: string,
+  ): Promise<void>;
+  /** Por línea de venta: si mueve stock, si es serializada y sus N/S vendidos. */
+  findReturnable(
+    tx: Prisma.TransactionClient,
+    tenantId: string,
+    saleItemIds: string[],
+  ): Promise<Map<string, ReturnableItem>>;
+  /**
+   * Reingresa lo devuelto: un IN por cantidad o las unidades elegidas de
+   * vuelta a IN_STOCK. `referenceId` es el documento de la devolución.
+   */
+  restockReturn(
+    tx: Prisma.TransactionClient,
+    tenantId: string,
+    referenceId: string,
+    lines: ReturnLine[],
   ): Promise<void>;
 }

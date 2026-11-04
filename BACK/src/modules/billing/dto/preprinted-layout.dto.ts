@@ -1,6 +1,13 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsInt, IsNumber, Max, Min, ValidateNested } from 'class-validator';
+import {
+  IsInt,
+  IsNumber,
+  IsOptional,
+  Max,
+  Min,
+  ValidateNested,
+} from 'class-validator';
 
 const MAX_MM = 500;
 
@@ -67,6 +74,13 @@ export class PreprintedLayoutDto {
   @ValidateNested()
   @Type(() => FormPointDto)
   buyerAddress!: FormPointDto;
+
+  // Opcional: los diseños guardados antes de las notas de crédito no lo traen.
+  @ApiPropertyOptional({ type: FormPointDto })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => FormPointDto)
+  relatedDocument?: FormPointDto;
 
   @ApiProperty({ type: FormItemsDto })
   @ValidateNested()
