@@ -324,7 +324,9 @@ describe('CreditNotesService (PostgreSQL)', () => {
       }),
     ).rejects.toThrow('Factura no encontrada');
     await expect(
-      service.voidInvoice(otherTenantId, invoiceId, { reason: 'Error de carga' }),
+      service.voidInvoice(otherTenantId, invoiceId, {
+        reason: 'Error de carga',
+      }),
     ).rejects.toThrow('Factura no encontrada');
     const invoice = await prisma.invoice.findUniqueOrThrow({
       where: { id: invoiceId },
