@@ -10,6 +10,55 @@ export interface StockLine {
   isSerialized: boolean;
 }
 
+/** Mercadería devuelta por el cliente que vuelve al stock. */
+export interface ReturnLine {
+  saleItemId: string;
+  quantity: number;
+  serialNumbers: string[];
+}
+
+/** Qué se puede reingresar de una línea de venta. */
+export interface ReturnableItem {
+  stocked: boolean;
+  isSerialized: boolean;
+  soldSerials: string[];
+}
+
+/** Mercadería que pasa de un depósito a otro. */
+export interface TransferLine {
+  productId: string;
+  quantity: number;
+  serialNumbers: string[];
+}
+
+export interface StockDispatch {
+  /** Documento que respalda el traslado (la nota de remisión). */
+  referenceId: string;
+  fromWarehouseId: string;
+  toWarehouseId: string;
+  notes: string;
+  lines: TransferLine[];
+}
+
+export interface StockReception {
+  referenceId: string;
+  /** Donde entra lo que llegó: el destino, o el origen si se anula el traslado. */
+  warehouseId: string;
+  notes: string;
+  /** Lo que llegó. */
+  lines: TransferLine[];
+  /** N/S despachados que no llegaron. */
+  lostSerials: { productId: string; serialNumbers: string[] }[];
+}
+
+/** Lo que hay disponible de un producto en un depósito. */
+export interface AvailableStock {
+  productId: string;
+  quantity: number;
+  /** N/S en stock y sin asignar a una venta (solo serializados). */
+  serialNumbers: string[];
+}
+
 /** Ítem ya guardado del que se pueden liberar reservas. */
 export interface ReservedItem {
   id: string;
@@ -76,4 +125,41 @@ export interface StockLedger {
     tenantId: string,
     saleItemId: string,
   ): Promise<void>;
+  /** Por línea de venta: si mueve stock, si es serializada y sus N/S vendidos. */
+  findReturnable(
+    tx: Prisma.TransactionClient,
+    tenantId: string,
+    saleItemIds: string[],
+  ): Promise<Map<string, ReturnableItem>>;
+  /**
+   * Reingresa lo devuelto: un IN por cantidad o las unidades elegidas de
+   * vuelta a IN_STOCK. `referenceId` es el documento de la devolución.
+   */
+  restockReturn(
+    tx: Prisma.TransactionClient,
+    tenantId: string,
+    referenceId: string,
+    lines: ReturnLine[],
+  ): Promise<void>;
+  /**
+   * Saca la mercadería del depósito de origen (un OUT por línea) y la deja en
+   * tránsito: los serializados pasan a IN_TRANSIT hasta que se reciban.
+   */
+  dispatch(
+    tx: Prisma.TransactionClient,
+    tenantId: string,
+    dispatch: StockDispatch,
+  ): Promise<void>;
+  /** Ingresa lo que llegó de un traslado en tránsito (un IN por línea). */
+  receive(
+    tx: Prisma.TransactionClient,
+    tenantId: string,
+    reception: StockReception,
+  ): Promise<void>;
+  /** Productos con saldo positivo en el depósito. */
+  availableIn(
+    tx: Prisma.TransactionClient,
+    tenantId: string,
+    warehouseId: string,
+  ): Promise<AvailableStock[]>;
 }

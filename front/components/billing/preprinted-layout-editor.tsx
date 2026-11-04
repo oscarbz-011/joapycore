@@ -148,7 +148,7 @@ export function PreprintedLayoutEditor({
           type="button"
           variant="outline"
           disabled={problem !== null}
-          onClick={() => printPreprintedForm(sampleFiscalReceipt(), layout)}
+          onClick={() => printPreprintedForm(sampleFiscalReceipt(series.documentType), layout)}
         >
           <Printer size={15} /> Imprimir prueba
         </Button>

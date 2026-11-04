@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowRight } from 'lucide-react';
 
@@ -25,9 +26,12 @@ import {
 } from '@/components/ui/select';
 import { apiErrorMessage } from '@/lib/api/api-error';
 import { inventoryApi } from '@/lib/api/inventory';
+import { warehousesApi } from '@/lib/api/warehouses';
 import {
   UNLOCATED_SOURCE,
   buildTransferRequest,
+  needsRemissionNote,
+  remissionTransferHref,
   transferDestinations,
   transferSources,
   type TransferRequest,
@@ -77,6 +81,11 @@ export function StockTransferDialog({ onClose }: StockTransferDialogProps) {
     enabled: Boolean(productId) && isSerialized,
   });
 
+  const { data: warehouses = [] } = useQuery({
+    queryKey: ['warehouses'],
+    queryFn: warehousesApi.listWarehouses,
+  });
+
   const row = stock?.items[0] ?? null;
   const sources = transferSources(row);
   const source = sources.find((item) => item.id === fromId) ?? null;
@@ -85,6 +94,7 @@ export function StockTransferDialog({ onClose }: StockTransferDialogProps) {
   const destination =
     destinations.find((warehouse) => warehouse.id === toWarehouseId) ?? null;
   const fromUnlocated = fromId === UNLOCATED_SOURCE;
+  const betweenBranches = needsRemissionNote(warehouses, fromId, toWarehouseId);
 
   const candidateSerials = units
     .filter(
@@ -297,6 +307,17 @@ export function StockTransferDialog({ onClose }: StockTransferDialogProps) {
                 </p>
               )}
 
+              {betweenBranches && (
+                <div role="alert" className="space-y-2 rounded-xl border border-warn/30 bg-warn-subtle px-3 py-2 text-xs text-warn">
+                  <p>
+                    Los depósitos son de distintas sucursales: la mercadería tiene que viajar con una nota de remisión.
+                  </p>
+                  <Link href={remissionTransferHref(fromId, toWarehouseId)} className="font-semibold underline">
+                    Trasladar con nota de remisión
+                  </Link>
+                </div>
+              )}
+
               {fromUnlocated && available < 0 && (
                 <p className="rounded-xl border border-warn/30 bg-warn-subtle px-3 py-2 text-xs text-warn">
                   El saldo sin depósito es negativo: son salidas históricas sin
@@ -380,7 +401,7 @@ export function StockTransferDialog({ onClose }: StockTransferDialogProps) {
             </Button>
             <Button
               type="submit"
-              disabled={mutation.isPending || !fromId || !toWarehouseId}
+              disabled={mutation.isPending || !fromId || !toWarehouseId || betweenBranches}
             >
               {mutation.isPending ? 'Trasladando...' : 'Trasladar'}
             </Button>

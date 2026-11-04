@@ -1,4 +1,4 @@
-import type { FiscalReceipt, FormPoint, PreprintedLayout } from './api/billing';
+import type { BillingDocumentType, FiscalReceipt, FormPoint, PreprintedLayout } from './api/billing';
 import { guaraniesInWords } from './number-to-words';
 import { escapeHtml, printHtmlDocument } from './print-html';
 
@@ -16,6 +16,7 @@ export const STANDARD_PREPRINTED_LAYOUT: PreprintedLayout = {
   buyerName: { x: 45, y: 45 },
   buyerDocument: { x: 150, y: 45 },
   buyerAddress: { x: 30, y: 52 },
+  relatedDocument: { x: 30, y: 59 },
   items: {
     top: 66,
     lineHeight: 5,
@@ -101,6 +102,7 @@ export function preprintedFormHtml(receipt: FiscalReceipt, layout: PreprintedLay
     place.left(layout.buyerName, receipt.buyer.name),
     place.left(layout.buyerDocument, receipt.buyer.document),
     place.left(layout.buyerAddress, receipt.buyer.address ?? ''),
+    place.left(layout.relatedDocument, receipt.relatedDocument ?? ''),
     ...lines,
     subtotal(items.exemptX, totals.exempt),
     subtotal(items.taxed5X, totals.taxed5),
@@ -128,7 +130,8 @@ ${fields}
 }
 
 /** Factura de ejemplo para calibrar el diseño con "Imprimir prueba". */
-export function sampleFiscalReceipt(): FiscalReceipt {
+/** Datos de prueba para calibrar la hoja; la de notas de crédito lleva la factura que modifica. */
+export function sampleFiscalReceipt(documentType: BillingDocumentType = 'INVOICE'): FiscalReceipt {
   return {
     invoiceId: 'prueba',
     modality: 'PREPRINTED',
@@ -150,6 +153,7 @@ export function sampleFiscalReceipt(): FiscalReceipt {
       branchAddress: null,
     },
     buyer: { name: 'NOMBRE O RAZÓN SOCIAL DE PRUEBA', document: 'RUC 80000000-0', address: 'DIRECCIÓN DE PRUEBA 123' },
+    relatedDocument: documentType === 'CREDIT_NOTE' ? 'Factura 001-001-0000000 del 01/01/26' : null,
     lines: [
       { description: 'PRODUCTO GRAVADO 10%', quantity: 2, unitPrice: 110_000, total: 220_000, ivaRate: 10 },
       { description: 'PRODUCTO GRAVADO 5%', quantity: 1, unitPrice: 52_500, total: 52_500, ivaRate: 5 },

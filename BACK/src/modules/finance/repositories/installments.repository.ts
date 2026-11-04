@@ -41,6 +41,38 @@ export class InstallmentsRepository {
     });
   }
 
+  // De la última a la primera: una nota de crédito achica las cuotas desde
+  // el final.
+  findOpenByLoanFromLast(
+    tenantId: string,
+    loanId: string,
+    client: PrismaClientOrTx,
+  ) {
+    return client.installment.findMany({
+      where: { loanId, tenantId, status: { not: 'PAID' } },
+      select: {
+        id: true,
+        amount: true,
+        paidAmount: true,
+        status: true,
+        paidAt: true,
+      },
+      orderBy: { number: 'desc' },
+    });
+  }
+
+  async hasCollected(
+    tenantId: string,
+    loanId: string,
+    client: PrismaClientOrTx,
+  ): Promise<boolean> {
+    const row = await client.installment.findFirst({
+      where: { loanId, tenantId, paidAmount: { gt: 0 } },
+      select: { id: true },
+    });
+    return row !== null;
+  }
+
   create(
     data: Prisma.InstallmentUncheckedCreateInput,
     client: PrismaClientOrTx = this.prisma,

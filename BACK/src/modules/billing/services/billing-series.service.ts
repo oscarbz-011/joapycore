@@ -43,6 +43,15 @@ const present = <T extends { printLayout: Prisma.JsonValue }>(series: T) => ({
   printLayout: resolvePreprintedLayout(series.printLayout),
 });
 
+const DOCUMENT_NAMES: Record<
+  BillingDocumentType,
+  { one: string; many: string }
+> = {
+  INVOICE: { one: 'la factura', many: 'facturas' },
+  CREDIT_NOTE: { one: 'la nota de crédito', many: 'notas de crédito' },
+  REMISSION_NOTE: { one: 'la nota de remisión', many: 'notas de remisión' },
+};
+
 const formatDay = (value: Date) =>
   value.toISOString().slice(0, 10).split('-').reverse().join('/');
 
@@ -122,7 +131,8 @@ export class BillingSeriesService {
 
   async update(tenantId: string, id: string, dto: UpdateBillingSeriesDto) {
     const current = await this.findOne(tenantId, id);
-    const used = current._count.invoices > 0;
+    const { invoices, creditNotes, remissionNotes } = current._count;
+    const used = invoices + creditNotes + remissionNotes > 0;
 
     if (used) {
       const locked: Exclude<keyof UpdateBillingSeriesDto, 'printLayout'>[] = [
@@ -145,7 +155,7 @@ export class BillingSeriesService {
       );
       if (changed.length > 0) {
         throw new UnprocessableEntityException(
-          'La serie ya numeró facturas: solo se puede cambiar el fin de vigencia, el fin del rango y si está activa. Para un timbrado nuevo, creá otra serie.',
+          'La serie ya numeró documentos: solo se puede cambiar el fin de vigencia, el fin del rango y si está activa. Para un timbrado nuevo, creá otra serie.',
         );
       }
     }
@@ -194,12 +204,14 @@ export class BillingSeriesService {
     seriesId: string,
     itemCount: number,
     tx: PrismaClientOrTx,
+    document: 'invoice' | 'creditNote' = 'invoice',
   ) {
     const series = await this.seriesRepository.findById(tenantId, seriesId, tx);
     if (!series) throw new NotFoundException('Serie no encontrada');
     return layoutFitProblem(
       resolvePreprintedLayout(series.printLayout),
       itemCount,
+      document,
     );
   }
 
@@ -236,6 +248,7 @@ export class BillingSeriesService {
         seriesId: series.id,
         documentNumber: params.documentNumber ?? series.nextNumber,
         at: params.at,
+        documentType: series.documentType,
       },
       tx,
     );
@@ -313,11 +326,12 @@ export class BillingSeriesService {
     tenantId: string,
     branchId: string | null,
     at: Date = new Date(),
+    documentType: BillingDocumentType = BillingDocumentType.INVOICE,
   ) {
     const series = await this.seriesRepository.findActiveForBranch(
       tenantId,
       branchId,
-      BillingDocumentType.INVOICE,
+      documentType,
     );
     return series.map((s) => ({ ...s, problem: seriesProblem(s, at) }));
   }
@@ -334,15 +348,21 @@ export class BillingSeriesService {
       seriesId?: string;
       documentNumber?: number;
       at: Date;
+      documentType?: BillingDocumentType;
     },
     tx: PrismaClientOrTx,
   ): Promise<SeriesNumbering> {
-    const series = await this.pickSeries(tenantId, params, tx);
+    const documentType = params.documentType ?? BillingDocumentType.INVOICE;
+    const series = await this.pickSeries(
+      tenantId,
+      { ...params, documentType },
+      tx,
+    );
 
     if (series.modality === BillingModality.PREPRINTED) {
       if (params.documentNumber === undefined) {
         throw new UnprocessableEntityException(
-          'Cargá el número del talonario de la factura',
+          `Cargá el número del talonario de ${DOCUMENT_NAMES[documentType].one}`,
         );
       }
       await this.assertPreprintedNumber(series, params.documentNumber, tx);
@@ -391,9 +411,16 @@ export class BillingSeriesService {
 
   private async pickSeries(
     tenantId: string,
-    params: { branchId: string | null; seriesId?: string; at: Date },
+    params: {
+      branchId: string | null;
+      seriesId?: string;
+      at: Date;
+      documentType: BillingDocumentType;
+    },
     tx: PrismaClientOrTx,
   ) {
+    const names = DOCUMENT_NAMES[params.documentType];
+    const isInvoice = params.documentType === BillingDocumentType.INVOICE;
     if (params.seriesId) {
       const series = await this.seriesRepository.findById(
         tenantId,
@@ -402,11 +429,13 @@ export class BillingSeriesService {
       );
       if (
         !series ||
-        series.documentType !== BillingDocumentType.INVOICE ||
+        series.documentType !== params.documentType ||
         (params.branchId && series.branchId !== params.branchId)
       ) {
         throw new UnprocessableEntityException(
-          'La serie elegida no corresponde a la sucursal de la venta',
+          isInvoice
+            ? 'La serie elegida no corresponde a la sucursal de la venta'
+            : `La serie elegida no es de ${names.many} de la sucursal que emite`,
         );
       }
       const problem = seriesProblem(series, params.at);
@@ -417,14 +446,16 @@ export class BillingSeriesService {
     const candidates = await this.seriesRepository.findActiveForBranch(
       tenantId,
       params.branchId,
-      BillingDocumentType.INVOICE,
+      params.documentType,
       tx,
     );
     const usable = candidates.filter((s) => !seriesProblem(s, params.at));
     if (usable.length === 1) return usable[0];
     if (usable.length > 1) {
       throw new UnprocessableEntityException(
-        'La sucursal tiene más de una serie vigente: elegí con cuál facturar',
+        isInvoice
+          ? 'La sucursal tiene más de una serie vigente: elegí con cuál facturar'
+          : `La sucursal tiene más de una serie de ${names.many} vigente: elegí cuál usar`,
       );
     }
     if (candidates.length === 1) {
@@ -435,10 +466,11 @@ export class BillingSeriesService {
     const branch = params.branchId
       ? await this.billingSources.findBranch(tenantId, params.branchId, tx)
       : null;
+    const kind = names.many;
     throw new UnprocessableEntityException(
       branch
-        ? `No hay una serie de facturas vigente para la sucursal ${branch.name}. Cargala en Configuración → Facturación.`
-        : 'No hay una serie de facturas vigente. Cargala en Configuración → Facturación.',
+        ? `No hay una serie de ${kind} vigente para la sucursal ${branch.name}. Cargala en Configuración → Facturación.`
+        : `No hay una serie de ${kind} vigente. Cargala en Configuración → Facturación.`,
     );
   }
 

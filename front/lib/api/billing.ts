@@ -4,7 +4,24 @@ import type { PaymentMethod } from "../payment-methods";
 export type InvoiceStatus = "PENDING" | "ISSUED" | "PAID" | "CANCELLED";
 export type CreditNoteStatus = "ISSUED" | "APPLIED";
 export type BillingModality = "PREPRINTED" | "SELF_PRINTED" | "ELECTRONIC";
-export type BillingDocumentType = "INVOICE" | "CREDIT_NOTE";
+export type BillingDocumentType = "INVOICE" | "CREDIT_NOTE" | "REMISSION_NOTE";
+/** TOTAL anula la operación; ITEMS acepta una devolución; AMOUNT concede un descuento. */
+export type CreditNoteKind = "TOTAL" | "ITEMS" | "AMOUNT";
+/** Qué pasa con la plata que el cliente ya pagó y deja de deber. */
+export type SettlementMode = "CUSTOMER_CREDIT" | "REFUND";
+export type BillingEventType =
+  | "ISSUED"
+  | "NUMBERED"
+  | "FORM_PRINTED"
+  | "SHEET_VOIDED"
+  | "SCAN_ATTACHED"
+  | "SCAN_REMOVED"
+  | "VOIDED"
+  | "CREDIT_NOTE_ISSUED"
+  | "REMISSION_NOTE_ISSUED"
+  | "REMISSION_RECEIVED"
+  | "REFUNDED"
+  | "CUSTOMER_CREDITED";
 export type { PaymentMethod } from "../payment-methods";
 
 /** Posición sobre la hoja del talonario, en mm desde arriba a la izquierda. */
@@ -26,6 +43,8 @@ export interface PreprintedLayout {
   buyerName: FormPoint;
   buyerDocument: FormPoint;
   buyerAddress: FormPoint;
+  /** Nota de crédito: la factura que modifica. */
+  relatedDocument: FormPoint;
   items: {
     top: number;
     lineHeight: number;
@@ -68,6 +87,8 @@ export interface FiscalReceipt {
     branchAddress: string | null;
   };
   buyer: { name: string; document: string; address: string | null };
+  /** Nota de crédito: la factura que modifica ("Factura 001-001-0000009 del 28/10/26"). */
+  relatedDocument: string | null;
   lines: {
     description: string;
     quantity: number;
@@ -207,6 +228,12 @@ export interface Invoice {
   formPrintedAt: string | null;
   physicalScanFileId: string | null;
   physicalScan: AttachedFile | null;
+  // Consumidor final sin identificar: "Sin Nombre" y X
+  anonymousBuyer: boolean;
+  // Suma de las notas de crédito emitidas; anulada conservando el original y las copias
+  creditedTotal: number | string;
+  voidReason: string | null;
+  voidedAt: string | null;
   // SIFEN
   cdc: string | null;
   qrUrl: string | null;
@@ -237,27 +264,148 @@ export interface Invoice {
   items: InvoiceItem[];
 }
 
+interface CreditNoteCustomer {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string | null;
+}
+
 export interface CreditNote {
   id: string;
-  invoiceId: string;
   number: string | null;
+  numberPrefix: string | null;
+  kind: CreditNoteKind;
   reason: string;
-  total: number;
+  total: number | string;
   status: CreditNoteStatus;
+  modality: BillingModality | null;
   issuedAt: string;
+  appliedToBalance: number | string;
   createdAt: string;
+  customer: CreditNoteCustomer | null;
   invoice: {
     id: string;
-    total: number;
-    saleOrder: {
-      customer: {
-        id: string;
-        firstName: string;
-        lastName: string;
-        email: string | null;
-      };
-    };
+    invoicePrefix: string | null;
+    invoiceNumber: string | null;
+    total: number | string;
+    issuedAt: string | null;
+    status: InvoiceStatus;
+    saleOrder: { customer: CreditNoteCustomer } | null;
   };
+}
+
+export interface CreditNoteItemRow {
+  id: string;
+  invoiceItemId: string | null;
+  description: string;
+  quantity: number;
+  unitPrice: number | string;
+  total: number | string;
+  ivaRate: number | string | null;
+  ivaAmount: number | string | null;
+  restockQuantity: number;
+  serialNumbers: string[];
+}
+
+export interface BillingEvent {
+  id: string;
+  type: BillingEventType;
+  detail: Record<string, unknown> | null;
+  userId: string | null;
+  createdAt: string;
+  creditNoteId: string | null;
+  remissionNoteId?: string | null;
+}
+
+export interface CreditNoteDetail extends CreditNote {
+  timbrado: string | null;
+  timbradoValidFrom: string | null;
+  timbradoValidUntil: string | null;
+  sequential: number | null;
+  seriesId: string | null;
+  pdfFileId: string | null;
+  formPrintCount: number;
+  formPrintedAt: string | null;
+  physicalScan: AttachedFile | null;
+  items: CreditNoteItemRow[];
+  refunds: {
+    id: string;
+    amount: number | string;
+    method: PaymentMethod;
+    reference: string | null;
+    createdAt: string;
+  }[];
+  customerCredits: { id: string; amount: number | string; createdAt: string }[];
+  events: BillingEvent[];
+}
+
+/** Lo que queda por acreditar de un ítem de la factura. */
+export interface CreditableInvoiceItem {
+  invoiceItemId: string;
+  description: string;
+  quantity: number;
+  creditableQuantity: number;
+  /** Precio por unidad que se acredita (en crédito, sobre el total financiado). */
+  unitPrice: number;
+  ivaRate: number;
+  saleOrderItemId: string | null;
+  restockable: boolean;
+  isSerialized: boolean;
+  soldSerials: string[];
+}
+
+export interface CreditNoteOptions {
+  invoice: {
+    id: string;
+    number: string;
+    status: InvoiceStatus;
+    total: number;
+    creditedTotal: number;
+    remaining: number;
+    isCreditSale: boolean;
+  };
+  customer: { id: string; name: string; creditBalance: number } | null;
+  /** Lo que el cliente todavía debe de la factura y lo que ya pagó. */
+  balance: { outstanding: number; paid: number };
+  items: CreditableInvoiceItem[];
+  series: BillingSeriesOption[];
+}
+
+export interface SettlementPayload {
+  mode: SettlementMode;
+  method?: PaymentMethod;
+  reference?: string;
+}
+
+export interface IssueCreditNotePayload {
+  kind: CreditNoteKind;
+  reason: string;
+  items?: { invoiceItemId: string; quantity: number }[];
+  amount?: number;
+  ivaRate?: number;
+  restock?: { invoiceItemId: string; quantity: number; serialNumbers?: string[] }[];
+  seriesId?: string;
+  documentNumber?: number;
+  excess?: SettlementPayload;
+}
+
+export interface VoidInvoicePayload {
+  reason: string;
+  settlement?: SettlementPayload;
+}
+
+export interface CustomerCredit {
+  balance: number;
+  entries: {
+    id: string;
+    amount: number | string;
+    source: "CREDIT_NOTE" | "INVOICE_VOID" | "APPLIED";
+    note: string | null;
+    createdAt: string;
+    creditNote: { id: string; numberPrefix: string | null; number: string | null } | null;
+    invoice: { id: string; invoicePrefix: string | null; invoiceNumber: string | null } | null;
+  }[];
 }
 
 export interface AssignInvoiceNumberPayload {
@@ -292,7 +440,7 @@ export interface BillingSeries {
   createdAt: string;
   updatedAt: string;
   branch: { id: string; name: string };
-  _count: { invoices: number };
+  _count: { invoices: number; creditNotes?: number; remissionNotes?: number };
 }
 
 /** Serie entre las que se puede elegir al numerar; `problem` dice por qué no sirve hoy. */
@@ -371,6 +519,37 @@ export const billingApi = {
 
   listCreditNotes: (): Promise<CreditNote[]> =>
     apiClient.get("/billing/credit-notes").then((r) => r.data),
+
+  listInvoiceCreditNotes: (invoiceId: string): Promise<CreditNote[]> =>
+    apiClient.get(`/billing/invoices/${invoiceId}/credit-notes`).then((r) => r.data),
+
+  getCreditNoteOptions: (invoiceId: string): Promise<CreditNoteOptions> =>
+    apiClient.get(`/billing/invoices/${invoiceId}/credit-note-options`).then((r) => r.data),
+
+  issueCreditNote: (invoiceId: string, dto: IssueCreditNotePayload): Promise<CreditNoteDetail> =>
+    apiClient.post(`/billing/invoices/${invoiceId}/credit-notes`, dto).then((r) => r.data),
+
+  voidInvoice: (invoiceId: string, dto: VoidInvoicePayload): Promise<{ id: string }> =>
+    apiClient.post(`/billing/invoices/${invoiceId}/void`, dto).then((r) => r.data),
+
+  listInvoiceEvents: (invoiceId: string): Promise<BillingEvent[]> =>
+    apiClient.get(`/billing/invoices/${invoiceId}/events`).then((r) => r.data),
+
+  getCreditNote: (id: string): Promise<CreditNoteDetail> =>
+    apiClient.get(`/billing/credit-notes/${id}`).then((r) => r.data),
+
+  /** Datos para imprimir la nota sobre la hoja del talonario; registra la impresión. */
+  printCreditNoteForm: (id: string): Promise<FormPrintResult> =>
+    apiClient.post(`/billing/credit-notes/${id}/form/print`).then((r) => r.data),
+
+  retryCreditNotePdf: (id: string): Promise<CreditNoteDetail> =>
+    apiClient.post(`/billing/credit-notes/${id}/pdf/retry`).then((r) => r.data),
+
+  setCreditNotePhysicalScan: (id: string, fileId: string | null): Promise<CreditNoteDetail> =>
+    apiClient.post(`/billing/credit-notes/${id}/physical-scan`, { fileId }).then((r) => r.data),
+
+  getCustomerCredit: (customerId: string): Promise<CustomerCredit> =>
+    apiClient.get(`/billing/customers/${customerId}/credit`).then((r) => r.data),
 
   /** Datos para imprimir sobre la hoja del talonario; registra la impresión. */
   printInvoiceForm: (invoiceId: string): Promise<FormPrintResult> =>

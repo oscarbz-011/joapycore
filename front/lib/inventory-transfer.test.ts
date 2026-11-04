@@ -3,6 +3,8 @@ import type { StockResult, StockRow } from './api/inventory';
 import {
   UNLOCATED_SOURCE,
   buildTransferRequest,
+  needsRemissionNote,
+  remissionTransferHref,
   transferDestinations,
   transferSources,
   type TransferForm,
@@ -175,5 +177,28 @@ describe('buildTransferRequest', () => {
     expect(() =>
       buildTransferRequest({ ...form, toWarehouseId: 'main' }, 10),
     ).toThrow('deben ser distintos');
+  });
+});
+
+describe('transfer between branches', () => {
+  const warehouses = [
+    { id: 'main', branchId: 'br-1' },
+    { id: 'back', branchId: 'br-1' },
+    { id: 'capiata', branchId: 'br-2' },
+    { id: 'loose', branchId: null },
+  ];
+
+  it('sends a transfer between branches to the remission note', () => {
+    expect(needsRemissionNote(warehouses, 'main', 'capiata')).toBe(true);
+    expect(needsRemissionNote(warehouses, 'main', 'loose')).toBe(true);
+    expect(needsRemissionNote(warehouses, 'main', 'back')).toBe(false);
+    expect(needsRemissionNote(warehouses, UNLOCATED_SOURCE, 'capiata')).toBe(false);
+    expect(needsRemissionNote(warehouses, 'main', '')).toBe(false);
+  });
+
+  it('opens the remission note with both warehouses chosen', () => {
+    expect(remissionTransferHref('main', 'capiata')).toBe(
+      '/dashboard/billing/remission-notes/new?from=main&to=capiata',
+    );
   });
 });

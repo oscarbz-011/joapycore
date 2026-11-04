@@ -23,6 +23,7 @@ export class BillingSourcesRepository {
         saleType: true,
         items: {
           select: {
+            id: true,
             quantity: true,
             unitPrice: true,
             financedUnitPrice: true,
@@ -63,6 +64,143 @@ export class BillingSourcesRepository {
     return client.branch.findFirst({
       where: { id: branchId, tenantId },
       select: { id: true, name: true },
+    });
+  }
+
+  // Depósitos entre los que se traslada mercadería con nota de remisión, con
+  // la dirección de su sucursal para el punto de partida y de llegada.
+  findWarehousesForRemission(
+    tenantId: string,
+    ids: string[] | null,
+    client: PrismaClientOrTx = this.prisma,
+  ) {
+    return client.warehouse.findMany({
+      where: { tenantId, ...(ids ? { id: { in: ids } } : { isActive: true }) },
+      select: {
+        id: true,
+        name: true,
+        isActive: true,
+        address: true,
+        branch: {
+          select: {
+            id: true,
+            name: true,
+            address: true,
+            numeroCasa: true,
+            city: true,
+            ciudadDesc: true,
+            departamentoDesc: true,
+          },
+        },
+      },
+      orderBy: { name: 'asc' },
+    });
+  }
+
+  findBranchForRemission(
+    tenantId: string,
+    branchId: string,
+    client: PrismaClientOrTx = this.prisma,
+  ) {
+    return client.branch.findFirst({
+      where: { id: branchId, tenantId },
+      select: {
+        id: true,
+        name: true,
+        address: true,
+        numeroCasa: true,
+        city: true,
+        ciudadDesc: true,
+        departamentoDesc: true,
+      },
+    });
+  }
+
+  findProductsForRemission(
+    tenantId: string,
+    ids: string[],
+    client: PrismaClientOrTx = this.prisma,
+  ) {
+    return client.product.findMany({
+      where: { tenantId, id: { in: ids }, deletedAt: null },
+      select: {
+        id: true,
+        name: true,
+        model: true,
+        unit: true,
+        isSerialized: true,
+        brand: { select: { name: true } },
+      },
+    });
+  }
+
+  findSaleItemsForRemission(
+    tenantId: string,
+    saleItemIds: string[],
+    client: PrismaClientOrTx = this.prisma,
+  ) {
+    if (saleItemIds.length === 0) return Promise.resolve([]);
+    return client.saleOrderItem.findMany({
+      where: { id: { in: saleItemIds }, saleOrder: { tenantId } },
+      select: {
+        id: true,
+        productId: true,
+        product: {
+          select: {
+            name: true,
+            model: true,
+            unit: true,
+            isSerialized: true,
+            brand: { select: { name: true } },
+          },
+        },
+      },
+    });
+  }
+
+  // N/S asignados a cada línea de venta, se hayan entregado o no todavía.
+  async findSerialsBySaleItems(
+    tenantId: string,
+    saleItemIds: string[],
+    client: PrismaClientOrTx = this.prisma,
+  ): Promise<Map<string, string[]>> {
+    const result = new Map<string, string[]>();
+    if (saleItemIds.length === 0) return result;
+    const units = await client.productUnit.findMany({
+      where: {
+        tenantId,
+        saleOrderItemId: { in: saleItemIds },
+        status: { in: ['IN_STOCK', 'SOLD'] },
+      },
+      select: { saleOrderItemId: true, serialNumber: true },
+      orderBy: { serialNumber: 'asc' },
+    });
+    for (const unit of units) {
+      if (!unit.saleOrderItemId) continue;
+      const list = result.get(unit.saleOrderItemId) ?? [];
+      list.push(unit.serialNumber);
+      result.set(unit.saleOrderItemId, list);
+    }
+    return result;
+  }
+
+  // La empresa: destinataria de un traslado entre sus sucursales y
+  // transportista cuando el vehículo es propio.
+  findTenantForRemission(
+    tenantId: string,
+    client: PrismaClientOrTx = this.prisma,
+  ) {
+    return client.tenant.findUnique({
+      where: { id: tenantId },
+      select: {
+        name: true,
+        razonSocial: true,
+        ruc: true,
+        address: true,
+        numeroCasa: true,
+        city: true,
+        departamentoDesc: true,
+      },
     });
   }
 }
