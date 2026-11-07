@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../prisma/prisma.service';
+import { CLOSED_SALE_STATUSES } from '../../../common/constants/sale-status.constant';
 
 @Injectable()
 export class SaleTargetsRepository {
@@ -44,7 +45,7 @@ export class SaleTargetsRepository {
     return this.prisma.saleOrder.findMany({
       where: {
         tenantId,
-        status: { in: ['CONFIRMED', 'INVOICED'] },
+        status: { in: CLOSED_SALE_STATUSES },
         orderDate: { gte: from, lte: to },
       },
       select: {
