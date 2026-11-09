@@ -50,7 +50,10 @@ export default function EditBillingSeriesPage() {
       {series && <BillingSeriesForm series={series} canManage={canManage} onDone={back} />}
       {series?.modality === 'PREPRINTED' && (
         <>
-          <PreprintedLayoutEditor key={series.updatedAt} series={series} canManage={canManage} />
+          {/* La nota de remisión de talonario se llena a mano: no se imprime sobre la hoja. */}
+          {series.documentType !== 'REMISSION_NOTE' && (
+            <PreprintedLayoutEditor key={series.updatedAt} series={series} canManage={canManage} />
+          )}
           <VoidedSheets series={series} canManage={canManage} />
         </>
       )}

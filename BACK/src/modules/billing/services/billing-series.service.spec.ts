@@ -31,7 +31,7 @@ function makeSeries(overrides: Record<string, unknown> = {}) {
     createdAt: new Date(),
     updatedAt: new Date(),
     branch: { id: 'branch-1', name: 'Central' },
-    _count: { invoices: 0, creditNotes: 0 },
+    _count: { invoices: 0, creditNotes: 0, remissionNotes: 0 },
     ...overrides,
   };
 }
@@ -190,7 +190,9 @@ describe('BillingSeriesService', () => {
 
     it('locks the numbering of a series that already numbered invoices', async () => {
       repo.findById.mockResolvedValue(
-        makeSeries({ _count: { invoices: 3, creditNotes: 0 } }),
+        makeSeries({
+          _count: { invoices: 3, creditNotes: 0, remissionNotes: 0 },
+        }),
       );
 
       await expect(
@@ -201,7 +203,9 @@ describe('BillingSeriesService', () => {
 
     it('lets a used series extend its range and validity or be deactivated', async () => {
       repo.findById.mockResolvedValue(
-        makeSeries({ _count: { invoices: 3, creditNotes: 0 } }),
+        makeSeries({
+          _count: { invoices: 3, creditNotes: 0, remissionNotes: 0 },
+        }),
       );
 
       await service.update('tenant-1', 'series-1', {
@@ -229,7 +233,7 @@ describe('BillingSeriesService', () => {
           timbrado: null,
           validFrom: null,
           validUntil: null,
-          _count: { invoices: 12, creditNotes: 0 },
+          _count: { invoices: 12, creditNotes: 0, remissionNotes: 0 },
         }),
       );
 
@@ -250,7 +254,7 @@ describe('BillingSeriesService', () => {
       repo.findById.mockResolvedValue(
         makeSeries({
           nextNumber: 120,
-          _count: { invoices: 3, creditNotes: 0 },
+          _count: { invoices: 3, creditNotes: 0, remissionNotes: 0 },
         }),
       );
 
@@ -338,6 +342,24 @@ describe('BillingSeriesService', () => {
         service.numberForIssue('tenant-1', params, tx),
       ).rejects.toThrow(
         'No hay una serie de facturas vigente para la sucursal Central',
+      );
+    });
+
+    it('names the document when there is no remission note series', async () => {
+      await expect(
+        service.numberForIssue(
+          'tenant-1',
+          { ...params, documentType: 'REMISSION_NOTE' },
+          tx,
+        ),
+      ).rejects.toThrow(
+        'No hay una serie de notas de remisión vigente para la sucursal Central',
+      );
+      expect(repo.findActiveForBranch).toHaveBeenCalledWith(
+        'tenant-1',
+        expect.anything(),
+        'REMISSION_NOTE',
+        tx,
       );
     });
 
@@ -491,7 +513,7 @@ describe('BillingSeriesService', () => {
         makeSeries({
           modality: 'PREPRINTED',
           printLayout: null,
-          _count: { invoices: 3, creditNotes: 0 },
+          _count: { invoices: 3, creditNotes: 0, remissionNotes: 0 },
         }),
       );
       await expect(

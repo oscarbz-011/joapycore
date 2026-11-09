@@ -732,7 +732,9 @@ export default function ProductDetailPage() {
                   >
                     {u.status === 'IN_STOCK'
                       ? 'En stock'
-                      : u.status === 'SOLD'
+                      : u.status === 'IN_TRANSIT'
+                        ? 'En tránsito'
+                        : u.status === 'SOLD'
                         ? 'Vendido'
                         : u.status === 'ADJUSTED_OUT'
                           ? 'Ajustado'

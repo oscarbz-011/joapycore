@@ -4,7 +4,7 @@ import type { PaymentMethod } from "../payment-methods";
 export type InvoiceStatus = "PENDING" | "ISSUED" | "PAID" | "CANCELLED";
 export type CreditNoteStatus = "ISSUED" | "APPLIED";
 export type BillingModality = "PREPRINTED" | "SELF_PRINTED" | "ELECTRONIC";
-export type BillingDocumentType = "INVOICE" | "CREDIT_NOTE";
+export type BillingDocumentType = "INVOICE" | "CREDIT_NOTE" | "REMISSION_NOTE";
 /** TOTAL anula la operación; ITEMS acepta una devolución; AMOUNT concede un descuento. */
 export type CreditNoteKind = "TOTAL" | "ITEMS" | "AMOUNT";
 /** Qué pasa con la plata que el cliente ya pagó y deja de deber. */
@@ -18,6 +18,8 @@ export type BillingEventType =
   | "SCAN_REMOVED"
   | "VOIDED"
   | "CREDIT_NOTE_ISSUED"
+  | "REMISSION_NOTE_ISSUED"
+  | "REMISSION_RECEIVED"
   | "REFUNDED"
   | "CUSTOMER_CREDITED";
 export type { PaymentMethod } from "../payment-methods";
@@ -313,6 +315,7 @@ export interface BillingEvent {
   userId: string | null;
   createdAt: string;
   creditNoteId: string | null;
+  remissionNoteId?: string | null;
 }
 
 export interface CreditNoteDetail extends CreditNote {
@@ -437,7 +440,7 @@ export interface BillingSeries {
   createdAt: string;
   updatedAt: string;
   branch: { id: string; name: string };
-  _count: { invoices: number; creditNotes?: number };
+  _count: { invoices: number; creditNotes?: number; remissionNotes?: number };
 }
 
 /** Serie entre las que se puede elegir al numerar; `problem` dice por qué no sirve hoy. */

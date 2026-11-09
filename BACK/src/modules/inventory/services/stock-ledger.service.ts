@@ -5,11 +5,15 @@ import {
 } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 import type {
+  AvailableStock,
   ReservedItem,
   ReturnableItem,
   ReturnLine,
   StockLedger,
+  StockDispatch,
   StockLine,
+  StockReception,
+  TransferLine,
 } from '../../../common/contracts/stock-ledger.contract';
 import {
   aggregateDemands,
@@ -17,6 +21,7 @@ import {
   type StockDemand,
 } from '../../../common/utils/stock-availability.util';
 import { ProductUnitsRepository } from '../repositories/product-units.repository';
+import { ProductsRepository } from '../repositories/products.repository';
 import { StockMovementsRepository } from '../repositories/stock-movements.repository';
 import { StockLocationsRepository } from '../repositories/stock-locations.repository';
 import { StockSourcesRepository } from '../repositories/stock-sources.repository';
@@ -32,6 +37,7 @@ export class StockLedgerService implements StockLedger {
     private readonly productUnits: ProductUnitsRepository,
     private readonly stockLocations: StockLocationsRepository,
     private readonly stockSources: StockSourcesRepository,
+    private readonly products: ProductsRepository,
   ) {}
 
   /**
@@ -271,6 +277,195 @@ export class StockLedgerService implements StockLedger {
         tx,
       );
     }
+  }
+
+  async dispatch(
+    tx: Prisma.TransactionClient,
+    tenantId: string,
+    dispatch: StockDispatch,
+  ): Promise<void> {
+    const { fromWarehouseId, toWarehouseId } = dispatch;
+    if (fromWarehouseId === toWarehouseId) {
+      throw new UnprocessableEntityException(
+        'Los depósitos de origen y destino deben ser distintos',
+      );
+    }
+    await this.assertActiveWarehouse(tx, tenantId, fromWarehouseId);
+    await this.assertActiveWarehouse(tx, tenantId, toWarehouseId);
+
+    const lines = dispatch.lines.filter((l) => l.quantity > 0);
+    if (lines.length === 0) {
+      throw new UnprocessableEntityException('El traslado no tiene mercadería');
+    }
+    const byId = await this.productsOf(tx, tenantId, lines);
+
+    const counted = lines.filter((l) => !byId.get(l.productId)?.isSerialized);
+    if (counted.length > 0) {
+      const demands: StockDemand[] = counted.map((l) => ({
+        productId: l.productId,
+        warehouseId: fromWarehouseId,
+        quantity: l.quantity,
+        name: byId.get(l.productId)?.name ?? '',
+      }));
+      await this.stockMovements.lockProducts(
+        tx,
+        tenantId,
+        demands.map((d) => d.productId),
+      );
+      const available = await this.stockMovements.sumByProductsAndWarehouse(
+        tenantId,
+        demands,
+        tx,
+      );
+      assertDemandsCovered(aggregateDemands(demands), available);
+    }
+
+    for (const line of lines) {
+      const product = byId.get(line.productId);
+      if (product?.isSerialized) {
+        const serials = this.uniqueSerials(line, product.name);
+        const moved = await this.productUnits.dispatchUnits(
+          tenantId,
+          line.productId,
+          serials,
+          fromWarehouseId,
+          toWarehouseId,
+          tx,
+        );
+        if (moved !== line.quantity) {
+          throw new UnprocessableEntityException(
+            `Algún número de serie de ${product.name} no está disponible en el depósito de origen`,
+          );
+        }
+      }
+      await this.stockMovements.create(
+        {
+          tenantId,
+          productId: line.productId,
+          warehouseId: fromWarehouseId,
+          type: 'OUT',
+          reason: 'TRANSFER',
+          quantity: -line.quantity,
+          referenceId: dispatch.referenceId,
+          notes: dispatch.notes,
+        },
+        tx,
+      );
+    }
+  }
+
+  async receive(
+    tx: Prisma.TransactionClient,
+    tenantId: string,
+    reception: StockReception,
+  ): Promise<void> {
+    await this.assertActiveWarehouse(tx, tenantId, reception.warehouseId);
+    const lines = reception.lines.filter((l) => l.quantity > 0);
+    const lost = reception.lostSerials.filter(
+      (l) => l.serialNumbers.length > 0,
+    );
+    const byId = await this.productsOf(tx, tenantId, [
+      ...lines,
+      ...lost.map((l) => ({ productId: l.productId })),
+    ]);
+
+    for (const line of lines) {
+      const product = byId.get(line.productId);
+      if (product?.isSerialized) {
+        const serials = this.uniqueSerials(line, product.name);
+        const received = await this.productUnits.receiveUnits(
+          tenantId,
+          line.productId,
+          serials,
+          reception.warehouseId,
+          tx,
+        );
+        if (received !== line.quantity) {
+          throw new UnprocessableEntityException(
+            `Algún número de serie de ${product.name} no está en tránsito`,
+          );
+        }
+      }
+      await this.stockMovements.create(
+        {
+          tenantId,
+          productId: line.productId,
+          warehouseId: reception.warehouseId,
+          type: 'IN',
+          reason: 'TRANSFER',
+          quantity: line.quantity,
+          referenceId: reception.referenceId,
+          notes: reception.notes,
+        },
+        tx,
+      );
+    }
+
+    for (const missing of lost) {
+      const count = await this.productUnits.loseInTransit(
+        tenantId,
+        missing.productId,
+        missing.serialNumbers,
+        tx,
+      );
+      if (count !== missing.serialNumbers.length) {
+        throw new UnprocessableEntityException(
+          'Algún número de serie faltante no está en tránsito',
+        );
+      }
+    }
+  }
+
+  private async productsOf(
+    tx: Prisma.TransactionClient,
+    tenantId: string,
+    lines: { productId: string }[],
+  ) {
+    const ids = [...new Set(lines.map((l) => l.productId))];
+    const products =
+      ids.length > 0
+        ? await this.products.findForTransfer(tenantId, ids, tx)
+        : [];
+    const byId = new Map(products.map((p) => [p.id, p]));
+    if (ids.some((id) => !byId.has(id))) {
+      throw new NotFoundException('Uno de los productos no existe');
+    }
+    return byId;
+  }
+
+  private uniqueSerials(line: TransferLine, name: string): string[] {
+    const serials = [...new Set(line.serialNumbers)];
+    if (serials.length !== line.quantity) {
+      throw new UnprocessableEntityException(
+        `Elegí un número de serie por cada unidad de ${name}`,
+      );
+    }
+    return serials;
+  }
+
+  async availableIn(
+    tx: Prisma.TransactionClient,
+    tenantId: string,
+    warehouseId: string,
+  ): Promise<AvailableStock[]> {
+    const [balances, units] = await Promise.all([
+      this.stockMovements.sumByWarehouse(tenantId, warehouseId, tx),
+      this.productUnits.findFreeInWarehouse(tenantId, warehouseId, tx),
+    ]);
+    const serials = new Map<string, string[]>();
+    for (const unit of units) {
+      serials.set(unit.productId, [
+        ...(serials.get(unit.productId) ?? []),
+        unit.serialNumber,
+      ]);
+    }
+    return [...balances]
+      .filter(([, quantity]) => quantity > 0)
+      .map(([productId, quantity]) => ({
+        productId,
+        quantity,
+        serialNumbers: serials.get(productId) ?? [],
+      }));
   }
 
   private async writeMovements(

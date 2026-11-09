@@ -5,7 +5,9 @@ import { PrismaClientOrTx } from '../../../prisma/types';
 
 const seriesInclude = {
   branch: { select: { id: true, name: true } },
-  _count: { select: { invoices: true, creditNotes: true } },
+  _count: {
+    select: { invoices: true, creditNotes: true, remissionNotes: true },
+  },
 } satisfies Prisma.BillingSeriesInclude;
 
 @Injectable()
@@ -125,12 +127,13 @@ export class BillingSeriesRepository {
     client: PrismaClientOrTx = this.prisma,
   ) {
     const where = { seriesId, serieCode, sequential };
-    const [invoice, creditNote, voided] = await Promise.all([
+    const found = await Promise.all([
       client.invoice.findFirst({ where, select: { id: true } }),
       client.creditNote.findFirst({ where, select: { id: true } }),
+      client.remissionNote.findFirst({ where, select: { id: true } }),
       client.billingVoidedNumber.findFirst({ where, select: { id: true } }),
     ]);
-    return Boolean(invoice || creditNote || voided);
+    return found.some(Boolean);
   }
 
   createVoided(

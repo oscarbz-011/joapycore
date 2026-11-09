@@ -280,7 +280,7 @@ export class ProductsService {
         'Se requiere el depósito de origen',
       );
     }
-    await this.assertActiveWarehouse(tenantId, dto.warehouseId);
+    const from = await this.assertActiveWarehouse(tenantId, dto.warehouseId);
 
     if (dto.reason === MovementReason.TRANSFER) {
       if (!dto.toWarehouseId) {
@@ -293,7 +293,12 @@ export class ProductsService {
           'Los depósitos de origen y destino deben ser distintos',
         );
       }
-      await this.assertActiveWarehouse(tenantId, dto.toWarehouseId);
+      const to = await this.assertActiveWarehouse(tenantId, dto.toWarehouseId);
+      if ((from.branchId ?? null) !== (to.branchId ?? null)) {
+        throw new UnprocessableEntityException(
+          'Un traslado entre sucursales necesita una nota de remisión: hacelo desde Facturación → Notas de remisión',
+        );
+      }
     }
 
     if (dto.reason === MovementReason.ADJUSTMENT && !dto.direction) {
@@ -529,6 +534,7 @@ export class ProductsService {
         'El depósito no existe o está inactivo',
       );
     }
+    return warehouse;
   }
 
   async createGlobalMovement(

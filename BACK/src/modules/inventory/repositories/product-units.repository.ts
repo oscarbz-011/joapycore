@@ -18,6 +18,24 @@ export class ProductUnitsRepository {
     });
   }
 
+  // En stock en el depósito y sin asignar a una venta.
+  findFreeInWarehouse(
+    tenantId: string,
+    warehouseId: string,
+    client: PrismaClientOrTx = this.prisma,
+  ) {
+    return client.productUnit.findMany({
+      where: {
+        tenantId,
+        warehouseId,
+        status: 'IN_STOCK',
+        saleOrderItemId: null,
+      },
+      select: { productId: true, serialNumber: true },
+      orderBy: { serialNumber: 'asc' },
+    });
+  }
+
   findBySerial(tenantId: string, productId: string, serialNumber: string) {
     return this.prisma.productUnit.findUnique({
       where: {
@@ -67,6 +85,68 @@ export class ProductUnitsRepository {
         warehouseId: fromWarehouseId,
       },
       data: { warehouseId: toWarehouseId },
+    });
+    return result.count;
+  }
+
+  // Salen del depósito con una nota de remisión: quedan en tránsito, ya
+  // apuntando al depósito de destino.
+  async dispatchUnits(
+    tenantId: string,
+    productId: string,
+    serialNumbers: string[],
+    fromWarehouseId: string,
+    toWarehouseId: string,
+    client: PrismaClientOrTx = this.prisma,
+  ): Promise<number> {
+    const result = await client.productUnit.updateMany({
+      where: {
+        tenantId,
+        productId,
+        serialNumber: { in: serialNumbers },
+        status: 'IN_STOCK',
+        warehouseId: fromWarehouseId,
+        saleOrderItemId: null,
+      },
+      data: { status: 'IN_TRANSIT', warehouseId: toWarehouseId },
+    });
+    return result.count;
+  }
+
+  async receiveUnits(
+    tenantId: string,
+    productId: string,
+    serialNumbers: string[],
+    warehouseId: string,
+    client: PrismaClientOrTx = this.prisma,
+  ): Promise<number> {
+    const result = await client.productUnit.updateMany({
+      where: {
+        tenantId,
+        productId,
+        serialNumber: { in: serialNumbers },
+        status: 'IN_TRANSIT',
+      },
+      data: { status: 'IN_STOCK', warehouseId },
+    });
+    return result.count;
+  }
+
+  // No llegaron al destino: salen del stock como faltante del traslado.
+  async loseInTransit(
+    tenantId: string,
+    productId: string,
+    serialNumbers: string[],
+    client: PrismaClientOrTx = this.prisma,
+  ): Promise<number> {
+    const result = await client.productUnit.updateMany({
+      where: {
+        tenantId,
+        productId,
+        serialNumber: { in: serialNumbers },
+        status: 'IN_TRANSIT',
+      },
+      data: { status: 'ADJUSTED_OUT' },
     });
     return result.count;
   }

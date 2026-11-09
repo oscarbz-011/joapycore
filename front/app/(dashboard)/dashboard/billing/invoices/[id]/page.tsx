@@ -5,6 +5,12 @@ import { EntityTimeline } from "@/components/communications/entity-timeline";
 import { SeriesNumberingFields } from "@/components/billing/series-numbering-fields";
 import { PreprintedSheetPanel } from "@/components/billing/preprinted-sheet-panel";
 import { printPreprintedForm } from "@/lib/preprinted-form";
+import { remissionNotesApi } from "@/lib/api/remission-notes";
+import {
+  REMISSION_MOTIVE_LABELS,
+  remissionDestination,
+  remissionNoteNumber,
+} from "@/lib/remission-notes";
 import {
   BILLING_EVENT_LABELS,
   billingEventDetail,
@@ -276,6 +282,11 @@ export default function InvoiceDetailPage() {
     queryFn: () => billingApi.listInvoiceCreditNotes(id),
     enabled: emitted,
   });
+  const { data: invoiceRemissions = [] } = useQuery({
+    queryKey: ["invoice", id, "remission-notes"],
+    queryFn: () => remissionNotesApi.listByInvoice(id),
+    enabled: emitted,
+  });
   const customerId = invoice?.saleOrder?.customer?.id;
   const { data: customerCredit } = useQuery({
     queryKey: ["customer-credit", customerId],
@@ -391,6 +402,9 @@ export default function InvoiceDetailPage() {
   const creditState = invoiceCreditState(invoice);
   const canCredit = canCreditInvoice(invoice);
   const canVoid = canVoidInvoice(invoice);
+  const canRemit =
+    (invoice.status === "ISSUED" || invoice.status === "PAID") &&
+    invoice.invoiceType === "SALE";
   const customer = invoice.saleOrder.customer;
   const invoiceRef = invoice.invoiceNumber
     ? `${invoice.invoicePrefix ?? ""}${invoice.invoiceNumber}`
@@ -604,6 +618,48 @@ export default function InvoiceDetailPage() {
                         <td className="px-5 py-3 text-muted-foreground">{formatDatePY(note.issuedAt, "local")}</td>
                         <td className="px-5 py-3 text-right font-medium tabular-nums text-foreground">
                           {formatPrice(Number(note.total))}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          )}
+
+          {invoiceRemissions.length > 0 && (
+            <section className="overflow-hidden rounded-xl border border-border bg-card">
+              <div className="border-b border-border px-5 py-4">
+                <h2 className={SECTION_LABEL}>Notas de remisión</h2>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-muted/30 text-xs font-semibold uppercase tracking-wider text-muted-foreground/60">
+                    <tr>
+                      <th className="px-5 py-3 text-left">N° Nota</th>
+                      <th className="px-5 py-3 text-left">Motivo</th>
+                      <th className="px-5 py-3 text-left">Destinatario</th>
+                      <th className="px-5 py-3 text-left">Inicio del traslado</th>
+                      <th className="px-5 py-3 text-left">Estado</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {invoiceRemissions.map((note) => (
+                      <tr
+                        key={note.id}
+                        onClick={() => router.push(`/dashboard/billing/remission-notes/${note.id}`)}
+                        className="cursor-pointer transition-colors hover:bg-muted/20"
+                      >
+                        <td className="whitespace-nowrap px-5 py-3 font-mono text-xs text-foreground">{remissionNoteNumber(note)}</td>
+                        <td className="px-5 py-3 text-muted-foreground">{REMISSION_MOTIVE_LABELS[note.motive]}</td>
+                        <td className="px-5 py-3 text-muted-foreground">{remissionDestination(note)}</td>
+                        <td className="whitespace-nowrap px-5 py-3 text-muted-foreground">
+                          {formatDatePY(note.transportStartDate, "utc")}
+                        </td>
+                        <td className="px-5 py-3">
+                          <Badge variant={note.status === "VOIDED" ? "destructive" : "outline"}>
+                            {note.status === "VOIDED" ? "Anulada" : "Vigente"}
+                          </Badge>
                         </td>
                       </tr>
                     ))}
@@ -863,6 +919,27 @@ export default function InvoiceDetailPage() {
               </DataGroup>
             )}
           </section>
+
+          {canRemit && (
+            <RequirePermission permission="billing:issue">
+              <section className="space-y-3 rounded-xl border border-border bg-card p-5">
+                <div>
+                  <h2 className={SECTION_LABEL}>Envío de la mercadería</h2>
+                  <p className="mt-1.5 text-xs text-muted-foreground">
+                    Opcional: la nota de remisión respalda el traslado. No hace falta si la factura viaja con la
+                    mercadería o si el cliente se la lleva.
+                  </p>
+                </div>
+                <Button
+                  className="w-full"
+                  variant="outline"
+                  onClick={() => router.push(`/dashboard/billing/invoices/${invoice.id}/remission-note`)}
+                >
+                  Emitir nota de remisión
+                </Button>
+              </section>
+            </RequirePermission>
+          )}
 
           {(canCredit || canVoid) && (
             <RequirePermission permission="billing:cancel">

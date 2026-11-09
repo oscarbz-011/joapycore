@@ -129,14 +129,16 @@ export function seriesToForm(series: BillingSeries): SeriesForm {
  * Campos que ya no se pueden cambiar porque la serie numeró facturas. El
  * timbrado y su inicio se pueden completar solo si faltaban.
  */
-/** Documentos que ya numeró la serie (facturas o notas de crédito). */
+/** Documentos que ya numeró la serie. */
 export function seriesUsage(series: Pick<BillingSeries, "_count">): number {
-  return series._count.invoices + (series._count.creditNotes ?? 0);
+  const { invoices, creditNotes = 0, remissionNotes = 0 } = series._count;
+  return invoices + creditNotes + remissionNotes;
 }
 
 export const DOCUMENT_TYPE_LABELS: Record<BillingDocumentType, string> = {
   INVOICE: "Factura",
   CREDIT_NOTE: "Nota de crédito",
+  REMISSION_NOTE: "Nota de remisión",
 };
 
 export function lockedFields(

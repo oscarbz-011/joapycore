@@ -7,6 +7,7 @@ import { StockLedgerService } from '../../inventory/services/stock-ledger.servic
 import { SaleOrdersService } from './sale-orders.service';
 import { ProductUnitsRepository } from '../../inventory/repositories/product-units.repository';
 import { StockSourcesRepository } from '../../inventory/repositories/stock-sources.repository';
+import { ProductsRepository } from '../../inventory/repositories/products.repository';
 import { StockMovementsRepository } from '../../inventory/repositories/stock-movements.repository';
 import { CreditSourcesRepository } from '../repositories/credit-sources.repository';
 import { CustomersRepository } from '../repositories/customers.repository';
@@ -245,6 +246,7 @@ describe('SaleOrdersService', () => {
           findById: jest.fn().mockResolvedValue({ id: 'wh-1', isActive: true }),
         } as any,
         new StockSourcesRepository(prisma as any),
+        new ProductsRepository(prisma as any),
       ),
       outbox as any,
       new CreditSourcesRepository(prisma as any),

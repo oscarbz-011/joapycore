@@ -680,6 +680,27 @@ describe('ProductsService', () => {
       ).rejects.toBeInstanceOf(BadRequestException);
     });
 
+    it('sends a transfer between branches to the remission note', async () => {
+      productsRepository.findById.mockResolvedValue(makeProduct());
+      warehousesRepository.findById
+        .mockResolvedValueOnce({ id: 'wh-1', isActive: true, branchId: 'br-1' })
+        .mockResolvedValueOnce({
+          id: 'wh-2',
+          isActive: true,
+          branchId: 'br-2',
+        });
+
+      await expect(
+        service.addStockMovement('tenant-1', 'prod-1', {
+          reason: 'TRANSFER',
+          quantity: 1,
+          warehouseId: 'wh-1',
+          toWarehouseId: 'wh-2',
+        }),
+      ).rejects.toThrow('necesita una nota de remisión');
+      expect(stockMovementsRepository.create).not.toHaveBeenCalled();
+    });
+
     it('rejects a non-serialized OUT that exceeds origin stock', async () => {
       productsRepository.findById.mockResolvedValue(makeProduct());
       stockMovementsRepository.sumByProductsAndWarehouse.mockResolvedValue(

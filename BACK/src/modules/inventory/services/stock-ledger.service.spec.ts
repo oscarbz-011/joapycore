@@ -138,6 +138,7 @@ describe('StockLedgerService', () => {
         units as any,
         {} as any,
         sources as any,
+        {} as any,
       );
     });
 
@@ -219,5 +220,237 @@ describe('StockLedgerService', () => {
         ]),
       ).rejects.toThrow('no corresponde a esta venta');
     });
+  });
+
+  describe('dispatch and receive', () => {
+    const tx = {} as any;
+    let movements: {
+      create: jest.Mock;
+      lockProducts: jest.Mock;
+      sumByProductsAndWarehouse: jest.Mock;
+    };
+    let units: {
+      dispatchUnits: jest.Mock;
+      receiveUnits: jest.Mock;
+      loseInTransit: jest.Mock;
+    };
+    let locations: { findById: jest.Mock };
+    let products: { findForTransfer: jest.Mock };
+    let ledger: StockLedgerService;
+
+    const dispatch = (lines: any[]) => ({
+      referenceId: 'rn-1',
+      fromWarehouseId: 'wh-a',
+      toWarehouseId: 'wh-b',
+      notes: 'Nota de remisión 001-001-0000001',
+      lines,
+    });
+
+    beforeEach(() => {
+      movements = {
+        create: jest.fn(),
+        lockProducts: jest.fn(),
+        sumByProductsAndWarehouse: jest
+          .fn()
+          .mockResolvedValue(new Map([['p-rice::wh-a', 10]])),
+      };
+      units = {
+        dispatchUnits: jest.fn().mockResolvedValue(2),
+        receiveUnits: jest.fn().mockResolvedValue(1),
+        loseInTransit: jest.fn().mockResolvedValue(1),
+      };
+      locations = {
+        findById: jest.fn().mockImplementation((_t: string, id: string) => ({
+          id,
+          isActive: true,
+        })),
+      };
+      products = {
+        findForTransfer: jest.fn().mockResolvedValue([
+          { id: 'p-rice', name: 'Arroz', isSerialized: false },
+          { id: 'p-tv', name: 'Televisor', isSerialized: true },
+        ]),
+      };
+      ledger = new StockLedgerService(
+        movements as any,
+        units as any,
+        locations as any,
+        {} as any,
+        products as any,
+      );
+    });
+
+    it('takes the goods out of the origin and leaves them in transit', async () => {
+      await ledger.dispatch(
+        tx,
+        'tenant-1',
+        dispatch([
+          { productId: 'p-rice', quantity: 4, serialNumbers: [] },
+          { productId: 'p-tv', quantity: 2, serialNumbers: ['SN-1', 'SN-2'] },
+        ]),
+      );
+      expect(movements.lockProducts).toHaveBeenCalledWith(tx, 'tenant-1', [
+        'p-rice',
+      ]);
+      expect(units.dispatchUnits).toHaveBeenCalledWith(
+        'tenant-1',
+        'p-tv',
+        ['SN-1', 'SN-2'],
+        'wh-a',
+        'wh-b',
+        tx,
+      );
+      expect(movements.create).toHaveBeenCalledTimes(2);
+      expect(movements.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          productId: 'p-rice',
+          warehouseId: 'wh-a',
+          type: 'OUT',
+          reason: 'TRANSFER',
+          quantity: -4,
+          referenceId: 'rn-1',
+        }),
+        tx,
+      );
+      expect(movements.create).not.toHaveBeenCalledWith(
+        expect.objectContaining({ type: 'IN' }),
+        tx,
+      );
+    });
+
+    it('rejects more than the origin has', async () => {
+      await expect(
+        ledger.dispatch(
+          tx,
+          'tenant-1',
+          dispatch([{ productId: 'p-rice', quantity: 11, serialNumbers: [] }]),
+        ),
+      ).rejects.toBeInstanceOf(UnprocessableEntityException);
+      expect(movements.create).not.toHaveBeenCalled();
+    });
+
+    it('rejects a serial number that is not free in the origin', async () => {
+      units.dispatchUnits.mockResolvedValue(1);
+      await expect(
+        ledger.dispatch(
+          tx,
+          'tenant-1',
+          dispatch([
+            { productId: 'p-tv', quantity: 2, serialNumbers: ['SN-1', 'SN-9'] },
+          ]),
+        ),
+      ).rejects.toThrow('no está disponible en el depósito de origen');
+    });
+
+    it.each([
+      [
+        { productId: 'p-tv', quantity: 2, serialNumbers: ['SN-1', 'SN-1'] },
+        'un número de serie por cada unidad',
+      ],
+      [{ productId: 'p-gone', quantity: 1, serialNumbers: [] }, 'no existe'],
+    ])('rejects %j', async (line, message) => {
+      await expect(
+        ledger.dispatch(tx, 'tenant-1', dispatch([line])),
+      ).rejects.toThrow(message);
+    });
+
+    it('rejects the same warehouse and an inactive one', async () => {
+      await expect(
+        ledger.dispatch(tx, 'tenant-1', {
+          ...dispatch([
+            { productId: 'p-rice', quantity: 1, serialNumbers: [] },
+          ]),
+          toWarehouseId: 'wh-a',
+        }),
+      ).rejects.toThrow('distintos');
+      locations.findById.mockResolvedValueOnce({ id: 'wh-a', isActive: false });
+      await expect(
+        ledger.dispatch(
+          tx,
+          'tenant-1',
+          dispatch([{ productId: 'p-rice', quantity: 1, serialNumbers: [] }]),
+        ),
+      ).rejects.toThrow('inactivo');
+    });
+
+    it('puts what arrived in the destination and writes off what did not', async () => {
+      await ledger.receive(tx, 'tenant-1', {
+        referenceId: 'rn-1',
+        warehouseId: 'wh-b',
+        notes: 'Recepción',
+        lines: [
+          { productId: 'p-rice', quantity: 3, serialNumbers: [] },
+          { productId: 'p-tv', quantity: 1, serialNumbers: ['SN-1'] },
+        ],
+        lostSerials: [{ productId: 'p-tv', serialNumbers: ['SN-2'] }],
+      });
+      expect(units.receiveUnits).toHaveBeenCalledWith(
+        'tenant-1',
+        'p-tv',
+        ['SN-1'],
+        'wh-b',
+        tx,
+      );
+      expect(units.loseInTransit).toHaveBeenCalledWith(
+        'tenant-1',
+        'p-tv',
+        ['SN-2'],
+        tx,
+      );
+      expect(movements.create).toHaveBeenCalledTimes(2);
+      expect(movements.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          productId: 'p-rice',
+          warehouseId: 'wh-b',
+          type: 'IN',
+          reason: 'TRANSFER',
+          quantity: 3,
+          referenceId: 'rn-1',
+        }),
+        tx,
+      );
+    });
+
+    it('rejects a serial number that is not in transit', async () => {
+      units.receiveUnits.mockResolvedValue(0);
+      await expect(
+        ledger.receive(tx, 'tenant-1', {
+          referenceId: 'rn-1',
+          warehouseId: 'wh-b',
+          notes: 'Recepción',
+          lines: [{ productId: 'p-tv', quantity: 1, serialNumbers: ['SN-9'] }],
+          lostSerials: [],
+        }),
+      ).rejects.toThrow('no está en tránsito');
+    });
+  });
+
+  it('lists what a warehouse has, with its free serial numbers', async () => {
+    const ledger = new StockLedgerService(
+      {
+        sumByWarehouse: jest.fn().mockResolvedValue(
+          new Map([
+            ['p-rice', 5],
+            ['p-tv', 2],
+            ['p-gone', 0],
+          ]),
+        ),
+      } as any,
+      {
+        findFreeInWarehouse: jest.fn().mockResolvedValue([
+          { productId: 'p-tv', serialNumber: 'SN-1' },
+          { productId: 'p-tv', serialNumber: 'SN-2' },
+        ]),
+      } as any,
+      {} as any,
+      {} as any,
+      {} as any,
+    );
+    await expect(
+      ledger.availableIn({} as any, 'tenant-1', 'wh-a'),
+    ).resolves.toEqual([
+      { productId: 'p-rice', quantity: 5, serialNumbers: [] },
+      { productId: 'p-tv', quantity: 2, serialNumbers: ['SN-1', 'SN-2'] },
+    ]);
   });
 });

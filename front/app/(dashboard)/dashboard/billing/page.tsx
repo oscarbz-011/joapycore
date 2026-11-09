@@ -29,6 +29,7 @@ import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
+import { RemissionNotesTab } from '@/components/billing/remission-notes-tab';
 import { TablePagination } from '@/components/table-pagination';
 import { usePagination } from '@/lib/use-pagination';
 
@@ -152,7 +153,13 @@ function CreditNotesTab() {
 
 // ── Main page ──────────────────────────────────────────────────────────────────
 
-type Tab = 'invoices' | 'credit-notes';
+type Tab = 'invoices' | 'credit-notes' | 'remission-notes';
+
+const TAB_LABELS: Record<Tab, string> = {
+  invoices: 'Facturas',
+  'credit-notes': 'Notas de crédito',
+  'remission-notes': 'Notas de remisión',
+};
 
 export default function BillingPage() {
   const router = useRouter();
@@ -217,7 +224,7 @@ export default function BillingPage() {
 
       {/* Tabs */}
       <div className="mb-5 flex border-b border-border gap-1">
-        {(['invoices', 'credit-notes'] as Tab[]).map((t) => (
+        {(Object.keys(TAB_LABELS) as Tab[]).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -226,12 +233,14 @@ export default function BillingPage() {
               tab === t ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground',
             )}
           >
-            {t === 'invoices' ? 'Facturas' : 'Notas de crédito'}
+            {TAB_LABELS[t]}
           </button>
         ))}
       </div>
 
-      {tab === 'credit-notes' ? (
+      {tab === 'remission-notes' ? (
+        <RemissionNotesTab />
+      ) : tab === 'credit-notes' ? (
         <CreditNotesTab />
       ) : (
         <>
