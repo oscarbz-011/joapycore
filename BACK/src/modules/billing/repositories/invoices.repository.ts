@@ -6,7 +6,7 @@ import type { SeriesNumbering } from '../types/series-numbering';
 
 // Lo que hace falta para imprimir una factura: en papel térmico, en A4 o
 // sobre la hoja de un talonario.
-const receiptSelect = {
+export const receiptSelect = {
   id: true,
   modality: true,
   invoicePrefix: true,
@@ -312,6 +312,106 @@ export class InvoicesRepository {
     return this.prisma.invoice.findFirst({
       where: { id, tenantId },
       select: receiptSelect,
+    });
+  }
+
+  // Lo que hace falta para acreditar o anular una factura.
+  findForCredit(
+    tenantId: string,
+    id: string,
+    client: PrismaClientOrTx = this.prisma,
+  ) {
+    return client.invoice.findFirst({
+      where: { id, tenantId },
+      select: {
+        id: true,
+        status: true,
+        invoiceType: true,
+        total: true,
+        creditedTotal: true,
+        anonymousBuyer: true,
+        invoicePrefix: true,
+        invoiceNumber: true,
+        issuedAt: true,
+        updatedAt: true,
+        saleOrderId: true,
+        series: { select: { branchId: true } },
+        saleOrder: {
+          select: {
+            saleType: true,
+            customerId: true,
+            branchId: true,
+            downPayment: { select: { amount: true } },
+            customer: {
+              select: { id: true, firstName: true, lastName: true },
+            },
+          },
+        },
+        paymentReceipt: {
+          select: {
+            customerId: true,
+            branchId: true,
+            customer: {
+              select: { id: true, firstName: true, lastName: true },
+            },
+          },
+        },
+        items: {
+          select: {
+            id: true,
+            description: true,
+            quantity: true,
+            unitPrice: true,
+            total: true,
+            ivaRate: true,
+            saleOrderItemId: true,
+          },
+          orderBy: { id: 'asc' },
+        },
+      },
+    });
+  }
+
+  /**
+   * Suma lo acreditado solo si nadie acreditó la factura mientras tanto: dos
+   * notas simultáneas no pueden pasarse del total.
+   */
+  addCredited(
+    tenantId: string,
+    id: string,
+    observedCredited: Prisma.Decimal | number,
+    amount: number,
+    client: PrismaClientOrTx,
+  ) {
+    return client.invoice.updateMany({
+      where: {
+        id,
+        tenantId,
+        status: { in: ['ISSUED', 'PAID'] },
+        creditedTotal: observedCredited,
+      },
+      data: { creditedTotal: { increment: amount } },
+    });
+  }
+
+  voidIfAllowed(
+    tenantId: string,
+    id: string,
+    status: 'ISSUED' | 'PAID',
+    observedUpdatedAt: Date,
+    reason: string,
+    now: Date,
+    client: PrismaClientOrTx,
+  ) {
+    return client.invoice.updateMany({
+      where: {
+        id,
+        tenantId,
+        status,
+        updatedAt: observedUpdatedAt,
+        creditedTotal: 0,
+      },
+      data: { status: 'CANCELLED', voidReason: reason, voidedAt: now },
     });
   }
 

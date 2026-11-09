@@ -31,7 +31,7 @@ function makeSeries(overrides: Record<string, unknown> = {}) {
     createdAt: new Date(),
     updatedAt: new Date(),
     branch: { id: 'branch-1', name: 'Central' },
-    _count: { invoices: 0 },
+    _count: { invoices: 0, creditNotes: 0 },
     ...overrides,
   };
 }
@@ -189,7 +189,9 @@ describe('BillingSeriesService', () => {
     });
 
     it('locks the numbering of a series that already numbered invoices', async () => {
-      repo.findById.mockResolvedValue(makeSeries({ _count: { invoices: 3 } }));
+      repo.findById.mockResolvedValue(
+        makeSeries({ _count: { invoices: 3, creditNotes: 0 } }),
+      );
 
       await expect(
         service.update('tenant-1', 'series-1', { timbrado: '87654321' }),
@@ -198,7 +200,9 @@ describe('BillingSeriesService', () => {
     });
 
     it('lets a used series extend its range and validity or be deactivated', async () => {
-      repo.findById.mockResolvedValue(makeSeries({ _count: { invoices: 3 } }));
+      repo.findById.mockResolvedValue(
+        makeSeries({ _count: { invoices: 3, creditNotes: 0 } }),
+      );
 
       await service.update('tenant-1', 'series-1', {
         rangeTo: 900,
@@ -225,7 +229,7 @@ describe('BillingSeriesService', () => {
           timbrado: null,
           validFrom: null,
           validUntil: null,
-          _count: { invoices: 12 },
+          _count: { invoices: 12, creditNotes: 0 },
         }),
       );
 
@@ -244,7 +248,10 @@ describe('BillingSeriesService', () => {
 
     it('does not let the range end before the last used number', async () => {
       repo.findById.mockResolvedValue(
-        makeSeries({ nextNumber: 120, _count: { invoices: 3 } }),
+        makeSeries({
+          nextNumber: 120,
+          _count: { invoices: 3, creditNotes: 0 },
+        }),
       );
 
       await expect(
@@ -484,7 +491,7 @@ describe('BillingSeriesService', () => {
         makeSeries({
           modality: 'PREPRINTED',
           printLayout: null,
-          _count: { invoices: 3 },
+          _count: { invoices: 3, creditNotes: 0 },
         }),
       );
       await expect(

@@ -61,6 +61,25 @@ export class LoansRepository {
     });
   }
 
+  findBareBySaleOrder(
+    tenantId: string,
+    saleOrderId: string,
+    client: PrismaClientOrTx,
+  ) {
+    return client.loan.findFirst({
+      where: { saleOrderId, tenantId },
+      select: { id: true, status: true, totalAmount: true },
+    });
+  }
+
+  update(
+    id: string,
+    data: Prisma.LoanUncheckedUpdateInput,
+    client: PrismaClientOrTx,
+  ) {
+    return client.loan.update({ where: { id }, data });
+  }
+
   create(data: Prisma.LoanUncheckedCreateInput) {
     return this.prisma.loan.create({ data, include: this.include });
   }

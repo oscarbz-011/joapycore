@@ -20,6 +20,7 @@ export const POINT_FIELDS: { title: string; fields: PointField[] }[] = [
       { key: 'buyerName', label: 'Nombre o razón social' },
       { key: 'buyerDocument', label: 'RUC o C.I.' },
       { key: 'buyerAddress', label: 'Dirección' },
+      { key: 'relatedDocument', label: 'Factura que modifica (nota de crédito)' },
     ],
   },
   {

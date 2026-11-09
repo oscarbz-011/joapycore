@@ -30,6 +30,7 @@ function makeReceipt(overrides: Partial<PosReceipt> = {}): PosReceipt {
       branchAddress: 'Mcal. López 50',
     },
     buyer: { name: 'Sin Nombre', document: 'X', address: null },
+    relatedDocument: null,
     formLayout: null,
     lines: [
       { description: 'Licuadora <Pro>', quantity: 2, unitPrice: 110_000, total: 220_000, ivaRate: 10 },

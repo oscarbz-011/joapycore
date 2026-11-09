@@ -14,6 +14,7 @@ import { PrismaService } from '../src/prisma/prisma.service';
 import { createOutbox } from './support/outbox';
 import { BillingSeriesRepository } from '../src/modules/billing/repositories/billing-series.repository';
 import { BillingSourcesRepository } from '../src/modules/billing/repositories/billing-sources.repository';
+import { BillingEventsRepository } from '../src/modules/billing/repositories/billing-events.repository';
 import { InvoicesRepository } from '../src/modules/billing/repositories/invoices.repository';
 import { BillingSeriesService } from '../src/modules/billing/services/billing-series.service';
 import { PosInvoicingService } from '../src/modules/billing/services/pos-invoicing.service';
@@ -40,6 +41,7 @@ describe('PosInvoicingService (PostgreSQL)', () => {
       sources,
       createOutbox(prisma).outbox,
       new EventBus(new EventEmitter2()),
+      new BillingEventsRepository(prisma),
     );
 
     const tenant = await prisma.tenant.create({
@@ -72,6 +74,7 @@ describe('PosInvoicingService (PostgreSQL)', () => {
   const removeSales = async (tenants: string[]) => {
     const where = { tenantId: { in: tenants } };
     await prisma.outboxEvent.deleteMany({ where });
+    await prisma.billingDocumentEvent.deleteMany({ where });
     await prisma.invoiceItem.deleteMany({ where: { invoice: where } });
     await prisma.invoice.deleteMany({ where });
     await prisma.saleOrderItem.deleteMany({ where: { saleOrder: where } });

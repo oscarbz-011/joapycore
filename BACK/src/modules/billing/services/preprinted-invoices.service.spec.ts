@@ -107,6 +107,7 @@ describe('PreprintedInvoicesService', () => {
       series as any,
       files as any,
       events as any,
+      { record: jest.fn() } as any,
     );
   });
 

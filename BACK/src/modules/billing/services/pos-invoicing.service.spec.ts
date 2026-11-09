@@ -59,6 +59,7 @@ describe('PosInvoicingService', () => {
         saleType: 'CASH',
         items: [
           {
+            id: 'soi-1',
             quantity: 2,
             unitPrice: 110_000,
             financedUnitPrice: null,
@@ -77,6 +78,7 @@ describe('PosInvoicingService', () => {
       billingSources as any,
       outbox as any,
       eventEmitter as any,
+      { record: jest.fn() } as any,
     );
   });
 
@@ -125,6 +127,7 @@ describe('PosInvoicingService', () => {
               ivaRate: 10,
               ivaAmount: 20_000,
               unitPriceWithoutIva: 100_000,
+              saleOrderItemId: 'soi-1',
             },
           ],
         },

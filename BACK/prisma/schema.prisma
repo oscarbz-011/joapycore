@@ -318,6 +318,35 @@ enum CreditNoteStatus {
   APPLIED
 }
 
+// TOTAL anula la operación entera; ITEMS acepta la devolución de ítems
+// facturados; AMOUNT concede un descuento o bonificación por un importe.
+enum CreditNoteKind {
+  TOTAL
+  ITEMS
+  AMOUNT
+}
+
+// Movimientos del saldo a favor de un cliente: se suma con una nota de
+// crédito o una factura anulada ya cobrada, y se resta al aplicarlo.
+enum CustomerCreditSource {
+  CREDIT_NOTE
+  INVOICE_VOID
+  APPLIED
+}
+
+enum BillingEventType {
+  ISSUED
+  NUMBERED
+  FORM_PRINTED
+  SHEET_VOIDED
+  SCAN_ATTACHED
+  SCAN_REMOVED
+  VOIDED
+  CREDIT_NOTE_ISSUED
+  REFUNDED
+  CUSTOMER_CREDITED
+}
+
 enum ARStatus {
   PENDING
   PARTIAL
@@ -586,6 +615,9 @@ model Tenant {
   appEmailInboxMessages      AppEmailInboxMessage[]
   billingSeries              BillingSeries[]
   billingVoidedNumbers       BillingVoidedNumber[]
+  customerCreditEntries      CustomerCreditEntry[]
+  billingRefunds             BillingRefund[]
+  billingDocumentEvents      BillingDocumentEvent[]
 
   @@map("tenants")
 }
@@ -1409,7 +1441,7 @@ model Customer {
   createdAt DateTime  @default(now()) @map("created_at")
   updatedAt DateTime  @updatedAt @map("updated_at")
 
-  tenant             Tenant              @relation(fields: [tenantId], references: [id])
+  tenant             Tenant                @relation(fields: [tenantId], references: [id])
   saleOrders         SaleOrder[]
   loans              Loan[]
   collectionVisits   CollectionVisit[]
@@ -1418,6 +1450,8 @@ model Customer {
   bureauChecks       CreditBureauCheck[]
   paymentReceipts    PaymentReceipt[]
   delinquencyReports DelinquencyReport[]
+  creditNotes        CreditNote[]
+  creditEntries      CustomerCreditEntry[]
 
   @@unique([tenantId, customerCode])
   @@index([tenantId, documentNumber])
@@ -1842,6 +1876,13 @@ model Invoice {
   // una X en RUC y documento (art. 20 del Decreto 6539/05).
   anonymousBuyer Boolean @default(false) @map("anonymous_buyer")
 
+  // Suma de las notas de crédito emitidas sobre la factura: nunca supera el
+  // total. El estado de cobro sigue en `status`.
+  creditedTotal Decimal   @default(0) @map("credited_total") @db.Decimal(12, 2)
+  // Anulada conservando el original y las copias (sin nota de crédito).
+  voidReason    String?   @map("void_reason")
+  voidedAt      DateTime? @map("voided_at")
+
   // SIFEN / e-billing fields (null until electronic billing integration)
   cdc          String? // Código de Control Digital
   xmlContent   String?   @map("xml_content")
@@ -1851,14 +1892,17 @@ model Invoice {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  tenant             Tenant                @relation(fields: [tenantId], references: [id])
-  saleOrder          SaleOrder?            @relation(fields: [saleOrderId], references: [id])
-  paymentReceipt     PaymentReceipt?       @relation(fields: [paymentReceiptId], references: [id])
-  series             BillingSeries?        @relation(fields: [seriesId], references: [id])
+  tenant             Tenant                 @relation(fields: [tenantId], references: [id])
+  saleOrder          SaleOrder?             @relation(fields: [saleOrderId], references: [id])
+  paymentReceipt     PaymentReceipt?        @relation(fields: [paymentReceiptId], references: [id])
+  series             BillingSeries?         @relation(fields: [seriesId], references: [id])
   items              InvoiceItem[]
   accountsReceivable AccountsReceivable?
   creditNotes        CreditNote[]
   voidedSheets       BillingVoidedNumber[]
+  events             BillingDocumentEvent[]
+  refunds            BillingRefund[]
+  customerCredits    CustomerCreditEntry[]
 
   @@unique([seriesId, serieCode, sequential])
   @@index([tenantId, seriesId])
@@ -1898,6 +1942,7 @@ model BillingSeries {
   tenant        Tenant                @relation(fields: [tenantId], references: [id])
   branch        Branch                @relation(fields: [branchId], references: [id])
   invoices      Invoice[]
+  creditNotes   CreditNote[]
   posTerminals  PosTerminal[]
   voidedNumbers BillingVoidedNumber[]
 
@@ -1944,7 +1989,12 @@ model InvoiceItem {
   ivaAmount           Decimal? @map("iva_amount") @db.Decimal(12, 2)
   unitPriceWithoutIva Decimal? @map("unit_price_without_iva") @db.Decimal(12, 2)
 
-  invoice Invoice @relation(fields: [invoiceId], references: [id])
+  // Ítem del pedido que facturó: hace falta para reingresar al stock lo que
+  // devuelve una nota de crédito.
+  saleOrderItemId String? @map("sale_order_item_id")
+
+  invoice         Invoice          @relation(fields: [invoiceId], references: [id])
+  creditNoteItems CreditNoteItem[]
 
   @@index([invoiceId])
   @@map("invoice_items")
@@ -1954,19 +2004,142 @@ model CreditNote {
   id        String           @id @default(uuid())
   tenantId  String           @map("tenant_id")
   invoiceId String           @map("invoice_id")
+  // Siete dígitos de la serie ("0000012"); las notas anteriores a las series
+  // conservan su "NC-0001".
   number    String?          @map("number")
   reason    String
   total     Decimal          @db.Decimal(12, 2)
   status    CreditNoteStatus @default(ISSUED)
+  kind      CreditNoteKind   @default(TOTAL)
   issuedAt  DateTime         @default(now()) @map("issued_at")
   createdAt DateTime         @default(now()) @map("created_at")
+  updatedAt DateTime         @default(now()) @updatedAt @map("updated_at")
 
-  tenant  Tenant  @relation(fields: [tenantId], references: [id])
-  invoice Invoice @relation(fields: [invoiceId], references: [id])
+  // Numeración: igual que la factura, se copia de la serie al emitir.
+  seriesId           String?          @map("series_id")
+  modality           BillingModality?
+  timbrado           String?
+  timbradoValidFrom  DateTime?        @map("timbrado_valid_from")
+  timbradoValidUntil DateTime?        @map("timbrado_valid_until")
+  serieCode          String           @default("") @map("serie_code")
+  establecimiento    String?
+  puntoExpedicion    String?          @map("punto_expedicion")
+  sequential         Int?
+  numberPrefix       String?          @map("number_prefix")
 
+  customerId       String? @map("customer_id")
+  issuedById       String? @map("issued_by_id")
+  // Parte del importe que descontó lo que el cliente debía. El resto quedó
+  // como saldo a favor o se devolvió (CustomerCreditEntry / BillingRefund).
+  appliedToBalance Decimal @default(0) @map("applied_to_balance") @db.Decimal(12, 2)
+
+  pdfFileId          String?     @unique @map("pdf_file_id")
+  pdfFile            FileRecord? @relation("CreditNotePdf", fields: [pdfFileId], references: [id])
+  formPrintCount     Int         @default(0) @map("form_print_count")
+  formPrintedAt      DateTime?   @map("form_printed_at")
+  physicalScanFileId String?     @unique @map("physical_scan_file_id")
+  physicalScan       FileRecord? @relation("CreditNotePhysicalScan", fields: [physicalScanFileId], references: [id])
+
+  tenant          Tenant                 @relation(fields: [tenantId], references: [id])
+  invoice         Invoice                @relation(fields: [invoiceId], references: [id])
+  series          BillingSeries?         @relation(fields: [seriesId], references: [id])
+  customer        Customer?              @relation(fields: [customerId], references: [id])
+  items           CreditNoteItem[]
+  events          BillingDocumentEvent[]
+  refunds         BillingRefund[]
+  customerCredits CustomerCreditEntry[]
+
+  @@unique([seriesId, serieCode, sequential])
   @@index([tenantId])
   @@index([invoiceId])
   @@map("credit_notes")
+}
+
+model CreditNoteItem {
+  id              String   @id @default(uuid())
+  creditNoteId    String   @map("credit_note_id")
+  invoiceItemId   String?  @map("invoice_item_id")
+  description     String
+  quantity        Int
+  unitPrice       Decimal  @map("unit_price") @db.Decimal(12, 2)
+  total           Decimal  @db.Decimal(12, 2)
+  ivaRate         Decimal? @map("iva_rate") @db.Decimal(5, 2)
+  ivaAmount       Decimal? @map("iva_amount") @db.Decimal(12, 2)
+  // Cuánto de lo devuelto volvió al stock y con qué números de serie.
+  restockQuantity Int      @default(0) @map("restock_quantity")
+  serialNumbers   String[] @default([]) @map("serial_numbers")
+
+  creditNote  CreditNote   @relation(fields: [creditNoteId], references: [id])
+  invoiceItem InvoiceItem? @relation(fields: [invoiceItemId], references: [id])
+
+  @@index([creditNoteId])
+  @@index([invoiceItemId])
+  @@map("credit_note_items")
+}
+
+// Saldo a favor del cliente: la suma de sus movimientos.
+model CustomerCreditEntry {
+  id           String               @id @default(uuid())
+  tenantId     String               @map("tenant_id")
+  customerId   String               @map("customer_id")
+  // Positivo suma saldo a favor; negativo lo consume.
+  amount       Decimal              @db.Decimal(12, 2)
+  source       CustomerCreditSource
+  creditNoteId String?              @map("credit_note_id")
+  invoiceId    String?              @map("invoice_id")
+  note         String?
+  createdById  String?              @map("created_by_id")
+  createdAt    DateTime             @default(now()) @map("created_at")
+
+  tenant     Tenant      @relation(fields: [tenantId], references: [id])
+  customer   Customer    @relation(fields: [customerId], references: [id])
+  creditNote CreditNote? @relation(fields: [creditNoteId], references: [id])
+  invoice    Invoice?    @relation(fields: [invoiceId], references: [id])
+
+  @@index([tenantId, customerId])
+  @@map("customer_credit_entries")
+}
+
+// Dinero devuelto al cliente por una nota de crédito o una factura anulada
+// ya cobrada.
+model BillingRefund {
+  id           String        @id @default(uuid())
+  tenantId     String        @map("tenant_id")
+  creditNoteId String?       @map("credit_note_id")
+  invoiceId    String?       @map("invoice_id")
+  amount       Decimal       @db.Decimal(12, 2)
+  method       PaymentMethod
+  reference    String?
+  createdById  String?       @map("created_by_id")
+  createdAt    DateTime      @default(now()) @map("created_at")
+
+  tenant     Tenant      @relation(fields: [tenantId], references: [id])
+  creditNote CreditNote? @relation(fields: [creditNoteId], references: [id])
+  invoice    Invoice?    @relation(fields: [invoiceId], references: [id])
+
+  @@index([tenantId])
+  @@index([invoiceId])
+  @@map("billing_refunds")
+}
+
+// Historial fiscal de una factura o nota de crédito.
+model BillingDocumentEvent {
+  id           String           @id @default(uuid())
+  tenantId     String           @map("tenant_id")
+  invoiceId    String?          @map("invoice_id")
+  creditNoteId String?          @map("credit_note_id")
+  type         BillingEventType
+  detail       Json?
+  userId       String?          @map("user_id")
+  createdAt    DateTime         @default(now()) @map("created_at")
+
+  tenant     Tenant      @relation(fields: [tenantId], references: [id])
+  invoice    Invoice?    @relation(fields: [invoiceId], references: [id])
+  creditNote CreditNote? @relation(fields: [creditNoteId], references: [id])
+
+  @@index([tenantId, invoiceId, createdAt])
+  @@index([tenantId, creditNoteId, createdAt])
+  @@map("billing_document_events")
 }
 
 // ─── Payments ─────────────────────────────────────────────────────────────────
@@ -2495,6 +2668,8 @@ model FileRecord {
   invoiceFor        Invoice?             @relation("InvoicePdf")
   invoiceScanFor    Invoice?             @relation("InvoicePhysicalScan")
   voidedSheetFor    BillingVoidedNumber? @relation("VoidedSheetScan")
+  creditNotePdfFor  CreditNote?          @relation("CreditNotePdf")
+  creditNoteScanFor CreditNote?          @relation("CreditNotePhysicalScan")
   receiptFor        PaymentReceipt?      @relation("ReceiptPdf")
   posPaperReportFor PosTerminal[]        @relation("PosPaperReport")
 

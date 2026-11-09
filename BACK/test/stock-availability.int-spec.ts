@@ -13,6 +13,7 @@ import { PrismaService } from '../src/prisma/prisma.service';
 import { ProductUnitsRepository } from '../src/modules/inventory/repositories/product-units.repository';
 import { StockMovementsRepository } from '../src/modules/inventory/repositories/stock-movements.repository';
 import { StockLocationsRepository } from '../src/modules/inventory/repositories/stock-locations.repository';
+import { StockSourcesRepository } from '../src/modules/inventory/repositories/stock-sources.repository';
 import { StockLedgerService } from '../src/modules/inventory/services/stock-ledger.service';
 
 describe('StockLedgerService.assertAvailable (PostgreSQL)', () => {
@@ -29,6 +30,7 @@ describe('StockLedgerService.assertAvailable (PostgreSQL)', () => {
       new StockMovementsRepository(prisma),
       new ProductUnitsRepository(prisma),
       new StockLocationsRepository(prisma),
+      new StockSourcesRepository(prisma),
     );
     const tenant = await prisma.tenant.create({
       data: { name: `TEST stock lock ${randomUUID()}` },

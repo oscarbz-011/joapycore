@@ -6,7 +6,7 @@ import {
 import { EventBus } from '../../../common/events/event-bus';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
-import { CreditNotesRepository } from '../repositories/credit-notes.repository';
+import { BillingEventsRepository } from '../repositories/billing-events.repository';
 import { InvoicesRepository } from '../repositories/invoices.repository';
 import type { AuditLogEvent } from '../../../audit/audit-log.event';
 import { AssignInvoiceNumberDto } from '../dto/assign-invoice-number.dto';
@@ -29,7 +29,7 @@ export class InvoicesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly invoicesRepository: InvoicesRepository,
-    private readonly creditNotesRepository: CreditNotesRepository,
+    private readonly events: BillingEventsRepository,
     private readonly eventEmitter: EventBus,
     private readonly outbox: OutboxService,
     private readonly seriesService: BillingSeriesService,
@@ -49,8 +49,8 @@ export class InvoicesService {
     return invoice;
   }
 
-  findCreditNotes(tenantId: string) {
-    return this.creditNotesRepository.findAll(tenantId);
+  findEvents(tenantId: string, invoiceId: string) {
+    return this.events.findByInvoice(tenantId, invoiceId);
   }
 
   // Series entre las que se puede elegir al emitir esta factura (o al
@@ -257,6 +257,10 @@ export class InvoicesService {
           'La factura no pudo finalizarse porque el PDF no está disponible o ya fue procesada',
         );
       }
+      await this.events.record(
+        { tenantId, invoiceId: id, type: 'ISSUED', userId },
+        tx,
+      );
 
       return this.outbox.enqueue(tx, tenantId, 'invoice.issued', {
         tenantId,
@@ -328,6 +332,15 @@ export class InvoicesService {
         'La factura ya está siendo emitida o cambió de estado. Recargá antes de reintentar.',
       );
     }
+    await this.events.record(
+      {
+        tenantId,
+        invoiceId: invoice.id,
+        type: 'ISSUED',
+        userId: params.userId,
+      },
+      tx,
+    );
     return this.outbox.enqueue(tx, tenantId, 'invoice.issued', {
       tenantId,
       invoiceId: invoice.id,
@@ -437,7 +450,7 @@ export class InvoicesService {
         tx,
       );
 
-      return this.invoicesRepository.createInterestInvoice(
+      const created = await this.invoicesRepository.createInterestInvoice(
         tenantId,
         {
           paymentReceiptId: params.paymentReceiptId,
@@ -448,6 +461,11 @@ export class InvoicesService {
         },
         tx,
       );
+      await this.events.record(
+        { tenantId, invoiceId: created.id, type: 'ISSUED' },
+        tx,
+      );
+      return created;
     });
 
     if (invoice.sequential != null) {
@@ -510,6 +528,18 @@ export class InvoicesService {
             'Otra persona numeró la factura al mismo tiempo. Recargá la página.',
           );
         }
+        await this.events.record(
+          {
+            tenantId,
+            invoiceId: id,
+            type: 'NUMBERED',
+            userId,
+            detail: {
+              number: `${numbering.invoicePrefix}${numbering.invoiceNumber}`,
+            },
+          },
+          tx,
+        );
         return numbering.modality;
       });
     } catch (error) {
@@ -554,52 +584,31 @@ export class InvoicesService {
     );
   }
 
+  // Descarta un borrador. Una factura emitida se anula o se acredita con una
+  // nota de crédito (CreditNotesService).
   async cancel(tenantId: string, id: string, reason: string, userId?: string) {
     const invoice = await this.findOne(tenantId, id);
     if (invoice.status === 'CANCELLED') {
       throw new UnprocessableEntityException('La factura ya está cancelada');
     }
-    if (invoice.status === 'PAID') {
+    if (invoice.status !== 'PENDING') {
       throw new UnprocessableEntityException(
-        'Las facturas pagadas no pueden cancelarse. Emita una nota de crédito.',
+        'Una factura emitida no se cancela: anulala o emití una nota de crédito.',
       );
     }
 
-    const cancellableStatus = invoice.status;
-    const needsCreditNote = invoice.status === 'ISSUED';
-
-    // Atomic: both the status change and the credit note creation succeed or both rollback.
-    await this.prisma.$transaction(async (tx) => {
-      const cancelled = await this.invoicesRepository.cancelIfAllowed(
-        tenantId,
-        id,
-        cancellableStatus,
-        invoice.updatedAt,
-        new Date(),
-        tx,
+    const cancelled = await this.invoicesRepository.cancelIfAllowed(
+      tenantId,
+      id,
+      'PENDING',
+      invoice.updatedAt,
+      new Date(),
+    );
+    if (cancelled.count !== 1) {
+      throw new UnprocessableEntityException(
+        'La factura está siendo emitida o cambió de estado. Recargá antes de cancelarla.',
       );
-      if (cancelled.count !== 1) {
-        throw new UnprocessableEntityException(
-          'La factura está siendo emitida o cambió de estado. Recargá antes de cancelarla.',
-        );
-      }
-
-      if (needsCreditNote) {
-        // generateNumber uses a COUNT, acceptable for v1 (low concurrency on cancellations).
-        const number =
-          await this.creditNotesRepository.generateNumber(tenantId);
-        await this.creditNotesRepository.create(
-          {
-            tenantId,
-            invoiceId: id,
-            reason,
-            total: invoice.total.toString(),
-            number,
-          },
-          tx,
-        );
-      }
-    });
+    }
 
     this.eventEmitter.emit('invoice.cancelled', { tenantId, invoiceId: id });
     this.eventEmitter.emit('audit.log', {
@@ -608,6 +617,7 @@ export class InvoicesService {
       module: 'billing',
       action: 'invoice.cancelled',
       resourceId: id,
+      after: { reason },
     } satisfies AuditLogEvent);
 
     return this.invoicesRepository.findById(tenantId, id);
