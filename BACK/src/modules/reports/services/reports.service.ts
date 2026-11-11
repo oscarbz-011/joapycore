@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
-import { SaleOrderStatus } from '@prisma/client';
 import { ReportsRepository } from '../repositories/reports.repository';
 import { startOfBusinessDay } from '../../../common/utils/business-date.util';
+import { CLOSED_SALE_STATUSES } from '../../../common/constants/sale-status.constant';
 
 @Injectable()
 export class ReportsService {
@@ -10,7 +10,7 @@ export class ReportsService {
   async salesReport(tenantId: string, dateFrom?: string, dateTo?: string) {
     const where = {
       tenantId,
-      status: { in: [SaleOrderStatus.CONFIRMED, SaleOrderStatus.INVOICED] },
+      status: { in: CLOSED_SALE_STATUSES },
       ...(dateFrom || dateTo
         ? {
             orderDate: {
