@@ -1,3 +1,4 @@
+import { lazy } from 'react';
 import { Route } from 'lucide-react';
 import type { FrontModuleManifest } from '../types';
 
@@ -17,6 +18,14 @@ export const logisticsManifest: FrontModuleManifest = {
     })),
     { section: 'logistics', label: 'Depósitos', href: '/dashboard/settings/warehouses' },
   ],
+  // Con Logística activa, la entrega del pedido la maneja Logística.
+  slots: {
+    'sale-order.delivery': lazy(() =>
+      import('@/components/logistics/order-delivery').then((m) => ({
+        default: m.LogisticsOrderDelivery,
+      })),
+    ),
+  },
   routes: [
     { prefix: '/dashboard/logistics', anyPermission: ['logistics:read', 'logistics:manage'] },
     { prefix: '/dashboard/logistics/mine', anyPermission: ['logistics:track'] },

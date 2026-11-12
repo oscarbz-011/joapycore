@@ -1,8 +1,8 @@
 import type { SaleOrderStatus } from './api/sales';
 
-// La entrega de un pedido vista desde la venta. Con Logística activa la
-// maneja Logística (nota de entrega, retiro, autorizaciones); sin Logística,
-// Ventas la marca entregada directamente. El servidor valida lo mismo.
+// Sin Logística, Ventas marca entregado un pedido confirmado, facturado o
+// cobrado. Con Logística activa la entrega la maneja Logística (ver el lugar
+// sale-order.delivery en front/modules). El servidor valida lo mismo.
 
 const DELIVERABLE: readonly SaleOrderStatus[] = [
   'CONFIRMED',
@@ -10,14 +10,9 @@ const DELIVERABLE: readonly SaleOrderStatus[] = [
   'PAYMENT_RECEIVED',
 ];
 
-export type OrderDeliveryMode = 'logistics' | 'direct' | 'none';
-
-export function orderDeliveryMode(input: {
+export function canDeliverDirectly(input: {
   status: SaleOrderStatus;
-  logisticsActive: boolean;
   permissions: readonly string[];
-}): OrderDeliveryMode {
-  if (input.logisticsActive) return 'logistics';
-  if (!DELIVERABLE.includes(input.status)) return 'none';
-  return input.permissions.includes('sales:update') ? 'direct' : 'none';
+}): boolean {
+  return DELIVERABLE.includes(input.status) && input.permissions.includes('sales:update');
 }

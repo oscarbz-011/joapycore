@@ -1,4 +1,5 @@
 import type { LucideIcon } from 'lucide-react';
+import type { SlotContributions } from './slot-types';
 
 /** Una entrada de primer nivel del menú lateral. */
 export interface NavSection {
@@ -49,4 +50,6 @@ export interface FrontModuleManifest {
   routes?: ModuleRoute[];
   /** Su pantalla de configuración, enlazada desde Ajustes → Módulos. */
   settingsHref?: string;
+  /** Lo que agrega en pantallas de otros módulos. Ver slot-types.ts. */
+  slots?: SlotContributions;
 }

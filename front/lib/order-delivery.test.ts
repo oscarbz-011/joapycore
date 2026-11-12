@@ -1,44 +1,24 @@
 import { describe, expect, it } from 'vitest';
-import { orderDeliveryMode } from './order-delivery';
+import { canDeliverDirectly } from './order-delivery';
 
 const canUpdate = ['sales:read', 'sales:update'];
 
-describe('orderDeliveryMode', () => {
-  it('leaves the delivery to Logistics when the module is active', () => {
-    expect(
-      orderDeliveryMode({
-        status: 'INVOICED',
-        logisticsActive: true,
-        permissions: canUpdate,
-      }),
-    ).toBe('logistics');
-  });
-
+describe('canDeliverDirectly', () => {
   it.each(['CONFIRMED', 'INVOICED', 'PAYMENT_RECEIVED'] as const)(
-    'lets Sales mark a %s order as delivered without Logistics',
+    'lets Sales mark a %s order as delivered',
     (status) => {
-      expect(
-        orderDeliveryMode({ status, logisticsActive: false, permissions: canUpdate }),
-      ).toBe('direct');
+      expect(canDeliverDirectly({ status, permissions: canUpdate })).toBe(true);
     },
   );
 
   it.each(['PENDING', 'PENDING_CREDIT_APPROVAL', 'DELIVERED', 'CANCELLED', 'QUOTED'] as const)(
     'offers nothing for a %s order',
     (status) => {
-      expect(
-        orderDeliveryMode({ status, logisticsActive: false, permissions: canUpdate }),
-      ).toBe('none');
+      expect(canDeliverDirectly({ status, permissions: canUpdate })).toBe(false);
     },
   );
 
   it('requires permission to update sales', () => {
-    expect(
-      orderDeliveryMode({
-        status: 'INVOICED',
-        logisticsActive: false,
-        permissions: ['sales:read'],
-      }),
-    ).toBe('none');
+    expect(canDeliverDirectly({ status: 'INVOICED', permissions: ['sales:read'] })).toBe(false);
   });
 });

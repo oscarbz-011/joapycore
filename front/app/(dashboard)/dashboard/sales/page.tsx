@@ -1,7 +1,8 @@
 "use client";
 
 import { apiErrorMessage } from "@/lib/api/api-error";
-import { OrderDelivery } from "@/components/logistics/order-delivery";
+import { OrderDirectDelivery } from "@/components/sales/order-direct-delivery";
+import { Slot } from "@/modules/slot";
 import { orderPartyName } from "@/lib/quote-party";
 import { findStockIssues } from "@/lib/sales-stock";
 import { salesChannelProductFilters } from "@/lib/product-catalog";
@@ -1341,7 +1342,11 @@ function OrderDetailPanel({
           </div>
         )}
 
-        <OrderDelivery order={order} onDelivered={invalidate} />
+        <Slot
+          name="sale-order.delivery"
+          props={{ order, onDelivered: invalidate }}
+          fallback={<OrderDirectDelivery order={order} onDelivered={invalidate} />}
+        />
 
         {/* Actions */}
         {(canConfirm || canConvert || canCancel) && (
