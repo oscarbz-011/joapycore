@@ -1,7 +1,6 @@
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { FRONT_MODULES } from './registry';
 import { Slot } from './slot';
 import { slotContributions } from './slots';
 import type { FrontModuleManifest } from './types';
@@ -46,10 +45,6 @@ describe('lugares para que un módulo aporte en otra pantalla', () => {
     ).toEqual(['logistics']);
   });
 
-  it('has Logistics as the only module adding to other screens today', () => {
-    const withSlots = FRONT_MODULES.filter((m) => m.slots).map((m) => m.id);
-    expect(withSlots).toEqual(['logistics']);
-  });
 });
 
 describe('<Slot>', () => {

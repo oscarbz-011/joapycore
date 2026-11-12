@@ -106,6 +106,11 @@ describe('menú generado desde los manifiestos', () => {
     ]);
   });
 
+  it('does not show treasury to someone who only sees invoices', () => {
+    expect(labels(['billing'], ['billing:read'])).not.toContain('Tesorería');
+    expect(labels(['billing', 'procurement'], ['billing:read'])).not.toContain('Tesorería');
+  });
+
   it('shows the announced modules only when they are active', () => {
     expect(labels([], [])).not.toContain('CRM');
     expect(labels(['crm'], [])).toContain('CRM');

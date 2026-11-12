@@ -8,9 +8,9 @@ import {
   Landmark,
   Settings,
 } from 'lucide-react';
-import { CHAT_PATH } from '@/components/chat/use-chat';
 import { COMMUNICATIONS_PATH } from '@/lib/api/communications';
 import { CALENDAR_PATH } from '@/lib/calendar';
+import { CHAT_PATH } from '@/lib/chat';
 import { NOTES_PATH } from '@/lib/notes';
 import type { FrontModuleManifest } from '../types';
 
