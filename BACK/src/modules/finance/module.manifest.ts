@@ -7,6 +7,7 @@ export const financeManifest = defineModule({
   description: 'Créditos, planes de cuotas e installments',
   icon: 'Banknote',
   isStable: true,
+  category: 'Finanzas y Contabilidad',
   depends: ['sales', 'billing'],
   owns: [
     'Loan',

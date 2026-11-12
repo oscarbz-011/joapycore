@@ -118,6 +118,15 @@ describe('Arquitectura modular', () => {
       }
     });
 
+    it('gives a catalog category to addons and only to addons', () => {
+      for (const m of MODULE_REGISTRY) {
+        expect([m.key, m.category !== undefined]).toEqual([
+          m.key,
+          m.kind === 'addon',
+        ]);
+      }
+    });
+
     it('hangs every feature from an addon', () => {
       for (const m of MODULE_REGISTRY.filter((x) => x.kind === 'feature')) {
         const parent = MODULE_REGISTRY.find((x) => x.key === m.parent);

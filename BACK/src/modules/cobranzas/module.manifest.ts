@@ -9,6 +9,7 @@ export const collectionsManifest = defineModule({
   description: 'Asignación de cobradores y gestión de mora',
   icon: 'ClipboardList',
   isStable: false,
+  category: 'Finanzas y Contabilidad',
   depends: ['finance'],
   owns: [
     'CollectionRoute',

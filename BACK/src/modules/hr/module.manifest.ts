@@ -7,6 +7,7 @@ export const hrManifest = defineModule({
   description: 'Empleados, licencias y procesamiento de nómina',
   icon: 'Users',
   isStable: true,
+  category: 'Recursos Humanos',
   depends: [],
   owns: [
     'Area',

@@ -7,6 +7,7 @@ export const salesManifest = defineModule({
   description: 'Pedidos, presupuestos y gestión de clientes',
   icon: 'ShoppingCart',
   isStable: true,
+  category: 'Ventas y CRM',
   depends: ['inventory'],
   owns: [
     'Customer',

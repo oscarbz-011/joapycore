@@ -90,6 +90,15 @@ export class TenantsController {
     return this.tenantModulesService.list(tenantId);
   }
 
+  @Get('modules/catalog')
+  @Permissions('tenants:read')
+  @ApiOperation({
+    summary: 'Module catalog: activatable modules and the roadmap',
+  })
+  moduleCatalog() {
+    return this.tenantModulesService.catalog();
+  }
+
   @Patch('modules/:moduleName')
   @Permissions('tenants:modules:manage')
   @ApiOperation({

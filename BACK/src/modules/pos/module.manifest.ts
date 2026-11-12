@@ -7,6 +7,7 @@ export const posManifest = defineModule({
   description: 'Venta rápida con código de barras y caja',
   icon: 'Monitor',
   isStable: false,
+  category: 'Punto de Venta',
   depends: ['sales', 'inventory', 'billing'],
   owns: ['PosTerminal', 'PosSession'],
 });
