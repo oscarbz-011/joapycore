@@ -3,8 +3,9 @@
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth-context";
 import { chatApi } from "@/lib/api/chat";
+import { CHAT_PATH } from "@/lib/chat";
 
-export const CHAT_PATH = "/dashboard/chat";
+export { CHAT_PATH };
 
 // Todas empiezan con "chat": un aviso por WebSocket las refresca juntas.
 export function chatKeys(tenantId?: string, userId?: string) {

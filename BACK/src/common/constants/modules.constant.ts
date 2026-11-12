@@ -1,4 +1,5 @@
 import { Industry } from '@prisma/client';
+import type { ModuleCategory } from '../modules/module-categories';
 import { MODULE_REGISTRY } from '../modules/module-registry';
 
 export interface ModuleDefinition {
@@ -9,6 +10,7 @@ export interface ModuleDefinition {
   dependencies: string[];
   /** false = visible en el catálogo pero marcado como "Próximamente / Beta". */
   isStable: boolean;
+  category?: ModuleCategory;
   /** Se activa y desactiva junto con este addon; no tiene interruptor propio. */
   bundledWith?: string;
 }
@@ -30,6 +32,7 @@ export const MODULE_CATALOG: Record<string, ModuleDefinition> =
         icon: m.icon,
         dependencies: m.depends.filter((dep) => addonKeys.has(dep)),
         isStable: m.isStable,
+        category: m.category,
         ...(m.bundledWith ? { bundledWith: m.bundledWith } : {}),
       },
     ]),

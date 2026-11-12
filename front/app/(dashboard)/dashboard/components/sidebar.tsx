@@ -3,497 +3,31 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import {
-  LayoutDashboard,
-  AppWindow,
-  Package,
-  ShoppingCart,
-  Truck,
-  Landmark,
-  ReceiptText,
-  HandCoins,
-  Calculator,
-  ChartColumn,
-  Hammer,
-  Route,
-  Users,
-  Network,
-  FolderKanban,
-  Monitor,
-  Boxes,
-  FolderOpen,
-  Headphones,
-  Crown,
-  Building2,
-  Settings,
-  ChevronDown,
-} from "lucide-react";
+import { LayoutDashboard, ChevronDown } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 import { useAuth } from "../../../../lib/auth-context";
 import { alertsApi } from "../../../../lib/api/alerts";
 import { useActiveModules } from "../../../../lib/use-active-modules";
 import { usePendingNotifications } from "../../../../lib/use-pending-notifications";
-import {
-  INVENTORY_NAV_ITEMS,
-  isInventoryItemActive,
-} from "../../../../lib/inventory-navigation";
-import { FINANCE_NAV_GROUPS } from "@/lib/finance-navigation";
 import { CompanySwitcher, JoapyCoreBrand } from "./company-switcher";
 import { closedGroupBadge, isNavItemActive } from "@/lib/sidebar-nav";
 import { COMMUNICATIONS_PATH } from "@/lib/api/communications";
 import { useCommunicationsAttention } from "@/components/communications/inbox/use-communications";
 import { CHAT_PATH, useChatUnread } from "@/components/chat/use-chat";
-import { NOTES_PATH } from "@/lib/notes";
-import { CALENDAR_PATH } from "@/lib/calendar";
-
-// ── Types ─────────────────────────────────────────────────────────────────────
-
-interface SubItem {
-  label: string;
-  href: string;
-  permission?: string;
-  module?: string;
-  stub?: boolean;
-  badge?: number;
-}
-
-interface SidebarGroup {
-  id: string;
-  label: string;
-  icon: React.ElementType;
-  items: SubItem[];
-  modules?: string[];
-  anyPermission?: string[];
-  // Sin dropdown — link directo al único item. Para secciones que ya
-  // administran todo puertas adentro con sus propias pestañas (ver
-  // documents-nav.tsx), donde desplegar un submenú de una sola opción es
-  // un clic extra sin aportar nada.
-  flat?: boolean;
-  // Cerrado, muestra la suma de lo pendiente de sus entradas.
-  badgeWhenClosed?: boolean;
-  // Una entrada también está activa en sus pantallas internas (/notas/nueva).
-  matchPrefix?: boolean;
-}
-
-// ── Group definitions ─────────────────────────────────────────────────────────
-
-const FINANCE_ICONS: Record<string, React.ElementType> = {
-  facturas: ReceiptText,
-  "creditos-cobranzas": HandCoins,
-  tesoreria: Landmark,
-  contabilidad: Calculator,
-  reportes: ChartColumn,
-};
-
-const STATIC_GROUPS: SidebarGroup[] = [
-  {
-    id: "apps",
-    label: "Aplicaciones",
-    icon: AppWindow,
-    badgeWhenClosed: true,
-    matchPrefix: true,
-    items: [
-      {
-        label: "Comunicaciones",
-        href: COMMUNICATIONS_PATH,
-        permission: "communications:access",
-      },
-      { label: "Chat", href: CHAT_PATH },
-      { label: "Calendario", href: CALENDAR_PATH },
-      { label: "Notas", href: NOTES_PATH },
-    ],
-  },
-  {
-    id: "inventory",
-    label: "Inventario",
-    icon: Package,
-    modules: ["inventory"],
-    anyPermission: [
-      "inventory:products:read",
-      "inventory:categories:read",
-      "inventory:brands:read",
-      "inventory:movements:read",
-      "inventory:movements:create",
-    ],
-    items: [...INVENTORY_NAV_ITEMS],
-  },
-  {
-    id: "sales",
-    label: "Ventas",
-    icon: ShoppingCart,
-    modules: ["sales"],
-    anyPermission: ["sales:read", "customers:read", "sales:quotes:read"],
-    items: [
-      {
-        label: "Clientes",
-        href: "/dashboard/sales/customers",
-        permission: "customers:read",
-      },
-      {
-        label: "Órdenes de venta",
-        href: "/dashboard/sales",
-        permission: "sales:read",
-      },
-      {
-        label: "Presupuestos",
-        href: "/dashboard/sales/quotes",
-        permission: "sales:quotes:read",
-      },
-      {
-        label: "Metas",
-        href: "/dashboard/sales/targets",
-        permission: "sales:read",
-      },
-      { label: "Devoluciones", href: "/dashboard/sales", stub: true },
-    ],
-  },
-  {
-    id: "procurement",
-    label: "Compras",
-    icon: Truck,
-    modules: ["procurement"],
-    anyPermission: ["procurement:read", "suppliers:read"],
-    items: [
-      {
-        label: "Órdenes de compra",
-        href: "/dashboard/procurement",
-        permission: "procurement:read",
-      },
-      {
-        label: "Comparar proveedores",
-        href: "/dashboard/procurement/compare-prices",
-        permission: "procurement:read",
-      },
-      {
-        label: "Proveedores",
-        href: "/dashboard/procurement/suppliers",
-        permission: "suppliers:read",
-      },
-      {
-        label: "Devolución de compra",
-        href: "/dashboard/procurement",
-        stub: true,
-      },
-    ],
-  },
-  {
-    // Solo aparece para tenants con el módulo activo — rubros que fabrican lo
-    // que venden (carpintería, taller). Ver ProductKind.
-    id: "production",
-    label: "Producción",
-    icon: Hammer,
-    modules: ["production"],
-    anyPermission: ["production:orders:read", "production:recipes:read"],
-    items: [
-      {
-        label: "Órdenes de producción",
-        href: "/dashboard/production",
-        permission: "production:orders:read",
-      },
-    ],
-  },
-  // Lo que era el menú "Finanzas": cinco entradas de primer nivel (ver
-  // lib/finance-navigation.ts).
-  ...FINANCE_NAV_GROUPS.map((group) => ({
-    ...group,
-    icon: FINANCE_ICONS[group.id] ?? Landmark,
-  })),
-  {
-    id: "logistics",
-    label: "Logística",
-    icon: Route,
-    modules: ["logistics"],
-    anyPermission: [
-      "logistics:read",
-      "logistics:manage",
-      "logistics:track",
-      "warehouses:read",
-    ],
-    items: [
-      {
-        label: "Entregas",
-        href: "/dashboard/logistics/deliveries",
-        permission: "logistics:read",
-      },
-      {
-        label: "Rutas de entrega",
-        href: "/dashboard/logistics/routes",
-        permission: "logistics:read",
-      },
-      {
-        label: "Mis entregas",
-        href: "/dashboard/logistics/mine",
-        permission: "logistics:track",
-      },
-      { label: "Entrada", href: "/dashboard/inventory", stub: true },
-      { label: "Salida", href: "/dashboard/inventory", stub: true },
-      { label: "Almacenamiento", href: "/dashboard/inventory", stub: true },
-      { label: "Transporte", href: "/dashboard/inventory", stub: true },
-      {
-        label: "Depósitos",
-        href: "/dashboard/settings/warehouses",
-        permission: "warehouses:read",
-      },
-    ],
-  },
-  {
-    id: "hr",
-    label: "RRHH",
-    icon: Users,
-    modules: ["hr"],
-    anyPermission: [
-      "hr:read",
-      "hr:employees:create",
-      "hr:payroll:run",
-      "hr:leaves:manage",
-    ],
-    items: [
-      { label: "Empleados", href: "/dashboard/hr", permission: "hr:read" },
-      { label: "Departamentos", href: "/dashboard/hr/areas" },
-      { label: "Roles", href: "/dashboard/hr", stub: true },
-      { label: "Asistencia", href: "/dashboard/hr", stub: true },
-      {
-        label: "Vacaciones",
-        href: "/dashboard/hr/leaves",
-        permission: "hr:read",
-      },
-      {
-        label: "Nómina de sueldos",
-        href: "/dashboard/hr/payroll",
-        permission: "hr:payroll:run",
-      },
-      { label: "Reclutamiento", href: "/dashboard/hr", stub: true },
-    ],
-  },
-  {
-    id: "crm",
-    label: "CRM",
-    icon: Network,
-    modules: ["crm"],
-    items: [
-      { label: "Contactos", href: "#", stub: true },
-      { label: "Leads", href: "#", stub: true },
-      { label: "Deals", href: "#", stub: true },
-      { label: "Pipeline", href: "#", stub: true },
-      { label: "Campañas", href: "#", stub: true },
-      { label: "Comentarios de clientes", href: "#", stub: true },
-    ],
-  },
-  {
-    id: "projects",
-    label: "Proyectos",
-    icon: FolderKanban,
-    modules: ["projects"],
-    items: [
-      { label: "Proyectos", href: "#", stub: true },
-      { label: "Tareas", href: "#", stub: true },
-      { label: "Timesheet", href: "#", stub: true },
-      { label: "Asignación de recursos", href: "#", stub: true },
-      { label: "Hitos", href: "#", stub: true },
-    ],
-  },
-  {
-    id: "pos",
-    label: "POS",
-    icon: Monitor,
-    modules: ["pos"],
-    anyPermission: ["pos:sell", "pos:session:manage"],
-    items: [
-      { label: "POS", href: "/dashboard/pos", permission: "pos:sell" },
-      {
-        label: "Órdenes POS",
-        href: "/dashboard/pos/history",
-        permission: "pos:session:manage",
-      },
-      {
-        label: "Impresión de códigos de barra",
-        href: "/dashboard/pos",
-        stub: true,
-      },
-      { label: "Impresión de códigos QR", href: "/dashboard/pos", stub: true },
-      {
-        label: "Configuración de impresión",
-        href: "/dashboard/pos",
-        stub: true,
-      },
-    ],
-  },
-  {
-    id: "assets",
-    label: "Activos Fijos",
-    icon: Boxes,
-    modules: ["assets"],
-    items: [
-      { label: "Registro de activos", href: "#", stub: true },
-      { label: "Asignaciones", href: "#", stub: true },
-      { label: "Mantenimiento", href: "#", stub: true },
-      { label: "Desecho", href: "#", stub: true },
-    ],
-  },
-  {
-    id: "documents",
-    label: "Documentos",
-    icon: FolderOpen,
-    modules: ["documents"],
-    flat: true,
-    items: [
-      {
-        label: "Documentos",
-        href: "/dashboard/documents",
-        permission: "documents:read",
-      },
-    ],
-  },
-  {
-    id: "empresa",
-    label: "Empresa",
-    icon: Building2,
-    anyPermission: [
-      "tenants:read",
-      "tenants:update",
-      "branches:read",
-      "warehouses:read",
-    ],
-    items: [
-      {
-        label: "Mi empresa",
-        href: "/dashboard/settings/tenant",
-        permission: "tenants:read",
-      },
-      {
-        label: "Sucursales",
-        href: "/dashboard/settings/branches",
-        permission: "branches:read",
-      },
-      {
-        label: "Precios",
-        href: "/dashboard/settings/pricing",
-        permission: "tenants:update",
-      },
-      {
-        label: "Depósitos",
-        href: "/dashboard/settings/warehouses",
-        permission: "warehouses:read",
-      },
-    ],
-    // Crédito y Cajas (POS) se accedan desde la tuerca de sus tarjetas en
-    // Ajustes → Módulos (Financiamiento / Punto de Venta), no desde acá —
-    // evita duplicar rutas de configuración propias de un módulo en este grupo genérico.
-  },
-  {
-    id: "membership",
-    label: "Membresía",
-    icon: Crown,
-    items: [
-      { label: "Planes", href: "#", stub: true },
-      { label: "Addons", href: "#", stub: true },
-      { label: "Transacciones", href: "#", stub: true },
-    ],
-  },
-  {
-    id: "support",
-    label: "Soporte",
-    icon: Headphones,
-    items: [
-      { label: "Contacto de mensajes", href: "#", stub: true },
-      { label: "Tickets", href: "#", stub: true },
-      { label: "Base de conocimiento", href: "#", stub: true },
-      { label: "Gestión de SLA", href: "#", stub: true },
-    ],
-  },
-  {
-    id: "sistema",
-    label: "Sistema",
-    icon: Settings,
-    anyPermission: [
-      "tenants:modules:manage",
-      "users:read",
-      "roles:manage",
-      "audit:read",
-      "alerts:manage",
-      "integrations:read",
-    ],
-    items: [
-      {
-        label: "Módulos",
-        href: "/dashboard/settings/modules",
-        permission: "tenants:modules:manage",
-      },
-      {
-        label: "Gestión de usuarios",
-        href: "/dashboard/settings/users",
-        permission: "users:read",
-      },
-      {
-        label: "Roles y permisos",
-        href: "/dashboard/settings/roles",
-        permission: "roles:manage",
-      },
-      {
-        label: "Auditoría",
-        href: "/dashboard/settings/audit",
-        permission: "audit:read",
-      },
-      {
-        label: "Alertas",
-        href: "/dashboard/settings/alerts",
-        permission: "alerts:manage",
-      },
-      {
-        label: "Integraciones",
-        href: "/dashboard/settings?tab=integrations",
-        permission: "integrations:read",
-      },
-      {
-        label: "Configuración",
-        href: "/dashboard/settings",
-        permission: "tenants:update",
-      },
-    ],
-  },
-];
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-function isGroupVisible(
-  group: SidebarGroup,
-  activeModules: string[],
-  permissions: string[],
-) {
-  if (group.modules && !group.modules.some((m) => activeModules.includes(m)))
-    return false;
-  if (group.anyPermission)
-    return group.anyPermission.some((p) => permissions.includes(p));
-  return true;
-}
+import { buildNavigation, type NavGroup } from "@/modules/navigation";
 
 // ── ModuleGroup ────────────────────────────────────────────────────────────────
 
-function ModuleGroup({
-  group,
-  permissions,
-  activeModules,
-}: {
-  group: SidebarGroup;
-  permissions: string[];
-  activeModules: string[];
-}) {
+function ModuleGroup({ group }: { group: NavGroup }) {
   const pathname = usePathname();
-
-  const visibleItems = group.items.filter(
-    (item) =>
-      (!item.permission || permissions.includes(item.permission)) &&
-      (!item.module || activeModules.includes(item.module)),
-  );
+  const visibleItems = group.items;
 
   const hasActive = visibleItems.some(
     (item) =>
       !item.stub &&
       item.href !== "#" &&
-      (group.id === "inventory"
-        ? isInventoryItemActive(pathname, item.href)
-        : isNavItemActive(pathname, item.href, group.matchPrefix)),
+      isNavItemActive(pathname, item.href, group.matchPrefix),
   );
 
   const [open, setOpen] = useState(hasActive);
@@ -559,9 +93,7 @@ function ModuleGroup({
             const isActive =
               !item.stub &&
               item.href !== "#" &&
-              (group.id === "inventory"
-                ? isInventoryItemActive(pathname, item.href)
-                : isNavItemActive(pathname, item.href, group.matchPrefix));
+              isNavItemActive(pathname, item.href, group.matchPrefix);
 
             if (item.stub) {
               return (
@@ -652,7 +184,7 @@ export function Sidebar() {
 
   const isDashActive = pathname === "/dashboard";
 
-  const groups = STATIC_GROUPS.map((g) => ({
+  const groups = buildNavigation(activeModules, permissions).map((g) => ({
     ...g,
     items: g.items.map((item) =>
       item.href in badgeByHref
@@ -660,13 +192,8 @@ export function Sidebar() {
         : item,
     ),
   }));
-
-  const BOTTOM_IDS = new Set(["empresa", "membership", "support", "sistema"]);
-  const allVisible = groups.filter((g) =>
-    isGroupVisible(g, activeModules, permissions),
-  );
-  const mainGroups = allVisible.filter((g) => !BOTTOM_IDS.has(g.id));
-  const bottomGroups = allVisible.filter((g) => BOTTOM_IDS.has(g.id));
+  const mainGroups = groups.filter((g) => !g.bottom);
+  const bottomGroups = groups.filter((g) => g.bottom);
 
   return (
     <aside className="fixed inset-y-0 left-0 flex w-[250px] flex-col border-r ">
@@ -695,12 +222,7 @@ export function Sidebar() {
 
         <div className="flex flex-col gap-px">
           {mainGroups.map((group) => (
-            <ModuleGroup
-              key={group.id}
-              group={group}
-              permissions={permissions}
-              activeModules={activeModules}
-            />
+            <ModuleGroup key={group.id} group={group} />
           ))}
         </div>
       </nav>
@@ -709,12 +231,7 @@ export function Sidebar() {
       {bottomGroups.length > 0 && (
         <div className="flex shrink-0 flex-col gap-px border-t border-sidebar-border px-3 py-2">
           {bottomGroups.map((group) => (
-            <ModuleGroup
-              key={group.id}
-              group={group}
-              permissions={permissions}
-              activeModules={activeModules}
-            />
+            <ModuleGroup key={group.id} group={group} />
           ))}
         </div>
       )}

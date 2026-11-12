@@ -86,6 +86,31 @@ describe('JoapyCore API (e2e)', () => {
     expect(me.body).not.toHaveProperty('tempPasswordEncrypted');
   });
 
+  it('serves the module catalog without mistaking it for a module', async () => {
+    await request(http).get('/tenants/me/modules/catalog').expect(401);
+    const res = await request(http)
+      .get('/tenants/me/modules/catalog')
+      .set('Authorization', `Bearer ${tokens.accessToken}`)
+      .expect(200);
+    const catalog = res.body as {
+      categories: string[];
+      modules: { key: string; category: string; dependencies: string[] }[];
+      roadmap: { displayName: string }[];
+    };
+    expect(catalog.modules.find((m) => m.key === 'billing')).toMatchObject({
+      category: 'Finanzas y Contabilidad',
+      dependencies: ['sales'],
+    });
+    expect(catalog.categories.length).toBeGreaterThan(0);
+    expect(catalog.roadmap.length).toBeGreaterThan(0);
+
+    await request(http)
+      .patch('/tenants/me/modules/catalog')
+      .set('Authorization', `Bearer ${tokens.accessToken}`)
+      .send({ active: true })
+      .expect(400);
+  });
+
   it('validates the body and reports the reason', async () => {
     const res = await request(http)
       .post('/auth/login')

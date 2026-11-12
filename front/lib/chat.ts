@@ -1,5 +1,7 @@
 import type { ChatConversation, ChatMessage, ChatPerson } from './api/chat';
 
+export const CHAT_PATH = '/dashboard/chat';
+
 const ZONE = 'America/Asuncion';
 
 export const personName = (person: ChatPerson) => `${person.firstName} ${person.lastName}`.trim();
