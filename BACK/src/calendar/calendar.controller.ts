@@ -14,6 +14,7 @@ import {
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { CurrentTenant } from '../common/decorators/current-tenant.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { Authenticated } from '../common/decorators/permissions.decorator';
 import type { JwtPayload } from '../common/types/jwt-payload.interface';
 import {
   CalendarEventDto,
@@ -21,7 +22,6 @@ import {
   UpdateCalendarEventDto,
 } from './calendar.dto';
 import { CalendarService } from './calendar.service';
-import { Authenticated } from '../common/decorators/permissions.decorator';
 
 // Sin permiso propio: cada usuario ve sus eventos y los de toda la empresa.
 @ApiTags('Calendar')

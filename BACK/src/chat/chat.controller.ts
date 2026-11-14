@@ -13,6 +13,7 @@ import {
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { CurrentTenant } from '../common/decorators/current-tenant.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { Authenticated } from '../common/decorators/permissions.decorator';
 import type { JwtPayload } from '../common/types/jwt-payload.interface';
 import {
   MessagesQueryDto,
@@ -20,7 +21,6 @@ import {
   SendMessageDto,
 } from './chat.dto';
 import { ChatService } from './chat.service';
-import { Authenticated } from '../common/decorators/permissions.decorator';
 
 // Sin permiso propio: cualquier usuario de la empresa habla con sus
 // compañeros, y cada uno ve solo las conversaciones en las que participa.

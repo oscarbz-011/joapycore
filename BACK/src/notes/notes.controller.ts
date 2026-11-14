@@ -15,10 +15,10 @@ import {
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { CurrentTenant } from '../common/decorators/current-tenant.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { Authenticated } from '../common/decorators/permissions.decorator';
 import type { JwtPayload } from '../common/types/jwt-payload.interface';
 import { NoteDto, NotesQueryDto, UpdateNoteDto } from './notes.dto';
 import { NotesService } from './notes.service';
-import { Authenticated } from '../common/decorators/permissions.decorator';
 
 // Sin permiso propio: cada usuario maneja sus notas y nadie más las ve.
 @ApiTags('Notes')

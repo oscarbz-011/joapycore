@@ -13,6 +13,19 @@ function controllerFiles(dir: string): string[] {
   });
 }
 
+// Incluye los handlers que un controller hereda de una clase base.
+function methodNames(proto: object): string[] {
+  const names = new Set<string>();
+  for (
+    let p: object | null = proto;
+    p && p !== Object.prototype;
+    p = Object.getPrototypeOf(p) as object | null
+  ) {
+    Object.getOwnPropertyNames(p).forEach((name) => names.add(name));
+  }
+  return [...names];
+}
+
 interface Route {
   name: string;
   handler: object;
@@ -30,7 +43,7 @@ function routes(): Route[] {
       )
       .flatMap((controller) => {
         const proto = controller.prototype as Record<string, unknown>;
-        return Object.getOwnPropertyNames(proto)
+        return methodNames(proto)
           .map((key) => [key, proto[key]] as const)
           .filter(
             ([, fn]) =>

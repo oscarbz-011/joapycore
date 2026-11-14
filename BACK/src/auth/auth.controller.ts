@@ -6,13 +6,13 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
+import { Authenticated } from '../common/decorators/permissions.decorator';
 import { Public } from '../common/decorators/public.decorator';
 import { THROTTLE } from '../config/security.config';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { RegisterDto } from './dto/register.dto';
-import { Authenticated } from '../common/decorators/permissions.decorator';
 
 @ApiTags('Auth')
 @Controller('auth')
