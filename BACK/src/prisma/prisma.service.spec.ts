@@ -18,21 +18,42 @@ describe('PrismaService.warnIfPrivileged', () => {
     await prisma.onModuleDestroy();
   });
 
-  const connectedAs = (role: object[]) =>
-    jest.spyOn(prisma, '$queryRaw').mockResolvedValue(role);
+  const unprivileged = {
+    name: 'app',
+    superuser: false,
+    bypassRls: false,
+    canCreate: false,
+    ownsTables: false,
+  };
+  const connectedAs = (role: object) =>
+    jest.spyOn(prisma, '$queryRaw').mockResolvedValue([role]);
 
   it.each([
-    { superuser: true, bypassRls: false },
-    { superuser: false, bypassRls: true },
-  ])('warns when the connection user is privileged (%o)', async (attrs) => {
-    connectedAs([{ name: 'postgres', ...attrs }]);
+    [{ superuser: true }, 'es superusuario'],
+    [{ bypassRls: true }, 'se saltea las políticas de filas'],
+    [{ ownsTables: true }, 'es dueño de las tablas'],
+    [{ canCreate: true }, 'puede crear tablas'],
+  ])('warns when the connection user %o', async (attrs, reason) => {
+    connectedAs({ ...unprivileged, name: 'postgres', ...attrs });
     await prisma.warnIfPrivileged();
-    expect(warn).toHaveBeenCalledWith(expect.stringContaining('"postgres"'));
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining(`"postgres", que ${reason}`),
+    );
   });
 
   it('stays quiet for an unprivileged user', async () => {
-    connectedAs([{ name: 'app', superuser: false, bypassRls: false }]);
+    connectedAs(unprivileged);
     await prisma.warnIfPrivileged();
     expect(warn).not.toHaveBeenCalled();
+  });
+
+  it('does not stop the startup when the check fails', async () => {
+    jest
+      .spyOn(prisma, '$queryRaw')
+      .mockRejectedValue(new Error('connection lost'));
+    await expect(prisma.warnIfPrivileged()).resolves.toBeUndefined();
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('connection lost'),
+    );
   });
 });

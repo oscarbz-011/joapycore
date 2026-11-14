@@ -40,7 +40,7 @@ Rama `feature/back/80-least-privilege-access`, worktree `.worktrees/security`.
 
 ### 0.1 Usuario de la base sin privilegios
 
-- Script idempotente `pnpm db:app-role`: corre con el usuario dueño de las tablas y crea o actualiza el usuario de la app.
+- Script idempotente `pnpm db:app-role`: corre con el usuario dueño de las tablas y crea o actualiza el usuario de la app. Se repite después de cada `prisma migrate deploy`, que crea la tabla de historial con los permisos por defecto.
   - Sin superusuario, sin `BYPASSRLS`, sin crear bases ni roles.
   - Lee y escribe datos de todas las tablas de `public`, salvo `_prisma_migrations`.
   - Privilegios por defecto para que las tablas que creen las migraciones futuras ya tengan permisos.
@@ -56,6 +56,7 @@ Rama `feature/back/80-least-privilege-access`, worktree `.worktrees/security`.
   - `@Authenticated()`: solo requiere sesión. Lo usan los datos propios del usuario (perfil, chat, notas, calendario), la marca de la empresa y cerrar sesión.
 - El guard de permisos pasa a negar por defecto: un endpoint sin `@Permissions`, `@AnyPermission`, `@Authenticated` ni `@Public` responde 403.
 - Test unitario que recorre todos los controllers por reflexión y falla si un endpoint no tiene regla o tiene más de una.
+- Pendiente: el guard global solo entiende HTTP. Si un gateway agrega handlers `@SubscribeMessage`, el guard los niega (y `switchToHttp()` no sirve ahí): esos handlers van a necesitar su propia regla.
 
 ---
 

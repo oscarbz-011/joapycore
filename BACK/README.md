@@ -71,9 +71,11 @@ La app no se conecta como dueño de las tablas ni como superusuario: un superusu
 - **Dueño** (`MIGRATE_DATABASE_URL`): crea y modifica las tablas. Solo lo usan las migraciones y `pnpm db:app-role`.
 - **App** (`DATABASE_URL`): lee y escribe datos en todas las tablas de `public` menos `_prisma_migrations`. No puede crear tablas, bases ni usuarios.
 
-`pnpm db:app-role` crea el usuario de la app con el nombre y la clave de `DATABASE_URL`, o lo actualiza si ya existe. Se puede correr las veces que haga falta. Las tablas que creen las migraciones futuras ya nacen con permisos, siempre que las migraciones corran con el mismo dueño.
+`pnpm db:app-role` crea el usuario de la app con el nombre y la clave de `DATABASE_URL`, o lo actualiza si ya existe. Si el usuario ya existía con otros permisos o heredaba otros roles, se los quita. Se puede correr las veces que haga falta, y falla si `DATABASE_URL` y `MIGRATE_DATABASE_URL` apuntan a bases distintas o usan el mismo usuario.
 
-Al arrancar, el backend avisa en el log si `DATABASE_URL` usa un superusuario o un usuario que se saltea las políticas de filas.
+Las tablas que creen las migraciones futuras ya nacen con permisos, siempre que las migraciones corran con el mismo dueño. Por eso, **después de cada `prisma migrate deploy` se vuelve a correr `pnpm db:app-role`**: la tabla de historial de migraciones también nace con permisos y el script es el que se los quita.
+
+Al arrancar, el backend avisa en el log si `DATABASE_URL` usa un superusuario, un usuario que se saltea las políticas de filas, el dueño de las tablas o un usuario que puede crearlas.
 
 ### Pasar un entorno al usuario de la app
 
@@ -84,13 +86,14 @@ Al arrancar, el backend avisa en el log si `DATABASE_URL` usa un superusuario o 
    DATABASE_URL="postgresql://joapycore_app:<clave>@localhost:5435/joapycore"
    ```
 
-2. Correr `pnpm db:app-role`.
+2. Correr `pnpm db:app-role`. Repetirlo después de cada `prisma migrate deploy`.
 3. Reiniciar el backend. El aviso del log ya no aparece.
 
 En producción:
 
-- El dueño necesita el atributo `CREATEROLE` para crear el usuario. Si no lo tiene, un administrador corre `pnpm db:app-role` con un usuario que sí.
-- Con PostgreSQL 14 o anterior, cualquier usuario puede crear tablas en `public`. Quitarlo una vez, como administrador: `REVOKE CREATE ON SCHEMA public FROM PUBLIC;`.
+- Para crear el usuario, el dueño necesita el atributo `CREATEROLE`. Para modificarlo después, además tiene que haberlo creado él. Si no se cumple alguna de las dos cosas, `pnpm db:app-role` lo corre un superusuario. Esto solo se probó con un dueño superusuario, que es el caso de desarrollo y de CI.
+- Con PostgreSQL 14 o anterior, cualquier usuario puede crear tablas en `public`. En ese caso `pnpm db:app-role` falla y avisa. Se resuelve una vez, como administrador: `REVOKE CREATE ON SCHEMA public FROM PUBLIC;`.
+- La clave del usuario de la app viaja en la sentencia `ALTER ROLE`. Si el servidor registra las sentencias DDL (`log_statement`), la clave queda en su log: conviene correr el script con ese registro apagado.
 - El proceso de la app recibe solo `DATABASE_URL`. `MIGRATE_DATABASE_URL` queda en el paso de despliegue que corre `prisma migrate deploy`.
 
 ## Estructura

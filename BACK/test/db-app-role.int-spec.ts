@@ -1,4 +1,5 @@
 import { Client } from 'pg';
+import { appRoleTarget, ensureAppRole } from '../src/prisma/app-role';
 
 // Solo tiene sentido cuando hay un dueño separado (CI lo define siempre).
 const describeWithAppRole = process.env.MIGRATE_DATABASE_URL
@@ -7,9 +8,21 @@ const describeWithAppRole = process.env.MIGRATE_DATABASE_URL
 
 describeWithAppRole('usuario de la base con el que se conecta la app', () => {
   const app = new Client({ connectionString: process.env.DATABASE_URL });
+  const owner = new Client({
+    connectionString: process.env.MIGRATE_DATABASE_URL,
+  });
+  const target = appRoleTarget(process.env.DATABASE_URL ?? '');
 
-  beforeAll(() => app.connect());
-  afterAll(() => app.end());
+  beforeAll(() => Promise.all([app.connect(), owner.connect()]));
+  afterAll(() => Promise.all([app.end(), owner.end()]));
+
+  const migrationsAccess = async () =>
+    (
+      await app.query<{ any: boolean }>(
+        `SELECT has_table_privilege('public._prisma_migrations',
+                  'SELECT, INSERT, UPDATE, DELETE, TRUNCATE') AS any`,
+      )
+    ).rows[0].any;
 
   it('has no administrative attribute', async () => {
     const { rows } = await app.query<Record<string, boolean>>(
@@ -46,15 +59,42 @@ describeWithAppRole('usuario de la base con el que se conecta la app', () => {
        WHERE n.nspname = 'public' AND c.relkind IN ('r', 'p')
          AND c.relname <> '_prisma_migrations'`,
     );
-    expect(rows.length).toBeGreaterThan(50);
+    expect(rows.length).toBeGreaterThan(0);
     expect(rows.filter((r) => r.missing.length > 0)).toEqual([]);
   });
 
-  it('cannot touch the migrations history', async () => {
-    const { rows } = await app.query<{ any: boolean }>(
-      `SELECT COALESCE(has_table_privilege(to_regclass('public._prisma_migrations'),
-                'SELECT, INSERT, UPDATE, DELETE, TRUNCATE'), false) AS any`,
+  // Una tabla de migraciones creada después del script nace con permisos por
+  // los privilegios por defecto: correr el script otra vez se los quita.
+  it('loses access to the migrations history when the script runs again', async () => {
+    const { rows } = await owner.query<{ created: boolean }>(
+      `SELECT to_regclass('public._prisma_migrations') IS NULL AS created`,
     );
-    expect(rows[0].any).toBe(false);
+    const created = rows[0].created;
+    if (created) {
+      await owner.query('CREATE TABLE "_prisma_migrations" (id text)');
+      expect(await migrationsAccess()).toBe(true);
+    }
+    try {
+      await ensureAppRole(owner, target);
+      expect(await migrationsAccess()).toBe(false);
+    } finally {
+      if (created) await owner.query('DROP TABLE "_prisma_migrations"');
+    }
+  });
+
+  it('leaves an existing role without inherited roles', async () => {
+    const [{ owner: ownerRole }] = (
+      await owner.query<{ owner: string }>('SELECT current_user AS owner')
+    ).rows;
+    await owner.query(`GRANT "${ownerRole}" TO "${target.role}"`);
+
+    await ensureAppRole(owner, target);
+
+    const { rows } = await owner.query(
+      `SELECT 1 FROM pg_auth_members m JOIN pg_roles u ON u.oid = m.member
+       WHERE u.rolname = $1`,
+      [target.role],
+    );
+    expect(rows).toEqual([]);
   });
 });

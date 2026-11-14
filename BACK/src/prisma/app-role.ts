@@ -8,7 +8,9 @@ export interface AppRoleTarget {
 
 export interface AppRoleState {
   owner: string;
+  database: string;
   roleExists: boolean;
+  memberOf: string[];
   hasMigrationsTable: boolean;
 }
 
@@ -50,6 +52,11 @@ export function appRoleStatements(
       `DATABASE_URL usa el mismo usuario que MIGRATE_DATABASE_URL (${state.owner}): la app necesita su propio usuario`,
     );
   }
+  if (target.database !== state.database) {
+    throw new Error(
+      `DATABASE_URL apunta a la base "${target.database}" y MIGRATE_DATABASE_URL a "${state.database}"`,
+    );
+  }
   const role = escapeIdentifier(target.role);
   const owner = escapeIdentifier(state.owner);
   const password = escapeLiteral(target.password);
@@ -58,7 +65,18 @@ export function appRoleStatements(
     state.roleExists
       ? `ALTER ROLE ${role} WITH ${ATTRIBUTES} PASSWORD ${password}`
       : `CREATE ROLE ${role} WITH ${ATTRIBUTES} PASSWORD ${password}`,
-    `GRANT CONNECT ON DATABASE ${escapeIdentifier(target.database)} TO ${role}`,
+    // Un usuario que ya existía termina igual que uno nuevo: sin roles
+    // heredados ni permisos de antes.
+    ...state.memberOf.map(
+      (granted) => `REVOKE ${escapeIdentifier(granted)} FROM ${role}`,
+    ),
+    `REVOKE ALL ON DATABASE ${escapeIdentifier(state.database)} FROM ${role}`,
+    `REVOKE ALL ON SCHEMA public FROM ${role}`,
+    `REVOKE ALL ON ALL TABLES IN SCHEMA public FROM ${role}`,
+    `REVOKE ALL ON ALL SEQUENCES IN SCHEMA public FROM ${role}`,
+    `ALTER DEFAULT PRIVILEGES FOR ROLE ${owner} IN SCHEMA public REVOKE ALL ON TABLES FROM ${role}`,
+    `ALTER DEFAULT PRIVILEGES FOR ROLE ${owner} IN SCHEMA public REVOKE ALL ON SEQUENCES FROM ${role}`,
+    `GRANT CONNECT ON DATABASE ${escapeIdentifier(state.database)} TO ${role}`,
     `GRANT USAGE ON SCHEMA public TO ${role}`,
     `GRANT ${DATA} ON ALL TABLES IN SCHEMA public TO ${role}`,
     `GRANT ${SEQUENCES} ON ALL SEQUENCES IN SCHEMA public TO ${role}`,
@@ -76,25 +94,27 @@ export async function ensureAppRole(
   owner: Queryable,
   target: AppRoleTarget,
 ): Promise<void> {
-  const [{ current_user }] = (
-    await owner.query<{ current_user: string }>('SELECT current_user')
-  ).rows;
-  const [{ role_exists, has_migrations_table }] = (
+  const [found] = (
     await owner.query<{
-      role_exists: boolean;
-      has_migrations_table: boolean;
+      owner: string;
+      database: string;
+      roleExists: boolean;
+      memberOf: string[];
+      hasMigrationsTable: boolean;
     }>(
-      `SELECT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = $1) AS role_exists,
-              to_regclass('public._prisma_migrations') IS NOT NULL AS has_migrations_table`,
+      `SELECT current_user AS owner,
+              current_database() AS database,
+              EXISTS (SELECT 1 FROM pg_roles WHERE rolname = $1) AS "roleExists",
+              ARRAY(SELECT g.rolname::text FROM pg_auth_members m
+                    JOIN pg_roles g ON g.oid = m.roleid
+                    JOIN pg_roles u ON u.oid = m.member
+                    WHERE u.rolname = $1) AS "memberOf",
+              to_regclass('public._prisma_migrations') IS NOT NULL AS "hasMigrationsTable"`,
       [target.role],
     )
   ).rows;
 
-  const statements = appRoleStatements(target, {
-    owner: current_user,
-    roleExists: role_exists,
-    hasMigrationsTable: has_migrations_table,
-  });
+  const statements = appRoleStatements(target, found);
 
   await owner.query('BEGIN');
   try {
@@ -103,5 +123,19 @@ export async function ensureAppRole(
   } catch (error) {
     await owner.query('ROLLBACK');
     throw error;
+  }
+
+  // Hasta PostgreSQL 14, PUBLIC puede crear tablas en public y eso no se le
+  // puede quitar a un solo usuario.
+  const [{ canCreate }] = (
+    await owner.query<{ canCreate: boolean }>(
+      `SELECT has_schema_privilege($1, 'public', 'CREATE') AS "canCreate"`,
+      [target.role],
+    )
+  ).rows;
+  if (canCreate) {
+    throw new Error(
+      `"${target.role}" todavía puede crear tablas en public: como administrador, correr REVOKE CREATE ON SCHEMA public FROM PUBLIC`,
+    );
   }
 }
