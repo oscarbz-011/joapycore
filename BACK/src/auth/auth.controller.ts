@@ -12,6 +12,7 @@ import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { RegisterDto } from './dto/register.dto';
+import { Authenticated } from '../common/decorators/permissions.decorator';
 
 @ApiTags('Auth')
 @Controller('auth')
@@ -76,6 +77,7 @@ export class AuthController {
 
   @ApiBearerAuth()
   @Post('logout')
+  @Authenticated()
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Cerrar sesión — revoca el refreshToken indicado' })
   @ApiResponse({ status: 204, description: 'Sesión cerrada' })

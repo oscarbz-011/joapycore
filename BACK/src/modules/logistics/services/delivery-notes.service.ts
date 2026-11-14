@@ -85,9 +85,7 @@ export class DeliveryNotesService {
 
   // El repartidor asignado también puede despachar su propia entrega
   // (empezar el viaje) sin depender de que un admin/despachador lo haga
-  // primero — mismo criterio que recordTrackingEvent() en
-  // DeliveryTrackingService: sin @Permissions() en el controller (PermissionsGuard
-  // es AND-only, no sirve para un OR de permisos), la verificación vive acá.
+  // primero, mismo criterio que recordTrackingEvent() en DeliveryTrackingService.
   async dispatch(
     tenantId: string,
     id: string,

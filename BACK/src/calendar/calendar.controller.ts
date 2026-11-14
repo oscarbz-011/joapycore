@@ -21,6 +21,7 @@ import {
   UpdateCalendarEventDto,
 } from './calendar.dto';
 import { CalendarService } from './calendar.service';
+import { Authenticated } from '../common/decorators/permissions.decorator';
 
 // Sin permiso propio: cada usuario ve sus eventos y los de toda la empresa.
 @ApiTags('Calendar')
@@ -37,6 +38,7 @@ export class CalendarController {
   constructor(private readonly calendar: CalendarService) {}
 
   @Get('events')
+  @Authenticated()
   list(
     @CurrentTenant() tenantId: string,
     @CurrentUser() user: JwtPayload,
@@ -46,6 +48,7 @@ export class CalendarController {
   }
 
   @Post('events')
+  @Authenticated()
   create(
     @CurrentTenant() tenantId: string,
     @CurrentUser() user: JwtPayload,
@@ -55,6 +58,7 @@ export class CalendarController {
   }
 
   @Get('events/:id')
+  @Authenticated()
   find(
     @CurrentTenant() tenantId: string,
     @CurrentUser() user: JwtPayload,
@@ -64,6 +68,7 @@ export class CalendarController {
   }
 
   @Patch('events/:id')
+  @Authenticated()
   update(
     @CurrentTenant() tenantId: string,
     @CurrentUser() user: JwtPayload,
@@ -74,6 +79,7 @@ export class CalendarController {
   }
 
   @Delete('events/:id')
+  @Authenticated()
   remove(
     @CurrentTenant() tenantId: string,
     @CurrentUser() user: JwtPayload,

@@ -2,7 +2,10 @@ import { Body, Controller, Get, Param, Patch, Post, Put } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CurrentTenant } from '../../common/decorators/current-tenant.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
-import { Permissions } from '../../common/decorators/permissions.decorator';
+import {
+  Authenticated,
+  Permissions,
+} from '../../common/decorators/permissions.decorator';
 import type { JwtPayload } from '../../common/types/jwt-payload.interface';
 import { AssignPermissionsDto } from '../dto/assign-permissions.dto';
 import { AssignUserRolesDto } from '../dto/assign-user-roles.dto';
@@ -21,12 +24,14 @@ export class UsersController {
   // ── Self-service (all authenticated users) ─────────────────────────────────
 
   @Get('me')
+  @Authenticated()
   @ApiOperation({ summary: 'Get own profile' })
   getMe(@CurrentUser() user: JwtPayload, @CurrentTenant() tenantId: string) {
     return this.usersService.getById(tenantId, user.sub);
   }
 
   @Patch('me')
+  @Authenticated()
   @ApiOperation({ summary: 'Update own profile (firstName, lastName)' })
   updateMe(
     @CurrentUser() user: JwtPayload,
@@ -37,6 +42,7 @@ export class UsersController {
   }
 
   @Post('me/change-email')
+  @Authenticated()
   @ApiOperation({ summary: 'Change own login email' })
   changeEmail(
     @CurrentUser() user: JwtPayload,
@@ -47,6 +53,7 @@ export class UsersController {
   }
 
   @Post('me/change-password')
+  @Authenticated()
   @ApiOperation({ summary: 'Change own password' })
   changePassword(
     @CurrentUser() user: JwtPayload,

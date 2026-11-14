@@ -16,7 +16,10 @@ import {
 } from '@nestjs/swagger';
 import { CurrentTenant } from '../../../common/decorators/current-tenant.decorator';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
-import { Permissions } from '../../../common/decorators/permissions.decorator';
+import {
+  AnyPermission,
+  Permissions,
+} from '../../../common/decorators/permissions.decorator';
 import { RequiredModule } from '../../../common/decorators/required-module.decorator';
 import type { JwtPayload } from '../../../common/types/jwt-payload.interface';
 import { DispatchDeliveryDto } from '../dto/dispatch-delivery.dto';
@@ -48,10 +51,10 @@ export class DeliveryNotesController {
     return this.service.findOne(tenantId, id);
   }
 
-  // Sin @Permissions(): logistics:manage (admin/despachador) O logistics:track
-  // + ser el repartidor asignado (empezar su propio viaje) — la verificación
-  // vive en el servicio, ver DeliveryNotesService.dispatch().
+  // Con logistics:track solo despacha el repartidor asignado: lo revisa
+  // DeliveryNotesService.dispatch().
   @Patch(':id/dispatch')
+  @AnyPermission('logistics:manage', 'logistics:track')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Despachar entrega (PENDING → DISPATCHED)' })
   dispatch(

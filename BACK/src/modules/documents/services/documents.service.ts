@@ -553,10 +553,8 @@ export class DocumentsService {
     return allowedRoles.some((role) => userRoles.includes(role));
   }
 
-  // La misma ruta (create/update/remove/attachFile/detachFile/sendEmail)
-  // sirve documentos comunes y plantillas — cada uno requiere un permiso
-  // distinto, así que el chequeo no puede vivir en un @Permissions() del
-  // controller (que gatearía la ruta entera con un solo permiso fijo).
+  // La ruta acepta cualquiera de los dos permisos; acá se exige el que
+  // corresponde a un documento o a una plantilla.
   private assertCanWriteDocument(
     isTemplate: boolean,
     userPermissions: string[],
