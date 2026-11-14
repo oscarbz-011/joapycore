@@ -69,6 +69,7 @@ cd BACK
 cp .env.example .env   # completar variables (ver abajo)
 pnpm install
 pnpm prisma migrate deploy
+pnpm db:app-role        # usuario de la app sin privilegios (ver BACK/README.md)
 pnpm prisma db seed     # permisos
 pnpm seed:demo          # opcional: tenants de demostración
 pnpm start:dev

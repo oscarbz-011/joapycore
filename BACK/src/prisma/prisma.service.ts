@@ -39,6 +39,19 @@ export class PrismaService
 
   async onModuleInit() {
     await this.$connect();
+    await this.warnIfPrivileged();
+  }
+
+  async warnIfPrivileged() {
+    const [role] = await this.$queryRaw<
+      { name: string; superuser: boolean; bypassRls: boolean }[]
+    >`SELECT rolname AS name, rolsuper AS superuser, rolbypassrls AS "bypassRls"
+      FROM pg_roles WHERE rolname = current_user`;
+    if (!role || (!role.superuser && !role.bypassRls)) return;
+
+    this.logger.warn(
+      `La app se conecta como "${role.name}", que es superusuario o se saltea las políticas de filas. Crear un usuario sin privilegios con pnpm db:app-role.`,
+    );
   }
 
   async onModuleDestroy() {

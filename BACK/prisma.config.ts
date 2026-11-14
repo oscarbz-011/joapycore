@@ -5,6 +5,9 @@ type Env = {
   DATABASE_URL: string;
 };
 
+// Las migraciones corren con el dueño de las tablas; la app, con su propio
+// usuario sin privilegios (pnpm db:app-role).
+
 export default defineConfig({
   schema: 'prisma/schema.prisma',
   migrations: {
@@ -12,6 +15,6 @@ export default defineConfig({
     seed: 'ts-node prisma/seed.ts',
   },
   datasource: {
-    url: env<Env>('DATABASE_URL'),
+    url: process.env.MIGRATE_DATABASE_URL || env<Env>('DATABASE_URL'),
   },
 });
