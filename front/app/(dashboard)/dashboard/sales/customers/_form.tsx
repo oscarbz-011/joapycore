@@ -213,6 +213,8 @@ export function CustomerForm({ initial, prefill, onDone }: Props) {
         <section className="p-6 space-y-4">
           <p className={SECTION_LABEL}>Datos personales</p>
 
+          {/* Por ahora el alta es siempre de una persona física; el tipo se cambia al editar. */}
+          {initial && (
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <Label>Tipo de contribuyente</Label>
@@ -227,6 +229,7 @@ export function CustomerForm({ initial, prefill, onDone }: Props) {
               </Select>
             </div>
           </div>
+          )}
 
           {company ? (
             <div className="space-y-1.5">
