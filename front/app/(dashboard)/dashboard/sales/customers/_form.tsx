@@ -15,9 +15,11 @@ import {
   type TaxpayerType,
 } from '../../../../../lib/api/sales';
 import { customerRucProblem } from '@/lib/ruc';
+import { birthDateForPayload, birthDateFromCustomer } from '@/lib/customer-birth-date';
 import { NumericInput } from '../../../../../components/numeric-input';
 import { DeliveryMap } from '../../../../../components/logistics/delivery-map';
 import { Button } from '@/components/ui/button';
+import { DatePicker } from '@/components/ui/date-picker';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
@@ -27,7 +29,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/u
 const EMPTY_FORM: CreateCustomerPayload = {
   firstName: '', secondFirstName: '', lastName: '', secondLastName: '',
   documentType: undefined, documentNumber: '', taxpayerType: 'INDIVIDUAL', email: '', phone: '',
-  address: '', city: '', profession: '', monthlyIncome: undefined, notes: '',
+  address: '', city: '', profession: '', birthDate: '', monthlyIncome: undefined, notes: '',
   economicActivity: undefined, hasIpsInsurance: undefined,
   employerName: '', supervisorName: '', workPhone: '', workAddress: '', workSeniority: '',
   homeStreet: '', homeNeighborhood: '', homeReference: '',
@@ -53,6 +55,7 @@ function fromCustomer(c: Customer): CreateCustomerPayload {
     address:          c.address ?? '',
     city:             c.city ?? '',
     profession:       c.profession ?? '',
+    birthDate:        birthDateFromCustomer(c.birthDate),
     monthlyIncome:    c.monthlyIncome ?? undefined,
     notes:            c.notes ?? '',
     economicActivity: c.economicActivity ?? undefined,
@@ -156,6 +159,7 @@ export function CustomerForm({ initial, prefill, onDone }: Props) {
         address:          form.address?.trim() || undefined,
         city:             form.city?.trim() || undefined,
         profession:       form.profession?.trim() || undefined,
+        birthDate:        birthDateForPayload(form.birthDate, company),
         monthlyIncome:    form.monthlyIncome || undefined,
         notes:            form.notes?.trim() || undefined,
         economicActivity: form.economicActivity || undefined,
@@ -281,6 +285,12 @@ export function CustomerForm({ initial, prefill, onDone }: Props) {
               />
               {rucError && <p className="text-xs text-destructive">{rucError}</p>}
             </div>
+            {!company && (
+              <div className="space-y-1.5">
+                <Label htmlFor="customer-birth-date">Fecha de nacimiento</Label>
+                <DatePicker id="customer-birth-date" value={form.birthDate ?? ''} onChange={(v) => set('birthDate', v)} />
+              </div>
+            )}
             <div className="space-y-1.5">
               <Label>Profesión</Label>
               <Input value={form.profession ?? ''} onChange={(e) => set('profession', e.target.value)} placeholder="Comerciante" />
