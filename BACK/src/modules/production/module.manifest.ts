@@ -10,6 +10,7 @@ export const productionManifest = defineModule({
   description: 'Recetas de materiales y órdenes de producción',
   icon: 'Hammer',
   isStable: false,
+  category: 'Producción',
   depends: ['inventory'],
   owns: ['ProductComponent', 'ProductionOrder', 'ProductionOrderItem'],
 });

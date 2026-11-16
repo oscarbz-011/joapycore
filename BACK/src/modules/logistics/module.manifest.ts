@@ -7,6 +7,7 @@ export const logisticsManifest = defineModule({
   description: 'Entrada, salida, almacenamiento y transporte de mercancías',
   icon: 'Route',
   isStable: false,
+  category: 'Logística',
   depends: ['inventory'],
   owns: [
     'DeliveryNote',

@@ -3,12 +3,14 @@ import {
   IsBoolean,
   IsEmail,
   IsEnum,
+  IsISO8601,
   IsLatitude,
   IsLongitude,
   IsNumber,
   IsOptional,
   IsPositive,
   IsString,
+  Matches,
 } from 'class-validator';
 import { DocumentType, EconomicActivity, TaxpayerType } from '@prisma/client';
 
@@ -73,6 +75,19 @@ export class CreateCustomerDto {
   @IsOptional()
   @IsString()
   profession?: string;
+
+  // Solo el día, sin hora: con hora, según el huso podía guardarse el día anterior.
+  @ApiPropertyOptional({
+    type: String,
+    format: 'date',
+    nullable: true,
+    example: '1990-05-20',
+    description: 'null la borra. Una persona jurídica no la guarda',
+  })
+  @IsOptional()
+  @Matches(/^\d{4}-\d{2}-\d{2}$/, { message: 'birthDate debe ser AAAA-MM-DD' })
+  @IsISO8601({ strict: true }, { message: 'birthDate no es una fecha válida' })
+  birthDate?: string | null;
 
   @ApiPropertyOptional()
   @IsOptional()

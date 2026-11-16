@@ -8,6 +8,11 @@ import { PrismaService } from '../../../prisma/prisma.service';
 import { PrismaClientOrTx } from '../../../prisma/types';
 import { CreateCustomerDto } from '../dto/create-customer.dto';
 
+// La fecha de nacimiento llega como texto AAAA-MM-DD y se guarda como día.
+export type CustomerData = Omit<CreateCustomerDto, 'birthDate'> & {
+  birthDate?: Date | null;
+};
+
 // Datos del cliente en los que busca el listado.
 const SEARCHED = [
   'firstName',
@@ -136,11 +141,11 @@ export class CustomersRepository {
     });
   }
 
-  create(tenantId: string, dto: CreateCustomerDto & { customerCode?: string }) {
+  create(tenantId: string, dto: CustomerData & { customerCode?: string }) {
     return this.prisma.customer.create({ data: { tenantId, ...dto } });
   }
 
-  update(tenantId: string, id: string, dto: Partial<CreateCustomerDto>) {
+  update(tenantId: string, id: string, dto: Partial<CustomerData>) {
     return this.prisma.customer.update({ where: { id }, data: dto });
   }
 

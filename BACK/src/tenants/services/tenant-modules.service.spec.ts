@@ -2,6 +2,7 @@ import {
   BadRequestException,
   UnprocessableEntityException,
 } from '@nestjs/common';
+import { MODULE_CATEGORIES } from '../../common/modules/module-categories';
 import { TenantModulesService } from './tenant-modules.service';
 
 function makeModule(name: string, active = true) {
@@ -46,6 +47,41 @@ describe('TenantModulesService', () => {
       repo.findAllForTenant.mockResolvedValue([makeModule('inventory')]);
       await service.list('tenant-1');
       expect(repo.findAllForTenant).toHaveBeenCalledWith('tenant-1');
+    });
+  });
+
+  describe('catalog', () => {
+    it('lists the activatable modules in catalog order with their category', () => {
+      const { modules } = service.catalog();
+      expect(modules.map((m) => m.key).slice(0, 4)).toEqual([
+        'inventory',
+        'sales',
+        'billing',
+        'payments',
+      ]);
+      expect(modules.find((m) => m.key === 'billing')).toMatchObject({
+        displayName: 'Facturación',
+        category: 'Finanzas y Contabilidad',
+        dependencies: ['sales'],
+        bundledWith: 'sales',
+      });
+    });
+
+    it('leaves core modules out', () => {
+      const keys = service.catalog().modules.map((m) => m.key);
+      expect(keys).not.toContain('branches');
+      expect(keys).not.toContain('credit-bureau');
+    });
+
+    it('puts every module and roadmap entry in a known category', () => {
+      const { categories, modules, roadmap } = service.catalog();
+      expect(categories).toEqual(MODULE_CATEGORIES);
+      for (const entry of [...modules, ...roadmap]) {
+        expect([
+          entry.displayName,
+          categories.includes(entry.category!),
+        ]).toEqual([entry.displayName, true]);
+      }
     });
   });
 

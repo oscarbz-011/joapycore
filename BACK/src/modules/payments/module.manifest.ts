@@ -7,6 +7,7 @@ export const paymentsManifest = defineModule({
   description: 'Cuentas por cobrar y registros de pago',
   icon: 'CreditCard',
   isStable: true,
+  category: 'Finanzas y Contabilidad',
   depends: ['billing'],
   owns: ['AccountsReceivable', 'PaymentRecord'],
 });

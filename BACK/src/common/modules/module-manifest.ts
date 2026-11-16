@@ -1,4 +1,5 @@
 import type { Prisma } from '@prisma/client';
+import type { ModuleCategory } from './module-categories';
 
 // core: siempre activo, sin fila en TenantModule ni @RequiredModule.
 // addon: lo activa el tenant; sus controllers llevan @RequiredModule(key).
@@ -13,6 +14,8 @@ export interface ModuleManifest {
   description: string;
   icon: string;
   isStable: boolean;
+  /** Grupo del catálogo; solo lo llevan los addons. */
+  category?: ModuleCategory;
   parent?: string;
   /** Addon sin interruptor propio: sigue a este otro, que está en depends. */
   bundledWith?: string;

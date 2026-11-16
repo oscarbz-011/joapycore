@@ -7,6 +7,7 @@ export const documentsManifest = defineModule({
   description: 'Repositorio de documentos, políticas, manuales y contratos',
   icon: 'FolderOpen',
   isStable: false,
+  category: 'Documentos',
   depends: [],
   owns: ['DocumentCategory', 'Document'],
 });

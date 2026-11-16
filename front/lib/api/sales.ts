@@ -152,6 +152,7 @@ export interface Customer {
   address: string | null;
   city: string | null;
   profession: string | null;
+  birthDate: string | null;
   monthlyIncome: number | null;
   notes: string | null;
   isActive: boolean;
@@ -331,6 +332,8 @@ export interface CreateCustomerPayload {
   address?: string;
   city?: string;
   profession?: string;
+  /** AAAA-MM-DD; null la borra. */
+  birthDate?: string | null;
   monthlyIncome?: number;
   notes?: string;
   economicActivity?: EconomicActivity;

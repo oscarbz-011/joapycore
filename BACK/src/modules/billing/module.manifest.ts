@@ -7,6 +7,7 @@ export const billingManifest = defineModule({
   description: 'Emisión y administración de facturas',
   icon: 'FileText',
   isStable: true,
+  category: 'Finanzas y Contabilidad',
   depends: ['sales'],
   bundledWith: 'sales',
   owns: [

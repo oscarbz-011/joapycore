@@ -1,4 +1,7 @@
-import { NotFoundException } from '@nestjs/common';
+import {
+  NotFoundException,
+  UnprocessableEntityException,
+} from '@nestjs/common';
 import { CustomersService } from './customers.service';
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
@@ -363,6 +366,95 @@ describe('CustomersService', () => {
         expect.objectContaining({ firstName: 'Ana' }),
       );
       expect(result.firstName).toBe('Ana');
+    });
+  });
+
+  // ── fecha de nacimiento ────────────────────────────────────────────────────
+
+  describe('birth date', () => {
+    beforeEach(() => {
+      customersRepository.create.mockResolvedValue(makeCustomer());
+      customersRepository.update.mockResolvedValue(makeCustomer());
+    });
+
+    it('stores the birth date of a person as a calendar day', async () => {
+      await service.create('tenant-1', {
+        firstName: 'María',
+        lastName: 'González',
+        birthDate: '1990-05-20',
+      });
+
+      expect(customersRepository.create).toHaveBeenCalledWith(
+        'tenant-1',
+        expect.objectContaining({
+          birthDate: new Date(Date.UTC(1990, 4, 20)),
+        }),
+      );
+    });
+
+    it('rejects a birth date after today', async () => {
+      const tomorrow = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000)
+        .toISOString()
+        .slice(0, 10);
+
+      await expect(
+        service.create('tenant-1', {
+          firstName: 'María',
+          lastName: 'González',
+          birthDate: tomorrow,
+        }),
+      ).rejects.toBeInstanceOf(UnprocessableEntityException);
+      expect(customersRepository.create).not.toHaveBeenCalled();
+    });
+
+    it('does not keep a birth date for a company', async () => {
+      await service.create('tenant-1', {
+        firstName: 'TIPS S.A.',
+        lastName: '',
+        taxpayerType: 'COMPANY',
+        birthDate: '1990-05-20',
+      });
+
+      expect(customersRepository.create).toHaveBeenCalledWith(
+        'tenant-1',
+        expect.objectContaining({ birthDate: null }),
+      );
+    });
+
+    it('clears the birth date when the update sends null', async () => {
+      customersRepository.findById.mockResolvedValue(makeCustomer());
+
+      await service.update('tenant-1', 'cust-1', { birthDate: null });
+
+      expect(customersRepository.update).toHaveBeenCalledWith(
+        'tenant-1',
+        'cust-1',
+        expect.objectContaining({ birthDate: null }),
+      );
+    });
+
+    it('leaves the birth date alone when the update does not send it', async () => {
+      customersRepository.findById.mockResolvedValue(makeCustomer());
+
+      await service.update('tenant-1', 'cust-1', { firstName: 'Ana' });
+
+      expect(customersRepository.update.mock.calls[0][2]).not.toHaveProperty(
+        'birthDate',
+      );
+    });
+
+    it('clears the birth date when a person becomes a company', async () => {
+      customersRepository.findById.mockResolvedValue(
+        makeCustomer({ birthDate: new Date(Date.UTC(1990, 4, 20)) }),
+      );
+
+      await service.update('tenant-1', 'cust-1', { taxpayerType: 'COMPANY' });
+
+      expect(customersRepository.update).toHaveBeenCalledWith(
+        'tenant-1',
+        'cust-1',
+        expect.objectContaining({ birthDate: null }),
+      );
     });
   });
 

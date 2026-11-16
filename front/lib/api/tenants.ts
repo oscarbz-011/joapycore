@@ -67,6 +67,35 @@ export interface TenantModuleResponse {
   activatedAt: string | null;
 }
 
+/** Un módulo que la empresa puede activar, según los manifiestos del backend. */
+export interface ModuleCatalogEntry {
+  key: string;
+  displayName: string;
+  description: string;
+  /** Nombre de un ícono de lucide-react. */
+  icon: string;
+  category: string;
+  dependencies: string[];
+  isStable: boolean;
+  /** Sin interruptor propio: se activa y desactiva con este módulo. */
+  bundledWith?: string;
+}
+
+/** Anunciado como "Próximamente": todavía no existe ni se puede activar. */
+export interface RoadmapModule {
+  displayName: string;
+  description: string;
+  icon: string;
+  category: string;
+}
+
+export interface ModuleCatalog {
+  /** En el orden en que se muestran. */
+  categories: string[];
+  modules: ModuleCatalogEntry[];
+  roadmap: RoadmapModule[];
+}
+
 export interface UpdateTenantPayload {
   name?: string;
   razonSocial?: string;
@@ -150,6 +179,9 @@ export const tenantsApi = {
 
   listModules: (): Promise<TenantModuleResponse[]> =>
     apiClient.get('/tenants/me/modules').then((r) => r.data),
+
+  getModuleCatalog: (): Promise<ModuleCatalog> =>
+    apiClient.get('/tenants/me/modules/catalog').then((r) => r.data),
 
   toggleModule: (moduleName: string, active: boolean): Promise<TenantModuleResponse[]> =>
     apiClient.patch(`/tenants/me/modules/${moduleName}`, { active }).then((r) => r.data),

@@ -7,6 +7,7 @@ export const procurementManifest = defineModule({
   description: 'Órdenes de compra y gestión de proveedores',
   icon: 'Truck',
   isStable: true,
+  category: 'Compras y Proveedores',
   depends: ['inventory'],
   owns: [
     'Supplier',

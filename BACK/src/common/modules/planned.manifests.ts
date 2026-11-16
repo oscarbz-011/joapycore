@@ -10,6 +10,7 @@ export const crmManifest = defineModule({
   description: 'Gestión de contactos, leads, deals y campañas comerciales',
   icon: 'Network',
   isStable: false,
+  category: 'Ventas y CRM',
   depends: ['sales'],
   owns: [],
 });
@@ -22,6 +23,7 @@ export const projectsManifest = defineModule({
     'Gestión de proyectos, tareas, timesheet y asignación de recursos',
   icon: 'FolderKanban',
   isStable: false,
+  category: 'Proyectos',
   depends: [],
   owns: [],
 });
@@ -33,6 +35,7 @@ export const assetsManifest = defineModule({
   description: 'Registro, asignación y mantenimiento de activos empresariales',
   icon: 'Boxes',
   isStable: false,
+  category: 'Activos Fijos',
   depends: [],
   owns: [],
 });

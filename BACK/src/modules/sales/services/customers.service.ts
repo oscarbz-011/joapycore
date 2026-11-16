@@ -93,10 +93,13 @@ export class CustomersService {
       if (existing)
         throw new ConflictException('Ya existe un cliente con ese email');
     }
+    const { birthDate: birthDateText, ...data } = dto;
+    const birthDate = this.birthDate(birthDateText, dto.taxpayerType) ?? null;
     const customerCode = await this.generateCustomerCode(tenantId);
     const customer = await this.customersRepository.create(tenantId, {
-      ...dto,
+      ...data,
       ...this.casedNames(dto, dto.taxpayerType),
+      birthDate,
       customerCode,
     });
 
@@ -152,9 +155,13 @@ export class CustomersService {
       if (existing)
         throw new ConflictException('Ya existe un cliente con ese email');
     }
+    const { birthDate: birthDateText, ...data } = dto;
+    const taxpayerType = dto.taxpayerType ?? before.taxpayerType;
+    const birthDate = this.birthDate(birthDateText, taxpayerType);
     const customer = await this.customersRepository.update(tenantId, id, {
-      ...dto,
-      ...this.casedNames(dto, dto.taxpayerType ?? before.taxpayerType),
+      ...data,
+      ...this.casedNames(dto, taxpayerType),
+      ...(birthDate !== undefined ? { birthDate } : {}),
     });
 
     this.eventEmitter.emit('customer.updated', { tenantId, customerId: id });
@@ -252,6 +259,22 @@ export class CustomersService {
       ...(dto.firstName ? { firstName: toTitleCase(dto.firstName) } : {}),
       ...(dto.lastName ? { lastName: toTitleCase(dto.lastName) } : {}),
     };
+  }
+
+  // undefined deja la fecha como está; una persona jurídica no tiene fecha de nacimiento.
+  private birthDate(
+    value: string | null | undefined,
+    taxpayerType: CreateCustomerDto['taxpayerType'] | null,
+  ): Date | null | undefined {
+    if (taxpayerType === 'COMPANY') return null;
+    if (value == null) return value;
+    const date = new Date(`${value}T00:00:00.000Z`);
+    if (date.getTime() > Date.now()) {
+      throw new UnprocessableEntityException(
+        'La fecha de nacimiento no puede ser posterior a hoy',
+      );
+    }
+    return date;
   }
 
   // Una factura con un RUC mal escrito no sirve al cliente para su crédito
