@@ -8,6 +8,7 @@ export const sifenManifest = defineModule({
     'Certificado digital y emisión de documentos electrónicos ante SIFEN',
   icon: 'Receipt',
   isStable: true,
+  category: 'Finanzas y Contabilidad',
   depends: ['billing'],
   owns: ['SifenConfig'],
 });

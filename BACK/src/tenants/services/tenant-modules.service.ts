@@ -8,6 +8,8 @@ import {
   ALL_TENANT_MODULES,
   MODULE_CATALOG,
 } from '../../common/constants/modules.constant';
+import { MODULE_CATEGORIES } from '../../common/modules/module-categories';
+import { MODULE_ROADMAP } from '../../common/modules/module-roadmap';
 import { TenantModulesRepository } from '../repositories/tenant-modules.repository';
 import { TenantModulesCache } from './tenant-modules.cache';
 
@@ -18,6 +20,18 @@ export class TenantModulesService {
     private readonly tenantModulesCache: TenantModulesCache,
     private readonly eventEmitter: EventBus,
   ) {}
+
+  // Igual para todas las empresas: el front lo usa en vez de tener su copia.
+  catalog() {
+    return {
+      categories: MODULE_CATEGORIES,
+      modules: ALL_TENANT_MODULES.map((key) => ({
+        key,
+        ...MODULE_CATALOG[key],
+      })),
+      roadmap: MODULE_ROADMAP,
+    };
+  }
 
   async list(tenantId: string) {
     await this.tenantModulesRepository.backfillMissing(tenantId);
