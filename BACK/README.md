@@ -82,7 +82,7 @@ Al arrancar, el backend avisa en el log si `DATABASE_URL` usa un superusuario, u
 1. En el `.env`, mover la conexión actual a `MIGRATE_DATABASE_URL` y poner en `DATABASE_URL` el usuario nuevo con una clave propia:
 
    ```bash
-   MIGRATE_DATABASE_URL="postgresql://joapycore:joapycore@localhost:5435/joapycore"
+   MIGRATE_DATABASE_URL="postgresql://joapycore:<clave-actual>@localhost:5435/joapycore"
    DATABASE_URL="postgresql://joapycore_app:<clave>@localhost:5435/joapycore"
    ```
 
