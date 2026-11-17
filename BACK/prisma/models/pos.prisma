@@ -1,0 +1,71 @@
+// Las térmicas solo se habilitan con el informe de durabilidad del papel
+// (RG 27/19).
+enum PosPrintFormat {
+  THERMAL_58
+  THERMAL_80
+  A4
+  HALF_LETTER
+}
+
+enum PosSessionStatus {
+  OPEN
+  CLOSED
+  DISCREPANCY
+}
+
+model PosTerminal {
+  id       String  @id @default(uuid())
+  tenantId String  @map("tenant_id")
+  branchId String  @map("branch_id")
+  name     String // "Caja 1", "Caja 2"
+  isActive Boolean @default(true) @map("is_active")
+
+  // Serie con la que la caja numera sus facturas; sin serie no puede vender.
+  invoiceSeriesId          String?        @map("invoice_series_id")
+  printFormat              PosPrintFormat @default(A4) @map("print_format")
+  // Informe del proveedor sobre la durabilidad del papel térmico y las
+  // condiciones de conservación que se imprimen en la factura.
+  thermalPaperReportFileId String?        @map("thermal_paper_report_file_id")
+  thermalPaperConservation String?        @map("thermal_paper_conservation")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  tenant             Tenant         @relation(fields: [tenantId], references: [id])
+  branch             Branch         @relation(fields: [branchId], references: [id])
+  invoiceSeries      BillingSeries? @relation(fields: [invoiceSeriesId], references: [id])
+  thermalPaperReport FileRecord?    @relation("PosPaperReport", fields: [thermalPaperReportFileId], references: [id])
+  sessions           PosSession[]
+
+  @@unique([tenantId, branchId, name])
+  @@index([thermalPaperReportFileId])
+  @@map("pos_terminals")
+}
+
+model PosSession {
+  id           String           @id @default(uuid())
+  tenantId     String           @map("tenant_id")
+  terminalId   String           @map("terminal_id")
+  cashierId    String           @map("cashier_id")
+  status       PosSessionStatus @default(OPEN)
+  openingCash  Decimal          @map("opening_cash") @db.Decimal(12, 2)
+  closingCash  Decimal?         @map("closing_cash") @db.Decimal(12, 2)
+  expectedCash Decimal?         @map("expected_cash") @db.Decimal(12, 2)
+  difference   Decimal?         @db.Decimal(12, 2)
+  openedAt     DateTime         @map("opened_at")
+  closedAt     DateTime?        @map("closed_at")
+  notes        String?
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  tenant   Tenant        @relation(fields: [tenantId], references: [id])
+  terminal PosTerminal   @relation(fields: [terminalId], references: [id])
+  cashier  User          @relation("SessionCashier", fields: [cashierId], references: [id])
+  orders   SaleOrder[]
+  payments SalePayment[]
+
+  @@index([tenantId, status])
+  @@index([tenantId, terminalId])
+  @@map("pos_sessions")
+}

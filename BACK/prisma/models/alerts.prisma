@@ -1,0 +1,27 @@
+enum AlertType {
+  STOCK_LOW
+  PAYMENT_DUE
+  INVOICE_OVERDUE
+}
+
+enum AlertChannel {
+  EMAIL
+  SYSTEM
+}
+
+model AlertConfig {
+  id        String       @id @default(uuid())
+  tenantId  String       @map("tenant_id")
+  type      AlertType
+  channel   AlertChannel @default(SYSTEM)
+  isActive  Boolean      @default(true) @map("is_active")
+  threshold Int?
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@unique([tenantId, type])
+  @@map("alert_configs")
+}

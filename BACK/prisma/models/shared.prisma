@@ -1,0 +1,30 @@
+enum MarkupType {
+  PERCENTAGE
+  FIXED
+}
+
+enum DocumentType {
+  CI
+  RUC
+  PASSPORT
+}
+
+enum PaymentMethod {
+  BANK_TRANSFER
+  CASH
+  CARD
+  PAGO_EXPRESS
+  AQUI_PAGO
+  CHECK
+}
+
+enum AdvancePaymentMode {
+  REDUCE_INSTALLMENTS
+  REDUCE_AMOUNT
+}
+
+enum OrderChannel {
+  NORMAL
+  POS
+  ECOMMERCE
+}

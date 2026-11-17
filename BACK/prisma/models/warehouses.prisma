@@ -1,0 +1,25 @@
+model Warehouse {
+  id        String  @id @default(uuid())
+  tenantId  String  @map("tenant_id")
+  branchId  String? @map("branch_id")
+  name      String
+  address   String?
+  isDefault Boolean @default(false) @map("is_default")
+  isActive  Boolean @default(true) @map("is_active")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  tenant           Tenant            @relation(fields: [tenantId], references: [id])
+  branch           Branch?           @relation(fields: [branchId], references: [id])
+  stockMovements   StockMovement[]
+  saleOrderItems   SaleOrderItem[]
+  purchaseReceipts PurchaseReceipt[]
+  productionOrders ProductionOrder[]
+  productUnits     ProductUnit[]
+  remissionsOut    RemissionNote[]   @relation("RemissionFromWarehouse")
+  remissionsIn     RemissionNote[]   @relation("RemissionToWarehouse")
+
+  @@unique([tenantId, name])
+  @@map("warehouses")
+}

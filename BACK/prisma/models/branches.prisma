@@ -1,0 +1,40 @@
+model Branch {
+  id         String  @id @default(uuid())
+  tenantId   String  @map("tenant_id")
+  name       String
+  address    String?
+  numeroCasa String? @map("numero_casa")
+  city       String?
+  phone      String?
+  email      String?
+  isMain     Boolean @default(false) @map("is_main")
+  isActive   Boolean @default(true) @map("is_active")
+
+  // SIFEN — datos de establecimiento
+  codigoEstablecimiento String? @map("codigo_establecimiento") // "001" registro ante SET
+  puntoExpedicion       String? @default("001") @map("punto_expedicion") // "001" punto de expedición
+  departamentoCodigo    Int?    @map("departamento_codigo")
+  departamentoDesc      String? @map("departamento_desc")
+  distritoCodigo        Int?    @map("distrito_codigo")
+  distritoDesc          String? @map("distrito_desc")
+  ciudadCodigo          Int?    @map("ciudad_codigo")
+  ciudadDesc            String? @map("ciudad_desc")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  tenant          Tenant           @relation(fields: [tenantId], references: [id])
+  warehouses      Warehouse[]
+  users           User[]
+  stockMovements  StockMovement[]
+  saleOrders      SaleOrder[]
+  purchaseOrders  PurchaseOrder[]
+  employees       Employee[]
+  posTerminals    PosTerminal[]
+  billingSeries   BillingSeries[]
+  paymentReceipts PaymentReceipt[]
+  remissionNotes  RemissionNote[]
+
+  @@unique([tenantId, name])
+  @@map("branches")
+}

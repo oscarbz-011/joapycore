@@ -1,0 +1,44 @@
+enum CreditBureauCheckFrequency {
+  FIRST_PURCHASE_ONLY
+  EVERY_REQUEST
+}
+
+enum CreditBureauCheckResult {
+  CLEAN
+  FLAGGED
+}
+
+model CreditBureauConfig {
+  id             String                     @id @default(uuid())
+  tenantId       String                     @unique @map("tenant_id")
+  isEnabled      Boolean                    @default(false) @map("is_enabled")
+  checkFrequency CreditBureauCheckFrequency @default(EVERY_REQUEST) @map("check_frequency")
+  // Nombre del proveedor activo — hoy solo existe "manual" (registro a mano
+  // por el analista). Preparado para que un proveedor real (Equifax u otro)
+  // se enchufe más adelante sin cambiar el resto del flujo.
+  providerName   String                     @default("manual") @map("provider_name")
+  updatedAt      DateTime                   @updatedAt @map("updated_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@map("credit_bureau_configs")
+}
+
+model CreditBureauCheck {
+  id            String                  @id @default(uuid())
+  tenantId      String                  @map("tenant_id")
+  customerId    String                  @map("customer_id")
+  saleOrderId   String?                 @map("sale_order_id")
+  performedById String?                 @map("performed_by_id")
+  provider      String                  @default("manual")
+  result        CreditBureauCheckResult
+  notes         String?
+  createdAt     DateTime                @default(now()) @map("created_at")
+
+  tenant    Tenant     @relation(fields: [tenantId], references: [id])
+  customer  Customer   @relation(fields: [customerId], references: [id])
+  saleOrder SaleOrder? @relation(fields: [saleOrderId], references: [id])
+
+  @@index([tenantId, customerId])
+  @@map("credit_bureau_checks")
+}

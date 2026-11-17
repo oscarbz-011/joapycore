@@ -1,4 +1,5 @@
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { PAYMENT_METHODS, paymentMethodLabel } from './payment-methods';
@@ -7,10 +8,13 @@ describe('payment methods', () => {
   // La lista del front tiene que ser exactamente el enum de Prisma: un valor
   // de más hace fallar el cobro en el backend.
   it('matches the PaymentMethod enum of the Prisma schema', () => {
-    const schema = readFileSync(
-      fileURLToPath(new URL('../../BACK/prisma/schema.prisma', import.meta.url)),
-      'utf8',
+    const modelsDir = fileURLToPath(
+      new URL('../../BACK/prisma/models/', import.meta.url),
     );
+    const schema = readdirSync(modelsDir)
+      .filter((name) => name.endsWith('.prisma'))
+      .map((name) => readFileSync(join(modelsDir, name), 'utf8'))
+      .join('\n');
     const block = schema.match(/enum PaymentMethod \{([^}]*)\}/)?.[1] ?? '';
     const values = block.split(/\s+/).filter(Boolean);
     expect([...PAYMENT_METHODS].sort()).toEqual(values.sort());

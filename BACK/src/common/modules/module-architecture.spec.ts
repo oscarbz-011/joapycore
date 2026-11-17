@@ -7,6 +7,7 @@ import {
 } from '../constants/modules.constant';
 import { KNOWN_BOUNDARY_DEBT } from './module-boundary-debt';
 import type { ModuleManifest } from './module-manifest';
+import { KNOWN_CROSS_MODULE_RELATIONS } from './module-relation-debt';
 import { MODULE_REGISTRY } from './module-registry';
 import { PLATFORM_TABLES } from './platform-tables';
 
@@ -16,7 +17,10 @@ import { PLATFORM_TABLES } from './platform-tables';
 
 const SRC = resolve(__dirname, '../..');
 const MODULES_DIR = join(SRC, 'modules');
-const SCHEMA = resolve(SRC, '../prisma/schema.prisma');
+const PRISMA_DIR = resolve(SRC, '../prisma');
+const MODELS_DIR = join(PRISMA_DIR, 'models');
+// Enums que usan varios dueños, o ninguno.
+const SHARED_SCHEMA = 'shared';
 
 const WRITE_METHODS = new Set([
   'create',
@@ -44,9 +48,28 @@ const DELEGATE_CALL = new RegExp(
   'g',
 );
 
-const schemaModels = [
-  ...readFileSync(SCHEMA, 'utf8').matchAll(/^model (\w+) \{/gm),
-].map((m) => m[1]);
+interface SchemaBlock {
+  kind: string;
+  name: string;
+  body: string;
+  file: string;
+}
+
+function schemaBlocks(text: string, file: string): SchemaBlock[] {
+  return [...text.matchAll(/^(model|enum) (\w+) \{([\s\S]*?)^\}/gm)].map(
+    ([, kind, name, body]) => ({ kind, name, body, file }),
+  );
+}
+
+const schemaFiles = readdirSync(MODELS_DIR)
+  .filter((name) => name.endsWith('.prisma'))
+  .map((name) => name.replace(/\.prisma$/, ''));
+const blocks = schemaFiles.flatMap((file) =>
+  schemaBlocks(readFileSync(join(MODELS_DIR, `${file}.prisma`), 'utf8'), file),
+);
+const schemaModels = blocks
+  .filter((b) => b.kind === 'model')
+  .map((b) => b.name);
 const delegateToModel = new Map(
   schemaModels.map((model) => [model[0].toLowerCase() + model.slice(1), model]),
 );
@@ -205,6 +228,50 @@ describe('Arquitectura modular', () => {
       const unowned = schemaModels.filter((m) => !ownerOf.has(m));
       expect(unowned).toEqual([]);
     });
+
+    it('keeps only the generator and the datasource in schema.prisma', () => {
+      const main = readFileSync(join(PRISMA_DIR, 'schema.prisma'), 'utf8');
+      expect(schemaBlocks(main, 'schema').map((b) => b.name)).toEqual([]);
+    });
+
+    it('puts every model in the file of its owner', () => {
+      const misplaced = blocks
+        .filter((b) => b.kind === 'model' && ownerOf.get(b.name) !== b.file)
+        .map(
+          (b) =>
+            `${b.name} en ${b.file}.prisma (dueño: ${ownerOf.get(b.name)})`,
+        );
+      expect(misplaced).toEqual([]);
+    });
+
+    it('names each schema file after an owner', () => {
+      const owners = new Set([...ownerOf.values(), SHARED_SCHEMA]);
+      expect(schemaFiles.filter((file) => !owners.has(file))).toEqual([]);
+    });
+
+    it('puts each enum with the only owner that uses it, or in shared', () => {
+      const enums = new Set(
+        blocks.filter((b) => b.kind === 'enum').map((b) => b.name),
+      );
+      const usedBy = new Map<string, Set<string>>();
+      for (const model of blocks.filter((b) => b.kind === 'model')) {
+        for (const [, type] of model.body.matchAll(/^[ \t]+\w+[ \t]+(\w+)/gm)) {
+          if (!enums.has(type)) continue;
+          const owners = usedBy.get(type) ?? new Set<string>();
+          owners.add(ownerOf.get(model.name) ?? '');
+          usedBy.set(type, owners);
+        }
+      }
+      const misplaced = blocks
+        .filter((b) => b.kind === 'enum')
+        .filter((b) => {
+          const owners = [...(usedBy.get(b.name) ?? [])];
+          const expected = owners.length === 1 ? owners[0] : SHARED_SCHEMA;
+          return b.file !== expected;
+        })
+        .map((b) => `${b.name} en ${b.file}.prisma`);
+      expect(misplaced).toEqual([]);
+    });
   });
 
   describe('guards de los controllers', () => {
@@ -305,6 +372,33 @@ describe('Arquitectura modular', () => {
       // Un acceso nuevo falla; uno que se corrigió también, para sacarlo de
       // la lista de deuda.
       expect(actual).toEqual(known);
+    });
+
+    it('relates to other modules’ tables only where it already did', () => {
+      const shared = new Set([
+        'platform',
+        ...MODULE_REGISTRY.filter((m) => m.kind === 'core').map((m) => m.key),
+      ]);
+      const actual = blocks
+        .filter((b) => b.kind === 'model')
+        .flatMap((model) =>
+          [
+            ...model.body.matchAll(
+              /^[ \t]+(\w+)[ \t]+(\w+)\??[ \t].*@relation\([^)]*fields:/gm,
+            ),
+          ]
+            .filter(([, , target]) => {
+              const owner = ownerOf.get(target);
+              return (
+                owner !== undefined &&
+                owner !== ownerOf.get(model.name) &&
+                !shared.has(owner)
+              );
+            })
+            .map(([, field, target]) => `${model.name}.${field} -> ${target}`),
+        )
+        .sort();
+      expect(actual).toEqual([...KNOWN_CROSS_MODULE_RELATIONS].sort());
     });
   });
 

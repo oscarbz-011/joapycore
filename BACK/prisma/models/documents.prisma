@@ -1,0 +1,84 @@
+enum DocType {
+  INTERNAL // Políticas, manuales, reglamentos internos
+  CONTRACT // Contratos con clientes o proveedores
+  COMPLIANCE // Habilitaciones, registros fiscales, certificados
+  BILLING // Plantillas de facturación (factura, recibo de dinero)
+}
+
+enum DocVisibility {
+  PUBLIC // Todos los usuarios del tenant con documents:read
+  PRIVATE // Solo el autor + documents:manage
+  ROLE_BASED // Solo los roles listados en allowedRoles
+}
+
+enum DocContentFormat {
+  TIPTAP // Editor WYSIWYG — contenido en JSON de TipTap
+  HTML // HTML/CSS crudo — control de layout fino (factura, recibo)
+  DOCX // Archivo .docx subido, usado tal cual como plantilla
+}
+
+enum TemplateKind {
+  SALE_CONTRACT // Contrato de compra-venta, generado automáticamente al emitir factura de venta a crédito
+  INVOICE // Factura (contado o crédito), generada automáticamente al emitir
+  PAYMENT_RECEIPT // Recibo de dinero, generado automáticamente al cobrar una cuota
+  QUOTE // Presupuesto, generado automáticamente al crear un pedido orderType=QUOTE
+  INTEREST_INVOICE // Factura de intereses moratorios, generada automáticamente al cobrar una cuota con recargos
+  PURCHASE_ORDER // Orden de compra, el documento que se le envía al proveedor
+}
+
+model DocumentCategory {
+  id        String    @id @default(uuid())
+  tenantId  String    @map("tenant_id")
+  name      String
+  createdAt DateTime  @default(now()) @map("created_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  tenant    Tenant     @relation(fields: [tenantId], references: [id])
+  documents Document[]
+
+  @@unique([tenantId, name])
+  @@map("document_categories")
+}
+
+model Document {
+  id           String        @id @default(uuid())
+  tenantId     String        @map("tenant_id")
+  type         DocType
+  title        String
+  description  String?
+  categoryId   String?       @map("category_id")
+  tags         String[]      @default([])
+  visibility   DocVisibility @default(PUBLIC)
+  allowedRoles String[]      @default([]) @map("allowed_roles")
+
+  // Archivo adjunto — vive en FileRecord (StorageDriver local/S3), 1:1
+  fileRecordId String? @unique @map("file_record_id")
+
+  // Entidad vinculada (contratos → cliente / orden)
+  entityType String? @map("entity_type")
+  entityId   String? @map("entity_id")
+
+  // Compliance: fecha de vencimiento del documento
+  expiresAt DateTime? @map("expires_at")
+
+  // Body: JSON de TipTap (contentFormat=TIPTAP) o HTML/CSS crudo (contentFormat=HTML)
+  content       String?
+  contentFormat DocContentFormat @default(TIPTAP) @map("content_format")
+
+  // Plantillas: documento reutilizado como fuente de generación automática
+  isTemplate   Boolean       @default(false) @map("is_template")
+  templateKind TemplateKind? @map("template_kind")
+  variables    Json? // snapshot de variables resueltas al generar (auditoría)
+
+  uploadedById String?   @map("uploaded_by_id")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+  deletedAt    DateTime? @map("deleted_at")
+
+  tenant     Tenant            @relation(fields: [tenantId], references: [id])
+  category   DocumentCategory? @relation(fields: [categoryId], references: [id])
+  fileRecord FileRecord?       @relation(fields: [fileRecordId], references: [id])
+
+  @@unique([tenantId, templateKind])
+  @@map("documents")
+}
