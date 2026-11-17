@@ -10,7 +10,10 @@ import {
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CurrentTenant } from '../../../common/decorators/current-tenant.decorator';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
-import { Permissions } from '../../../common/decorators/permissions.decorator';
+import {
+  AnyPermission,
+  Permissions,
+} from '../../../common/decorators/permissions.decorator';
 import { RequiredModule } from '../../../common/decorators/required-module.decorator';
 import type { JwtPayload } from '../../../common/types/jwt-payload.interface';
 import { DeliveryTrackingService } from '../services/delivery-tracking.service';
@@ -60,9 +63,10 @@ export class DeliveryTrackingController {
     return this.service.findMine(tenantId, user.sub, status);
   }
 
-  // Sin @Permissions(): la verificación (logistics:manage O logistics:track,
-  // más pertenencia si es track) vive en el servicio — ver DeliveryTrackingService.
+  // Con logistics:track solo registra el repartidor asignado: lo revisa
+  // DeliveryTrackingService.
   @Post('deliveries/:id/tracking-events')
+  @AnyPermission('logistics:manage', 'logistics:track')
   @ApiOperation({
     summary:
       'Registrar un checkpoint del recorrido — también marca "entregado"',

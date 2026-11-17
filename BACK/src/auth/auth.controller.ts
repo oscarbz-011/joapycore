@@ -6,6 +6,7 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
+import { Authenticated } from '../common/decorators/permissions.decorator';
 import { Public } from '../common/decorators/public.decorator';
 import { THROTTLE } from '../config/security.config';
 import { AuthService } from './auth.service';
@@ -76,6 +77,7 @@ export class AuthController {
 
   @ApiBearerAuth()
   @Post('logout')
+  @Authenticated()
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Cerrar sesión — revoca el refreshToken indicado' })
   @ApiResponse({ status: 204, description: 'Sesión cerrada' })

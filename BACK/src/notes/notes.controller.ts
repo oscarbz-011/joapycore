@@ -15,6 +15,7 @@ import {
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { CurrentTenant } from '../common/decorators/current-tenant.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { Authenticated } from '../common/decorators/permissions.decorator';
 import type { JwtPayload } from '../common/types/jwt-payload.interface';
 import { NoteDto, NotesQueryDto, UpdateNoteDto } from './notes.dto';
 import { NotesService } from './notes.service';
@@ -34,6 +35,7 @@ export class NotesController {
   constructor(private readonly notes: NotesService) {}
 
   @Get()
+  @Authenticated()
   list(
     @CurrentTenant() tenantId: string,
     @CurrentUser() user: JwtPayload,
@@ -43,6 +45,7 @@ export class NotesController {
   }
 
   @Post()
+  @Authenticated()
   create(
     @CurrentTenant() tenantId: string,
     @CurrentUser() user: JwtPayload,
@@ -52,6 +55,7 @@ export class NotesController {
   }
 
   @Get(':id')
+  @Authenticated()
   find(
     @CurrentTenant() tenantId: string,
     @CurrentUser() user: JwtPayload,
@@ -61,6 +65,7 @@ export class NotesController {
   }
 
   @Patch(':id')
+  @Authenticated()
   update(
     @CurrentTenant() tenantId: string,
     @CurrentUser() user: JwtPayload,
@@ -71,6 +76,7 @@ export class NotesController {
   }
 
   @Post(':id/trash')
+  @Authenticated()
   @HttpCode(200)
   trash(
     @CurrentTenant() tenantId: string,
@@ -81,6 +87,7 @@ export class NotesController {
   }
 
   @Post(':id/restore')
+  @Authenticated()
   @HttpCode(200)
   restore(
     @CurrentTenant() tenantId: string,
@@ -91,6 +98,7 @@ export class NotesController {
   }
 
   @Delete(':id')
+  @Authenticated()
   remove(
     @CurrentTenant() tenantId: string,
     @CurrentUser() user: JwtPayload,

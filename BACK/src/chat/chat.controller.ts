@@ -13,6 +13,7 @@ import {
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { CurrentTenant } from '../common/decorators/current-tenant.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { Authenticated } from '../common/decorators/permissions.decorator';
 import type { JwtPayload } from '../common/types/jwt-payload.interface';
 import {
   MessagesQueryDto,
@@ -37,16 +38,19 @@ export class ChatController {
   constructor(private readonly chat: ChatService) {}
 
   @Get('people')
+  @Authenticated()
   people(@CurrentTenant() tenantId: string, @CurrentUser() user: JwtPayload) {
     return this.chat.people(tenantId, user.sub);
   }
 
   @Get('unread')
+  @Authenticated()
   unread(@CurrentTenant() tenantId: string, @CurrentUser() user: JwtPayload) {
     return this.chat.unread(tenantId, user.sub);
   }
 
   @Get('conversations')
+  @Authenticated()
   conversations(
     @CurrentTenant() tenantId: string,
     @CurrentUser() user: JwtPayload,
@@ -55,6 +59,7 @@ export class ChatController {
   }
 
   @Post('conversations')
+  @Authenticated()
   @HttpCode(200)
   open(
     @CurrentTenant() tenantId: string,
@@ -65,6 +70,7 @@ export class ChatController {
   }
 
   @Get('conversations/:id/messages')
+  @Authenticated()
   messages(
     @CurrentTenant() tenantId: string,
     @CurrentUser() user: JwtPayload,
@@ -75,6 +81,7 @@ export class ChatController {
   }
 
   @Post('conversations/:id/messages')
+  @Authenticated()
   send(
     @CurrentTenant() tenantId: string,
     @CurrentUser() user: JwtPayload,
@@ -85,6 +92,7 @@ export class ChatController {
   }
 
   @Post('conversations/:id/read')
+  @Authenticated()
   @HttpCode(200)
   read(
     @CurrentTenant() tenantId: string,

@@ -39,6 +39,43 @@ export class PrismaService
 
   async onModuleInit() {
     await this.$connect();
+    await this.warnIfPrivileged();
+  }
+
+  async warnIfPrivileged() {
+    try {
+      const [role] = await this.$queryRaw<
+        {
+          name: string;
+          superuser: boolean;
+          bypassRls: boolean;
+          canCreate: boolean;
+          ownsTables: boolean;
+        }[]
+      >`SELECT rolname AS name, rolsuper AS superuser, rolbypassrls AS "bypassRls",
+          has_schema_privilege('public', 'CREATE') AS "canCreate",
+          EXISTS (SELECT 1 FROM pg_tables
+                  WHERE schemaname = 'public' AND tableowner = current_user) AS "ownsTables"
+        FROM pg_roles WHERE rolname = current_user`;
+      if (!role) return;
+
+      // El dueño de una tabla también se saltea sus políticas de filas.
+      const reasons = [
+        role.superuser && 'es superusuario',
+        role.bypassRls && 'se saltea las políticas de filas',
+        role.ownsTables && 'es dueño de las tablas',
+        role.canCreate && 'puede crear tablas',
+      ].filter(Boolean);
+      if (reasons.length === 0) return;
+
+      this.logger.warn(
+        `La app se conecta como "${role.name}", que ${reasons.join(', ')}. Crear un usuario sin privilegios con pnpm db:app-role.`,
+      );
+    } catch (error) {
+      this.logger.warn(
+        `No se pudieron revisar los privilegios del usuario de la base: ${(error as Error).message}`,
+      );
+    }
   }
 
   async onModuleDestroy() {

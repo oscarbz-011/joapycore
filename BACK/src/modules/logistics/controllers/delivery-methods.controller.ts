@@ -10,7 +10,10 @@ import {
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CurrentTenant } from '../../../common/decorators/current-tenant.decorator';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
-import { Permissions } from '../../../common/decorators/permissions.decorator';
+import {
+  Authenticated,
+  Permissions,
+} from '../../../common/decorators/permissions.decorator';
 import { RequiredModule } from '../../../common/decorators/required-module.decorator';
 import type { JwtPayload } from '../../../common/types/jwt-payload.interface';
 import {
@@ -26,10 +29,8 @@ const actorOf = (user: JwtPayload) => ({
   permissions: user.permissions,
 });
 
-// Varias rutas van sin @Permissions(): las puede usar logística O el vendedor
-// del pedido, y PermissionsGuard solo sabe exigir todos los permisos a la vez.
-// En esos casos la verificación vive en DeliveryMethodsService (mismo criterio
-// que el despacho y el recorrido).
+// Las rutas con @Authenticated() las usa logística o el vendedor del pedido,
+// que puede no tener permisos de logística: decide DeliveryMethodsService.
 @ApiTags('Logistics')
 @ApiBearerAuth()
 @RequiredModule('logistics')
@@ -38,6 +39,7 @@ export class DeliveryMethodsController {
   constructor(private readonly service: DeliveryMethodsService) {}
 
   @Get('by-order/:saleOrderId')
+  @Authenticated()
   @ApiOperation({
     summary: 'Entrega de un pedido (logística o el vendedor del pedido)',
   })
@@ -50,6 +52,7 @@ export class DeliveryMethodsController {
   }
 
   @Post(':id/method')
+  @Authenticated()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Elegir envío a domicilio o retiro en sucursal',
@@ -64,6 +67,7 @@ export class DeliveryMethodsController {
   }
 
   @Post(':id/pickup')
+  @Authenticated()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Registrar que el cliente de la venta retiró el pedido',
@@ -77,6 +81,7 @@ export class DeliveryMethodsController {
   }
 
   @Post(':id/seller-request')
+  @Authenticated()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'El vendedor pide llevar el pedido en persona',
@@ -121,6 +126,7 @@ export class DeliveryMethodsController {
   }
 
   @Post(':id/seller-delivered')
+  @Authenticated()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'El vendedor autorizado marca el pedido como entregado',

@@ -12,7 +12,10 @@ import {
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CurrentTenant } from '../../../common/decorators/current-tenant.decorator';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
-import { Permissions } from '../../../common/decorators/permissions.decorator';
+import {
+  AnyPermission,
+  Permissions,
+} from '../../../common/decorators/permissions.decorator';
 import { RequiredModule } from '../../../common/decorators/required-module.decorator';
 import type { JwtPayload } from '../../../common/types/jwt-payload.interface';
 import {
@@ -34,10 +37,8 @@ const actorOf = (user: JwtPayload) => ({
   permissions: user.permissions,
 });
 
-// Iniciar la ruta y registrar una entrega no realizada van sin
-// @Permissions(): los hace logística O el repartidor de la ruta, y
-// PermissionsGuard solo sabe exigir todos los permisos a la vez. La
-// verificación vive en DeliveryRoutesService.
+// Las rutas con logistics:track las usa solo el repartidor de la ruta: lo
+// revisa DeliveryRoutesService.
 @ApiTags('Logistics')
 @ApiBearerAuth()
 @RequiredModule('logistics')
@@ -92,6 +93,7 @@ export class DeliveryRoutesController {
   }
 
   @Post('stops/:noteId/fail')
+  @AnyPermission('logistics:manage', 'logistics:track')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary:
@@ -126,6 +128,7 @@ export class DeliveryRoutesController {
   }
 
   @Post(':id/start')
+  @AnyPermission('logistics:manage', 'logistics:track')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Iniciar la ruta (logística o el repartidor de la ruta)',
@@ -140,6 +143,7 @@ export class DeliveryRoutesController {
   }
 
   @Post(':id/checkpoint')
+  @AnyPermission('logistics:manage', 'logistics:track')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary:
@@ -154,9 +158,9 @@ export class DeliveryRoutesController {
     return this.service.markCheckpoint(tenantId, id, dto, actorOf(user));
   }
 
-  // La parada de un cliente: todos sus pedidos de la ruta a la vez. Sin
-  // @Permissions() por lo mismo que iniciar la ruta: logística o su repartidor.
+  // La parada de un cliente: todos sus pedidos de la ruta a la vez.
   @Post(':id/customers/:customerId/deliver')
+  @AnyPermission('logistics:manage', 'logistics:track')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Entregar todos los pedidos en camino de un cliente en la ruta',
@@ -178,6 +182,7 @@ export class DeliveryRoutesController {
   }
 
   @Post(':id/customers/:customerId/checkpoint')
+  @AnyPermission('logistics:manage', 'logistics:track')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Marcar un hito en todos los pedidos de un cliente en la ruta',
@@ -199,6 +204,7 @@ export class DeliveryRoutesController {
   }
 
   @Post(':id/customers/:customerId/fail')
+  @AnyPermission('logistics:manage', 'logistics:track')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary:

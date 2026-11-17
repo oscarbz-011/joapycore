@@ -901,10 +901,8 @@ export class SaleOrdersService implements SalesGateway {
   // queda vinculado a la Casa Matriz automáticamente), cae a la sucursal
   // principal del tenant — así funciona sin fricción con una sola sucursal
   // y sin romper nada cuando se agregan más.
-  // POST /sales/orders crea tanto pedidos reales como presupuestos — mismo
-  // problema que documents.service.ts (una ruta, dos permisos distintos
-  // según un campo del body) resuelto con el mismo patrón: sin decorador
-  // estático en el controller, se decide acá.
+  // La ruta acepta sales:create o sales:quotes:manage; acá se exige el que
+  // corresponde al tipo de orden.
   private assertCanCreateOrder(
     orderType: string | undefined,
     userPermissions: string[],

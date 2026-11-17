@@ -11,7 +11,10 @@ import {
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CurrentTenant } from '../../../common/decorators/current-tenant.decorator';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
-import { Permissions } from '../../../common/decorators/permissions.decorator';
+import {
+  AnyPermission,
+  Permissions,
+} from '../../../common/decorators/permissions.decorator';
 import { RequiredModule } from '../../../common/decorators/required-module.decorator';
 import type { JwtPayload } from '../../../common/types/jwt-payload.interface';
 import { AdjustOrderDto } from '../dto/adjust-order.dto';
@@ -33,10 +36,9 @@ import { SaleOrdersService } from '../services/sale-orders.service';
 export class SaleOrdersController {
   constructor(private readonly saleOrdersService: SaleOrdersService) {}
 
-  // Sin @Permissions estático: con sales:read se listan todas las órdenes;
-  // con solo sales:quotes:read, únicamente los presupuestos (la pantalla de
-  // Presupuestos se habilita con ese permiso y antes recibía 403).
+  // Con solo sales:quotes:read se listan únicamente los presupuestos.
   @Get()
+  @AnyPermission('sales:read', 'sales:quotes:read')
   @ApiOperation({ summary: 'Listar órdenes de venta' })
   findAll(@CurrentTenant() tenantId: string, @CurrentUser() user: JwtPayload) {
     const canManage = user.permissions.includes('sales:manage');
@@ -58,6 +60,7 @@ export class SaleOrdersController {
   }
 
   @Get(':id')
+  @AnyPermission('sales:read', 'sales:quotes:read')
   @ApiOperation({ summary: 'Obtener orden de venta por ID' })
   findOne(
     @CurrentTenant() tenantId: string,
@@ -71,12 +74,10 @@ export class SaleOrdersController {
     );
   }
 
-  // create() no declara @Permissions() a nivel de ruta a propósito: la misma
-  // ruta crea tanto pedidos reales como presupuestos (discriminado por
-  // dto.orderType, no por URL), y cada uno requiere un permiso distinto
-  // (sales:create vs sales:quotes:manage) — el chequeo se hace dentro del
-  // service, mismo criterio que documents.service.ts para create/update.
+  // Crea pedidos y presupuestos, que piden permisos distintos: la ruta exige
+  // uno de los dos y el servicio, el que corresponde a dto.orderType.
   @Post()
+  @AnyPermission('sales:create', 'sales:quotes:manage')
   @ApiOperation({ summary: 'Crear orden de venta' })
   create(
     @CurrentTenant() tenantId: string,
