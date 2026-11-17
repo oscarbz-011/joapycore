@@ -16,6 +16,7 @@ import { LogisticsOnSaleCompletedListener } from './events/logistics-on-sale-com
 import { LogisticsRouteProgressListener } from './events/logistics-route-progress.listener';
 import { LogisticsOnModuleActivatedListener } from './events/logistics-on-module-activated.listener';
 import { TenantsModule } from '../../tenants/tenants.module';
+import { TenantContext } from '../../prisma/tenant-context';
 
 // Orden de controllers importa: DeliveryTrackingController declara rutas
 // literales bajo /logistics/deliveries/* (p.ej. GET .../mine) que Express
@@ -57,7 +58,9 @@ export class LogisticsModule implements OnApplicationBootstrap {
     try {
       // Cubre una activación cuya sincronización falló y pedidos de antes de
       // que existiera la nota. Solo tenants con Logística activa.
-      const { closed, created } = await this.deliveryNotes.syncWithSales();
+      const { closed, created } = await TenantContext.runAsPlatform(() =>
+        this.deliveryNotes.syncWithSales(),
+      );
       if (closed + created > 0) {
         this.logger.log(
           `Delivery notes synced: ${created} created, ${closed} closed`,

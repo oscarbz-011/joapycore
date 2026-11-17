@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { BUSINESS_TIMEZONE } from '../../common/utils/business-date.util';
 import { RefreshTokensRepository } from '../repositories/refresh-tokens.repository';
+import { TenantContext } from '../../prisma/tenant-context';
 
 // Cuánto se conservan los tokens ya inservibles. Los revocados recientes se
 // necesitan para detectar reuso (ver AuthService.refresh); pasado este plazo
@@ -22,7 +23,15 @@ export class RefreshTokensCleanupService {
   ) {}
 
   @Cron(CronExpression.EVERY_DAY_AT_3AM, { timeZone: BUSINESS_TIMEZONE })
-  async purgeStaleTokens(now: Date = new Date()): Promise<number> {
+  purgeStaleTokens(now: Date = new Date()): Promise<number> {
+    return TenantContext.runAsPlatform(() =>
+      this.purgeStaleTokensAsPlatform(now),
+    );
+  }
+
+  private async purgeStaleTokensAsPlatform(
+    now: Date = new Date(),
+  ): Promise<number> {
     const cutoff = new Date(now.getTime() - RETENTION_DAYS * 86_400_000);
     const { count } = await this.refreshTokensRepository.deleteStale(cutoff);
     if (count > 0) {

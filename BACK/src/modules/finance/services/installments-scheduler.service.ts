@@ -5,6 +5,7 @@ import { InstallmentsRepository } from '../repositories/installments.repository'
 import { LoansRepository } from '../repositories/loans.repository';
 import { InterestCalcService } from './interest-calc.service';
 import { BUSINESS_TIMEZONE } from '../../../common/utils/business-date.util';
+import { TenantContext } from '../../../prisma/tenant-context';
 
 function toNum(value: unknown): number {
   if (typeof value === 'object' && value !== null && 'toNumber' in value) {
@@ -25,7 +26,13 @@ export class InstallmentsSchedulerService {
   ) {}
 
   @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT, { timeZone: BUSINESS_TIMEZONE })
-  async markOverdueInstallments() {
+  markOverdueInstallments() {
+    return TenantContext.runAsPlatform(() =>
+      this.markOverdueInstallmentsAsPlatform(),
+    );
+  }
+
+  private async markOverdueInstallmentsAsPlatform() {
     const result = await this.installmentsRepository.markAllOverdue();
     if (result.count > 0) {
       this.logger.log(`Marked ${result.count} installment(s) as OVERDUE`);
@@ -40,7 +47,13 @@ export class InstallmentsSchedulerService {
   // %) se refleja correctamente la próxima corrida sin arrastrar valores
   // viejos.
   @Cron(CronExpression.EVERY_DAY_AT_1AM, { timeZone: BUSINESS_TIMEZONE })
-  async recalculateInterestCharges() {
+  recalculateInterestCharges() {
+    return TenantContext.runAsPlatform(() =>
+      this.recalculateInterestChargesAsPlatform(),
+    );
+  }
+
+  private async recalculateInterestChargesAsPlatform() {
     // Si el proceso no estaba vivo a medianoche, la corrida de la 01:00 no
     // debe depender de que markOverdueInstallments haya ocurrido antes.
     await this.installmentsRepository.markAllOverdue();
@@ -134,7 +147,13 @@ export class InstallmentsSchedulerService {
   // (REPORTED/EXCLUDED) — la detección automática solo alimenta la cola de
   // revisión, un analista decide qué hacer con cada caso.
   @Cron(CronExpression.EVERY_DAY_AT_1AM, { timeZone: BUSINESS_TIMEZONE })
-  async detectDelinquentCustomers() {
+  detectDelinquentCustomers() {
+    return TenantContext.runAsPlatform(() =>
+      this.detectDelinquentCustomersAsPlatform(),
+    );
+  }
+
+  private async detectDelinquentCustomersAsPlatform() {
     const configs = await this.sources.findDelinquencyConfigs();
     if (!configs.length) return;
 

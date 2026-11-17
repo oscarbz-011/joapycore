@@ -9,6 +9,7 @@ import { Interval } from '@nestjs/schedule';
 import { Queue, Worker, type ConnectionOptions } from 'bullmq';
 import { CommunicationsRepository } from './communications.repository';
 import { CommunicationsService } from './communications.service';
+import { TenantContext } from '../prisma/tenant-context';
 
 const QUEUE = 'communications-email';
 type DeliveryJob = { tenantId: string; messageId: string };
@@ -79,9 +80,9 @@ export class CommunicationsWorker implements OnModuleInit, OnModuleDestroy {
           typeof job.data.messageId !== 'string'
         )
           throw new Error('Job inválido');
-        await this.communications.process(
-          job.data.tenantId,
-          job.data.messageId,
+        const { tenantId, messageId } = job.data;
+        await TenantContext.run(tenantId, () =>
+          this.communications.process(tenantId, messageId),
         );
       },
       { connection, concurrency: 3, prefix },
@@ -102,7 +103,11 @@ export class CommunicationsWorker implements OnModuleInit, OnModuleDestroy {
   // PostgreSQL is the durable outbox. Redis can be flushed/restarted without
   // losing queued intent; each dispatch is safe under multiple API instances.
   @Interval(10_000)
-  async dispatchDue() {
+  dispatchDue() {
+    return TenantContext.runAsPlatform(() => this.dispatchDueAsPlatform());
+  }
+
+  private async dispatchDueAsPlatform() {
     if (!this.queue || this.scanning) return;
     this.scanning = true;
     try {

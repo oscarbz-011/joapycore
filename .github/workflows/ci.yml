@@ -97,8 +97,10 @@ jobs:
           pnpm exec prisma db seed
           pnpm seed:demo
 
-      - name: Usuario de la app sin privilegios
-        run: pnpm db:app-role
+      - name: Seguridad de filas y usuario de la app sin privilegios
+        run: |
+          pnpm db:tenant-rls
+          pnpm db:app-role
 
       - name: Tests de integración (PostgreSQL)
         run: pnpm test:int
@@ -112,6 +114,7 @@ jobs:
         run: |
           docker exec "${{ job.services.postgres.id }}" createdb -U joapycore joapycore_comms_test_ci
           pnpm exec prisma db push
+          pnpm db:tenant-rls
           pnpm db:app-role
           pnpm test:int --testPathPatterns=communications.int-spec
 

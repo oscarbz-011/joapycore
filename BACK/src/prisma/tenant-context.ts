@@ -2,6 +2,7 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 
 interface TenantStore {
   tenantId?: string;
+  allTenants?: boolean;
 }
 
 const storage = new AsyncLocalStorage<TenantStore>();
@@ -24,10 +25,21 @@ export const TenantContext = {
     return storage.run({ tenantId }, async () => await fn());
   },
 
+  /**
+   * Para lo que recorre todas las empresas o se resuelve antes de conocerla
+   * (crons, outbox, login): la seguridad de filas no filtra.
+   */
+  runAsPlatform<T>(fn: () => Promise<T>): Promise<T> {
+    return storage.run({ allTenants: true }, async () => await fn());
+  },
+
   set(tenantId: string): void {
     const store = storage.getStore();
     if (!store) {
       throw new Error('No hay un contexto de empresa abierto');
+    }
+    if (store.allTenants) {
+      throw new Error('El contexto de plataforma no lleva empresa');
     }
     if (store.tenantId && store.tenantId !== tenantId) {
       throw new Error('El contexto ya pertenece a otra empresa');
@@ -37,5 +49,9 @@ export const TenantContext = {
 
   get(): string | undefined {
     return storage.getStore()?.tenantId;
+  },
+
+  isPlatform(): boolean {
+    return storage.getStore()?.allTenants === true;
   },
 };

@@ -69,14 +69,14 @@ pnpm lint           # ESLint con auto-fix
 
 La app no se conecta como dueño de las tablas ni como superusuario: un superusuario puede borrar tablas y se saltea cualquier política de filas. Hay dos usuarios:
 
-- **Dueño** (`MIGRATE_DATABASE_URL`): crea y modifica las tablas. Solo lo usan las migraciones y `pnpm db:app-role`.
+- **Dueño** (`MIGRATE_DATABASE_URL`): crea y modifica las tablas. Solo lo usan las migraciones, `pnpm db:tenant-rls` y `pnpm db:app-role`.
 - **App** (`DATABASE_URL`): lee y escribe datos en todas las tablas de `public` menos `_prisma_migrations`. No puede crear tablas, bases ni usuarios.
 
 `pnpm db:app-role` crea el usuario de la app con el nombre y la clave de `DATABASE_URL`, o lo actualiza si ya existe. Si el usuario ya existía con otros permisos o heredaba otros roles, se los quita. Se puede correr las veces que haga falta, y falla si `DATABASE_URL` y `MIGRATE_DATABASE_URL` apuntan a bases distintas o usan el mismo usuario.
 
 Las tablas que creen las migraciones futuras ya nacen con permisos, siempre que las migraciones corran con el mismo dueño. Por eso, **después de cada `prisma migrate deploy` se vuelve a correr `pnpm db:app-role`**: la tabla de historial de migraciones también nace con permisos y el script es el que se los quita.
 
-Al arrancar, el backend avisa en el log si `DATABASE_URL` usa un superusuario, un usuario que se saltea las políticas de filas, el dueño de las tablas o un usuario que puede crearlas.
+Al arrancar, el backend avisa en el log si `DATABASE_URL` usa un superusuario, un usuario que se saltea las políticas de filas, el dueño de las tablas o un usuario que puede crearlas. Con `NODE_ENV=production` no arranca.
 
 ### Pasar un entorno al usuario de la app
 
@@ -87,7 +87,7 @@ Al arrancar, el backend avisa en el log si `DATABASE_URL` usa un superusuario, u
    DATABASE_URL="postgresql://joapycore_app:<clave>@localhost:5435/joapycore"
    ```
 
-2. Correr `pnpm db:app-role`. Repetirlo después de cada `prisma migrate deploy`.
+2. Correr `pnpm db:tenant-rls` y `pnpm db:app-role`. Repetirlos después de cada `prisma migrate deploy`.
 3. Reiniciar el backend. El aviso del log ya no aparece.
 
 En producción:
@@ -96,6 +96,23 @@ En producción:
 - Con PostgreSQL 14 o anterior, cualquier usuario puede crear tablas en `public`. En ese caso `pnpm db:app-role` falla y avisa. Se resuelve una vez, como administrador: `REVOKE CREATE ON SCHEMA public FROM PUBLIC;`.
 - La clave del usuario de la app viaja en la sentencia `ALTER ROLE`. Si el servidor registra las sentencias DDL (`log_statement`), la clave queda en su log: conviene correr el script con ese registro apagado.
 - El proceso de la app recibe solo `DATABASE_URL`. `MIGRATE_DATABASE_URL` queda en el paso de despliegue que corre `prisma migrate deploy`.
+
+## Seguridad de filas por empresa
+
+Además de filtrar por `tenantId` en cada consulta, Postgres no deja ver ni escribir filas de otra empresa:
+
+- Toda tabla con columna `tenant_id` tiene la política `tenant_isolation`. Solo quedan fuera `tenants`, `permissions` (catálogo global) y `refresh_tokens` (se buscan antes de saber la empresa).
+- La empresa viaja en cada conexión: cada pedido HTTP abre un contexto (`TenantContext`), la autenticación le pone la empresa del token y `TenantPool` la fija en la conexión (`app.tenant_id`) antes de cada consulta o transacción.
+- Sin empresa en el contexto no se ve nada. Lo que no nace de un pedido declara su contexto:
+  - `TenantContext.run(tenantId, fn)`: trabajos de una empresa, como los del worker de comunicaciones o los consumidores del outbox.
+  - `TenantContext.runAsPlatform(fn)`: lo que recorre todas las empresas o se resuelve antes de conocerla, como crons, el despacho del outbox, login, registro y refresh.
+- El dueño de las tablas no queda sujeto a las políticas: migraciones y scripts de mantenimiento ven todo.
+
+`pnpm db:tenant-rls` activa la seguridad de filas y recrea la política en toda tabla con `tenant_id`. Es idempotente y se corre **después de cada `prisma migrate deploy`**, antes de `pnpm db:app-role`; así una tabla nueva queda protegida sin escribir SQL a mano. Al arrancar, el backend avisa si alguna quedó sin protección, y con `NODE_ENV=production` no arranca.
+
+Si hiciera falta apagarla de urgencia, `TENANT_RLS=off` hace que la app trabaje en modo plataforma: las políticas siguen ahí pero dejan pasar todo. El backend lo marca como error en el log al arrancar.
+
+En desarrollo, mientras `DATABASE_URL` sea un superusuario, las políticas no se aplican (ver [Usuario de la base](#usuario-de-la-base)).
 
 ## Estructura
 
