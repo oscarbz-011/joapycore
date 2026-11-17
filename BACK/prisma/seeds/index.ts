@@ -1,5 +1,6 @@
 import 'dotenv/config';
-import { createPrisma, DEMO_PASSWORD } from './helpers';
+import { demoPassword } from '../../src/prisma/demo-password';
+import { createPrisma } from './helpers';
 import { seedElectrodomesticos } from './electrodomesticos.seed';
 import { seedFerreteria } from './ferreteria.seed';
 import { seedSupermercado } from './supermercado.seed';
@@ -11,6 +12,7 @@ import { seedDefault } from './default.seed';
 // catálogo de permisos, ver prisma/seed.ts). No se ejecuta automáticamente
 // en `prisma migrate dev`.
 async function main() {
+  demoPassword(process.env);
   const prisma = createPrisma();
 
   const seeders = [
@@ -34,7 +36,9 @@ async function main() {
   }
 
   console.log('\nResumen:');
-  console.log(`Password de todos los owners de demo: ${DEMO_PASSWORD}\n`);
+  console.log(
+    'Todos los owners de demo entran con la clave de DEMO_PASSWORD.\n',
+  );
   for (const r of results) {
     console.log(
       `  ${r.industry.padEnd(16)} ${r.ownerEmail}${r.skipped ? '  (ya existía)' : ''}`,
