@@ -86,6 +86,8 @@ jobs:
       # (la shadow database falla en una migración vieja), así que en CI el
       # schema se crea directo desde schema.prisma.
       - name: Crear schema y datos de prueba
+        env:
+          DEMO_PASSWORD: ci-demo-password
         run: |
           pnpm exec prisma db push
           pnpm exec prisma db seed
