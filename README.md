@@ -59,8 +59,11 @@ No hay Redis ni BullMQ: los procesos asíncronos son eventos en memoria (`@nestj
 ### 1. Levantar infraestructura
 
 ```bash
+cp .env.example .env   # elegir las claves de Postgres y MinIO
 docker compose up -d
 ```
+
+Los servicios quedan accesibles solo desde esta máquina (`127.0.0.1`).
 
 ### 2. Backend
 

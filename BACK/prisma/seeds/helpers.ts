@@ -6,14 +6,10 @@ import {
   FALLBACK_MODULES,
   MODULE_TEMPLATES,
 } from '../../src/common/constants/modules.constant';
+import { demoPassword } from '../../src/prisma/demo-password';
 
 const SALT_ROUNDS = 10;
 const OWNER_ROLE_NAME = 'Owner';
-
-// Compartida por todos los tenants de demo — solo para desarrollo local,
-// nunca para producción (mismo criterio que las cuentas QA usadas en toda
-// la sesión de verificación de este proyecto).
-export const DEMO_PASSWORD = 'Demo1234!';
 
 export function createPrisma() {
   const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
@@ -56,7 +52,10 @@ export async function createDemoTenant(
   prisma: PrismaClient,
   input: DemoTenantInput,
 ) {
-  const passwordHash = await bcrypt.hash(DEMO_PASSWORD, SALT_ROUNDS);
+  const passwordHash = await bcrypt.hash(
+    demoPassword(process.env),
+    SALT_ROUNDS,
+  );
   const activeModules = MODULE_TEMPLATES[input.industry] ?? FALLBACK_MODULES;
 
   return prisma.$transaction(async (tx) => {

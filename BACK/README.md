@@ -26,7 +26,8 @@ API REST del ERP SaaS modular construido con NestJS. Arquitectura multi-tenant d
 # 1. Copiar variables de entorno
 cp .env.example .env
 
-# 2. Levantar la base de datos (desde la raíz del monorepo)
+# 2. Levantar la base de datos (desde la raíz del monorepo, con su .env
+#    copiado de .env.example; DATABASE_URL usa esa misma clave)
 docker compose up -d
 
 # 3. Instalar dependencias

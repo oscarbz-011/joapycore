@@ -380,8 +380,8 @@
   docker compose exec -T postgres dropdb --if-exists -U joapycore joapycore_comms_test_local
   docker compose exec -T postgres createdb -U joapycore joapycore_comms_test_local
   Set-Location BACK
-  $env:DATABASE_URL='postgresql://joapycore:joapycore@localhost:5435/joapycore_comms_test_local'
-  $env:COMMUNICATIONS_TEST_DATABASE_URL='postgresql://joapycore:joapycore@localhost:5435/joapycore_comms_test_local'
+  $env:DATABASE_URL='postgresql://<usuario>:<clave>@localhost:5435/joapycore_comms_test_local'
+  $env:COMMUNICATIONS_TEST_DATABASE_URL='postgresql://<usuario>:<clave>@localhost:5435/joapycore_comms_test_local'
   $env:COMMUNICATIONS_TEST_REDIS_URL='redis://localhost:6379'
   pnpm exec prisma db push
   pnpm test:int --testPathPatterns=communications.int-spec
@@ -451,7 +451,7 @@
   docker compose exec -T postgres dropdb --if-exists -U joapycore joapycore_recovery_test
   docker compose exec -T postgres createdb -U joapycore joapycore_recovery_test
   Set-Location BACK
-  $env:DATABASE_URL='postgresql://joapycore:joapycore@localhost:5435/joapycore_recovery_test'
+  $env:DATABASE_URL='postgresql://<usuario>:<clave>@localhost:5435/joapycore_recovery_test'
   pnpm exec prisma db push
   pnpm test:int
   pnpm test:e2e

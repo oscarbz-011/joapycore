@@ -91,6 +91,7 @@ jobs:
       - name: Crear schema y datos de prueba
         env:
           DATABASE_URL: ${{ env.MIGRATE_DATABASE_URL }}
+          DEMO_PASSWORD: ci-demo-password
         run: |
           pnpm exec prisma db push
           pnpm exec prisma db seed
