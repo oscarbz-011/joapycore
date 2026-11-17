@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { JwtPayload } from '../../common/types/jwt-payload.interface';
+import { TenantContext } from '../../prisma/tenant-context';
 import {
   issuedBeforeCutoff,
   SessionStateCache,
@@ -24,6 +25,8 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   // La firma del token prueba quién es; el estado vigente (activo, empresa
   // activa, permisos actuales) sale de la base con caché corto.
   async validate(payload: JwtPayload & { iat?: number }): Promise<JwtPayload> {
+    // La firma prueba la empresa: desde acá las consultas salen con ella.
+    TenantContext.set(payload.tenantId);
     const state = await this.sessionState.get(payload.sub);
     if (!state || !state.userActive) {
       throw new UnauthorizedException('La sesión ya no es válida');

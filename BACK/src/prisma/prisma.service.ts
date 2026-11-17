@@ -7,7 +7,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '@prisma/client';
-import { Pool } from 'pg';
+import { TenantPool } from './tenant-pool';
 
 @Injectable()
 export class PrismaService
@@ -15,10 +15,10 @@ export class PrismaService
   implements OnModuleInit, OnModuleDestroy
 {
   private readonly logger = new Logger(PrismaService.name);
-  private readonly pool: Pool;
+  private readonly pool: TenantPool;
 
   constructor(configService: ConfigService) {
-    const pool = new Pool({
+    const pool = new TenantPool({
       connectionString: configService.get<string>('DATABASE_URL'),
       // Release idle connections so stale ones don't accumulate after a DB restart
       idleTimeoutMillis: 10_000,

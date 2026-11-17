@@ -5,6 +5,7 @@ import helmet from 'helmet';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { corsOrigin } from './config/security.config';
 import { AppValidationPipe } from './common/pipes/app-validation.pipe';
+import { TenantContext } from './prisma/tenant-context';
 
 /**
  * Middlewares y configuración global de la app HTTP. Vive fuera de main.ts
@@ -30,6 +31,11 @@ export function configureApp(app: NestExpressApplication): void {
     crossOriginResourcePolicy: { policy: 'cross-origin' },
   });
   const docsHelmet = helmet({ contentSecurityPolicy: false });
+  // Cada pedido corre en su propio contexto de empresa, que completa la
+  // autenticación.
+  app.use((_req: Request, _res: Response, next: NextFunction) =>
+    TenantContext.runRequest(next),
+  );
   app.use((req: Request, res: Response, next: NextFunction) =>
     req.path.startsWith('/docs')
       ? docsHelmet(req, res, next)
