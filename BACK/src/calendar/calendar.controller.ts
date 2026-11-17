@@ -14,6 +14,7 @@ import {
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { CurrentTenant } from '../common/decorators/current-tenant.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { Authenticated } from '../common/decorators/permissions.decorator';
 import type { JwtPayload } from '../common/types/jwt-payload.interface';
 import {
   CalendarEventDto,
@@ -37,6 +38,7 @@ export class CalendarController {
   constructor(private readonly calendar: CalendarService) {}
 
   @Get('events')
+  @Authenticated()
   list(
     @CurrentTenant() tenantId: string,
     @CurrentUser() user: JwtPayload,
@@ -46,6 +48,7 @@ export class CalendarController {
   }
 
   @Post('events')
+  @Authenticated()
   create(
     @CurrentTenant() tenantId: string,
     @CurrentUser() user: JwtPayload,
@@ -55,6 +58,7 @@ export class CalendarController {
   }
 
   @Get('events/:id')
+  @Authenticated()
   find(
     @CurrentTenant() tenantId: string,
     @CurrentUser() user: JwtPayload,
@@ -64,6 +68,7 @@ export class CalendarController {
   }
 
   @Patch('events/:id')
+  @Authenticated()
   update(
     @CurrentTenant() tenantId: string,
     @CurrentUser() user: JwtPayload,
@@ -74,6 +79,7 @@ export class CalendarController {
   }
 
   @Delete('events/:id')
+  @Authenticated()
   remove(
     @CurrentTenant() tenantId: string,
     @CurrentUser() user: JwtPayload,

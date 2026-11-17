@@ -4,38 +4,28 @@ import {
   ForbiddenException,
   Injectable,
 } from '@nestjs/common';
-import { Reflector } from '@nestjs/core';
 import { Request } from 'express';
-import { Permission } from '../constants/permissions.constant';
-import { PERMISSIONS_KEY } from '../decorators/permissions.decorator';
 import { JwtPayload } from '../types/jwt-payload.interface';
+import { resolveAccessRule } from './access-rule';
 
+// Niega por defecto: una ruta sin regla declarada no se abre por olvido.
 @Injectable()
 export class PermissionsGuard implements CanActivate {
-  constructor(private readonly reflector: Reflector) {}
-
   canActivate(context: ExecutionContext): boolean {
-    const required = this.reflector.getAllAndOverride<Permission[]>(
-      PERMISSIONS_KEY,
-      [context.getHandler(), context.getClass()],
-    );
+    const rule = resolveAccessRule(context.getHandler(), context.getClass());
+    if (!rule) throw new ForbiddenException('Insufficient permissions');
 
-    if (!required || required.length === 0) {
-      return true;
-    }
+    if (rule.kind === 'public' || rule.kind === 'authenticated') return true;
 
-    const request = context
-      .switchToHttp()
-      .getRequest<Request & { user?: JwtPayload }>();
-    const user = request.user;
-    const hasAllPermissions = required.every((permission) =>
-      user?.permissions?.includes(permission),
-    );
+    const granted =
+      context.switchToHttp().getRequest<Request & { user?: JwtPayload }>().user
+        ?.permissions ?? [];
+    const allowed =
+      rule.kind === 'all'
+        ? rule.permissions.every((p) => granted.includes(p))
+        : rule.permissions.some((p) => granted.includes(p));
 
-    if (!hasAllPermissions) {
-      throw new ForbiddenException('Insufficient permissions');
-    }
-
+    if (!allowed) throw new ForbiddenException('Insufficient permissions');
     return true;
   }
 }

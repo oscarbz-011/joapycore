@@ -139,9 +139,8 @@ export class DeliveryTrackingService {
   }
 
   // Además de registrar el checkpoint, esta es la acción de "marcar
-  // entregado" del propio repartidor — evita necesitar un guard con OR de
-  // permisos (PermissionsGuard es AND-only): el controller no lleva
-  // @Permissions(), la verificación vive acá.
+  // entregado" del propio repartidor: con logistics:track tiene que ser el
+  // repartidor asignado.
   async recordTrackingEvent(
     tenantId: string,
     deliveryNoteId: string,

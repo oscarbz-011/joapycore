@@ -22,7 +22,10 @@ import {
 import { memoryStorage } from 'multer';
 import { CurrentTenant } from '../../../common/decorators/current-tenant.decorator';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
-import { Permissions } from '../../../common/decorators/permissions.decorator';
+import {
+  AnyPermission,
+  Permissions,
+} from '../../../common/decorators/permissions.decorator';
 import { RequiredModule } from '../../../common/decorators/required-module.decorator';
 import { CreateDocumentCategoryDto } from '../dto/create-document-category.dto';
 import { CreateDocumentDto } from '../dto/create-document.dto';
@@ -115,13 +118,8 @@ export class DocumentsController {
   }
 
   // ── Documento individual ──────────────────────────────────────────────────
-  // create/update/remove/attachFile/detachFile/sendEmail NO declaran
-  // @Permissions() a nivel de ruta a propósito: la misma ruta sirve tanto
-  // documentos comunes como plantillas (discriminado por isTemplate en el
-  // body/registro, no por URL), y cada uno requiere un permiso distinto
-  // (documents:manage vs documents:templates:manage) — el chequeo se hace
-  // dentro del service, una vez que sabe con cuál de los dos está tratando.
-  // Igual que documents:read, mismo criterio que el canRead() ya existente.
+  // Las escrituras sirven documentos y plantillas, que piden permisos
+  // distintos: la ruta exige uno de los dos y el servicio, el que corresponde.
 
   @Get(':id')
   @Permissions('documents:read')
@@ -135,6 +133,7 @@ export class DocumentsController {
   }
 
   @Post()
+  @AnyPermission('documents:manage', 'documents:templates:manage')
   @ApiOperation({ summary: 'Crear documento' })
   create(
     @CurrentTenant() tenantId: string,
@@ -145,6 +144,7 @@ export class DocumentsController {
   }
 
   @Patch(':id')
+  @AnyPermission('documents:manage', 'documents:templates:manage')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Actualizar documento' })
   update(
@@ -157,6 +157,7 @@ export class DocumentsController {
   }
 
   @Delete(':id')
+  @AnyPermission('documents:manage', 'documents:templates:manage')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Eliminar documento (soft delete)' })
   remove(
@@ -170,6 +171,7 @@ export class DocumentsController {
   // ── Archivo adjunto ──────────────────────────────────────────────────────
 
   @Post(':id/file')
+  @AnyPermission('documents:manage', 'documents:templates:manage')
   @UseInterceptors(
     FileInterceptor('file', {
       storage: memoryStorage(),
@@ -196,6 +198,7 @@ export class DocumentsController {
   }
 
   @Delete(':id/file')
+  @AnyPermission('documents:manage', 'documents:templates:manage')
   @ApiOperation({ summary: 'Quitar el archivo adjunto de un documento' })
   detachFile(
     @CurrentTenant() tenantId: string,
@@ -206,6 +209,7 @@ export class DocumentsController {
   }
 
   @Post(':id/email')
+  @AnyPermission('documents:manage', 'documents:templates:manage')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Enviar el documento adjunto por email' })
   sendEmail(
@@ -224,6 +228,7 @@ export class DocumentsController {
   }
 
   @Post(':id/generate')
+  @AnyPermission('documents:manage', 'documents:templates:manage')
   @ApiOperation({ summary: 'Generar un PDF a partir de una plantilla DOCX' })
   generate(
     @CurrentTenant() tenantId: string,

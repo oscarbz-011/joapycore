@@ -12,6 +12,8 @@ export default defineConfig({
     seed: 'ts-node prisma/seed.ts',
   },
   datasource: {
-    url: env<Env>('DATABASE_URL'),
+    // Las migraciones corren con el dueño de las tablas; la app, con su
+    // propio usuario sin privilegios (pnpm db:app-role).
+    url: process.env.MIGRATE_DATABASE_URL || env<Env>('DATABASE_URL'),
   },
 });

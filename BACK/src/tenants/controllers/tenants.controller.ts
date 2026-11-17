@@ -14,7 +14,10 @@ import {
 import type { Response } from 'express';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CurrentTenant } from '../../common/decorators/current-tenant.decorator';
-import { Permissions } from '../../common/decorators/permissions.decorator';
+import {
+  Authenticated,
+  Permissions,
+} from '../../common/decorators/permissions.decorator';
 import { CreateCreditPlanDto } from '../dto/create-credit-plan.dto';
 import { CreateInterestComponentDto } from '../dto/create-interest-component.dto';
 import { ToggleTenantModuleDto } from '../dto/toggle-tenant-module.dto';
@@ -53,12 +56,14 @@ export class TenantsController {
 
   // Sin permiso propio: todo usuario ve en el menú en qué empresa está.
   @Get('brand')
+  @Authenticated()
   @ApiOperation({ summary: 'Name and logo of the current tenant' })
   getBrand(@CurrentTenant() tenantId: string) {
     return this.tenantsService.brand(tenantId);
   }
 
   @Get('logo')
+  @Authenticated()
   @ApiOperation({ summary: 'Logo image of the current tenant' })
   async getLogo(@CurrentTenant() tenantId: string, @Res() res: Response) {
     const logo = await this.tenantsService.logo(tenantId);
