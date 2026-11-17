@@ -177,6 +177,7 @@ describe('CreditNotesService (PostgreSQL)', () => {
         items: {
           create: [
             {
+              tenantId,
               productId,
               warehouseId,
               quantity: 2,
@@ -199,6 +200,7 @@ describe('CreditNotesService (PostgreSQL)', () => {
         items: {
           create: [
             {
+              tenantId,
               description: 'Heladera',
               quantity: 2,
               unitPrice: 1_100_000,

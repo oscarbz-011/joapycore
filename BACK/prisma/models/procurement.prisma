@@ -199,6 +199,7 @@ model PurchaseOrderStatusChange {
 }
 
 model PurchaseOrderItem {
+  tenantId            String  @map("tenant_id")
   id                  String  @id @default(uuid())
   purchaseOrderId     String  @map("purchase_order_id")
   productId           String  @map("product_id")
@@ -219,6 +220,7 @@ model PurchaseOrderItem {
   purchaseReceiptItems PurchaseReceiptItem[]
 
   @@index([purchaseOrderId])
+  @@index([tenantId])
   @@map("purchase_order_items")
 }
 
@@ -249,6 +251,7 @@ model PurchaseReceipt {
 }
 
 model PurchaseReceiptItem {
+  tenantId            String    @map("tenant_id")
   id                  String    @id @default(uuid())
   purchaseReceiptId   String    @map("purchase_receipt_id")
   purchaseOrderItemId String    @map("purchase_order_item_id")
@@ -269,6 +272,7 @@ model PurchaseReceiptItem {
   invoiceItems      SupplierInvoiceItem[]
 
   @@index([purchaseReceiptId])
+  @@index([tenantId])
   @@map("purchase_receipt_items")
 }
 
@@ -352,6 +356,7 @@ model SupplierInvoice {
 }
 
 model SupplierInvoiceItem {
+  tenantId              String  @map("tenant_id")
   id                    String  @id @default(uuid())
   supplierInvoiceId     String  @map("supplier_invoice_id")
   purchaseReceiptItemId String  @map("purchase_receipt_item_id")
@@ -369,6 +374,7 @@ model SupplierInvoiceItem {
 
   @@index([supplierInvoiceId])
   @@index([purchaseReceiptItemId])
+  @@index([tenantId])
   @@map("supplier_invoice_items")
 }
 

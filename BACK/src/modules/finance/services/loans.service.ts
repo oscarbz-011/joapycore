@@ -242,6 +242,7 @@ export class LoansService {
         collectedById: params.collectedById ?? null,
         items: {
           create: params.items.map((i) => ({
+            tenantId,
             installmentId: i.installmentId,
             installmentNumber: i.installmentNumber,
             amountApplied: i.amountApplied,

@@ -43,6 +43,7 @@ describe('SaleTargetsService (PostgreSQL)', () => {
         orderDate: ORDER_DATE,
         items: {
           create: {
+            tenantId,
             description: 'Línea de prueba',
             quantity: 1,
             unitPrice: amount,

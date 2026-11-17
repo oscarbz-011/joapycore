@@ -8,6 +8,7 @@ paths:
 # Prisma and PostgreSQL
 
 - Scope every tenant-owned query and mutation by `tenantId`, including nested lookups and existence checks. Add a cross-tenant denial test when changing access paths.
+- Every table except `Tenant`, `Permission` and `RefreshToken` has a `tenantId` mapped to `tenant_id`; Postgres row-level security (`pnpm db:tenant-rls`) filters on it. Code that does not run inside an authenticated request (crons, workers, outbox, startup tasks, pre-login lookups) must wrap its work in `TenantContext.run(tenantId, fn)` or, when it spans tenants, `TenantContext.runAsPlatform(fn)`; otherwise its queries see no rows. Prisma promises are lazy: `await` them inside the callback.
 - Use a Prisma transaction when a business invariant spans multiple writes. Keep external I/O outside database transactions.
 - Select only required data and preserve deterministic ordering for pagination and worker batches.
 - Add a new migration for schema changes. Never edit a migration that may have run in another environment and never use `db push` as a production migration strategy.

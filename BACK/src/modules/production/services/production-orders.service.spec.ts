@@ -104,6 +104,7 @@ describe('ProductionOrdersService', () => {
       expect(repository.createItems).toHaveBeenCalledWith(
         [
           {
+            tenantId: 'tenant-1',
             productionOrderId: 'po-1',
             componentId: 'tablero-1',
             plannedQuantity: 6,

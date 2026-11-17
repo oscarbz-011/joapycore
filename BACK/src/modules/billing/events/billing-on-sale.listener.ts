@@ -82,7 +82,7 @@ export class BillingOnSaleListener {
 
       for (const item of order.items) {
         await this.invoicesRepository.createItem(
-          { invoiceId: inv.id, ...toInvoiceItem(item) },
+          { tenantId, invoiceId: inv.id, ...toInvoiceItem(item) },
           tx,
         );
       }

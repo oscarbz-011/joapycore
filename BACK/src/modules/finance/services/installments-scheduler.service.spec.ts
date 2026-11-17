@@ -129,7 +129,7 @@ describe('InstallmentsSchedulerService', () => {
         return Promise.resolve({ count: componentActive ? 0 : 1 });
       });
       installmentsRepo.upsertInterestCharge.mockImplementation(
-        (_installmentId, _componentId, amount) => {
+        (_tenantId, _installmentId, _componentId, amount) => {
           openCharge = amount;
           return Promise.resolve({} as never);
         },
@@ -178,7 +178,7 @@ describe('InstallmentsSchedulerService', () => {
       jest.useFakeTimers().setSystemTime(now);
       let openCharge = 0;
       installmentsRepo.upsertInterestCharge.mockImplementation(
-        (_installmentId, _componentId, amount) => {
+        (_tenantId, _installmentId, _componentId, amount) => {
           openCharge = amount;
           return Promise.resolve({} as never);
         },
@@ -257,6 +257,7 @@ describe('InstallmentsSchedulerService', () => {
         loanId: 'loan-1',
       });
       expect(installmentsRepo.upsertInterestCharge).toHaveBeenCalledWith(
+        TENANT,
         'inst-1',
         'daily-mora',
         3000,
@@ -294,6 +295,7 @@ describe('InstallmentsSchedulerService', () => {
       await service.recalculateInterestCharges();
 
       expect(installmentsRepo.upsertInterestCharge).toHaveBeenCalledWith(
+        TENANT,
         'inst-1',
         'comp-1',
         0,
@@ -333,6 +335,7 @@ describe('InstallmentsSchedulerService', () => {
 
       // 1% diario de 100000 = 1000/día * 5 días = 5000
       expect(installmentsRepo.upsertInterestCharge).toHaveBeenCalledWith(
+        TENANT,
         'inst-1',
         'comp-1',
         5000,
@@ -398,12 +401,14 @@ describe('InstallmentsSchedulerService', () => {
       await service.recalculateInterestCharges();
 
       expect(installmentsRepo.upsertInterestCharge).toHaveBeenCalledWith(
+        TENANT,
         'inst-1',
         'admin-fee',
         50_000,
         4,
       );
       expect(installmentsRepo.upsertInterestCharge).toHaveBeenCalledWith(
+        TENANT,
         'inst-1',
         'mora',
         400_000, // cuarto período iniciado * 10% = 40% de 1.000.000

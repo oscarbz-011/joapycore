@@ -287,6 +287,7 @@ export async function seedElectrodomesticos(prisma: PrismaClient) {
   });
   await prisma.creditPlan.create({
     data: {
+      tenantId: tenant.id,
       creditConfigId: creditConfig.id,
       installments: 6,
       interestRate: 15,

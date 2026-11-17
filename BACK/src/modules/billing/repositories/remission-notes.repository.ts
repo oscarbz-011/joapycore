@@ -229,12 +229,17 @@ export class RemissionNotesRepository {
     data: Omit<Prisma.RemissionNoteUncheckedCreateInput, 'items'>,
     items: Omit<
       Prisma.RemissionNoteItemUncheckedCreateWithoutRemissionNoteInput,
-      'id'
+      'id' | 'tenantId'
     >[],
     client: PrismaClientOrTx,
   ) {
     return client.remissionNote.create({
-      data: { ...data, items: { create: items } },
+      data: {
+        ...data,
+        items: {
+          create: items.map((item) => ({ ...item, tenantId: data.tenantId })),
+        },
+      },
       select: { id: true },
     });
   }

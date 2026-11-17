@@ -228,6 +228,7 @@ model User {
 }
 
 model UserPermission {
+  tenantId     String @map("tenant_id")
   userId       String @map("user_id")
   permissionId String @map("permission_id")
 
@@ -236,6 +237,7 @@ model UserPermission {
 
   @@id([userId, permissionId])
   @@index([permissionId])
+  @@index([tenantId])
   @@map("user_permissions")
 }
 
@@ -265,6 +267,7 @@ model Permission {
 }
 
 model RolePermission {
+  tenantId     String @map("tenant_id")
   roleId       String @map("role_id")
   permissionId String @map("permission_id")
 
@@ -273,18 +276,21 @@ model RolePermission {
 
   @@id([roleId, permissionId])
   @@index([permissionId])
+  @@index([tenantId])
   @@map("role_permissions")
 }
 
 model UserRole {
-  userId String @map("user_id")
-  roleId String @map("role_id")
+  tenantId String @map("tenant_id")
+  userId   String @map("user_id")
+  roleId   String @map("role_id")
 
   user User @relation(fields: [userId], references: [id])
   role Role @relation(fields: [roleId], references: [id])
 
   @@id([userId, roleId])
   @@index([roleId])
+  @@index([tenantId])
   @@map("user_roles")
 }
 
@@ -408,6 +414,7 @@ model SalesConfig {
 }
 
 model CreditPlan {
+  tenantId       String   @map("tenant_id")
   id             String   @id @default(uuid())
   creditConfigId String   @map("credit_config_id")
   installments   Int
@@ -419,6 +426,7 @@ model CreditPlan {
   creditConfig CreditConfig @relation(fields: [creditConfigId], references: [id])
 
   @@unique([creditConfigId, installments])
+  @@index([tenantId])
   @@map("credit_plans")
 }
 
@@ -591,6 +599,7 @@ model OutboxEvent {
 // Resultado de cada consumidor de un evento del outbox: un reintento solo
 // vuelve a llamar a los que fallaron.
 model OutboxDelivery {
+  tenantId    String         @map("tenant_id")
   id          String         @id @default(uuid())
   eventId     String         @map("event_id")
   consumer    String
@@ -604,6 +613,7 @@ model OutboxDelivery {
   event OutboxEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
 
   @@unique([eventId, consumer])
+  @@index([tenantId])
   @@map("outbox_deliveries")
 }
 

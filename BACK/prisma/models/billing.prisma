@@ -259,6 +259,7 @@ model BillingVoidedNumber {
 }
 
 model InvoiceItem {
+  tenantId    String  @map("tenant_id")
   id          String  @id @default(uuid())
   invoiceId   String  @map("invoice_id")
   description String
@@ -280,6 +281,7 @@ model InvoiceItem {
   remissionItems  RemissionNoteItem[]
 
   @@index([invoiceId])
+  @@index([tenantId])
   @@map("invoice_items")
 }
 
@@ -339,6 +341,7 @@ model CreditNote {
 }
 
 model CreditNoteItem {
+  tenantId        String   @map("tenant_id")
   id              String   @id @default(uuid())
   creditNoteId    String   @map("credit_note_id")
   invoiceItemId   String?  @map("invoice_item_id")
@@ -357,6 +360,7 @@ model CreditNoteItem {
 
   @@index([creditNoteId])
   @@index([invoiceItemId])
+  @@index([tenantId])
   @@map("credit_note_items")
 }
 
@@ -518,6 +522,7 @@ model RemissionNote {
 }
 
 model RemissionNoteItem {
+  tenantId         String   @map("tenant_id")
   id               String   @id @default(uuid())
   remissionNoteId  String   @map("remission_note_id")
   productId        String?  @map("product_id")
@@ -536,5 +541,6 @@ model RemissionNoteItem {
 
   @@index([remissionNoteId])
   @@index([invoiceItemId])
+  @@index([tenantId])
   @@map("remission_note_items")
 }

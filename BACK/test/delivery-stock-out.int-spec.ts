@@ -150,6 +150,7 @@ describe('Entrega → descuento de stock (PostgreSQL)', () => {
         status: options.status,
         items: {
           create: {
+            tenantId,
             productId: product.id,
             warehouseId: warehouse.id,
             quantity: 3,

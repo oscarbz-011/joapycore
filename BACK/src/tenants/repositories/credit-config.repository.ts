@@ -63,12 +63,13 @@ export class CreditConfigRepository {
   }
 
   createPlan(
+    tenantId: string,
     creditConfigId: string,
     installments: number,
     interestRate: number,
   ) {
     return this.prisma.creditPlan.create({
-      data: { creditConfigId, installments, interestRate },
+      data: { tenantId, creditConfigId, installments, interestRate },
     });
   }
 

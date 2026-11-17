@@ -62,13 +62,19 @@ Rama `feature/back/80-least-privilege-access`, worktree `.worktrees/security`.
 
 ## Fase 1 — Aislamiento entre empresas en Postgres (Trello #81)
 
-- `tenantId` en los 20 modelos que no lo tienen, con relleno desde el registro padre. Las tablas globales (`Tenant`, `Permission`) y las que se resuelven antes de conocer la empresa (por ejemplo, `RefreshToken` en el login) quedan fuera, en una lista declarada y revisada una por una.
-- Política en cada tabla de empresa: `tenant_id = current_setting('app.tenant_id')`, con `FORCE ROW LEVEL SECURITY`.
-- La empresa activa viaja a Postgres en cada consulta: contexto por request (AsyncLocalStorage) y una extensión de Prisma que abre la transacción con `set_config('app.tenant_id', …, true)`. Hay que resolver cómo convive con las ~170 transacciones existentes y medir el costo.
-- Crons, outbox y workers declaran la empresa de cada trabajo. Lo que recorre todas las empresas usa un usuario de mantenimiento explícito.
-- El aviso de la fase 0 pasa a ser error: con un usuario que saltea RLS, el backend no arranca en producción.
-- Test de arquitectura: toda tabla con `tenantId` tiene política. Tests de integración: una consulta sin `tenantId` no devuelve filas de otra empresa, y una escritura con otra empresa falla.
-- Se activa por módulo, con una migración para volver atrás.
+**Hecha (2026-11, rama `feature/back/81-tenant-rls`).** Lo implementado y en qué cambió respecto del diseño inicial:
+
+- `tenantId` en las 17 tablas que solo lo heredaban de su padre, con relleno desde el padre. Quedan sin él `Tenant`, `Permission` y `RefreshToken` (`tenant-exempt-tables.ts`). `PlatformEmailMessage` lo tiene opcional, por los correos propios de la plataforma.
+- **La empresa viaja al tomar la conexión, no en una transacción por consulta.** `TenantPool` (subclase de `pg.Pool`) fija `app.tenant_id` cada vez que entrega una conexión, leyéndola de `TenantContext` (AsyncLocalStorage). El adaptador de Prisma pide conexión tanto para consultas sueltas como para transacciones, así que no hizo falta tocar las transacciones existentes. Costo medido: ~1,5 ms por consulta solo cuando la conexión cambia de empresa.
+- **Modo plataforma en vez de un usuario de mantenimiento.** Crons, despacho del outbox, login, registro y refresh corren con `TenantContext.runAsPlatform`, que fija `app.all_tenants = on`. Contra lo que protege esta fase (una consulta que se olvida del `tenantId`) da lo mismo que un segundo usuario, sin otra credencial que desplegar. Los consumidores del outbox y los trabajos del worker de comunicaciones corren con la empresa del evento o del mensaje.
+- **Sin `FORCE ROW LEVEL SECURITY`.** El dueño de las tablas no queda sujeto: si no, una migración de datos futura actualizaría cero filas sin avisar.
+- **Las políticas no van en una migración.** `pnpm db:tenant-rls` activa RLS y recrea la política en toda tabla con columna `tenant_id`. Se corre después de cada `migrate deploy`, como `db:app-role`. Así una tabla nueva queda protegida sola, y el CI (que crea el schema con `db push`) también las tiene. El backend verifica al arrancar que ninguna tabla haya quedado sin protección, y en producción no arranca si falta alguna.
+- Prisma junta en una sola consulta los `findUnique` del mismo tick y los despacha con el contexto del primero que consultó. Con dos empresas en el mismo tick, la segunda recibía `null`. `separateBatchesByTenant` separa las tandas por empresa y despacha cada una con el contexto de quien la pidió. Usa partes internas de Prisma y falla al arrancar si cambian.
+- En producción tampoco arranca con un usuario que se saltea RLS.
+- `TENANT_RLS=off` apaga el filtro sin migraciones, como vuelta atrás de urgencia.
+- Tests:
+  - `tenant-isolation.int-spec.ts`, con el usuario sin privilegios: cada empresa ve solo lo suyo aunque la consulta no filtre; sin empresa no ve nada; escribir o modificar filas de otra empresa falla o no afecta nada; el modo plataforma ve todo.
+  - El resto de las suites de integración y e2e corren con RLS activo. Las de integración arman sus datos en modo plataforma (`test/platform-context.setup.ts`).
 
 ## Fase 2 — Qué filas ve cada usuario dentro de la empresa (Trello #82)
 

@@ -7,7 +7,9 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '@prisma/client';
-import { Pool } from 'pg';
+import { separateBatchesByTenant } from './tenant-batching';
+import { TenantPool } from './tenant-pool';
+import { unprotectedTenantTables } from './tenant-rls';
 
 @Injectable()
 export class PrismaService
@@ -15,10 +17,15 @@ export class PrismaService
   implements OnModuleInit, OnModuleDestroy
 {
   private readonly logger = new Logger(PrismaService.name);
-  private readonly pool: Pool;
+  private readonly pool: TenantPool;
+  private readonly production: boolean;
+  private readonly enforceTenants: boolean;
 
   constructor(configService: ConfigService) {
-    const pool = new Pool({
+    // Interruptor de emergencia: apaga el filtro por empresa sin migraciones.
+    const enforceTenants = configService.get<string>('TENANT_RLS') !== 'off';
+    const pool = new TenantPool({
+      enforceTenants,
       connectionString: configService.get<string>('DATABASE_URL'),
       // Release idle connections so stale ones don't accumulate after a DB restart
       idleTimeoutMillis: 10_000,
@@ -34,15 +41,44 @@ export class PrismaService
     });
 
     super({ adapter: new PrismaPg(pool) });
+    separateBatchesByTenant(this);
     this.pool = pool;
+    this.production = configService.get<string>('NODE_ENV') === 'production';
+    this.enforceTenants = enforceTenants;
   }
 
   async onModuleInit() {
     await this.$connect();
+    if (!this.enforceTenants) {
+      this.logger.error(
+        'TENANT_RLS=off: las consultas no se filtran por empresa en la base.',
+      );
+    }
     await this.warnIfPrivileged();
+    await this.checkTenantRls();
   }
 
+  /** En producción no arranca si una tabla de empresa quedó sin seguridad de filas. */
+  async checkTenantRls() {
+    if (!this.enforceTenants) return;
+    let tables: string[];
+    try {
+      tables = await unprotectedTenantTables(this.pool);
+    } catch (error) {
+      this.logger.warn(
+        `No se pudo revisar la seguridad de filas: ${(error as Error).message}`,
+      );
+      return;
+    }
+    if (tables.length === 0) return;
+    const message = `${tables.length} tabla(s) con tenant_id sin seguridad de filas (${tables.slice(0, 5).join(', ')}${tables.length > 5 ? ', …' : ''}). Correr pnpm db:tenant-rls.`;
+    if (this.production) throw new Error(message);
+    this.logger.warn(message);
+  }
+
+  /** En producción no arranca con un usuario que se saltea la seguridad de filas. */
   async warnIfPrivileged() {
+    let message: string | undefined;
     try {
       const [role] = await this.$queryRaw<
         {
@@ -67,15 +103,15 @@ export class PrismaService
         role.canCreate && 'puede crear tablas',
       ].filter(Boolean);
       if (reasons.length === 0) return;
-
-      this.logger.warn(
-        `La app se conecta como "${role.name}", que ${reasons.join(', ')}. Crear un usuario sin privilegios con pnpm db:app-role.`,
-      );
+      message = `La app se conecta como "${role.name}", que ${reasons.join(', ')}. Crear un usuario sin privilegios con pnpm db:app-role.`;
     } catch (error) {
       this.logger.warn(
         `No se pudieron revisar los privilegios del usuario de la base: ${(error as Error).message}`,
       );
+      return;
     }
+    if (this.production) throw new Error(message);
+    this.logger.warn(message);
   }
 
   async onModuleDestroy() {

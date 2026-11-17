@@ -17,6 +17,7 @@ enum InstallmentStatus {
 // (total o parcialmente) se descuenta acá; el detalle efectivamente cobrado
 // queda snapshoteado en PaymentReceiptItem, que sí es historial permanente.
 model InstallmentInterestCharge {
+  tenantId       String   @map("tenant_id")
   id             String   @id @default(uuid())
   installmentId  String   @map("installment_id")
   componentId    String   @map("component_id")
@@ -28,6 +29,7 @@ model InstallmentInterestCharge {
   component   InterestComponent @relation(fields: [componentId], references: [id])
 
   @@unique([installmentId, componentId])
+  @@index([tenantId])
   @@map("installment_interest_charges")
 }
 
@@ -132,6 +134,7 @@ enum PaymentReceiptItemKind {
 }
 
 model PaymentReceiptItem {
+  tenantId          String                 @map("tenant_id")
   id                String                 @id @default(uuid())
   receiptId         String                 @map("receipt_id")
   installmentId     String                 @map("installment_id")
@@ -147,5 +150,6 @@ model PaymentReceiptItem {
   installment Installment    @relation(fields: [installmentId], references: [id])
 
   @@index([receiptId])
+  @@index([tenantId])
   @@map("payment_receipt_items")
 }

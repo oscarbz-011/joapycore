@@ -126,27 +126,36 @@ export class UsersRepository {
   }
 
   attachRole(
+    tenantId: string,
     userId: string,
     roleId: string,
     client: PrismaClientOrTx = this.prisma,
   ) {
-    return client.userRole.create({ data: { userId, roleId } });
+    return client.userRole.create({ data: { tenantId, userId, roleId } });
   }
 
-  async setRoles(userId: string, roleIds: string[]) {
+  async setRoles(tenantId: string, userId: string, roleIds: string[]) {
     await this.prisma.userRole.deleteMany({ where: { userId } });
     if (roleIds.length > 0) {
       await this.prisma.userRole.createMany({
-        data: roleIds.map((roleId) => ({ userId, roleId })),
+        data: roleIds.map((roleId) => ({ tenantId, userId, roleId })),
       });
     }
   }
 
-  async setPermissions(userId: string, permissionIds: string[]) {
+  async setPermissions(
+    tenantId: string,
+    userId: string,
+    permissionIds: string[],
+  ) {
     await this.prisma.userPermission.deleteMany({ where: { userId } });
     if (permissionIds.length > 0) {
       await this.prisma.userPermission.createMany({
-        data: permissionIds.map((permissionId) => ({ userId, permissionId })),
+        data: permissionIds.map((permissionId) => ({
+          tenantId,
+          userId,
+          permissionId,
+        })),
       });
     }
   }

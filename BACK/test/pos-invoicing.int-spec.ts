@@ -126,7 +126,12 @@ describe('PosInvoicingService (PostgreSQL)', () => {
         total: 220_000,
         items: {
           create: [
-            { description: 'Licuadora', quantity: 2, unitPrice: 110_000 },
+            {
+              tenantId,
+              description: 'Licuadora',
+              quantity: 2,
+              unitPrice: 110_000,
+            },
           ],
         },
       },

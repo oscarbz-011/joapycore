@@ -280,6 +280,7 @@ model DownPayment {
 }
 
 model SaleOrderItem {
+  tenantId    String  @map("tenant_id")
   id          String  @id @default(uuid())
   saleOrderId String  @map("sale_order_id")
   productId   String? @map("product_id") // null = item de servicio / línea libre
@@ -323,6 +324,7 @@ model SaleOrderItem {
 
   @@index([saleOrderId])
   @@index([productId])
+  @@index([tenantId])
   @@map("sale_order_items")
 }
 
@@ -348,6 +350,7 @@ model SaleCombo {
 }
 
 model SaleComboItem {
+  tenantId  String @map("tenant_id")
   id        String @id @default(uuid())
   comboId   String @map("combo_id")
   productId String @map("product_id")
@@ -356,6 +359,7 @@ model SaleComboItem {
   combo   SaleCombo @relation(fields: [comboId], references: [id])
   product Product   @relation(fields: [productId], references: [id])
 
+  @@index([tenantId])
   @@map("sale_combo_items")
 }
 

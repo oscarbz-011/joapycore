@@ -1,5 +1,6 @@
 import { UnauthorizedException } from '@nestjs/common';
 import { TenantStatus, UserStatus } from '@prisma/client';
+import { TenantContext } from '../../prisma/tenant-context';
 import { JwtStrategy } from '../strategies/jwt.strategy';
 import { issuedBeforeCutoff, SessionStateCache } from './session-state.cache';
 
@@ -42,7 +43,12 @@ function setup(
     permissionsResolver as never,
   );
   const config = { getOrThrow: () => 'x'.repeat(32) };
-  const strategy = new JwtStrategy(config as never, cache);
+  const jwt = new JwtStrategy(config as never, cache);
+  // Como en un pedido HTTP: el middleware abre el contexto de empresa.
+  const strategy = {
+    validate: (p: Parameters<JwtStrategy['validate']>[0]) =>
+      TenantContext.runRequest(() => jwt.validate(p)),
+  };
   return { cache, strategy, usersRepository, permissionsResolver };
 }
 

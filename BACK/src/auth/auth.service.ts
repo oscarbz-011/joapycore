@@ -25,6 +25,7 @@ import type { AuditLogEvent } from '../audit/audit-log.event';
 import { PermissionsResolver } from './services/permissions.resolver';
 import { issuedBeforeCutoff } from './services/session-state.cache';
 import { SESSION_INVALIDATE_EVENT } from '../common/events/session-invalidate.event';
+import { TenantContext } from '../prisma/tenant-context';
 
 const SALT_ROUNDS = 10;
 const OWNER_ROLE_NAME = 'Owner';
@@ -47,7 +48,12 @@ export class AuthService {
     private readonly permissionsResolver: PermissionsResolver,
   ) {}
 
-  async register(dto: RegisterDto) {
+  // Crea la empresa: todavía no hay una en el contexto.
+  register(dto: RegisterDto) {
+    return TenantContext.runAsPlatform(() => this.registerAsPlatform(dto));
+  }
+
+  private async registerAsPlatform(dto: RegisterDto) {
     const existing = await this.usersRepository.findByEmail(dto.email);
     if (existing) {
       throw new ConflictException('Email is already registered');
@@ -73,6 +79,7 @@ export class AuthService {
       );
       if (permissions.length > 0) {
         await this.rolesRepository.attachPermissions(
+          tenant.id,
           ownerRole.id,
           permissions.map((permission) => permission.id),
           tx,
@@ -89,7 +96,12 @@ export class AuthService {
         },
         tx,
       );
-      await this.usersRepository.attachRole(createdUser.id, ownerRole.id, tx);
+      await this.usersRepository.attachRole(
+        tenant.id,
+        createdUser.id,
+        ownerRole.id,
+        tx,
+      );
       await this.tenantModulesRepository.seedDefaults(
         tenant.id,
         dto.industry,
@@ -118,7 +130,12 @@ export class AuthService {
     return tokens;
   }
 
-  async login(dto: LoginDto) {
+  // Busca al usuario por correo o nombre antes de saber su empresa.
+  login(dto: LoginDto) {
+    return TenantContext.runAsPlatform(() => this.loginAsPlatform(dto));
+  }
+
+  private async loginAsPlatform(dto: LoginDto) {
     const user = await this.usersRepository.findByEmailOrUsername(
       dto.emailOrUsername,
     );
@@ -166,7 +183,12 @@ export class AuthService {
     return { ...tokens, mustChangePassword: user.mustChangePassword };
   }
 
-  async refresh(dto: RefreshTokenDto) {
+  // Busca el token antes de saber de qué empresa es.
+  refresh(dto: RefreshTokenDto) {
+    return TenantContext.runAsPlatform(() => this.refreshAsPlatform(dto));
+  }
+
+  private async refreshAsPlatform(dto: RefreshTokenDto) {
     const { id, secret } = this.parseRefreshToken(dto.refreshToken);
     const stored = await this.refreshTokensRepository.findById(id);
     if (!stored) {

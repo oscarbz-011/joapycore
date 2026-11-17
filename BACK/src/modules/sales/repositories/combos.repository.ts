@@ -47,6 +47,7 @@ export class CombosRepository {
         discountPercentage: dto.discountPercentage,
         items: {
           create: dto.items.map((i) => ({
+            tenantId,
             productId: i.productId,
             quantity: i.quantity,
           })),
@@ -74,6 +75,7 @@ export class CombosRepository {
             ? {
                 items: {
                   create: dto.items.map((i) => ({
+                    tenantId,
                     productId: i.productId,
                     quantity: i.quantity,
                   })),

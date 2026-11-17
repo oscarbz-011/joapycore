@@ -263,7 +263,7 @@ export class InvoicesRepository {
         ...(data.numbering ?? {}),
         total: data.total,
         issuedAt: data.issuedAt,
-        items: { create: data.items },
+        items: { create: data.items.map((item) => ({ ...item, tenantId })) },
       },
       include: { items: true },
     });
@@ -279,7 +279,10 @@ export class InvoicesRepository {
       issuedAt: Date;
       paymentMethod: PaymentMethod | null;
       anonymousBuyer: boolean;
-      items: Omit<Prisma.InvoiceItemCreateManyInvoiceInput, 'id'>[];
+      items: Omit<
+        Prisma.InvoiceItemCreateManyInvoiceInput,
+        'id' | 'tenantId'
+      >[];
     },
     client: PrismaClientOrTx = this.prisma,
   ) {
@@ -294,7 +297,7 @@ export class InvoicesRepository {
         issuedAt: data.issuedAt,
         paymentMethod: data.paymentMethod,
         anonymousBuyer: data.anonymousBuyer,
-        items: { create: data.items },
+        items: { create: data.items.map((item) => ({ ...item, tenantId })) },
       },
       select: { id: true },
     });

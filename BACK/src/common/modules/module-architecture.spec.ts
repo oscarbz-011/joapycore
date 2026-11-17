@@ -8,6 +8,10 @@ import {
 import { KNOWN_BOUNDARY_DEBT } from './module-boundary-debt';
 import type { ModuleManifest } from './module-manifest';
 import { KNOWN_CROSS_MODULE_RELATIONS } from './module-relation-debt';
+import {
+  NULLABLE_TENANT_TABLES,
+  TENANT_EXEMPT_TABLES,
+} from './tenant-exempt-tables';
 import { MODULE_REGISTRY } from './module-registry';
 import { PLATFORM_TABLES } from './platform-tables';
 
@@ -227,6 +231,39 @@ describe('Arquitectura modular', () => {
       expect(repeated).toEqual([]);
       const unowned = schemaModels.filter((m) => !ownerOf.has(m));
       expect(unowned).toEqual([]);
+    });
+
+    it('gives every table a tenantId, except the declared ones', () => {
+      const withoutTenant = blocks
+        .filter((b) => b.kind === 'model')
+        .filter((b) => !/^[ \t]+tenantId[ \t]+String\??[ \t]/m.test(b.body))
+        .map((b) => b.name)
+        .sort();
+      expect(withoutTenant).toEqual(Object.keys(TENANT_EXEMPT_TABLES).sort());
+    });
+
+    // pnpm db:tenant-rls protege toda tabla con una columna tenant_id.
+    it('stores every tenantId in a tenant_id column', () => {
+      const otherColumn = blocks
+        .filter((b) => b.kind === 'model')
+        .filter((b) => /^[ \t]+tenantId[ \t]+String\??[ \t]/m.test(b.body))
+        .filter(
+          (b) =>
+            !/^[ \t]+tenantId[ \t]+String\??[ \t].*@map\("tenant_id"\)/m.test(
+              b.body,
+            ),
+        )
+        .map((b) => b.name);
+      expect(otherColumn).toEqual([]);
+    });
+
+    it('makes tenantId optional only where declared', () => {
+      const optional = blocks
+        .filter((b) => b.kind === 'model')
+        .filter((b) => /^[ \t]+tenantId[ \t]+String\?[ \t]/m.test(b.body))
+        .map((b) => b.name)
+        .sort();
+      expect(optional).toEqual(Object.keys(NULLABLE_TENANT_TABLES).sort());
     });
 
     it('keeps only the generator and the datasource in schema.prisma', () => {

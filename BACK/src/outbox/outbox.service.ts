@@ -12,6 +12,7 @@ import {
   type OutboxConsumer,
 } from './outbox-consumers.registry';
 import { OutboxRepository } from './outbox.repository';
+import { TenantContext } from '../prisma/tenant-context';
 
 export const OUTBOX_MAX_ATTEMPTS = 10;
 const BASE_BACKOFF_MS = 30_000;
@@ -123,7 +124,18 @@ export class OutboxService {
   }
 
   /** Devuelve el error si el consumidor falló y hay que reintentarlo. */
-  private async deliver(
+  private deliver(
+    eventId: string,
+    tenantId: string,
+    consumer: OutboxConsumer,
+    payload: unknown,
+  ): Promise<string | null> {
+    return TenantContext.run(tenantId, () =>
+      this.deliverAsTenant(eventId, tenantId, consumer, payload),
+    );
+  }
+
+  private async deliverAsTenant(
     eventId: string,
     tenantId: string,
     consumer: OutboxConsumer,
@@ -134,17 +146,27 @@ export class OutboxService {
         consumer.module &&
         !(await this.tenantModules.isActive(tenantId, consumer.module));
       if (!skip) await consumer.handle(payload);
-      await this.outboxRepository.recordDelivery(eventId, consumer.consumer, {
-        failed: false,
-      });
+      await this.outboxRepository.recordDelivery(
+        tenantId,
+        eventId,
+        consumer.consumer,
+        {
+          failed: false,
+        },
+      );
       return null;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       try {
-        await this.outboxRepository.recordDelivery(eventId, consumer.consumer, {
-          failed: consumer.retry,
-          error: message,
-        });
+        await this.outboxRepository.recordDelivery(
+          tenantId,
+          eventId,
+          consumer.consumer,
+          {
+            failed: consumer.retry,
+            error: message,
+          },
+        );
       } catch (recordError) {
         // Sin el registro no se sabe si se procesó: se reintenta.
         return `${consumer.consumer}: ${message} (sin registrar: ${(recordError as Error).message})`;
@@ -158,7 +180,11 @@ export class OutboxService {
   }
 
   @Cron(CronExpression.EVERY_30_SECONDS)
-  async processDue(): Promise<void> {
+  processDue(): Promise<void> {
+    return TenantContext.runAsPlatform(() => this.processDueAsPlatform());
+  }
+
+  private async processDueAsPlatform(): Promise<void> {
     const now = new Date();
     const ids = await this.outboxRepository.findDue(
       now,
@@ -171,7 +197,11 @@ export class OutboxService {
   }
 
   @Cron(CronExpression.EVERY_DAY_AT_4AM)
-  async purgeDone(): Promise<void> {
+  purgeDone(): Promise<void> {
+    return TenantContext.runAsPlatform(() => this.purgeDoneAsPlatform());
+  }
+
+  private async purgeDoneAsPlatform(): Promise<void> {
     const cutoff = new Date(Date.now() - DONE_RETENTION_DAYS * 86_400_000);
     const { count } = await this.outboxRepository.deleteDoneBefore(cutoff);
     if (count > 0) this.logger.log(`Purged ${count} processed outbox event(s)`);

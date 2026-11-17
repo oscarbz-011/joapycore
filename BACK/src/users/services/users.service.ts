@@ -203,7 +203,7 @@ export class UsersService {
       );
     }
 
-    await this.usersRepository.setRoles(id, dto.roleIds);
+    await this.usersRepository.setRoles(tenantId, id, dto.roleIds);
     this.invalidateSession({ userId: id });
     return this.getById(tenantId, id);
   }
@@ -306,6 +306,7 @@ export class UsersService {
     }
 
     await this.usersRepository.setPermissions(
+      tenantId,
       id,
       permissions.map((p) => p.id),
     );

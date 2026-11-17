@@ -95,7 +95,12 @@ export class CreditConfigService {
         `Ya existe un plan de ${dto.installments} cuotas`,
       );
     }
-    return this.repo.createPlan(config.id, dto.installments, dto.interestRate);
+    return this.repo.createPlan(
+      tenantId,
+      config.id,
+      dto.installments,
+      dto.interestRate,
+    );
   }
 
   async updatePlan(tenantId: string, planId: string, dto: UpdateCreditPlanDto) {

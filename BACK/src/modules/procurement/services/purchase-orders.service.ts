@@ -213,6 +213,7 @@ export class PurchaseOrdersService {
             : undefined;
           await this.purchaseOrdersRepository.createItem(
             {
+              tenantId,
               purchaseOrderId: order.id,
               productId: item.productId,
               quantity: item.quantity,
