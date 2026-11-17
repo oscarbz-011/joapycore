@@ -1,0 +1,400 @@
+enum PurchaseType {
+  LOCAL
+  IMPORT
+}
+
+enum SupplierAvailability {
+  AVAILABLE // En stock
+  ON_ORDER // A pedido: lo trae, pero no lo tiene
+  OUT_OF_STOCK // Sin stock
+}
+
+enum PurchaseOrderStatus {
+  PENDING // Borrador: todavía no salió hacia el proveedor
+  SENT // Enviada al proveedor, a la espera de su confirmación
+  CONFIRMED
+  PARTIALLY_RECEIVED
+  RECEIVED
+  CANCELLED
+}
+
+enum SupplierPaymentKind {
+  PAYMENT // Pago de una cuenta por pagar (mercadería ya recibida)
+  ADVANCE // Anticipo de una orden de compra, antes de recibir
+  ADVANCE_REFUND // Devolución de un anticipo por parte del proveedor
+}
+
+enum SupplierInvoiceStatus {
+  MATCHED // Coincide con lo recibido: se aplicó sola
+  PENDING_APPROVAL // Difiere de lo recibido: espera que alguien la apruebe
+  APPROVED // Se aceptó la diferencia
+  REJECTED // Se reclama al proveedor; las recepciones quedan libres
+}
+
+enum APStatus {
+  PENDING
+  PARTIAL
+  PAID
+  CANCELLED
+}
+
+// Catálogo tal como lo manda el proveedor, ANTES de mapearlo al catálogo
+// interno. Es una tabla aparte de ProductSupplier a propósito: aquella exige
+// `productId` y es única por par producto-proveedor, así que no puede
+// representar un ítem todavía sin mapear — y ese es justamente el punto de
+// importar la lista de precios sin tener que crear productos primero.
+// Ver plan-modulo-compras.md, Fase 1.
+model SupplierCatalogItem {
+  id                    String                @id @default(uuid())
+  tenantId              String                @map("tenant_id")
+  supplierId            String                @map("supplier_id")
+  // Código con el que el proveedor identifica el ítem — es la clave natural
+  // de la importación (upsert por proveedor + código).
+  supplierSku           String                @map("supplier_sku")
+  description           String
+  // Código de barras o del fabricante, cuando el proveedor lo informa. Es el
+  // mismo en la lista de cualquier proveedor, así que empareja ítems entre
+  // catálogos mejor que la descripción. Opcional: muchas listas no lo traen.
+  barcode               String?
+  price                 Decimal?              @db.Decimal(12, 2)
+  // Unidad en la que vende el proveedor y cuántas unidades internas equivale
+  // (ej. vende "caja x12" y el factor 12 lo lleva a unidades).
+  supplierUnit          String?               @map("supplier_unit")
+  conversionFactor      Decimal?              @map("conversion_factor") @db.Decimal(12, 4)
+  validFrom             DateTime?             @map("valid_from")
+  validTo               DateTime?             @map("valid_to")
+  // Cantidad mínima que el proveedor vende de este ítem, en su unidad.
+  minOrderQuantity      Int?                  @map("min_order_quantity")
+  // No hay integración con el stock del proveedor: es un dato que se carga
+  // a mano, con la fecha en que se actualizó para saber qué tan viejo es.
+  availability          SupplierAvailability?
+  availabilityUpdatedAt DateTime?             @map("availability_updated_at")
+  // Precio por cantidad: [{ minQuantity, price }], en la unidad del
+  // proveedor, ordenado por minQuantity (ver normalizePriceTiers).
+  priceTiers            Json                  @default("[]") @map("price_tiers")
+  // Nullable a propósito: el ítem vive suelto hasta que alguien lo vincula a
+  // un producto interno (o hasta que la orden de compra lo fuerza).
+  productId             String?               @map("product_id")
+  createdAt             DateTime              @default(now()) @map("created_at")
+  updatedAt             DateTime              @updatedAt @map("updated_at")
+
+  tenant   Tenant   @relation(fields: [tenantId], references: [id])
+  supplier Supplier @relation(fields: [supplierId], references: [id])
+  product  Product? @relation(fields: [productId], references: [id])
+
+  @@unique([supplierId, supplierSku])
+  @@index([tenantId, supplierId])
+  @@index([tenantId, barcode])
+  @@map("supplier_catalog_items")
+}
+
+model Supplier {
+  id                String    @id @default(uuid())
+  tenantId          String    @map("tenant_id")
+  name              String
+  contactName       String?   @map("contact_name")
+  email             String?
+  phone             String?
+  address           String?
+  taxId             String?   @map("tax_id")
+  isImporter        Boolean   @default(false) @map("is_importer")
+  // Plazo de pago en días — 0 (default) es contado. Cada AccountsPayable
+  // generada al recibir mercadería de este proveedor calcula su dueDate
+  // como receivedAt + paymentTermDays.
+  paymentTermDays   Int?      @default(0) @map("payment_term_days")
+  // Anticipo que el proveedor suele pedir para despachar, en % del total
+  // de la orden. null/0 = no pide. Es el valor por defecto de cada orden.
+  advancePercent    Decimal?  @map("advance_percent") @db.Decimal(5, 2)
+  // Condiciones comerciales, para comparar proveedores más allá del precio.
+  // Todas opcionales: null = "no se sabe", no "cero".
+  shippingCost      Decimal?  @map("shipping_cost") @db.Decimal(12, 2)
+  leadTimeDays      Int?      @map("lead_time_days")
+  minOrderAmount    Decimal?  @map("min_order_amount") @db.Decimal(12, 2)
+  // Descuento sobre el total de la orden: [{ minAmount, percent }], ordenado
+  // por minAmount (ver normalizeVolumeDiscounts).
+  volumeDiscounts   Json      @default("[]") @map("volume_discounts")
+  // Descuento según la cantidad de unidades de la orden:
+  // [{ minQuantity, percent }], ordenado por minQuantity. Es otra forma de
+  // descuento por volumen; hay proveedores que usan una, otra o las dos.
+  quantityDiscounts Json      @default("[]") @map("quantity_discounts")
+  isActive          Boolean   @default(true) @map("is_active")
+  deletedAt         DateTime? @map("deleted_at")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  tenant           Tenant                @relation(fields: [tenantId], references: [id])
+  purchaseOrders   PurchaseOrder[]
+  productSuppliers ProductSupplier[]
+  catalogItems     SupplierCatalogItem[]
+  accountsPayable  AccountsPayable[]
+  supplierInvoices SupplierInvoice[]
+
+  @@index([tenantId])
+  @@map("suppliers")
+}
+
+model PurchaseOrder {
+  id              String              @id @default(uuid())
+  tenantId        String              @map("tenant_id")
+  // Número visible de la orden (OC-AA-000001), correlativo por empresa. Es
+  // con lo que el proveedor la identifica en el PDF.
+  orderNumber     String?             @map("order_number")
+  // PDF de la orden. Se genera al enviarla o al pedirlo; la orden no se edita
+  // después de creada, así que no hace falta regenerarlo.
+  pdfFileId       String?             @map("pdf_file_id")
+  // Anticipo que pide esta orden antes de despachar (0 = ninguno). Nace del
+  // porcentaje del proveedor y se puede ajustar por orden.
+  advanceAmount   Decimal             @default(0) @map("advance_amount") @db.Decimal(12, 2)
+  // Condición de pago pactada en esta orden, en días (0 = contado). Se copia
+  // del proveedor al crearla: si después el proveedor cambia su plazo, las
+  // órdenes ya hechas conservan el suyo.
+  paymentTermDays Int                 @default(0) @map("payment_term_days")
+  supplierId      String              @map("supplier_id")
+  branchId        String?             @map("branch_id")
+  purchaseType    PurchaseType        @default(LOCAL) @map("purchase_type")
+  status          PurchaseOrderStatus @default(PENDING)
+  orderDate       DateTime            @map("order_date")
+  expectedDate    DateTime?           @map("expected_date")
+  exchangeRate    Decimal?            @map("exchange_rate") @db.Decimal(10, 4)
+  customsDuty     Decimal?            @map("customs_duty") @db.Decimal(5, 2)
+  customsRef      String?             @map("customs_ref")
+  notes           String?
+  createdAt       DateTime            @default(now()) @map("created_at")
+  updatedAt       DateTime            @updatedAt @map("updated_at")
+
+  tenant          Tenant                      @relation(fields: [tenantId], references: [id])
+  supplier        Supplier                    @relation(fields: [supplierId], references: [id])
+  branch          Branch?                     @relation(fields: [branchId], references: [id])
+  items           PurchaseOrderItem[]
+  receipts        PurchaseReceipt[]
+  statusChanges   PurchaseOrderStatusChange[]
+  advancePayments SupplierPayment[]
+
+  @@unique([tenantId, orderNumber])
+  @@index([tenantId, status])
+  @@index([supplierId])
+  @@map("purchase_orders")
+}
+
+// Historial de estados de la orden: quién la movió, cuándo y por qué. Es la
+// trazabilidad de la orden; el estado actual sigue viviendo en PurchaseOrder.
+model PurchaseOrderStatusChange {
+  id              String               @id @default(uuid())
+  tenantId        String               @map("tenant_id")
+  purchaseOrderId String               @map("purchase_order_id")
+  // null en la primera entrada (alta de la orden).
+  fromStatus      PurchaseOrderStatus? @map("from_status")
+  toStatus        PurchaseOrderStatus  @map("to_status")
+  // Obligatorio al cancelar.
+  reason          String?
+  changedById     String?              @map("changed_by_id")
+  createdAt       DateTime             @default(now()) @map("created_at")
+
+  tenant        Tenant        @relation(fields: [tenantId], references: [id])
+  purchaseOrder PurchaseOrder @relation(fields: [purchaseOrderId], references: [id])
+  changedBy     User?         @relation(fields: [changedById], references: [id])
+
+  @@index([tenantId, purchaseOrderId])
+  @@map("purchase_order_status_changes")
+}
+
+model PurchaseOrderItem {
+  id                  String  @id @default(uuid())
+  purchaseOrderId     String  @map("purchase_order_id")
+  productId           String  @map("product_id")
+  quantity            Int
+  receivedQty         Int     @default(0) @map("received_qty")
+  unitCost            Decimal @map("unit_cost") @db.Decimal(12, 2)
+  // Copia del ítem del catálogo del proveedor con que se pidió: la orden
+  // tiene que seguir diciendo lo mismo aunque el catálogo cambie o el ítem se
+  // borre. Sin relación a propósito; null = producto agregado suelto.
+  catalogItemId       String? @map("catalog_item_id")
+  supplierSku         String? @map("supplier_sku")
+  supplierDescription String? @map("supplier_description")
+
+  purchaseOrder        PurchaseOrder         @relation(fields: [purchaseOrderId], references: [id])
+  product              Product               @relation(fields: [productId], references: [id])
+  productUnits         ProductUnit[]
+  productBatches       ProductBatch[]
+  purchaseReceiptItems PurchaseReceiptItem[]
+
+  @@index([purchaseOrderId])
+  @@map("purchase_order_items")
+}
+
+// Documento de recepción propio, separado de la OC — permite recepciones
+// parciales reimprimibles/listables por separado en vez de solo acumular
+// PurchaseOrderItem.receivedQty como un contador sin historial propio.
+model PurchaseReceipt {
+  id              String   @id @default(uuid())
+  tenantId        String   @map("tenant_id")
+  purchaseOrderId String   @map("purchase_order_id")
+  receiptNumber   Int      @map("receipt_number")
+  warehouseId     String?  @map("warehouse_id")
+  receivedAt      DateTime @default(now()) @map("received_at")
+  notes           String?
+  createdById     String?  @map("created_by_id")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  tenant          Tenant                @relation(fields: [tenantId], references: [id])
+  purchaseOrder   PurchaseOrder         @relation(fields: [purchaseOrderId], references: [id])
+  warehouse       Warehouse?            @relation(fields: [warehouseId], references: [id])
+  createdBy       User?                 @relation(fields: [createdById], references: [id])
+  items           PurchaseReceiptItem[]
+  accountsPayable AccountsPayable?
+
+  @@unique([tenantId, receiptNumber])
+  @@index([tenantId, purchaseOrderId])
+  @@map("purchase_receipts")
+}
+
+model PurchaseReceiptItem {
+  id                  String    @id @default(uuid())
+  purchaseReceiptId   String    @map("purchase_receipt_id")
+  purchaseOrderItemId String    @map("purchase_order_item_id")
+  productId           String    @map("product_id")
+  quantity            Int
+  unitCost            Decimal   @map("unit_cost") @db.Decimal(12, 2)
+  batchNumber         String?   @map("batch_number")
+  expiresAt           DateTime? @map("expires_at")
+  // N/S ingresados en esta línea (solo productos serializados) — el listener
+  // de inventory los lee de acá para crear los ProductUnit, nunca del
+  // payload del evento (mismo criterio defensivo que el resto del proyecto).
+  serialNumbers       String[]  @default([]) @map("serial_numbers")
+
+  purchaseReceipt   PurchaseReceipt       @relation(fields: [purchaseReceiptId], references: [id])
+  purchaseOrderItem PurchaseOrderItem     @relation(fields: [purchaseOrderItemId], references: [id])
+  product           Product               @relation(fields: [productId], references: [id])
+  productUnits      ProductUnit[]
+  invoiceItems      SupplierInvoiceItem[]
+
+  @@index([purchaseReceiptId])
+  @@map("purchase_receipt_items")
+}
+
+// Espejo de AccountsReceivable pero del lado de Compras — se genera al
+// recibir mercadería (purchase.receipt.created, listener dentro del propio
+// módulo procurement), no al confirmar la orden ni con una "factura de
+// proveedor" manual. Ver procurement-on-receipt.listener.ts.
+model AccountsPayable {
+  id                String    @id @default(uuid())
+  tenantId          String    @map("tenant_id")
+  purchaseReceiptId String    @unique @map("purchase_receipt_id")
+  supplierId        String    @map("supplier_id")
+  amount            Decimal   @db.Decimal(12, 2)
+  paidAmount        Decimal   @default(0) @map("paid_amount") @db.Decimal(12, 2)
+  // Parte de paidAmount que vino de un anticipo de la orden, no de un pago
+  // hecho sobre esta cuenta.
+  advanceApplied    Decimal   @default(0) @map("advance_applied") @db.Decimal(12, 2)
+  // Factura del proveedor que cubre esta cuenta. Sin factura, `amount` es
+  // una estimación (cantidad recibida × costo de la orden).
+  supplierInvoiceId String?   @map("supplier_invoice_id")
+  // Lo estimado al recibir, una vez que la factura fijó `amount`.
+  estimatedAmount   Decimal?  @map("estimated_amount") @db.Decimal(12, 2)
+  status            APStatus  @default(PENDING)
+  dueDate           DateTime? @map("due_date")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  tenant           Tenant                @relation(fields: [tenantId], references: [id])
+  purchaseReceipt  PurchaseReceipt       @relation(fields: [purchaseReceiptId], references: [id])
+  supplier         Supplier              @relation(fields: [supplierId], references: [id])
+  supplierPayments SupplierPayment[]
+  supplierInvoice  SupplierInvoice?      @relation(fields: [supplierInvoiceId], references: [id])
+  invoiceItems     SupplierInvoiceItem[]
+
+  @@index([tenantId, status])
+  @@index([supplierId])
+  @@index([supplierInvoiceId])
+  @@map("accounts_payable")
+}
+
+// Factura del proveedor. Cubre una o varias recepciones (una cuenta por pagar
+// cada una) y fija cuánto se debe de verdad: hasta que llega, la cuenta por
+// pagar es una estimación.
+model SupplierInvoice {
+  id             String                @id @default(uuid())
+  tenantId       String                @map("tenant_id")
+  supplierId     String                @map("supplier_id")
+  invoiceNumber  String                @map("invoice_number")
+  timbrado       String?
+  // Día de calendario (medianoche UTC). El plazo de pago corre desde acá.
+  invoiceDate    DateTime              @map("invoice_date")
+  subtotal       Decimal               @db.Decimal(12, 2)
+  shippingAmount Decimal               @default(0) @map("shipping_amount") @db.Decimal(12, 2)
+  discountAmount Decimal               @default(0) @map("discount_amount") @db.Decimal(12, 2)
+  total          Decimal               @db.Decimal(12, 2)
+  // Lo que se había estimado al recibir, al momento de cargar la factura.
+  estimatedTotal Decimal               @map("estimated_total") @db.Decimal(12, 2)
+  status         SupplierInvoiceStatus
+  notes          String?
+  // Factura escaneada o en PDF, tal como la mandó el proveedor.
+  fileId         String?               @map("file_id")
+  // Por qué se aprobó la diferencia, o qué se reclama al rechazarla.
+  reviewNote     String?               @map("review_note")
+  reviewedById   String?               @map("reviewed_by_id")
+  reviewedAt     DateTime?             @map("reviewed_at")
+  createdById    String?               @map("created_by_id")
+  createdAt      DateTime              @default(now()) @map("created_at")
+
+  tenant     Tenant                @relation(fields: [tenantId], references: [id])
+  supplier   Supplier              @relation(fields: [supplierId], references: [id])
+  createdBy  User?                 @relation("SupplierInvoiceCreatedBy", fields: [createdById], references: [id])
+  reviewedBy User?                 @relation("SupplierInvoiceReviewedBy", fields: [reviewedById], references: [id])
+  items      SupplierInvoiceItem[]
+  payables   AccountsPayable[]
+
+  // El número no se repite por proveedor entre facturas vigentes; la
+  // unicidad (que excluye las rechazadas) está en la migración.
+  @@index([tenantId, supplierId, invoiceNumber])
+  @@index([tenantId, status])
+  @@map("supplier_invoices")
+}
+
+model SupplierInvoiceItem {
+  id                    String  @id @default(uuid())
+  supplierInvoiceId     String  @map("supplier_invoice_id")
+  purchaseReceiptItemId String  @map("purchase_receipt_item_id")
+  accountsPayableId     String  @map("accounts_payable_id")
+  // Lo que dice la factura.
+  quantity              Int
+  unitCost              Decimal @map("unit_cost") @db.Decimal(12, 2)
+  // Lo que se había recibido, tal como estaba al cargar la factura.
+  receivedQuantity      Int     @map("received_quantity")
+  receivedUnitCost      Decimal @map("received_unit_cost") @db.Decimal(12, 2)
+
+  supplierInvoice     SupplierInvoice     @relation(fields: [supplierInvoiceId], references: [id], onDelete: Cascade)
+  purchaseReceiptItem PurchaseReceiptItem @relation(fields: [purchaseReceiptItemId], references: [id])
+  accountsPayable     AccountsPayable     @relation(fields: [accountsPayableId], references: [id])
+
+  @@index([supplierInvoiceId])
+  @@index([purchaseReceiptItemId])
+  @@map("supplier_invoice_items")
+}
+
+model SupplierPayment {
+  id                String              @id @default(uuid())
+  tenantId          String              @map("tenant_id")
+  // Un pago es de una cuenta por pagar (PAYMENT) o de una orden de compra
+  // (ADVANCE / ADVANCE_REFUND): tiene una de las dos, nunca ambas.
+  accountsPayableId String?             @map("accounts_payable_id")
+  purchaseOrderId   String?             @map("purchase_order_id")
+  kind              SupplierPaymentKind @default(PAYMENT)
+  amount            Decimal             @db.Decimal(12, 2)
+  paymentMethod     PaymentMethod       @map("payment_method")
+  paymentDate       DateTime            @map("payment_date")
+  reference         String?
+  notes             String?
+  createdById       String?             @map("created_by_id")
+  createdAt         DateTime            @default(now()) @map("created_at")
+
+  tenant          Tenant           @relation(fields: [tenantId], references: [id])
+  accountsPayable AccountsPayable? @relation(fields: [accountsPayableId], references: [id])
+  purchaseOrder   PurchaseOrder?   @relation(fields: [purchaseOrderId], references: [id])
+  createdBy       User?            @relation(fields: [createdById], references: [id])
+
+  @@index([tenantId])
+  @@index([accountsPayableId])
+  @@index([purchaseOrderId])
+  @@map("supplier_payments")
+}

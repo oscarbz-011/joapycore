@@ -170,7 +170,7 @@ export class CreateCustomerDto {
 
   // Coordenadas de la dirección de entrega — usadas por Logística para
   // ubicar al cliente en el mapa antes de la 1ª entrega. Ver
-  // schema.prisma:Customer para la nota sobre por qué esto es solo la
+  // Customer en prisma/models/sales.prisma para la nota sobre por qué esto es solo la
   // "mejor estimación": DeliveryTrackingEvent sigue siendo la fuente de
   // verdad de qué pasó en una entrega puntual, esto solo fija el pin
   // inicial/default.

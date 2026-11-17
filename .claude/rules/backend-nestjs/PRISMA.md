@@ -11,5 +11,6 @@ paths:
 - Use a Prisma transaction when a business invariant spans multiple writes. Keep external I/O outside database transactions.
 - Select only required data and preserve deterministic ordering for pagination and worker batches.
 - Add a new migration for schema changes. Never edit a migration that may have run in another environment and never use `db push` as a production migration strategy.
-- Update `schema.prisma`, migration SQL, seeds/fixtures, repository mappings, and tests as one coherent change.
+- Models live in `prisma/models/<owner>.prisma`, the file of the module that owns them (enums used by several owners go in `shared.prisma`); `prisma/schema.prisma` holds only the generator and datasource. New relations to another module's table are stored by ID only, without `@relation`.
+- Update the model file, migration SQL, seeds/fixtures, repository mappings, and tests as one coherent change.
 - Run `pnpm exec prisma validate` and `pnpm exec prisma generate`; exercise migrations against a disposable database when the migration history supports replay. The current CI uses `prisma db push` only because a documented legacy migration cannot replay on an empty shadow database.

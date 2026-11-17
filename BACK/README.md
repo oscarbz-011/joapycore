@@ -107,6 +107,13 @@ src/
 ├── users/           # Usuarios y roles con RBAC por tenant
 ├── tenants/         # Tenants y gestión de módulos activos
 └── modules/         # Módulos de negocio (sales, inventory, billing…)
+
+prisma/
+├── schema.prisma    # Solo el generator y el datasource
+├── models/          # Un archivo por módulo dueño de sus tablas, platform.prisma
+│                    # para las de la plataforma y shared.prisma para los enums
+│                    # que usan varios módulos
+└── migrations/
 ```
 
 ## Multi-tenancy

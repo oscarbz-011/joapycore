@@ -1,0 +1,166 @@
+enum CollectionRouteStatus {
+  OPEN
+  CLOSED
+  CANCELLED
+}
+
+enum VisitResult {
+  COLLECTED
+  PARTIAL
+  ABSENT
+  REFUSED
+  PROMISE
+}
+
+enum AgreementStatus {
+  ACTIVE
+  FULFILLED
+  BROKEN
+  CANCELLED
+}
+
+enum CollectionNoteType {
+  VISIT
+  CALL
+  MESSAGE
+  GENERAL
+}
+
+model CollectionRoute {
+  id             String                @id @default(uuid())
+  tenantId       String                @map("tenant_id")
+  routeDate      DateTime              @map("route_date") @db.Date
+  collectorId    String?               @map("collector_id")
+  status         CollectionRouteStatus @default(OPEN)
+  totalPlanned   Decimal               @default(0) @map("total_planned") @db.Decimal(12, 2)
+  totalCollected Decimal               @default(0) @map("total_collected") @db.Decimal(12, 2)
+  notes          String?
+  closedAt       DateTime?             @map("closed_at")
+  closedById     String?               @map("closed_by_id")
+  createdById    String?               @map("created_by_id")
+  createdAt      DateTime              @default(now()) @map("created_at")
+  updatedAt      DateTime              @updatedAt @map("updated_at")
+
+  tenant    Tenant            @relation(fields: [tenantId], references: [id])
+  collector User?             @relation("RouteCollector", fields: [collectorId], references: [id])
+  closedBy  User?             @relation("RouteClosedBy", fields: [closedById], references: [id])
+  createdBy User?             @relation("RouteCreatedBy", fields: [createdById], references: [id])
+  visits    CollectionVisit[]
+
+  @@index([tenantId, routeDate])
+  @@index([tenantId, collectorId])
+  @@map("collection_routes")
+}
+
+model CollectionVisit {
+  id              String         @id @default(uuid())
+  tenantId        String         @map("tenant_id")
+  routeId         String         @map("route_id")
+  customerId      String         @map("customer_id")
+  loanId          String?        @map("loan_id")
+  installmentId   String?        @map("installment_id")
+  arId            String?        @map("ar_id")
+  plannedAmount   Decimal        @map("planned_amount") @db.Decimal(12, 2)
+  collectedAmount Decimal        @default(0) @map("collected_amount") @db.Decimal(12, 2)
+  result          VisitResult?
+  promiseDate     DateTime?      @map("promise_date")
+  paymentMethod   PaymentMethod? @map("payment_method")
+  reference       String?
+  notes           String?
+  visitedAt       DateTime?      @map("visited_at")
+  visitOrder      Int            @default(0) @map("visit_order")
+  createdAt       DateTime       @default(now()) @map("created_at")
+  updatedAt       DateTime       @updatedAt @map("updated_at")
+
+  tenant      Tenant              @relation(fields: [tenantId], references: [id])
+  route       CollectionRoute     @relation(fields: [routeId], references: [id])
+  customer    Customer            @relation(fields: [customerId], references: [id])
+  loan        Loan?               @relation(fields: [loanId], references: [id])
+  installment Installment?        @relation(fields: [installmentId], references: [id])
+  ar          AccountsReceivable? @relation(fields: [arId], references: [id])
+
+  @@index([tenantId, routeId])
+  @@index([tenantId, customerId])
+  @@index([routeId])
+  @@map("collection_visits")
+}
+
+model PaymentAgreement {
+  id                 String          @id @default(uuid())
+  tenantId           String          @map("tenant_id")
+  customerId         String          @map("customer_id")
+  loanId             String?         @map("loan_id")
+  originalDebt       Decimal         @map("original_debt") @db.Decimal(12, 2)
+  agreedInstallments Int             @map("agreed_installments")
+  agreedAmount       Decimal         @map("agreed_amount") @db.Decimal(12, 2)
+  startDate          DateTime        @map("start_date") @db.Date
+  status             AgreementStatus @default(ACTIVE)
+  notes              String?
+  approvedById       String?         @map("approved_by_id")
+  createdById        String?         @map("created_by_id")
+  createdAt          DateTime        @default(now()) @map("created_at")
+  updatedAt          DateTime        @updatedAt @map("updated_at")
+
+  tenant     Tenant   @relation(fields: [tenantId], references: [id])
+  customer   Customer @relation(fields: [customerId], references: [id])
+  loan       Loan?    @relation(fields: [loanId], references: [id])
+  approvedBy User?    @relation("AgreementApprovedBy", fields: [approvedById], references: [id])
+  createdBy  User?    @relation("AgreementCreatedBy", fields: [createdById], references: [id])
+
+  @@index([tenantId, customerId])
+  @@map("payment_agreements")
+}
+
+model CollectionNote {
+  id          String             @id @default(uuid())
+  tenantId    String             @map("tenant_id")
+  customerId  String             @map("customer_id")
+  note        String
+  type        CollectionNoteType @default(GENERAL)
+  createdById String?            @map("created_by_id")
+  createdAt   DateTime           @default(now()) @map("created_at")
+
+  tenant    Tenant   @relation(fields: [tenantId], references: [id])
+  customer  Customer @relation(fields: [customerId], references: [id])
+  createdBy User?    @relation("NoteCreatedBy", fields: [createdById], references: [id])
+
+  @@index([tenantId, customerId])
+  @@map("collection_notes")
+}
+
+enum DelinquencyReportStatus {
+  PENDING_REVIEW
+  REPORTED
+  EXCLUDED
+}
+
+// Candidato detectado automáticamente por el scheduler nocturno al cruzar
+// CreditConfig.delinquencyThresholdDays — un analista lo revisa y decide
+// reportarlo (REPORTED) o excluirlo (EXCLUDED). No hay integración real con
+// Informconf: "provider" es texto libre (default "informconf") y
+// "reference" es lo que el analista carga a mano tras reportarlo por fuera
+// del sistema — mismo criterio 100% manual que ya usa
+// credit-bureau/CreditBureauCheck.
+model DelinquencyReport {
+  id           String                  @id @default(uuid())
+  tenantId     String                  @map("tenant_id")
+  customerId   String                  @map("customer_id")
+  loanId       String                  @map("loan_id")
+  daysOverdue  Int                     @map("days_overdue")
+  status       DelinquencyReportStatus @default(PENDING_REVIEW)
+  provider     String                  @default("informconf")
+  reference    String?
+  notes        String?
+  reviewedById String?                 @map("reviewed_by_id")
+  reviewedAt   DateTime?               @map("reviewed_at")
+  createdAt    DateTime                @default(now()) @map("created_at")
+  updatedAt    DateTime                @updatedAt @map("updated_at")
+
+  tenant     Tenant   @relation(fields: [tenantId], references: [id])
+  customer   Customer @relation(fields: [customerId], references: [id])
+  loan       Loan     @relation(fields: [loanId], references: [id])
+  reviewedBy User?    @relation("DelinquencyReportReviewedBy", fields: [reviewedById], references: [id])
+
+  @@unique([tenantId, loanId])
+  @@map("delinquency_reports")
+}

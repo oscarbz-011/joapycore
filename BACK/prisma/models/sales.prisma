@@ -1,0 +1,376 @@
+enum SaleOrderStatus {
+  QUOTED
+  PENDING
+  PENDING_CREDIT_APPROVAL
+  CREDIT_APPROVED
+  CREDIT_REJECTED
+  CREDIT_NEEDS_ADJUSTMENT
+  PAYMENT_RECEIVED
+  CONFIRMED
+  DELIVERED
+  INVOICED
+  CANCELLED
+}
+
+enum CreditAdjustmentSuggestion {
+  LOWER_VALUE_PRODUCT
+  MORE_INSTALLMENTS
+  ADD_GUARANTOR
+}
+
+enum SaleType {
+  CASH
+  CREDIT
+}
+
+enum OrderType {
+  STANDARD
+  QUOTE
+  WHOLESALE
+}
+
+enum ComboPriceMode {
+  FIXED
+  SUM_WITH_DISCOUNT
+}
+
+// Persona física o jurídica. En una jurídica, firstName guarda la razón social.
+enum TaxpayerType {
+  INDIVIDUAL
+  COMPANY
+}
+
+enum EconomicActivity {
+  ASALARIADO
+  FUNCIONARIO_PUBLICO
+  PROFESIONAL_INDEPENDIENTE
+  COMERCIANTE
+}
+
+model Customer {
+  id              String        @id @default(uuid())
+  tenantId        String        @map("tenant_id")
+  customerCode    String?       @map("customer_code")
+  firstName       String        @map("first_name")
+  secondFirstName String?       @map("second_first_name")
+  lastName        String        @map("last_name")
+  secondLastName  String?       @map("second_last_name")
+  documentType    DocumentType? @map("document_type")
+  documentNumber  String?       @map("document_number")
+  taxpayerType    TaxpayerType? @map("taxpayer_type")
+  email           String?
+  phone           String?
+  address         String?
+  city            String?
+  profession      String?
+  birthDate       DateTime?     @map("birth_date") @db.Date
+  monthlyIncome   Decimal?      @map("monthly_income") @db.Decimal(12, 2)
+  creditLimit     Decimal?      @map("credit_limit") @db.Decimal(12, 2)
+  notes           String?
+  // Texto de búsqueda: en minúsculas y sin acentos. Lo calcula la base
+  // (columna generada con unaccent, ver la migración); la aplicación solo
+  // lo lee. Es null en una base creada sin migraciones (`db push`).
+  searchText      String?       @map("search_text")
+
+  // Marca manual de incobrable/judicial (calificación 6). Quién la puso o la
+  // quitó queda en el log de auditoría.
+  uncollectibleAt     DateTime? @map("uncollectible_at")
+  uncollectibleReason String?   @map("uncollectible_reason")
+
+  economicActivity EconomicActivity? @map("economic_activity")
+  hasIpsInsurance  Boolean?          @map("has_ips_insurance")
+
+  // Datos laborales
+  employerName   String? @map("employer_name")
+  supervisorName String? @map("supervisor_name")
+  workPhone      String? @map("work_phone")
+  workAddress    String? @map("work_address")
+  workSeniority  String? @map("work_seniority")
+
+  // Structured delivery address — Casa
+  homeStreet       String? @map("home_street")
+  homeNeighborhood String? @map("home_neighborhood")
+  homeReference    String? @map("home_reference")
+
+  // Structured delivery address — Departamento / Apto
+  aptBuilding String? @map("apt_building")
+  aptFloor    String? @map("apt_floor")
+  aptNumber   String? @map("apt_number")
+
+  // Última coordenada conocida — "mejor estimación" para el pin por defecto
+  // del mapa. La fuente de verdad de qué pasó en una entrega puntual es
+  // DeliveryTrackingEvent, no esto; se sincroniza acá solo cuando el
+  // repartidor confirma que corrigió la ubicación.
+  latitude  Decimal? @db.Decimal(9, 6)
+  longitude Decimal? @db.Decimal(9, 6)
+
+  isActive  Boolean   @default(true) @map("is_active")
+  deletedAt DateTime? @map("deleted_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+
+  tenant             Tenant                @relation(fields: [tenantId], references: [id])
+  saleOrders         SaleOrder[]
+  loans              Loan[]
+  collectionVisits   CollectionVisit[]
+  paymentAgreements  PaymentAgreement[]
+  collectionNotes    CollectionNote[]
+  bureauChecks       CreditBureauCheck[]
+  paymentReceipts    PaymentReceipt[]
+  delinquencyReports DelinquencyReport[]
+  creditNotes        CreditNote[]
+  remissionNotes     RemissionNote[]
+  creditEntries      CustomerCreditEntry[]
+
+  @@unique([tenantId, customerCode])
+  @@index([tenantId, documentNumber])
+  @@map("customers")
+}
+
+model SaleOrder {
+  id           String          @id @default(uuid())
+  tenantId     String          @map("tenant_id")
+  customerId   String          @map("customer_id")
+  branchId     String?         @map("branch_id")
+  createdById  String?         @map("created_by_id")
+  sellerId     String?         @map("seller_id")
+  status       SaleOrderStatus @default(PENDING)
+  orderType    OrderType       @default(STANDARD) @map("order_type")
+  saleType     SaleType        @default(CASH) @map("sale_type")
+  channel      OrderChannel    @default(NORMAL) @map("channel")
+  installments Int?
+  interestRate Decimal?        @map("interest_rate") @db.Decimal(5, 2)
+  orderDate    DateTime        @map("order_date")
+  notes        String?
+
+  // Totals (denormalized from items for reporting and POS display)
+  subtotal Decimal? @map("subtotal") @db.Decimal(12, 2)
+  total    Decimal? @map("total") @db.Decimal(12, 2)
+
+  // Presupuestos (orderType=QUOTE) — código secuencial PRES-AA-NNNNNN y PDF
+  // generado automáticamente al crear. Null para pedidos que no son presupuesto.
+  quoteNumber    String? @map("quote_number") // único por tenant, ver @@unique abajo
+  quotePdfFileId String? @map("quote_pdf_file_id")
+
+  // Presupuesto para alguien que todavía no es cliente: sus datos se cargan a
+  // mano acá y `customerId` apunta al cliente genérico "Consumidor Final"
+  // hasta que el presupuesto se convierte en pedido y se elige un cliente real.
+  prospectName     String? @map("prospect_name")
+  prospectDocument String? @map("prospect_document")
+  prospectPhone    String? @map("prospect_phone")
+  prospectEmail    String? @map("prospect_email")
+  prospectAddress  String? @map("prospect_address")
+
+  // POS session link (null for NORMAL channel)
+  posSessionId String? @map("pos_session_id")
+
+  // Delivery surcharge (freight / zone)
+  surchargeType   MarkupType? @map("surcharge_type")
+  surchargeAmount Decimal?    @map("surcharge_amount") @db.Decimal(12, 2)
+  surchargeReason String?     @map("surcharge_reason")
+
+  // Credit approval tracking
+  approvedById    String?   @map("approved_by_id")
+  approvedAt      DateTime? @map("approved_at")
+  rejectedById    String?   @map("rejected_by_id")
+  rejectedAt      DateTime? @map("rejected_at")
+  rejectionReason String?   @map("rejection_reason")
+
+  // Devuelto al vendedor para ajustar (sin rechazar) — ej. sugerir bajar el
+  // valor del pedido, sumar cuotas, o agregar un garante.
+  adjustmentNote        String?                      @map("adjustment_note")
+  suggestedAlternatives CreditAdjustmentSuggestion[] @map("suggested_alternatives")
+
+  // Primera vez que un analista abrió la evaluación de esta solicitud. null =
+  // "nueva" en la bandeja de Evaluación de crédito. Se limpia al reenviarla.
+  creditViewedAt   DateTime? @map("credit_viewed_at")
+  creditViewedById String?   @map("credit_viewed_by_id")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  tenant       Tenant              @relation(fields: [tenantId], references: [id])
+  customer     Customer            @relation(fields: [customerId], references: [id])
+  branch       Branch?             @relation(fields: [branchId], references: [id])
+  createdBy    User?               @relation("SaleCreator", fields: [createdById], references: [id])
+  seller       User?               @relation("SaleSeller", fields: [sellerId], references: [id])
+  approvedBy   User?               @relation("CreditApprover", fields: [approvedById], references: [id])
+  rejectedBy   User?               @relation("CreditRejecter", fields: [rejectedById], references: [id])
+  items        SaleOrderItem[]
+  invoice      Invoice?
+  loan         Loan?
+  downPayment  DownPayment?
+  salePayments SalePayment[]
+  deliveryNote DeliveryNote?
+  posSession   PosSession?         @relation(fields: [posSessionId], references: [id])
+  guarantors   Guarantor[]
+  bureauChecks CreditBureauCheck[]
+
+  @@unique([tenantId, quoteNumber])
+  @@index([customerId])
+  @@index([sellerId])
+  @@map("sale_orders")
+}
+
+model Guarantor {
+  id             String       @id @default(uuid())
+  tenantId       String       @map("tenant_id")
+  saleOrderId    String       @map("sale_order_id")
+  firstName      String       @map("first_name")
+  lastName       String       @map("last_name")
+  documentType   DocumentType @map("document_type")
+  documentNumber String       @map("document_number")
+  phone          String?
+  email          String?
+  monthlyIncome  Decimal?     @map("monthly_income") @db.Decimal(12, 2)
+  address        String?
+  createdAt      DateTime     @default(now()) @map("created_at")
+
+  tenant    Tenant    @relation(fields: [tenantId], references: [id])
+  saleOrder SaleOrder @relation(fields: [saleOrderId], references: [id])
+
+  @@index([tenantId])
+  @@index([saleOrderId])
+  @@map("guarantors")
+}
+
+model SalePayment {
+  id            String        @id @default(uuid())
+  tenantId      String        @map("tenant_id")
+  saleOrderId   String        @map("sale_order_id")
+  amount        Decimal       @db.Decimal(12, 2)
+  paymentMethod PaymentMethod @map("payment_method")
+  paymentDate   DateTime      @map("payment_date")
+  reference     String?
+  notes         String?
+  collectedById String?       @map("collected_by_id")
+  posSessionId  String?       @map("pos_session_id")
+  createdAt     DateTime      @default(now()) @map("created_at")
+  updatedAt     DateTime      @updatedAt @map("updated_at")
+
+  tenant      Tenant      @relation(fields: [tenantId], references: [id])
+  saleOrder   SaleOrder   @relation(fields: [saleOrderId], references: [id])
+  collectedBy User?       @relation("SalePaymentCollector", fields: [collectedById], references: [id])
+  posSession  PosSession? @relation(fields: [posSessionId], references: [id])
+
+  @@index([tenantId, saleOrderId])
+  @@index([saleOrderId])
+  @@map("sale_payments")
+}
+
+model DownPayment {
+  id             String        @id @default(uuid())
+  tenantId       String        @map("tenant_id")
+  saleOrderId    String        @unique @map("sale_order_id")
+  amount         Decimal       @db.Decimal(12, 2)
+  paymentMethod  PaymentMethod @map("payment_method")
+  paymentDate    DateTime      @map("payment_date")
+  reference      String?
+  notes          String?
+  registeredById String?       @map("registered_by_id")
+  createdAt      DateTime      @default(now()) @map("created_at")
+  updatedAt      DateTime      @updatedAt @map("updated_at")
+
+  tenant       Tenant    @relation(fields: [tenantId], references: [id])
+  saleOrder    SaleOrder @relation(fields: [saleOrderId], references: [id])
+  registeredBy User?     @relation("DownPaymentRegistrar", fields: [registeredById], references: [id])
+
+  @@index([tenantId])
+  @@map("down_payments")
+}
+
+model SaleOrderItem {
+  id          String  @id @default(uuid())
+  saleOrderId String  @map("sale_order_id")
+  productId   String? @map("product_id") // null = item de servicio / línea libre
+  description String? // requerido cuando productId es null
+  batchId     String? @map("batch_id")
+  warehouseId String? @map("warehouse_id")
+  quantity    Int
+  unitPrice   Decimal @map("unit_price") @db.Decimal(12, 2)
+
+  // Notas/especificaciones opcionales por línea (dimensiones, materiales,
+  // etc.) — uso libre, pensado para presupuestos de rubros con líneas a
+  // medida (carpintería, herrería). No afecta precio ni stock.
+  specNotes String? @map("spec_notes")
+
+  // IVA breakdown (populated at sale time from product.ivaTaxRate)
+  ivaRate             Decimal? @map("iva_rate") @db.Decimal(5, 2)
+  ivaAmount           Decimal? @map("iva_amount") @db.Decimal(12, 2)
+  unitPriceWithoutIva Decimal? @map("unit_price_without_iva") @db.Decimal(12, 2)
+
+  // Precio con interés de crédito ya aplicado — solo se completa en ventas a
+  // crédito (null en contado). Se calcula server-side una sola vez, al crear
+  // el ítem, a partir de la tasa resuelta contra el CreditPlan del pedido —
+  // nunca lo manda el cliente. Facturación y el contrato generado deben
+  // preferir este valor sobre unitPrice cuando esté presente.
+  financedUnitPrice Decimal? @map("financed_unit_price") @db.Decimal(12, 2)
+
+  // Trazabilidad de combo — el pedido se arma como líneas normales (una por
+  // producto componente), estas 2 columnas solo permiten reagruparlas
+  // visualmente y saber de qué combo salieron. No afectan stock, IVA, precio
+  // financiado ni ninguna otra lógica — cada línea se procesa exactamente
+  // igual que si se hubiese agregado producto por producto.
+  comboId      String? @map("combo_id")
+  comboGroupId String? @map("combo_group_id")
+
+  saleOrder    SaleOrder     @relation(fields: [saleOrderId], references: [id])
+  product      Product?      @relation(fields: [productId], references: [id])
+  batch        ProductBatch? @relation(fields: [batchId], references: [id])
+  warehouse    Warehouse?    @relation(fields: [warehouseId], references: [id])
+  productUnits ProductUnit[]
+  combo        SaleCombo?    @relation(fields: [comboId], references: [id])
+
+  @@index([saleOrderId])
+  @@index([productId])
+  @@map("sale_order_items")
+}
+
+model SaleCombo {
+  id                 String         @id @default(uuid())
+  tenantId           String         @map("tenant_id")
+  name               String
+  description        String?
+  priceMode          ComboPriceMode @default(FIXED) @map("price_mode")
+  fixedPrice         Decimal?       @map("fixed_price") @db.Decimal(12, 2)
+  discountPercentage Decimal?       @map("discount_percentage") @db.Decimal(5, 2)
+  isActive           Boolean        @default(true) @map("is_active")
+  createdAt          DateTime       @default(now()) @map("created_at")
+  updatedAt          DateTime       @updatedAt @map("updated_at")
+  deletedAt          DateTime?      @map("deleted_at")
+
+  tenant    Tenant          @relation(fields: [tenantId], references: [id])
+  items     SaleComboItem[]
+  saleItems SaleOrderItem[]
+
+  @@index([tenantId])
+  @@map("sale_combos")
+}
+
+model SaleComboItem {
+  id        String @id @default(uuid())
+  comboId   String @map("combo_id")
+  productId String @map("product_id")
+  quantity  Int
+
+  combo   SaleCombo @relation(fields: [comboId], references: [id])
+  product Product   @relation(fields: [productId], references: [id])
+
+  @@map("sale_combo_items")
+}
+
+model SaleTarget {
+  id           String   @id @default(uuid())
+  tenantId     String   @map("tenant_id")
+  userId       String?  @map("user_id") // null = company-wide target
+  period       String // "YYYY-MM"
+  targetAmount Decimal  @map("target_amount") @db.Decimal(14, 2)
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+  user   User?  @relation(fields: [userId], references: [id])
+
+  @@index([tenantId])
+  @@map("sale_targets")
+}

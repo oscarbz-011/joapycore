@@ -1,0 +1,34 @@
+enum SifenEnvironment {
+  TESTING
+  PRODUCTION
+}
+
+model SifenConfig {
+  id       String @id @default(uuid())
+  tenantId String @unique @map("tenant_id")
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
+  environment SifenEnvironment @default(TESTING)
+
+  // Certificado de firma (.p12 / .pfx) — almacenado cifrado con AES-256-GCM
+  certFilename   String?   @map("cert_filename")
+  certData       Bytes?    @map("cert_data")
+  certPassword   String?   @map("cert_password") // cifrado
+  certType       String?   @map("cert_type") // p12 | pfx | cer | crt
+  certValidFrom  DateTime? @map("cert_valid_from")
+  certValidUntil DateTime? @map("cert_valid_until")
+  certSubject    String?   @map("cert_subject")
+
+  // Certificado CA raíz SET Paraguay (opcional, .cer / .crt)
+  caCertFilename String? @map("ca_cert_filename")
+  caCertData     Bytes?  @map("ca_cert_data")
+
+  isConfigured Boolean   @default(false) @map("is_configured")
+  lastTestedAt DateTime? @map("last_tested_at")
+  lastTestOk   Boolean?  @map("last_test_ok")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("sifen_configs")
+}

@@ -99,9 +99,9 @@ Cada punto es una rama y un PR propios. El orden sugerido es este; se ajusta al 
 
 ### C1. Schema de Prisma por módulo
 
-- `prisma/schema.prisma` pasa a `prisma/schema/` con un archivo por dueño (`sales.prisma`, `billing.prisma`, `platform.prisma`, …). Prisma 7 lo soporta y `prisma.config.ts` apunta a la carpeta.
+- **Hecho (2026-11, Trello #84).** Los modelos pasan a `prisma/models/` con un archivo por dueño (`sales.prisma`, `billing.prisma`, `platform.prisma`, …) y `shared.prisma` para los enums de varios dueños. `prisma/schema.prisma` queda con el generator y el datasource, y `prisma.config.ts` apunta a la carpeta `prisma/`. (Prisma pide que `migrations/` quede al lado de `schema.prisma`, por eso no es `prisma/schema/`.)
 - El test de arquitectura comprueba que cada modelo esté en el archivo de su dueño.
-- Las relaciones nuevas entre módulos se hacen solo por ID, sin `@relation`. Las existentes se quedan como están.
+- Las relaciones nuevas entre módulos se hacen solo por ID, sin `@relation`. Las existentes se quedan como están, congeladas en `module-relation-debt.ts`.
 - **Riesgo:** choca con cualquier rama que toque el schema. Hacerlo en un momento sin ramas abiertas que cambien el schema.
 
 ### C2. Frontend: catálogo y navegación desde los manifiestos

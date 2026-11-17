@@ -87,7 +87,7 @@ jobs:
 
       # La historia de migraciones no se puede reproducir desde una base vacía
       # (la shadow database falla en una migración vieja), así que en CI el
-      # schema se crea directo desde schema.prisma.
+      # schema se crea directo desde los modelos de Prisma.
       - name: Crear schema y datos de prueba
         env:
           DATABASE_URL: ${{ env.MIGRATE_DATABASE_URL }}
