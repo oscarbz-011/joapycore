@@ -56,21 +56,34 @@ export class RolesRepository {
   }
 
   attachPermissions(
+    tenantId: string,
     roleId: string,
     permissionIds: string[],
     client: PrismaClientOrTx = this.prisma,
   ) {
     return client.rolePermission.createMany({
-      data: permissionIds.map((permissionId) => ({ roleId, permissionId })),
+      data: permissionIds.map((permissionId) => ({
+        tenantId,
+        roleId,
+        permissionId,
+      })),
       skipDuplicates: true,
     });
   }
 
-  async replacePermissions(roleId: string, permissionIds: string[]) {
+  async replacePermissions(
+    tenantId: string,
+    roleId: string,
+    permissionIds: string[],
+  ) {
     await this.prisma.rolePermission.deleteMany({ where: { roleId } });
     if (permissionIds.length > 0) {
       await this.prisma.rolePermission.createMany({
-        data: permissionIds.map((permissionId) => ({ roleId, permissionId })),
+        data: permissionIds.map((permissionId) => ({
+          tenantId,
+          roleId,
+          permissionId,
+        })),
       });
     }
   }

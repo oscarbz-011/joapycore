@@ -32,7 +32,11 @@ async function main() {
 
     if (missing.length > 0) {
       await prisma.rolePermission.createMany({
-        data: missing.map((p) => ({ roleId: role.id, permissionId: p.id })),
+        data: missing.map((p) => ({
+          tenantId: role.tenantId,
+          roleId: role.id,
+          permissionId: p.id,
+        })),
         skipDuplicates: true,
       });
       console.log(

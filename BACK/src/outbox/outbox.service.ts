@@ -134,17 +134,27 @@ export class OutboxService {
         consumer.module &&
         !(await this.tenantModules.isActive(tenantId, consumer.module));
       if (!skip) await consumer.handle(payload);
-      await this.outboxRepository.recordDelivery(eventId, consumer.consumer, {
-        failed: false,
-      });
+      await this.outboxRepository.recordDelivery(
+        tenantId,
+        eventId,
+        consumer.consumer,
+        {
+          failed: false,
+        },
+      );
       return null;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       try {
-        await this.outboxRepository.recordDelivery(eventId, consumer.consumer, {
-          failed: consumer.retry,
-          error: message,
-        });
+        await this.outboxRepository.recordDelivery(
+          tenantId,
+          eventId,
+          consumer.consumer,
+          {
+            failed: consumer.retry,
+            error: message,
+          },
+        );
       } catch (recordError) {
         // Sin el registro no se sabe si se procesó: se reintenta.
         return `${consumer.consumer}: ${message} (sin registrar: ${(recordError as Error).message})`;

@@ -488,12 +488,18 @@ describe('RemissionNotesService (PostgreSQL)', () => {
           items: {
             create: [
               {
+                tenantId,
                 productId: rice,
                 warehouseId: fromWarehouse,
                 quantity: 5,
                 unitPrice: 10_000,
               },
-              { description: 'Flete', quantity: 1, unitPrice: 50_000 },
+              {
+                tenantId,
+                description: 'Flete',
+                quantity: 1,
+                unitPrice: 50_000,
+              },
             ],
           },
         },
@@ -513,6 +519,7 @@ describe('RemissionNotesService (PostgreSQL)', () => {
           items: {
             create: [
               {
+                tenantId,
                 description: 'Arroz',
                 quantity: 5,
                 unitPrice: 10_000,
@@ -520,6 +527,7 @@ describe('RemissionNotesService (PostgreSQL)', () => {
                 saleOrderItemId: riceItem?.id,
               },
               {
+                tenantId,
                 description: 'Flete',
                 quantity: 1,
                 unitPrice: 50_000,
@@ -597,6 +605,7 @@ describe('RemissionNotesService (PostgreSQL)', () => {
           items: {
             create: [
               {
+                tenantId,
                 productId: tv,
                 warehouseId: fromWarehouse,
                 quantity: 2,
@@ -621,6 +630,7 @@ describe('RemissionNotesService (PostgreSQL)', () => {
           items: {
             create: [
               {
+                tenantId,
                 description: 'Televisor',
                 quantity: 2,
                 unitPrice: 1_000_000,

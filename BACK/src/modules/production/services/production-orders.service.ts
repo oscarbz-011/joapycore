@@ -97,6 +97,7 @@ export class ProductionOrdersService {
       // que realmente se planificó.
       await this.repository.createItems(
         recipe.map((line) => ({
+          tenantId,
           productionOrderId: created.id,
           componentId: line.componentId,
           plannedQuantity: toNum(line.quantity) * dto.quantity,

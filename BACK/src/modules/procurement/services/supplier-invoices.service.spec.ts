@@ -211,6 +211,7 @@ describe('SupplierInvoicesService', () => {
 
       expect(created().items.create).toEqual([
         {
+          tenantId: 'tenant-1',
           purchaseReceiptItemId: 'ri-1',
           accountsPayableId: 'ap-1',
           quantity: 9,

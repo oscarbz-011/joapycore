@@ -826,6 +826,7 @@ export class SaleOrdersService implements SalesGateway {
 
       const saleItem = await this.saleOrdersRepository.createItem(
         {
+          tenantId,
           saleOrderId: orderId,
           productId: item.productId ?? null,
           description: item.description ?? null,

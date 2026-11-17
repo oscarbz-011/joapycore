@@ -113,6 +113,7 @@ export class PurchaseReceiptsService {
             create: dto.items.map((line) => {
               const item = itemsById.get(line.purchaseOrderItemId)!;
               return {
+                tenantId,
                 purchaseOrderItemId: line.purchaseOrderItemId,
                 productId: item.productId,
                 quantity: line.quantity,

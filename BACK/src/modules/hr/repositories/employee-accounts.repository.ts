@@ -47,7 +47,7 @@ export class EmployeeAccountsRepository {
     });
     if (!position?.roleId) return;
     await client.userRole.create({
-      data: { userId, roleId: position.roleId },
+      data: { tenantId, userId, roleId: position.roleId },
     });
   }
 

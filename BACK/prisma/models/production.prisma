@@ -69,6 +69,7 @@ model ProductionOrder {
 // mostrando lo que realmente se planificó) y el consumo real se ajusta al
 // completar, porque en el taller casi nunca sale exacto.
 model ProductionOrderItem {
+  tenantId          String  @map("tenant_id")
   id                String  @id @default(uuid())
   productionOrderId String  @map("production_order_id")
   componentId       String  @map("component_id")
@@ -79,5 +80,6 @@ model ProductionOrderItem {
   component       Product         @relation(fields: [componentId], references: [id])
 
   @@unique([productionOrderId, componentId])
+  @@index([tenantId])
   @@map("production_order_items")
 }

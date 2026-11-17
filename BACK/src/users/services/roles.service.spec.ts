@@ -184,6 +184,7 @@ describe('RolesService', () => {
       });
 
       expect(repo.replacePermissions).toHaveBeenCalledWith(
+        'tenant-1',
         'role-1',
         perms.map((p) => p.id),
       );

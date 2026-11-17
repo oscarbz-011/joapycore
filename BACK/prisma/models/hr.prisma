@@ -215,6 +215,7 @@ model PayrollRecord {
 }
 
 model PayrollRecordItem {
+  tenantId        String @map("tenant_id")
   id              String @id @default(uuid())
   payrollRecordId String @map("payroll_record_id")
   employeeId      String @map("employee_id")
@@ -235,5 +236,6 @@ model PayrollRecordItem {
   employee      Employee      @relation(fields: [employeeId], references: [id])
 
   @@unique([payrollRecordId, employeeId])
+  @@index([tenantId])
   @@map("payroll_record_items")
 }

@@ -112,6 +112,7 @@ export class InstallmentsSchedulerService {
         );
 
         await this.installmentsRepository.upsertInterestCharge(
+          inst.tenantId,
           inst.id,
           component.id,
           charge,

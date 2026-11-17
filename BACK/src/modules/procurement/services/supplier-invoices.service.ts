@@ -179,6 +179,7 @@ export class SupplierInvoicesService {
             create: received.map((line) => {
               const invoiced = invoicedById.get(line.receiptItemId);
               return {
+                tenantId,
                 purchaseReceiptItemId: line.receiptItemId,
                 accountsPayableId: line.payableId,
                 quantity: invoiced?.quantity ?? 0,

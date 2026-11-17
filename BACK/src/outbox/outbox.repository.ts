@@ -104,6 +104,7 @@ export class OutboxRepository {
 
   /** `error` sin `failed`: falló pero no se reintenta, queda anotado. */
   recordDelivery(
+    tenantId: string,
     eventId: string,
     consumer: string,
     result: { failed: boolean; error?: string },
@@ -113,7 +114,7 @@ export class OutboxRepository {
     const processedAt = result.failed ? null : new Date();
     return this.prisma.outboxDelivery.upsert({
       where: { eventId_consumer: { eventId, consumer } },
-      create: { eventId, consumer, status, lastError, processedAt },
+      create: { tenantId, eventId, consumer, status, lastError, processedAt },
       update: { status, lastError, processedAt, attempts: { increment: 1 } },
     });
   }

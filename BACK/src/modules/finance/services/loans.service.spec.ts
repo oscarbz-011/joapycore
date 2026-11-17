@@ -721,6 +721,7 @@ describe('LoansService', () => {
             items: {
               create: [
                 {
+                  tenantId: 'tenant-1',
                   installmentId: INST_ID,
                   installmentNumber: 1,
                   amountApplied: 50,
@@ -728,6 +729,7 @@ describe('LoansService', () => {
                   componentName: 'Gastos administrativos',
                 },
                 {
+                  tenantId: 'tenant-1',
                   installmentId: INST_ID,
                   installmentNumber: 1,
                   amountApplied: 150,
@@ -805,6 +807,7 @@ describe('LoansService', () => {
             items: {
               create: [
                 {
+                  tenantId: 'tenant-1',
                   installmentId: 'inst-1',
                   installmentNumber: 1,
                   amountApplied: 300,
@@ -812,6 +815,7 @@ describe('LoansService', () => {
                   componentName: null,
                 },
                 {
+                  tenantId: 'tenant-1',
                   installmentId: 'inst-2',
                   installmentNumber: 2,
                   amountApplied: 100,
@@ -926,6 +930,7 @@ describe('LoansService', () => {
             items: {
               create: [
                 {
+                  tenantId: 'tenant-1',
                   installmentId: 'inst-1',
                   installmentNumber: 1,
                   amountApplied: 300,
@@ -933,6 +938,7 @@ describe('LoansService', () => {
                   componentName: null,
                 },
                 {
+                  tenantId: 'tenant-1',
                   installmentId: 'inst-2',
                   installmentNumber: 2,
                   amountApplied: 150,

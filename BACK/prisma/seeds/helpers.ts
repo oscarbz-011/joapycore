@@ -84,6 +84,7 @@ export async function createDemoTenant(
     if (allPermissions.length > 0) {
       await tx.rolePermission.createMany({
         data: allPermissions.map((p) => ({
+          tenantId: tenant.id,
           roleId: ownerRole.id,
           permissionId: p.id,
         })),
@@ -101,7 +102,7 @@ export async function createDemoTenant(
       },
     });
     await tx.userRole.create({
-      data: { userId: owner.id, roleId: ownerRole.id },
+      data: { tenantId: tenant.id, userId: owner.id, roleId: ownerRole.id },
     });
 
     const branch = await tx.branch.create({

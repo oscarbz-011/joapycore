@@ -96,6 +96,7 @@ export class RolesService {
     }
 
     await this.rolesRepository.replacePermissions(
+      tenantId,
       id,
       permissions.map((p) => p.id),
     );

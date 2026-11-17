@@ -73,6 +73,7 @@ export class AuthService {
       );
       if (permissions.length > 0) {
         await this.rolesRepository.attachPermissions(
+          tenant.id,
           ownerRole.id,
           permissions.map((permission) => permission.id),
           tx,
@@ -89,7 +90,12 @@ export class AuthService {
         },
         tx,
       );
-      await this.usersRepository.attachRole(createdUser.id, ownerRole.id, tx);
+      await this.usersRepository.attachRole(
+        tenant.id,
+        createdUser.id,
+        ownerRole.id,
+        tx,
+      );
       await this.tenantModulesRepository.seedDefaults(
         tenant.id,
         dto.industry,

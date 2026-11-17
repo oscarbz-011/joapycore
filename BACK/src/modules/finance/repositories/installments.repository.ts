@@ -165,6 +165,7 @@ export class InstallmentsRepository {
   // interest-calc.service.ts. `amount` es el cargo vigente completo, no un
   // delta a sumar.
   upsertInterestCharge(
+    tenantId: string,
     installmentId: string,
     componentId: string,
     amount: number,
@@ -172,7 +173,7 @@ export class InstallmentsRepository {
   ) {
     return this.prisma.installmentInterestCharge.upsert({
       where: { installmentId_componentId: { installmentId, componentId } },
-      create: { installmentId, componentId, amount, periodsElapsed },
+      create: { tenantId, installmentId, componentId, amount, periodsElapsed },
       update: { amount, periodsElapsed },
     });
   }

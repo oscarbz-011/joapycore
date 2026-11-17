@@ -176,12 +176,17 @@ export class CreditNotesRepository {
     data: Omit<Prisma.CreditNoteUncheckedCreateInput, 'items'>,
     items: Omit<
       Prisma.CreditNoteItemUncheckedCreateWithoutCreditNoteInput,
-      'id'
+      'id' | 'tenantId'
     >[],
     client: PrismaClientOrTx,
   ) {
     return client.creditNote.create({
-      data: { ...data, items: { create: items } },
+      data: {
+        ...data,
+        items: {
+          create: items.map((item) => ({ ...item, tenantId: data.tenantId })),
+        },
+      },
       select: { id: true },
     });
   }

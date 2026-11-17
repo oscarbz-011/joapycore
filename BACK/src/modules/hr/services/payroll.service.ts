@@ -77,6 +77,7 @@ export class PayrollService {
       const netSalary = grossSalary - ipsEmployee;
 
       await this.payrollRepository.createItem({
+        tenantId,
         payrollRecordId: record.id,
         employeeId: emp.id,
         baseSalary,

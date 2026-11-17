@@ -87,9 +87,14 @@ describe('OutboxService', () => {
 
     for (const c of consumers) {
       expect(c.handle).toHaveBeenCalledWith(PAYLOAD);
-      expect(repo.recordDelivery).toHaveBeenCalledWith('ev-1', c.consumer, {
-        failed: false,
-      });
+      expect(repo.recordDelivery).toHaveBeenCalledWith(
+        't1',
+        'ev-1',
+        c.consumer,
+        {
+          failed: false,
+        },
+      );
     }
     expect(events.emit).toHaveBeenCalledWith('invoice.issued', PAYLOAD);
     expect(repo.markDone).toHaveBeenCalledWith('ev-1');
@@ -120,11 +125,11 @@ describe('OutboxService', () => {
     await expect(service.dispatch('ev-1')).resolves.toBe(false);
 
     expect(healthy.handle).toHaveBeenCalled();
-    expect(repo.recordDelivery).toHaveBeenCalledWith('ev-1', 'a', {
+    expect(repo.recordDelivery).toHaveBeenCalledWith('t1', 'ev-1', 'a', {
       failed: true,
       error: 'db down',
     });
-    expect(repo.recordDelivery).toHaveBeenCalledWith('ev-1', 'b', {
+    expect(repo.recordDelivery).toHaveBeenCalledWith('t1', 'ev-1', 'b', {
       failed: false,
     });
     expect(repo.markDone).not.toHaveBeenCalled();
@@ -158,7 +163,7 @@ describe('OutboxService', () => {
 
     await expect(service.dispatch('ev-1')).resolves.toBe(true);
 
-    expect(repo.recordDelivery).toHaveBeenCalledWith('ev-1', 'a', {
+    expect(repo.recordDelivery).toHaveBeenCalledWith('t1', 'ev-1', 'a', {
       failed: false,
       error: 'pdf down',
     });
@@ -174,9 +179,14 @@ describe('OutboxService', () => {
 
     expect(tenantModules.isActive).toHaveBeenCalledWith('t1', 'logistics');
     expect(logistics.handle).not.toHaveBeenCalled();
-    expect(repo.recordDelivery).toHaveBeenCalledWith('ev-1', 'logistics.note', {
-      failed: false,
-    });
+    expect(repo.recordDelivery).toHaveBeenCalledWith(
+      't1',
+      'ev-1',
+      'logistics.note',
+      {
+        failed: false,
+      },
+    );
   });
 
   it('completes the event even if an in-memory observer throws', async () => {

@@ -170,11 +170,13 @@ describe('AuthService', () => {
         tx,
       );
       expect(rolesRepository.attachPermissions).toHaveBeenCalledWith(
+        'tenant-1',
         'role-1',
         ['perm-1'],
         tx,
       );
       expect(usersRepository.attachRole).toHaveBeenCalledWith(
+        'tenant-1',
         'user-1',
         'role-1',
         tx,
