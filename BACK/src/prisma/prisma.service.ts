@@ -7,6 +7,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '@prisma/client';
+import { separateBatchesByTenant } from './tenant-batching';
 import { TenantPool } from './tenant-pool';
 import { unprotectedTenantTables } from './tenant-rls';
 
@@ -40,6 +41,7 @@ export class PrismaService
     });
 
     super({ adapter: new PrismaPg(pool) });
+    separateBatchesByTenant(this);
     this.pool = pool;
     this.production = configService.get<string>('NODE_ENV') === 'production';
     this.enforceTenants = enforceTenants;

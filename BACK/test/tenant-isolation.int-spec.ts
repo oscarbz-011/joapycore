@@ -107,3 +107,45 @@ describeAsApp('seguridad de filas por empresa', () => {
     );
   });
 });
+
+describeAsApp('findUnique de dos empresas en el mismo tick', () => {
+  const prisma = new PrismaService(
+    new ConfigService({ DATABASE_URL: process.env.DATABASE_URL }),
+  );
+  const tenants = [randomUUID(), randomUUID()];
+  const ids: string[] = [];
+
+  beforeAll(async () => {
+    await prisma.tenant.createMany({
+      data: tenants.map((id) => ({ id, name: `TEST rls tick ${id}` })),
+    });
+    for (const tenantId of tenants) {
+      const row = await prisma.customer.create({
+        data: {
+          tenantId,
+          firstName: 'Tick',
+          lastName: tenantId.slice(0, 8),
+          customerCode: `CLI-${randomUUID().slice(0, 8)}`,
+        },
+      });
+      ids.push(row.id);
+    }
+  });
+
+  afterAll(async () => {
+    await prisma.customer.deleteMany({ where: { tenantId: { in: tenants } } });
+    await prisma.tenant.deleteMany({ where: { id: { in: tenants } } });
+    await prisma.onModuleDestroy();
+  });
+
+  it('finds each row for its own tenant', async () => {
+    const found = await Promise.all(
+      tenants.map((tenantId, i) =>
+        TenantContext.run(tenantId, () =>
+          prisma.customer.findUnique({ where: { id: ids[i] } }),
+        ),
+      ),
+    );
+    expect(found.map((row) => row?.id)).toEqual(ids);
+  });
+});
