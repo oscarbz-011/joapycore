@@ -27,6 +27,7 @@ import {
 } from './platform-delivery';
 import { ResendClient } from './resend.client';
 import { SmtpPlatformClient } from './smtp-platform.client';
+import { TenantContext } from '../prisma/tenant-context';
 
 export interface PlatformAttachment {
   filename: string;
@@ -173,11 +174,14 @@ export class PlatformEmailService {
   /** Un correo de JoapyCore mismo: no pertenece a ninguna empresa. */
   async sendSystem(input: Content): Promise<PlatformEmailResult> {
     const route = this.requireRoute();
-    return this.deliver(route, input, {
-      tenantId: null,
-      from: route.systemSender(),
-      replyTo: null,
-    });
+    // Su registro no tiene empresa: se guarda aunque lo dispare un pedido.
+    return TenantContext.runAsPlatform(() =>
+      this.deliver(route, input, {
+        tenantId: null,
+        from: route.systemSender(),
+        replyTo: null,
+      }),
+    );
   }
 
   private async deliver(

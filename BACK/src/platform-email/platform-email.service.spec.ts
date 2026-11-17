@@ -4,6 +4,7 @@ import {
   PlatformEmailService,
 } from './platform-email.service';
 import { PlatformDeliveryError } from './platform-delivery';
+import { TenantContext } from '../prisma/tenant-context';
 
 const config = {
   driver: 'resend' as 'resend' | 'smtp',
@@ -214,6 +215,25 @@ describe('PlatformEmailService', () => {
         expect.objectContaining({ tenantId: null, status: 'SENT' }),
       );
       expect(repository.countRecent).not.toHaveBeenCalled();
+    });
+
+    it('records it in platform mode even when a company request sends it', async () => {
+      let platform: boolean | undefined;
+      repository.record.mockImplementation(() => {
+        platform = TenantContext.isPlatform();
+        return Promise.resolve({ id: 'log-1' });
+      });
+
+      await TenantContext.run('tenant-1', () =>
+        service.sendSystem({
+          purpose: 'system.password_reset',
+          to: 'usuario@example.com',
+          subject: 'Recuperá tu contraseña',
+          html: '<p>…</p>',
+        }),
+      );
+
+      expect(platform).toBe(true);
     });
   });
 
