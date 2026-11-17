@@ -91,7 +91,7 @@ docker compose exec -T postgres createdb -U joapycore joapycore_comms_test_local
 
 Push-Location BACK
 try {
-  $env:DATABASE_URL='postgresql://joapycore:joapycore@localhost:5435/joapycore_comms_test_local'
+  $env:DATABASE_URL='postgresql://<usuario>:<clave>@localhost:5435/joapycore_comms_test_local'
   $env:COMMUNICATIONS_TEST_DATABASE_URL=$env:DATABASE_URL
   $env:COMMUNICATIONS_TEST_REDIS_URL='redis://127.0.0.1:6379/15'
   pnpm exec prisma db push
