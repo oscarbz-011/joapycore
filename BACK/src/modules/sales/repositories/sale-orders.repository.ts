@@ -173,6 +173,13 @@ export class SaleOrdersRepository {
     });
   }
 
+  setItemBatch(tenantId: string, saleItemId: string, batchId: string) {
+    return this.prisma.saleOrderItem.updateMany({
+      where: { id: saleItemId, tenantId },
+      data: { batchId },
+    });
+  }
+
   updateStatus(id: string, status: string, client?: PrismaClientOrTx) {
     const db = client ?? this.prisma;
     return db.saleOrder.update({

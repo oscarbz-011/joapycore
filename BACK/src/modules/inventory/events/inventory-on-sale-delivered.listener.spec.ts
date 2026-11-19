@@ -22,15 +22,16 @@ describe('InventoryOnSaleDeliveredListener', () => {
   let listener: InventoryOnSaleDeliveredListener;
   let prisma: { saleOrder: { findFirst: jest.Mock }; $transaction: jest.Mock };
   let stockEntryService: { consumeFifo: jest.Mock };
-  let tx: {
-    stockMovement: { findFirst: jest.Mock };
-    saleOrderItem: { update: jest.Mock };
-  };
+  let tx: { stockMovement: { findFirst: jest.Mock } };
+  let outbox: { enqueue: jest.Mock; dispatch: jest.Mock };
 
   beforeEach(() => {
     tx = {
       stockMovement: { findFirst: jest.fn().mockResolvedValue(null) },
-      saleOrderItem: { update: jest.fn() },
+    };
+    outbox = {
+      enqueue: jest.fn().mockResolvedValue('event-1'),
+      dispatch: jest.fn().mockResolvedValue(true),
     };
     prisma = {
       saleOrder: { findFirst: jest.fn() },
@@ -43,6 +44,7 @@ describe('InventoryOnSaleDeliveredListener', () => {
       stockEntryService as any,
       new StockSourcesRepository(prisma as any),
       new StockMovementsRepository(prisma as any),
+      outbox as any,
     );
   });
 
@@ -54,7 +56,7 @@ describe('InventoryOnSaleDeliveredListener', () => {
     expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 
-  it('consumes FIFO for a lot-managed, non-serialized item and stamps batchId', async () => {
+  it('consumes FIFO for a lot-managed item and tells Sales which batch it used', async () => {
     prisma.saleOrder.findFirst.mockResolvedValue(makeOrder());
     stockEntryService.consumeFifo.mockResolvedValue('batch-old');
 
@@ -67,10 +69,27 @@ describe('InventoryOnSaleDeliveredListener', () => {
       'item-1',
       tx,
     );
-    expect(tx.saleOrderItem.update).toHaveBeenCalledWith({
-      where: { id: 'item-1' },
-      data: { batchId: 'batch-old' },
-    });
+    expect(outbox.enqueue).toHaveBeenCalledWith(
+      tx,
+      'tenant-1',
+      'inventory.batch.consumed',
+      {
+        tenantId: 'tenant-1',
+        saleOrderId: 'order-1',
+        lines: [{ saleItemId: 'item-1', batchId: 'batch-old' }],
+      },
+    );
+    expect(outbox.dispatch).toHaveBeenCalledWith('event-1');
+  });
+
+  it('publishes nothing when no line consumed a batch', async () => {
+    prisma.saleOrder.findFirst.mockResolvedValue(makeOrder());
+    stockEntryService.consumeFifo.mockResolvedValue(null);
+
+    await listener.handle({ tenantId: 'tenant-1', saleOrderId: 'order-1' });
+
+    expect(outbox.enqueue).not.toHaveBeenCalled();
+    expect(outbox.dispatch).not.toHaveBeenCalled();
   });
 
   it('skips serialized items entirely', async () => {
@@ -120,6 +139,7 @@ describe('InventoryOnSaleDeliveredListener', () => {
     await listener.handle({ tenantId: 'tenant-1', saleOrderId: 'order-1' });
 
     expect(stockEntryService.consumeFifo).not.toHaveBeenCalled();
+    expect(outbox.enqueue).not.toHaveBeenCalled();
   });
 
   // El outbox solo reintenta si el error le llega.

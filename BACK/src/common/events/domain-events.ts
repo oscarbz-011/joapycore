@@ -89,6 +89,10 @@ export interface DomainEvents {
     type: string;
     quantity: number;
   };
+  // Primer lote del que salió cada renglón de una venta entregada.
+  'inventory.batch.consumed': SaleOrderRef & {
+    lines: { saleItemId: string; batchId: string }[];
+  };
   'production.order.completed': Tenant & {
     productionOrderId: string;
     productId: string;

@@ -101,15 +101,4 @@ export class StockSourcesRepository {
       data: { salesChannels, salesChannelsOnReceipt: [] },
     });
   }
-
-  setSaleOrderItemBatch(
-    saleOrderItemId: string,
-    batchId: string,
-    client: PrismaClientOrTx = this.prisma,
-  ) {
-    return client.saleOrderItem.update({
-      where: { id: saleOrderItemId },
-      data: { batchId },
-    });
-  }
 }
