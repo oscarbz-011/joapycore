@@ -7,6 +7,7 @@ import { SaleTargetsController } from './controllers/sale-targets.controller';
 import { SalesOnDeliveryListener } from './events/sales-on-delivery.listener';
 import { SalesOnInvoiceListener } from './events/sales-on-invoice.listener';
 import { SalesOnBatchConsumedListener } from './events/sales-on-batch-consumed.listener';
+import { SalesOnLocationCorrectedListener } from './events/sales-on-location-corrected.listener';
 import { CombosRepository } from './repositories/combos.repository';
 import { CustomersRepository } from './repositories/customers.repository';
 import { GuarantorsRepository } from './repositories/guarantors.repository';
@@ -48,6 +49,7 @@ import { TenantsModule } from '../../tenants/tenants.module';
     SalesOnDeliveryListener,
     SalesOnInvoiceListener,
     SalesOnBatchConsumedListener,
+    SalesOnLocationCorrectedListener,
     { provide: SALES_GATEWAY, useExisting: SaleOrdersService },
   ],
   exports: [SALES_GATEWAY],

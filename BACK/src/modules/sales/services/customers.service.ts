@@ -158,10 +158,12 @@ export class CustomersService {
     const { birthDate: birthDateText, ...data } = dto;
     const taxpayerType = dto.taxpayerType ?? before.taxpayerType;
     const birthDate = this.birthDate(birthDateText, taxpayerType);
+    const movedPin = dto.latitude !== undefined || dto.longitude !== undefined;
     const customer = await this.customersRepository.update(tenantId, id, {
       ...data,
       ...this.casedNames(dto, taxpayerType),
       ...(birthDate !== undefined ? { birthDate } : {}),
+      ...(movedPin ? { locationUpdatedAt: new Date() } : {}),
     });
 
     this.eventEmitter.emit('customer.updated', { tenantId, customerId: id });

@@ -12,9 +12,6 @@ export const KNOWN_BOUNDARY_DEBT: Record<string, string[]> = {
   'modules/finance/repositories/finance-sources.repository.ts': [
     'write:DelinquencyReport',
   ],
-  'modules/logistics/repositories/logistics-sources.repository.ts': [
-    'write:Customer',
-  ],
 
   // Lecturas fuera del repositorio de fuentes.
   'modules/cobranzas/repositories/delinquency-reports.repository.ts': [

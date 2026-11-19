@@ -123,6 +123,13 @@ export interface DomainEvents {
   'delivery.assigned': DeliveryRef;
   'delivery.seller.requested': DeliveryRef;
   'delivery.tracking.recorded': DeliveryRef;
+  // El repartidor marcó que el cliente no estaba en la ubicación guardada.
+  'delivery.location.corrected': DeliveryRef & {
+    customerId: string;
+    latitude: number;
+    longitude: number;
+    correctedAt: string;
+  };
   'delivery.route.changed': Tenant;
 
   'pos.session.opened': Tenant & {
