@@ -1,10 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma, OrderType } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
+import type { QuotePdf } from '../../../common/contracts/document-pdf.contract';
 import { PrismaClientOrTx } from '../../../prisma/types';
 
 @Injectable()
-export class SaleOrdersRepository {
+export class SaleOrdersRepository implements QuotePdf {
   constructor(private readonly prisma: PrismaService) {}
 
   private get include() {
@@ -170,6 +171,13 @@ export class SaleOrdersRepository {
     return this.prisma.saleOrder.updateMany({
       where: { id, tenantId, status: 'CONFIRMED' },
       data: { status: 'INVOICED' },
+    });
+  }
+
+  async attachQuotePdf(tenantId: string, saleOrderId: string, fileId: string) {
+    await this.prisma.saleOrder.updateMany({
+      where: { id: saleOrderId, tenantId },
+      data: { quotePdfFileId: fileId },
     });
   }
 

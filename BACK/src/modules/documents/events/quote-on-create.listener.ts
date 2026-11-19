@@ -1,5 +1,9 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { OnDomainEvent } from '../../../common/events/on-domain-event.decorator';
+import {
+  QUOTE_PDF,
+  type QuotePdf,
+} from '../../../common/contracts/document-pdf.contract';
 import { TemplateKind } from '@prisma/client';
 import { numberToWordsEs } from '../../../common/utils/number-to-words.util';
 import { DocxTemplateService } from '../../../files/docx/docx-template.service';
@@ -45,6 +49,7 @@ export class QuoteOnCreateListener {
     private readonly filesService: FilesService,
     private readonly pdfService: PdfService,
     private readonly docxTemplateService: DocxTemplateService,
+    @Inject(QUOTE_PDF) private readonly quotePdf: QuotePdf,
   ) {}
 
   @OnDomainEvent('sale.order.quoted')
@@ -180,6 +185,6 @@ export class QuoteOnCreateListener {
       { module: 'documents', entityType: 'sale_order', entityId: order.id },
     );
 
-    await this.sources.setQuotePdf(event.tenantId, order.id, fileRecord.id);
+    await this.quotePdf.attachQuotePdf(event.tenantId, order.id, fileRecord.id);
   }
 }

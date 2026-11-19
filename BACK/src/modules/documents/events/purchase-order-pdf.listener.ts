@@ -1,5 +1,9 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { OnDomainEvent } from '../../../common/events/on-domain-event.decorator';
+import {
+  PURCHASE_ORDER_PDF,
+  type PurchaseOrderPdf,
+} from '../../../common/contracts/document-pdf.contract';
 import { TemplateKind } from '@prisma/client';
 import { DocxTemplateService } from '../../../files/docx/docx-template.service';
 import { unflattenVariables } from '../../../files/docx/docx-variables.util';
@@ -27,6 +31,8 @@ export class PurchaseOrderPdfListener {
     private readonly filesService: FilesService,
     private readonly pdfService: PdfService,
     private readonly docxTemplateService: DocxTemplateService,
+    @Inject(PURCHASE_ORDER_PDF)
+    private readonly purchaseOrderPdf: PurchaseOrderPdf,
   ) {}
 
   @OnDomainEvent('purchase.order.pdf.requested')
@@ -117,7 +123,7 @@ export class PurchaseOrderPdfListener {
       },
     );
 
-    await this.sources.setPurchaseOrderPdf(
+    await this.purchaseOrderPdf.attachPurchaseOrderPdf(
       event.tenantId,
       order.id,
       fileRecord.id,

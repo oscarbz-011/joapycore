@@ -3,12 +3,6 @@
 // al repositorio de fuentes; no se agregan entradas nuevas.
 export const KNOWN_BOUNDARY_DEBT: Record<string, string[]> = {
   // Escrituras en tablas ajenas: las más urgentes de mover a eventos.
-  'modules/documents/repositories/document-sources.repository.ts': [
-    'write:Invoice',
-    'write:PaymentReceipt',
-    'write:PurchaseOrder',
-    'write:SaleOrder',
-  ],
   'modules/finance/repositories/finance-sources.repository.ts': [
     'write:DelinquencyReport',
   ],

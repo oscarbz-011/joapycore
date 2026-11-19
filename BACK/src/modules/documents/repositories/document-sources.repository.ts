@@ -3,9 +3,10 @@ import { PrismaService } from '../../../prisma/prisma.service';
 
 /**
  * Lecturas de datos de otros módulos (facturas, pedidos, recibos, clientes)
- * que Documentos necesita para generar PDFs, y el enlace del PDF generado
- * de vuelta a su entidad. Quedan agrupadas acá para que ningún listener ni
- * servicio consulte Prisma directo.
+ * que Documentos necesita para generar PDFs. El PDF generado lo vincula el
+ * dueño de cada documento por su contrato (ver document-pdf.contract.ts).
+ * Quedan agrupadas acá para que ningún listener ni servicio consulte Prisma
+ * directo.
  */
 @Injectable()
 export class DocumentSourcesRepository {
@@ -53,31 +54,6 @@ export class DocumentSourcesRepository {
     });
   }
 
-  async setInvoicePdf(
-    tenantId: string,
-    invoiceId: string,
-    fileId: string,
-    attemptAt: Date,
-    expectedStatus: 'PENDING' | 'ISSUED' | 'PAID',
-  ) {
-    const updated = await this.prisma.invoice.updateMany({
-      where: {
-        id: invoiceId,
-        tenantId,
-        status: expectedStatus,
-        pdfFileId: null,
-        issuedAt: attemptAt,
-      },
-      data: { pdfFileId: fileId },
-    });
-    if (updated.count !== 1) {
-      throw new Error(
-        `La factura ${invoiceId} cambió durante la generación del PDF`,
-      );
-    }
-    return updated;
-  }
-
   // ── Pedidos de venta ───────────────────────────────────────────────────────
 
   findQuoteForPdf(tenantId: string, saleOrderId: string) {
@@ -102,24 +78,6 @@ export class DocumentSourcesRepository {
           include: { product: { select: { name: true, unit: true } } },
         },
       },
-    });
-  }
-
-  setPurchaseOrderPdf(
-    tenantId: string,
-    purchaseOrderId: string,
-    fileId: string,
-  ) {
-    return this.prisma.purchaseOrder.updateMany({
-      where: { id: purchaseOrderId, tenantId },
-      data: { pdfFileId: fileId },
-    });
-  }
-
-  setQuotePdf(tenantId: string, saleOrderId: string, fileId: string) {
-    return this.prisma.saleOrder.updateMany({
-      where: { id: saleOrderId, tenantId },
-      data: { quotePdfFileId: fileId },
     });
   }
 
@@ -158,13 +116,6 @@ export class DocumentSourcesRepository {
         collectedBy: true,
         items: { orderBy: { installmentNumber: 'asc' } },
       },
-    });
-  }
-
-  setReceiptPdf(tenantId: string, receiptId: string, fileId: string) {
-    return this.prisma.paymentReceipt.updateMany({
-      where: { id: receiptId, tenantId },
-      data: { pdfFileId: fileId },
     });
   }
 

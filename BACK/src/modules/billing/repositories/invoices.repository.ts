@@ -3,6 +3,10 @@ import { InvoiceStatus, PaymentMethod, Prisma } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { PrismaClientOrTx } from '../../../prisma/types';
 import type { SeriesNumbering } from '../types/series-numbering';
+import type {
+  InvoicePdf,
+  InvoicePdfStatus,
+} from '../../../common/contracts/document-pdf.contract';
 
 // Lo que hace falta para imprimir una factura: en papel térmico, en A4 o
 // sobre la hoja de un talonario.
@@ -95,10 +99,33 @@ export const receiptSelect = {
 } satisfies Prisma.InvoiceSelect;
 
 @Injectable()
-export class InvoicesRepository {
+export class InvoicesRepository implements InvoicePdf {
   private static readonly STALE_CLAIM_MS = 5 * 60 * 1000;
 
   constructor(private readonly prisma: PrismaService) {}
+
+  async attachInvoicePdf(
+    tenantId: string,
+    invoiceId: string,
+    fileId: string,
+    attempt: { issuedAt: Date; status: InvoicePdfStatus },
+  ) {
+    const updated = await this.prisma.invoice.updateMany({
+      where: {
+        id: invoiceId,
+        tenantId,
+        status: attempt.status,
+        pdfFileId: null,
+        issuedAt: attempt.issuedAt,
+      },
+      data: { pdfFileId: fileId },
+    });
+    if (updated.count !== 1) {
+      throw new Error(
+        `La factura ${invoiceId} cambió durante la generación del PDF`,
+      );
+    }
+  }
 
   private get include() {
     return {

@@ -150,3 +150,42 @@ describe('InvoicesRepository listings', () => {
     );
   });
 });
+
+describe('InvoicesRepository PDF link (INVOICE_PDF)', () => {
+  it('links only the same issuance attempt with no prior PDF', async () => {
+    const updateMany = jest.fn().mockResolvedValue({ count: 1 });
+    const repository = new InvoicesRepository({
+      invoice: { updateMany },
+    } as never);
+    const issuedAt = new Date('2026-09-23T12:01:00.000Z');
+
+    await repository.attachInvoicePdf('tenant-1', 'inv-1', 'pdf-1', {
+      issuedAt,
+      status: 'PENDING',
+    });
+
+    expect(updateMany).toHaveBeenCalledWith({
+      where: {
+        id: 'inv-1',
+        tenantId: 'tenant-1',
+        status: 'PENDING',
+        pdfFileId: null,
+        issuedAt,
+      },
+      data: { pdfFileId: 'pdf-1' },
+    });
+  });
+
+  it('rejects a stale renderer when the invoice changed meanwhile', async () => {
+    const repository = new InvoicesRepository({
+      invoice: { updateMany: jest.fn().mockResolvedValue({ count: 0 }) },
+    } as never);
+
+    await expect(
+      repository.attachInvoicePdf('tenant-1', 'inv-1', 'pdf-stale', {
+        issuedAt: new Date('2026-09-23T12:01:00.000Z'),
+        status: 'PENDING',
+      }),
+    ).rejects.toThrow('cambió durante la generación del PDF');
+  });
+});

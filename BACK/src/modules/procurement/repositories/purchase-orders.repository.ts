@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PurchaseOrderStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
+import type { PurchaseOrderPdf } from '../../../common/contracts/document-pdf.contract';
 import { PrismaClientOrTx } from '../../../prisma/types';
 
 export function orderSequence(orderNumber: string | null): number {
@@ -9,8 +10,19 @@ export function orderSequence(orderNumber: string | null): number {
 }
 
 @Injectable()
-export class PurchaseOrdersRepository {
+export class PurchaseOrdersRepository implements PurchaseOrderPdf {
   constructor(private readonly prisma: PrismaService) {}
+
+  async attachPurchaseOrderPdf(
+    tenantId: string,
+    purchaseOrderId: string,
+    fileId: string,
+  ) {
+    await this.prisma.purchaseOrder.updateMany({
+      where: { id: purchaseOrderId, tenantId },
+      data: { pdfFileId: fileId },
+    });
+  }
 
   findAll(tenantId: string, status?: PurchaseOrderStatus) {
     return this.prisma.purchaseOrder.findMany({
