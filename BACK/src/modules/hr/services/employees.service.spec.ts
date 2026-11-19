@@ -5,8 +5,11 @@ import {
 } from '@nestjs/common';
 import * as bcrypt from 'bcryptjs';
 import { EmployeesService } from './employees.service';
-import { EmployeeAccountsRepository } from '../repositories/employee-accounts.repository';
+import { UsersRepository } from '../../../users/repositories/users.repository';
+import { UserAccountsService } from '../../../users/services/user-accounts.service';
 import { EmployeesRepository } from '../repositories/employees.repository';
+import { HrSourcesRepository } from '../repositories/hr-sources.repository';
+import { PositionsRepository } from '../repositories/positions.repository';
 
 jest.mock('bcryptjs');
 
@@ -67,6 +70,12 @@ describe('EmployeesService', () => {
     branch: {
       findMany: jest.Mock;
     };
+    position: {
+      findFirst: jest.Mock;
+    };
+    userRole: {
+      create: jest.Mock;
+    };
   };
   let eventEmitter: { emit: jest.Mock };
 
@@ -80,7 +89,7 @@ describe('EmployeesService', () => {
         findMany: jest.fn().mockResolvedValue([]),
         create: jest.fn(),
         update: jest.fn(),
-        updateMany: jest.fn(),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
       },
       employee: {
         create: jest.fn(),
@@ -88,6 +97,12 @@ describe('EmployeesService', () => {
       },
       branch: {
         findMany: jest.fn().mockResolvedValue([{ id: 'branch-1' }]),
+      },
+      position: {
+        findFirst: jest.fn().mockResolvedValue(null),
+      },
+      userRole: {
+        create: jest.fn(),
       },
     };
     employeesRepository = {
@@ -111,7 +126,9 @@ describe('EmployeesService', () => {
       employeesRepository as any,
       prisma as any,
       eventEmitter as any,
-      new EmployeeAccountsRepository(prisma as any),
+      new UserAccountsService(new UsersRepository(prisma as any)),
+      new PositionsRepository(prisma as any),
+      new HrSourcesRepository(prisma as any),
     );
   });
 
@@ -209,6 +226,34 @@ describe('EmployeesService', () => {
       expect(result.tempPassword).toBeDefined();
     });
 
+    it('gives the new user the role linked to the position', async () => {
+      prisma.user.findUnique.mockResolvedValue(null);
+      (bcrypt.hash as jest.Mock).mockResolvedValue('hashed-temp');
+      prisma.user.create.mockResolvedValue({ id: 'user-new' });
+      prisma.position.findFirst.mockResolvedValue({ roleId: 'role-seller' });
+      prisma.employee.create.mockResolvedValue(
+        makeEmployee({ userId: 'user-new' }),
+      );
+
+      await service.create('tenant-1', {
+        ...baseDto,
+        email: 'ana@company.com',
+        positionId: 'pos-1',
+      });
+
+      expect(prisma.position.findFirst).toHaveBeenCalledWith({
+        where: { id: 'pos-1', tenantId: 'tenant-1' },
+        select: { roleId: true },
+      });
+      expect(prisma.userRole.create).toHaveBeenCalledWith({
+        data: {
+          tenantId: 'tenant-1',
+          userId: 'user-new',
+          roleId: 'role-seller',
+        },
+      });
+    });
+
     it('throws ConflictException if email is already taken', async () => {
       prisma.user.findUnique.mockResolvedValue({ id: 'existing-user' });
 
@@ -289,8 +334,8 @@ describe('EmployeesService', () => {
 
       await service.update('tenant-1', 'emp-1', { branchId: 'branch-2' });
 
-      expect(prisma.user.update).toHaveBeenCalledWith({
-        where: { id: 'user-1' },
+      expect(prisma.user.updateMany).toHaveBeenCalledWith({
+        where: { id: 'user-1', tenantId: 'tenant-1' },
         data: { branchId: 'branch-2' },
       });
     });
@@ -305,7 +350,7 @@ describe('EmployeesService', () => {
 
       await service.update('tenant-1', 'emp-1', { branchId: 'branch-2' });
 
-      expect(prisma.user.update).not.toHaveBeenCalled();
+      expect(prisma.user.updateMany).not.toHaveBeenCalled();
     });
 
     it('does not touch the user account when branchId is not part of the update', async () => {
@@ -318,7 +363,7 @@ describe('EmployeesService', () => {
 
       await service.update('tenant-1', 'emp-1', { firstName: 'Andrea' });
 
-      expect(prisma.user.update).not.toHaveBeenCalled();
+      expect(prisma.user.updateMany).not.toHaveBeenCalled();
     });
   });
 
@@ -389,10 +434,13 @@ describe('EmployeesService', () => {
       const result = await service.resetUserPassword('tenant-1', 'emp-1');
 
       expect(result.tempPassword).toBeDefined();
-      expect(prisma.user.update).toHaveBeenCalledWith(
+      expect(prisma.user.updateMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { id: 'user-1' },
-          data: expect.objectContaining({ mustChangePassword: true }),
+          where: { id: 'user-1', tenantId: 'tenant-1' },
+          data: expect.objectContaining({
+            mustChangePassword: true,
+            sessionsValidAfter: expect.any(Date),
+          }),
         }),
       );
     });

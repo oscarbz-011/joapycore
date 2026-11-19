@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../prisma/prisma.service';
+import { PrismaClientOrTx } from '../../../prisma/types';
 import { toUpperNorm } from '../../../common/utils/normalize.util';
 
 const WITH_RELATIONS = {
@@ -26,6 +27,18 @@ export class PositionsRepository {
       where: { id, tenantId },
       ...WITH_RELATIONS,
     });
+  }
+
+  async findRoleId(
+    tenantId: string,
+    id: string,
+    client: PrismaClientOrTx = this.prisma,
+  ): Promise<string | null> {
+    const position = await client.position.findFirst({
+      where: { id, tenantId },
+      select: { roleId: true },
+    });
+    return position?.roleId ?? null;
   }
 
   create(

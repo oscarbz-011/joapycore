@@ -9,6 +9,7 @@ interface CreateUserData {
   firstName: string;
   lastName: string;
   username?: string;
+  branchId?: string;
   mustChangePassword?: boolean;
   tempPasswordEncrypted?: string;
   tempPasswordExpiresAt?: Date;
@@ -27,8 +28,19 @@ export class UsersRepository {
 
   // Email is globally unique across the platform (one account = one tenant for v1),
   // so login must look it up without a tenant filter.
-  findByEmail(email: string) {
-    return this.prisma.user.findUnique({ where: { email } });
+  findByEmail(email: string, client: PrismaClientOrTx = this.prisma) {
+    return client.user.findUnique({ where: { email } });
+  }
+
+  async findUsernamesStartingWith(
+    prefix: string,
+    client: PrismaClientOrTx = this.prisma,
+  ): Promise<string[]> {
+    const users = await client.user.findMany({
+      where: { username: { startsWith: prefix } },
+      select: { username: true },
+    });
+    return users.flatMap((u) => (u.username ? [u.username] : []));
   }
 
   findByEmailInsensitive(email: string) {
@@ -99,8 +111,13 @@ export class UsersRepository {
     return client.user.create({ data: { ...data, username, tenantId } });
   }
 
-  async update(tenantId: string, id: string, data: Prisma.UserUpdateInput) {
-    const result = await this.prisma.user.updateMany({
+  async update(
+    tenantId: string,
+    id: string,
+    data: Prisma.UserUncheckedUpdateManyInput,
+    client: PrismaClientOrTx = this.prisma,
+  ) {
+    const result = await client.user.updateMany({
       where: { id, tenantId },
       data,
     });

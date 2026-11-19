@@ -12,12 +12,6 @@ export const KNOWN_BOUNDARY_DEBT: Record<string, string[]> = {
   'modules/finance/repositories/finance-sources.repository.ts': [
     'write:DelinquencyReport',
   ],
-  'modules/hr/repositories/employee-accounts.repository.ts': [
-    'read:Branch',
-    'read:User',
-    'write:User',
-    'write:UserRole',
-  ],
   'modules/inventory/repositories/stock-sources.repository.ts': [
     'write:SaleOrderItem',
   ],

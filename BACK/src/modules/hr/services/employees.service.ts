@@ -1,32 +1,26 @@
 import {
   ConflictException,
+  Inject,
   Injectable,
   NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { EventBus } from '../../../common/events/event-bus';
-import * as bcrypt from 'bcryptjs';
-import { EmployeeAccountsRepository } from '../repositories/employee-accounts.repository';
+import {
+  USER_ACCOUNTS,
+  type UserAccounts,
+} from '../../../common/contracts/user-accounts.contract';
 import { EmployeesRepository } from '../repositories/employees.repository';
+import { HrSourcesRepository } from '../repositories/hr-sources.repository';
+import { PositionsRepository } from '../repositories/positions.repository';
 import { CreateEmployeeDto } from '../dto/create-employee.dto';
 import { UpdateEmployeeDto } from '../dto/update-employee.dto';
 import { PrismaService } from '../../../prisma/prisma.service';
-import {
-  buildUsernameBase,
-  resolveUsername,
-} from '../../../common/utils/username.util';
 import { toTitleCase } from '../../../common/utils/normalize.util';
-import {
-  generateTempPassword,
-  encryptTempPassword,
-  buildTempPasswordExpiry,
-} from '../../../common/utils/temp-password.util';
 import {
   SESSION_INVALIDATE_EVENT,
   type SessionInvalidateEvent,
 } from '../../../common/events/session-invalidate.event';
-
-const SALT_ROUNDS = 10;
 
 @Injectable()
 export class EmployeesService {
@@ -35,7 +29,9 @@ export class EmployeesService {
     // Solo para abrir transacciones; los accesos a datos van por repositorios.
     private readonly prisma: PrismaService,
     private readonly eventEmitter: EventBus,
-    private readonly accounts: EmployeeAccountsRepository,
+    @Inject(USER_ACCOUNTS) private readonly accounts: UserAccounts,
+    private readonly positionsRepository: PositionsRepository,
+    private readonly sources: HrSourcesRepository,
   ) {}
 
   list(tenantId: string) {
@@ -65,48 +61,26 @@ export class EmployeesService {
       let tempPassword: string | undefined;
 
       if (dto.email) {
-        const existing = await this.accounts.findUserByEmail(dto.email, tx);
-        if (existing) throw new ConflictException('El email ya está en uso');
-
-        // Auto-generate unique username: jose.benitez → jose.benitez2 …
-        const usernameBase = buildUsernameBase(firstName, lastName);
-        const taken = await this.accounts.findUsernamesStartingWith(
-          usernameBase,
+        const roleId = dto.positionId
+          ? await this.positionsRepository.findRoleId(
+              tenantId,
+              dto.positionId,
+              tx,
+            )
+          : null;
+        const account = await this.accounts.createWithTempPassword(
           tx,
-        );
-        const username = resolveUsername(usernameBase, taken);
-
-        tempPassword = generateTempPassword();
-        const passwordHash = await bcrypt.hash(tempPassword, SALT_ROUNDS);
-        const tempPasswordEncrypted = encryptTempPassword(tempPassword);
-        const tempPasswordExpiresAt = buildTempPasswordExpiry();
-
-        const user = await this.accounts.createUser(
+          tenantId,
           {
-            tenantId,
-            branchId: dto.branchId,
             email: dto.email,
-            username,
-            passwordHash,
             firstName,
             lastName,
-            mustChangePassword: true,
-            tempPasswordEncrypted,
-            tempPasswordExpiresAt,
+            branchId: dto.branchId,
+            roleId,
           },
-          tx,
         );
-        userId = user.id;
-
-        // Auto-assign the role linked to the employee's position
-        if (dto.positionId) {
-          await this.accounts.assignPositionRole(
-            tenantId,
-            user.id,
-            dto.positionId,
-            tx,
-          );
-        }
+        userId = account.userId;
+        tempPassword = account.tempPassword;
       }
 
       const employee = await this.employeesRepository.create(
@@ -173,9 +147,11 @@ export class EmployeesService {
     // Employee.branchId — hay que mantenerlos en sincronía si el empleado
     // tiene una cuenta de usuario vinculada.
     if (dto.branchId !== undefined && employee.userId) {
-      await this.accounts.updateUser(employee.userId, {
-        branchId: dto.branchId || null,
-      });
+      await this.accounts.setBranch(
+        tenantId,
+        employee.userId,
+        dto.branchId || null,
+      );
     }
 
     return updated;
@@ -194,7 +170,7 @@ export class EmployeesService {
       await this.employeesRepository.terminate(tenantId, id, date, tx);
 
       if (employee.userId) {
-        await this.accounts.deactivateUser(tenantId, employee.userId, tx);
+        await this.accounts.deactivate(tx, tenantId, employee.userId);
       }
     });
     if (employee.userId) {
@@ -225,18 +201,10 @@ export class EmployeesService {
       );
     }
 
-    const tempPassword = generateTempPassword();
-    const passwordHash = await bcrypt.hash(tempPassword, SALT_ROUNDS);
-    const tempPasswordEncrypted = encryptTempPassword(tempPassword);
-    const tempPasswordExpiresAt = buildTempPasswordExpiry();
-
-    await this.accounts.updateUser(employee.userId, {
-      passwordHash,
-      mustChangePassword: true,
-      tempPasswordEncrypted,
-      tempPasswordExpiresAt,
-      sessionsValidAfter: new Date(),
-    });
+    const { tempPassword } = await this.accounts.resetTempPassword(
+      tenantId,
+      employee.userId,
+    );
     this.eventEmitter.emit(SESSION_INVALIDATE_EVENT, {
       userId: employee.userId,
     } satisfies SessionInvalidateEvent);
@@ -247,7 +215,7 @@ export class EmployeesService {
   async linkUser(tenantId: string, id: string, email: string) {
     await this.getById(tenantId, id);
 
-    const existing = await this.accounts.findUserByEmail(email);
+    const existing = await this.accounts.findByEmail(email);
     if (!existing)
       throw new NotFoundException('Usuario no encontrado con ese email');
     if (existing.tenantId !== tenantId)
@@ -272,7 +240,7 @@ export class EmployeesService {
   ): Promise<string> {
     let branchNum = '00';
     if (branchId) {
-      const branchIds = await this.accounts.findBranchIdsInOrder(tenantId);
+      const branchIds = await this.sources.findBranchIdsInOrder(tenantId);
       const idx = branchIds.indexOf(branchId);
       if (idx >= 0) branchNum = String(idx + 1).padStart(2, '0');
     }
