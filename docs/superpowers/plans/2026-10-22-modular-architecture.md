@@ -121,15 +121,18 @@ Cada punto es una rama y un PR propios. El orden sugerido es este; se ajusta al 
 
 ### C4. Bajar la deuda de límites (primero las escrituras)
 
+**C4a, escrituras: hecho (2026-11, Trello #85).** Cada escritura pasó al módulo dueño. Si la operación tiene que ser todo o nada, o quien la pide necesita el resultado en el momento, va por contrato dentro de la transacción de quien llama. Si es un efecto que puede llegar después, va por evento con outbox.
+
 | Escritura ajena | Reemplazo |
 |---|---|
-| Documentos escribe `pdfFileId` en facturas, pedidos, recibos y OC | Evento `document.pdf.generated`; cada dueño guarda su `pdfFileId` |
-| RRHH crea usuarios y roles | Puerto `USER_ACCOUNTS` implementado por `users/` |
-| Inventario escribe `SaleOrderItem.batchId` | Evento `inventory.batch.consumed`, que escucha Ventas |
-| Logística corrige coordenadas de `Customer` | Evento `delivery.location.corrected`, que escucha Ventas |
-| Finanzas escribe `DelinquencyReport` | Mover el cálculo de mora a Cobranzas, o pasar el dueño a Finanzas (decidir) |
+| Documentos escribe `pdfFileId` en facturas, recibos, OC y presupuestos | Contratos `INVOICE_PDF`, `RECEIPT_PDF`, `PURCHASE_ORDER_PDF` y `QUOTE_PDF`, implementados por cada dueño. Va por contrato y no por evento porque la emisión de la factura espera el PDF vinculado: sin él vuelve a borrador |
+| RRHH crea usuarios y roles | Contrato `USER_ACCOUNTS`, implementado por `users/`, dentro de la transacción del alta y la baja del empleado |
+| Inventario escribe `SaleOrderItem.batchId` | Evento `inventory.batch.consumed` en la transacción del consumo FIFO; Ventas lo anota (`sales.record-sold-batch`) |
+| Logística corrige coordenadas de `Customer` | Evento `delivery.location.corrected` en la transacción del seguimiento; Ventas solo aplica una ubicación más nueva que la guardada (`customers.location_updated_at`) |
+| El registro crea la Casa Matriz y el Depósito Principal | Contratos `BRANCH_SETUP` y `WAREHOUSE_SETUP`, dentro de la transacción del registro |
+| Finanzas escribe `DelinquencyReport` | **Queda para la reestructuración de Finanzas** (decisión del usuario, 2026-11-18): es probable que préstamos y cobranzas terminen en la misma área |
 
-Después vienen las lecturas, que pasan a `*-sources.repository.ts` o a contratos.
+**C4b, lecturas: pendiente.** Si el dueño es del núcleo, la lectura pasa al repositorio de fuentes del que lee. Si el dueño se puede apagar, pasa a un contrato que con el módulo apagado devuelve vacío.
 
 ### C5. Datos iniciales declarativos por módulo
 

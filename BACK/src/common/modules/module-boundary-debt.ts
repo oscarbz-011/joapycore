@@ -2,7 +2,7 @@
 // dueños (2026-10). Se van sacando a medida que pasan a contratos, eventos o
 // al repositorio de fuentes; no se agregan entradas nuevas.
 export const KNOWN_BOUNDARY_DEBT: Record<string, string[]> = {
-  // Escrituras en tablas ajenas: las más urgentes de mover a eventos.
+  // Escritura ajena que queda para la reestructuración de Finanzas.
   'modules/finance/repositories/finance-sources.repository.ts': [
     'write:DelinquencyReport',
   ],
