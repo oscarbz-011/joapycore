@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import { TenantContext } from '../../prisma/tenant-context';
 import { PrismaClientOrTx } from '../../prisma/types';
 
 interface CreateUserData {
@@ -80,9 +81,12 @@ export class UsersRepository {
     const base = `${normalize(firstName)}.${normalize(lastName)}`;
     let candidate = base;
     let suffix = 2;
-    while (
-      await this.prisma.user.findUnique({ where: { username: candidate } })
-    ) {
+    // Único en toda la plataforma: se busca sin el filtro de la seguridad de filas.
+    const isTaken = (username: string) =>
+      TenantContext.runAsPlatform(() =>
+        this.prisma.user.findUnique({ where: { username } }),
+      );
+    while (await isTaken(candidate)) {
       candidate = `${base}${suffix++}`;
     }
     return candidate;

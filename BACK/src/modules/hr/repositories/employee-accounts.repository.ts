@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
+import { TenantContext } from '../../../prisma/tenant-context';
 import { PrismaClientOrTx } from '../../../prisma/types';
 
 /**
@@ -12,18 +13,20 @@ import { PrismaClientOrTx } from '../../../prisma/types';
 export class EmployeeAccountsRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  findUserByEmail(email: string, client: PrismaClientOrTx = this.prisma) {
-    return client.user.findUnique({ where: { email } });
+  findUserByEmail(email: string) {
+    return this.prisma.user.findUnique({ where: { email } });
   }
 
-  async findUsernamesStartingWith(
-    prefix: string,
-    client: PrismaClientOrTx = this.prisma,
-  ): Promise<string[]> {
-    const users = await client.user.findMany({
-      where: { username: { startsWith: prefix } },
-      select: { username: true },
-    });
+  // El usuario es único en toda la plataforma porque el login no pide empresa:
+  // se elige uno libre sin el filtro de la seguridad de filas, sin mostrar de
+  // quién es el ocupado.
+  async findUsernamesStartingWith(prefix: string): Promise<string[]> {
+    const users = await TenantContext.runAsPlatform(() =>
+      this.prisma.user.findMany({
+        where: { username: { startsWith: prefix } },
+        select: { username: true },
+      }),
+    );
     return users.map((u) => u.username).filter(Boolean) as string[];
   }
 

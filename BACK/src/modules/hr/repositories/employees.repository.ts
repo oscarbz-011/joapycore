@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { DocumentType, Prisma } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { PrismaClientOrTx } from '../../../prisma/types';
 
@@ -38,6 +38,17 @@ export class EmployeesRepository {
     return this.prisma.employee.findFirst({
       where: { id, tenantId, deletedAt: null },
       include: WITH_RELATIONS,
+    });
+  }
+
+  findByDocument(
+    tenantId: string,
+    documentType: DocumentType,
+    documentNumber: string,
+  ) {
+    return this.prisma.employee.findFirst({
+      where: { tenantId, documentType, documentNumber },
+      select: { firstName: true, lastName: true },
     });
   }
 
