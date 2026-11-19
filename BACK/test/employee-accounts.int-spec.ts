@@ -124,6 +124,44 @@ describe('EmployeesService + USER_ACCOUNTS (PostgreSQL)', () => {
     ).rejects.toThrow('El email ya está en uso');
   });
 
+  it('never touches a user of another company', async () => {
+    const other = await prisma.tenant.create({
+      data: { name: `TEST other company ${randomUUID()}` },
+      select: { id: true },
+    });
+    const accounts = new UserAccountsService(new UsersRepository(prisma));
+    try {
+      const outsider = await prisma.user.create({
+        data: {
+          tenantId: other.id,
+          email: `outsider-${randomUUID()}@company.test`,
+          passwordHash: 'unchanged',
+          firstName: 'Otra',
+          lastName: 'Empresa',
+        },
+      });
+
+      await accounts.setBranch(tenantId, outsider.id, null);
+      await accounts.resetTempPassword(tenantId, outsider.id);
+      await prisma.$transaction((tx) =>
+        accounts.deactivate(tx, tenantId, outsider.id),
+      );
+
+      const after = await prisma.user.findUniqueOrThrow({
+        where: { id: outsider.id },
+      });
+      expect(after).toMatchObject({
+        status: outsider.status,
+        passwordHash: 'unchanged',
+        mustChangePassword: outsider.mustChangePassword,
+        sessionsValidAfter: outsider.sessionsValidAfter,
+      });
+    } finally {
+      await prisma.user.deleteMany({ where: { tenantId: other.id } });
+      await prisma.tenant.deleteMany({ where: { id: other.id } });
+    }
+  });
+
   it('deactivates the account when the employee is terminated', async () => {
     const email = `term-${randomUUID()}@company.test`;
     const { employee } = await service.create(
