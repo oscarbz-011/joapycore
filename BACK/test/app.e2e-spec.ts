@@ -86,6 +86,27 @@ describe('JoapyCore API (e2e)', () => {
     expect(me.body).not.toHaveProperty('tempPasswordEncrypted');
   });
 
+  it('gives the new tenant its headquarters and default warehouse', async () => {
+    const auth = `Bearer ${tokens.accessToken}`;
+    const branches = await request(http)
+      .get('/branches')
+      .set('Authorization', auth)
+      .expect(200);
+    const warehouses = await request(http)
+      .get('/warehouses')
+      .set('Authorization', auth)
+      .expect(200);
+    const [main] = branches.body as { id: string; isMain: boolean }[];
+    expect(main).toMatchObject({ name: 'Casa Matriz', isMain: true });
+    expect(warehouses.body).toEqual([
+      expect.objectContaining({
+        name: 'Depósito Principal',
+        isDefault: true,
+        branchId: main.id,
+      }),
+    ]);
+  });
+
   it('serves the module catalog without mistaking it for a module', async () => {
     await request(http).get('/tenants/me/modules/catalog').expect(401);
     const res = await request(http)

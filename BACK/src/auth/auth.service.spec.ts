@@ -5,17 +5,15 @@ import { Industry, TenantStatus, UserStatus } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 import { createHash } from 'node:crypto';
 import { AuthService } from './auth.service';
-import { TenantsRepository } from '../tenants/repositories/tenants.repository';
 
 jest.mock('bcryptjs');
 
 describe('AuthService', () => {
   let service: AuthService;
   let prisma: { $transaction: jest.Mock };
-  let tx: {
-    branch: { create: jest.Mock };
-    warehouse: { create: jest.Mock };
-  };
+  let tx: object;
+  let branchSetup: { createHeadquarters: jest.Mock };
+  let warehouseSetup: { createMainWarehouse: jest.Mock };
   let permissionsResolver: { resolve: jest.Mock };
   let configService: { get: jest.Mock };
   let jwtService: { signAsync: jest.Mock };
@@ -38,7 +36,6 @@ describe('AuthService', () => {
   let tenantsRepository: {
     create: jest.Mock;
     findById: jest.Mock;
-    createHeadquarters: jest.Mock;
   };
   let tenantModulesRepository: {
     seedDefaults: jest.Mock;
@@ -66,9 +63,12 @@ describe('AuthService', () => {
   };
 
   beforeEach(() => {
-    tx = {
-      branch: { create: jest.fn().mockResolvedValue({ id: 'branch-1' }) },
-      warehouse: { create: jest.fn().mockResolvedValue({ id: 'wh-1' }) },
+    tx = {};
+    branchSetup = {
+      createHeadquarters: jest.fn().mockResolvedValue({ id: 'branch-1' }),
+    };
+    warehouseSetup = {
+      createMainWarehouse: jest.fn().mockResolvedValue({ id: 'wh-1' }),
     };
     prisma = {
       $transaction: jest.fn((callback: (t: unknown) => unknown) =>
@@ -104,10 +104,6 @@ describe('AuthService', () => {
     };
     tenantsRepository = {
       create: jest.fn(),
-      // Implementación real: crea sobre el tx mockeado.
-      createHeadquarters: jest.fn((tenantId: string, client: any) =>
-        new TenantsRepository({} as any).createHeadquarters(tenantId, client),
-      ),
       findById: jest.fn().mockResolvedValue({
         id: 'tenant-1',
         name: 'Acme',
@@ -137,6 +133,8 @@ describe('AuthService', () => {
       tenantModulesRepository as any,
       refreshTokensRepository as any,
       permissionsResolver as any,
+      branchSetup,
+      warehouseSetup,
     );
   });
 
@@ -186,8 +184,15 @@ describe('AuthService', () => {
         Industry.ELECTRODOMESTICOS,
         tx,
       );
-      expect(tx.branch.create).toHaveBeenCalled();
-      expect(tx.warehouse.create).toHaveBeenCalled();
+      expect(branchSetup.createHeadquarters).toHaveBeenCalledWith(
+        tx,
+        'tenant-1',
+      );
+      expect(warehouseSetup.createMainWarehouse).toHaveBeenCalledWith(
+        tx,
+        'tenant-1',
+        'branch-1',
+      );
       expect(eventEmitter.emit).toHaveBeenCalledWith('user.registered', {
         userId: 'user-1',
         tenantId: 'tenant-1',

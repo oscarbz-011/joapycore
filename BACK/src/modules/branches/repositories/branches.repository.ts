@@ -1,4 +1,6 @@
 import { Injectable } from '@nestjs/common';
+import type { Prisma } from '@prisma/client';
+import type { BranchSetup } from '../../../common/contracts/branch-setup.contract';
 import { PrismaService } from '../../../prisma/prisma.service';
 
 export interface CreateBranchData {
@@ -19,7 +21,7 @@ export interface UpdateBranchData {
 }
 
 @Injectable()
-export class BranchesRepository {
+export class BranchesRepository implements BranchSetup {
   constructor(private readonly prisma: PrismaService) {}
 
   findAll(tenantId: string) {
@@ -35,6 +37,12 @@ export class BranchesRepository {
 
   create(tenantId: string, data: CreateBranchData) {
     return this.prisma.branch.create({ data: { tenantId, ...data } });
+  }
+
+  createHeadquarters(tx: Prisma.TransactionClient, tenantId: string) {
+    return tx.branch.create({
+      data: { tenantId, name: 'Casa Matriz', isMain: true },
+    });
   }
 
   update(tenantId: string, id: string, data: UpdateBranchData) {
