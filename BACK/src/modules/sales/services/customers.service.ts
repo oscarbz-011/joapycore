@@ -158,7 +158,14 @@ export class CustomersService {
     const { birthDate: birthDateText, ...data } = dto;
     const taxpayerType = dto.taxpayerType ?? before.taxpayerType;
     const birthDate = this.birthDate(birthDateText, taxpayerType);
-    const movedPin = dto.latitude !== undefined || dto.longitude !== undefined;
+    // Reenviar las mismas coordenadas no cuenta: una corrección del
+    // repartidor que siga en cola se descartaría.
+    const moved = (value: number | undefined, current: unknown) =>
+      value !== undefined &&
+      value !== (current == null ? null : Number(current));
+    const movedPin =
+      moved(dto.latitude, before.latitude) ||
+      moved(dto.longitude, before.longitude);
     const customer = await this.customersRepository.update(tenantId, id, {
       ...data,
       ...this.casedNames(dto, taxpayerType),
