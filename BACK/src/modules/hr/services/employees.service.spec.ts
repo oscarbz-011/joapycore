@@ -45,6 +45,7 @@ describe('EmployeesService', () => {
     findAll: jest.Mock;
     findById: jest.Mock;
     findByUserId: jest.Mock;
+    findByDocument: jest.Mock;
     nextEmployeeNumber: jest.Mock;
     create: jest.Mock;
     terminate: jest.Mock;
@@ -94,6 +95,7 @@ describe('EmployeesService', () => {
       findAll: jest.fn(),
       findById: jest.fn(),
       findByUserId: jest.fn(),
+      findByDocument: jest.fn().mockResolvedValue(null),
       nextEmployeeNumber: jest.fn().mockResolvedValue(1),
       // create/terminate: implementación real sobre el mock de Prisma.
       create: jest.fn((data: any, client: any) =>
@@ -216,6 +218,29 @@ describe('EmployeesService', () => {
         service.create('tenant-1', { ...baseDto, email: 'taken@company.com' }),
       ).rejects.toBeInstanceOf(ConflictException);
 
+      expect(prisma.employee.create).not.toHaveBeenCalled();
+    });
+
+    it('names the employee who already has that document', async () => {
+      employeesRepository.findByDocument.mockResolvedValue({
+        firstName: 'Ana',
+        lastName: 'Huber',
+      });
+
+      await expect(
+        service.create('tenant-1', { ...baseDto, email: 'new@company.com' }),
+      ).rejects.toThrow(
+        new ConflictException(
+          'Ya hay un empleado con el documento CI 1234567: Ana Huber',
+        ),
+      );
+
+      expect(employeesRepository.findByDocument).toHaveBeenCalledWith(
+        'tenant-1',
+        'CI',
+        '1234567',
+      );
+      expect(prisma.user.create).not.toHaveBeenCalled();
       expect(prisma.employee.create).not.toHaveBeenCalled();
     });
 

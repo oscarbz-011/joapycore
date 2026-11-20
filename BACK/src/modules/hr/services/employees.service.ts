@@ -49,6 +49,17 @@ export class EmployeesService {
   }
 
   async create(tenantId: string, dto: CreateEmployeeDto) {
+    const holder = await this.employeesRepository.findByDocument(
+      tenantId,
+      dto.documentType,
+      dto.documentNumber,
+    );
+    if (holder) {
+      throw new ConflictException(
+        `Ya hay un empleado con el documento ${dto.documentType} ${dto.documentNumber}: ${holder.firstName} ${holder.lastName}`,
+      );
+    }
+
     const employeeNumber =
       await this.employeesRepository.nextEmployeeNumber(tenantId);
     const employeeCode = await this.generateEmployeeCode(
@@ -60,22 +71,22 @@ export class EmployeesService {
     const firstName = toTitleCase(dto.firstName);
     const lastName = toTitleCase(dto.lastName);
 
+    let username: string | undefined;
+    if (dto.email) {
+      const existing = await this.accounts.findUserByEmail(dto.email);
+      if (existing) throw new ConflictException('El email ya está en uso');
+
+      // jose.benitez → jose.benitez2 …
+      const usernameBase = buildUsernameBase(firstName, lastName);
+      const taken = await this.accounts.findUsernamesStartingWith(usernameBase);
+      username = resolveUsername(usernameBase, taken);
+    }
+
     return this.prisma.$transaction(async (tx) => {
       let userId: string | undefined;
       let tempPassword: string | undefined;
 
       if (dto.email) {
-        const existing = await this.accounts.findUserByEmail(dto.email, tx);
-        if (existing) throw new ConflictException('El email ya está en uso');
-
-        // Auto-generate unique username: jose.benitez → jose.benitez2 …
-        const usernameBase = buildUsernameBase(firstName, lastName);
-        const taken = await this.accounts.findUsernamesStartingWith(
-          usernameBase,
-          tx,
-        );
-        const username = resolveUsername(usernameBase, taken);
-
         tempPassword = generateTempPassword();
         const passwordHash = await bcrypt.hash(tempPassword, SALT_ROUNDS);
         const tempPasswordEncrypted = encryptTempPassword(tempPassword);
