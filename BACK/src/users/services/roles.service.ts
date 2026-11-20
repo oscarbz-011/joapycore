@@ -28,6 +28,7 @@ export class RolesService {
     this.eventEmitter.emit(SESSION_INVALIDATE_EVENT, {
       tenantId,
     } satisfies SessionInvalidateEvent);
+    this.eventEmitter.emit('auth.permissions.changed', { tenantId });
   }
 
   list(tenantId: string) {

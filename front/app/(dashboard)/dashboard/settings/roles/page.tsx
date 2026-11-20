@@ -2,11 +2,12 @@
 
 import { apiErrorMessage } from '@/lib/api/api-error';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Plus, Shield, ShieldCheck, Trash2, ChevronDown, ChevronRight } from 'lucide-react';
+import { Plus, Shield, ShieldCheck, Trash2, ChevronDown, ChevronRight, CheckCircle2, AlertCircle } from 'lucide-react';
 import { rolesApi, type RoleResponse } from '../../../../../lib/api/roles';
 import { PERMISSION_GROUPS, getPermissionLabel } from '../../../../../lib/permissions';
+import { pendingChangesLabel, permissionChanges } from '../../../../../lib/permissions-refresh';
 import { Button } from '@/components/ui/button';
 import { TablePagination } from '@/components/table-pagination';
 import { usePagination } from '@/lib/use-pagination';
@@ -88,13 +89,35 @@ function RolePermissionsPanel({
       return next;
     });
 
-  const hasChanges =
-    JSON.stringify([...selected].sort()) !== JSON.stringify([...currentKeys].sort());
+  const [savedAt, setSavedAt] = useState<number | null>(null);
+
+  const changes = permissionChanges(currentKeys, selected);
+  const hasChanges = changes.added.length + changes.removed.length > 0;
 
   const saveMutation = useMutation({
     mutationFn: () => rolesApi.setPermissions(role.id, [...selected]),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['roles'] }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['roles'] });
+      setSavedAt(Date.now());
+    },
   });
+
+  useEffect(() => {
+    if (savedAt === null) return;
+    const timer = setTimeout(() => setSavedAt(null), 6000);
+    return () => clearTimeout(timer);
+  }, [savedAt]);
+
+  const toggleAndClearNotice = (key: string) => {
+    setSavedAt(null);
+    saveMutation.reset();
+    toggle(key);
+  };
+
+  const discard = () => {
+    saveMutation.reset();
+    setSelected(new Set(currentKeys));
+  };
 
   const deleteMutation = useMutation({
     mutationFn: () => rolesApi.delete(role.id),
@@ -174,21 +197,34 @@ function RolePermissionsPanel({
                 </button>
                 {isOpen && (
                   <div className="border-t border-border px-3 py-2 space-y-1.5">
-                    {group.permissions.map((perm) => (
-                      <label
-                        key={perm.key}
-                        className={`flex items-center gap-2.5 ${role.isSystem ? 'cursor-default opacity-70' : 'cursor-pointer'}`}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={selected.has(perm.key)}
-                          disabled={role.isSystem}
-                          onChange={() => toggle(perm.key)}
-                          className="h-4 w-4 rounded border-border accent-primary"
-                        />
-                        <span className="text-sm text-muted-foreground">{perm.label}</span>
-                      </label>
-                    ))}
+                    {group.permissions.map((perm) => {
+                      const changed =
+                        changes.added.includes(perm.key) || changes.removed.includes(perm.key);
+                      return (
+                        <label
+                          key={perm.key}
+                          className={`flex items-center gap-2.5 ${role.isSystem ? 'cursor-default opacity-70' : 'cursor-pointer'}`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={selected.has(perm.key)}
+                            disabled={role.isSystem || saveMutation.isPending}
+                            onChange={() => toggleAndClearNotice(perm.key)}
+                            className="h-4 w-4 rounded border-border accent-primary"
+                          />
+                          <span
+                            className={`text-sm ${changed ? 'font-medium text-foreground' : 'text-muted-foreground'}`}
+                          >
+                            {perm.label}
+                          </span>
+                          {changed && (
+                            <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800 dark:bg-amber-950/50 dark:text-amber-300">
+                              {changes.added.includes(perm.key) ? 'Se agrega' : 'Se quita'}
+                            </span>
+                          )}
+                        </label>
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -196,16 +232,41 @@ function RolePermissionsPanel({
           })}
         </div>
 
-        {!role.isSystem && hasChanges && (
-          <div className="border-t border-border px-6 py-4">
-            <button
-              type="button"
-              onClick={() => saveMutation.mutate()}
-              disabled={saveMutation.isPending}
-              className="w-full rounded-lg bg-primary py-2.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-            >
-              {saveMutation.isPending ? 'Guardando...' : 'Guardar permisos'}
-            </button>
+        {!role.isSystem && (
+          <div className="space-y-3 border-t border-border px-6 py-4">
+            <div aria-live="polite">
+              {saveMutation.isError ? (
+                <p className="flex items-start gap-2 text-sm text-destructive">
+                  <AlertCircle size={16} className="mt-0.5 shrink-0" />
+                  {apiErrorMessage(saveMutation.error, 'No se pudieron guardar los permisos')}
+                </p>
+              ) : savedAt !== null && !hasChanges ? (
+                <p className="flex items-start gap-2 text-sm text-emerald-700 dark:text-emerald-400">
+                  <CheckCircle2 size={16} className="mt-0.5 shrink-0" />
+                  Permisos guardados. Los usuarios con este rol los reciben al instante.
+                </p>
+              ) : (
+                <p className={`text-sm ${hasChanges ? 'font-medium text-amber-700 dark:text-amber-400' : 'text-muted-foreground'}`}>
+                  {pendingChangesLabel(changes)}
+                </p>
+              )}
+            </div>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                onClick={discard}
+                disabled={!hasChanges || saveMutation.isPending}
+              >
+                Descartar
+              </Button>
+              <Button
+                className="flex-1"
+                onClick={() => saveMutation.mutate()}
+                disabled={!hasChanges || saveMutation.isPending}
+              >
+                {saveMutation.isPending ? 'Guardando...' : 'Guardar permisos'}
+              </Button>
+            </div>
           </div>
         )}
       </aside>
@@ -215,13 +276,15 @@ function RolePermissionsPanel({
 
 export default function RolesPage() {
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [selectedRole, setSelectedRole] = useState<RoleResponse | null>(null);
+  const [selectedRoleId, setSelectedRoleId] = useState<string | null>(null);
 
   const { data: roles = [], isLoading } = useQuery({
     queryKey: ['roles'],
     queryFn: rolesApi.list,
   });
   const pagination = usePagination(roles);
+  // Del listado vigente: después de guardar, el panel compara contra lo guardado.
+  const selectedRole = roles.find((role) => role.id === selectedRoleId) ?? null;
 
   return (
     <>
@@ -268,7 +331,7 @@ export default function RolesPage() {
                 return (
                   <tr
                     key={role.id}
-                    onClick={() => setSelectedRole(role)}
+                    onClick={() => setSelectedRoleId(role.id)}
                     className="cursor-pointer hover:bg-muted/20 transition-colors"
                   >
                     <td className="px-4 py-3">
@@ -328,8 +391,9 @@ export default function RolesPage() {
       {showCreateModal && <CreateRoleModal onClose={() => setShowCreateModal(false)} />}
       {selectedRole && (
         <RolePermissionsPanel
+          key={selectedRole.id}
           role={selectedRole}
-          onClose={() => setSelectedRole(null)}
+          onClose={() => setSelectedRoleId(null)}
         />
       )}
     </>

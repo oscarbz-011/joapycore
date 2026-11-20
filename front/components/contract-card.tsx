@@ -6,6 +6,7 @@ import { documentsApi } from "../lib/api/documents";
 import { filesApi } from "../lib/api/files";
 import { downloadBlob, openBlobInNewTab } from "../lib/blob-file";
 import { useAuth } from "../lib/auth-context";
+import { contractLoadErrorMessage } from "../lib/contract-card";
 import { Button } from "@/components/ui/button";
 
 // Muestra el contrato de compra-venta generado automáticamente para una venta
@@ -22,7 +23,14 @@ export function ContractCard({
   const canManage =
     jwtPayload?.permissions.includes("documents:manage") ?? false;
 
-  const { data: docs = [], isLoading } = useQuery({
+  const {
+    data: docs = [],
+    isLoading,
+    isError,
+    error,
+    refetch,
+    isFetching,
+  } = useQuery({
     queryKey: ["documents", "contract", entityType, entityId],
     queryFn: () =>
       documentsApi.list({ entityType, entityId, type: "CONTRACT" }),
@@ -50,6 +58,28 @@ export function ContractCard({
 
   if (isLoading) {
     return <div className="h-12 rounded-xl bg-muted/20 animate-pulse" />;
+  }
+
+  if (isError) {
+    const message = contractLoadErrorMessage(error);
+    return (
+      <div
+        role="status"
+        className="rounded-xl border border-border bg-card p-4 space-y-2"
+      >
+        <p className="text-sm text-muted-foreground">{message.text}</p>
+        {message.canRetry && (
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => refetch()}
+            disabled={isFetching}
+          >
+            Reintentar
+          </Button>
+        )}
+      </div>
+    );
   }
 
   if (!contract || !contract.fileRecord) return null;

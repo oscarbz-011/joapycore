@@ -205,6 +205,10 @@ export class UsersService {
 
     await this.usersRepository.setRoles(tenantId, id, dto.roleIds);
     this.invalidateSession({ userId: id });
+    this.eventEmitter.emit('auth.permissions.changed', {
+      tenantId,
+      userId: id,
+    });
     return this.getById(tenantId, id);
   }
 
@@ -311,6 +315,10 @@ export class UsersService {
       permissions.map((p) => p.id),
     );
     this.invalidateSession({ userId: id });
+    this.eventEmitter.emit('auth.permissions.changed', {
+      tenantId,
+      userId: id,
+    });
     return this.getById(tenantId, id);
   }
 

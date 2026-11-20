@@ -31,6 +31,9 @@ interface InvoiceIssued extends Tenant {
 export interface DomainEvents {
   'audit.log': AuditLogEvent;
   'auth.session.invalidate': SessionInvalidateEvent;
+  // Llega al navegador por el WebSocket de la empresa para que renueve la
+  // sesión. Sin userId alcanza a todos los usuarios de la empresa.
+  'auth.permissions.changed': Tenant & { userId?: string };
 
   'tenant.registered': Tenant & { industry: Industry | null | undefined };
   'tenant.module.activated': Tenant & { moduleName: string };
