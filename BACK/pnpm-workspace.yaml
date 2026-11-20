@@ -11,6 +11,7 @@ packages:
 # deepmerge-ts 7→8 sí cambia de major: solo lo usa @prisma/config (CLI de
 # Prisma, no el runtime) y se verificó `prisma validate` + `prisma generate`.
 # body-parser, multer y zod: pnpm audit del 29/10/2026.
+# effect (ReDoS, GHSA-7589-6fvf-x4pw): @prisma/config fija 3.20.0; 19/11/2026.
 allowBuilds:
   '@parcel/watcher': true
   '@prisma/engines': true
@@ -25,6 +26,7 @@ overrides:
   brace-expansion@<1.1.20: ^1.1.20
   brace-expansion@>=2.0.0 <2.1.6: ^2.1.6
   deepmerge-ts@<8.0.0: ^8.0.2
+  effect@<3.22.1: 3.22.4
   engine.io@>=6.6.0 <6.6.10: ^6.6.10
   fast-uri@<3.1.6: ^3.1.6
   js-yaml@>=4.0.0 <4.3.2: ^4.3.2
