@@ -1,5 +1,6 @@
 import { Global, Module } from '@nestjs/common';
 import { BILLING_GATEWAY } from '../../common/contracts/billing-gateway.contract';
+import { INVOICE_PDF } from '../../common/contracts/document-pdf.contract';
 import { FilesModule } from '../../files/files.module';
 import { BillingSeriesController } from './controllers/billing-series.controller';
 import { CreditNotesController } from './controllers/credit-notes.controller';
@@ -26,8 +27,8 @@ import { PreprintedInvoicesService } from './services/preprinted-invoices.servic
 import { RemissionNotePdfService } from './services/remission-note-pdf.service';
 import { RemissionNotesService } from './services/remission-notes.service';
 
-// Global solo para exponer BILLING_GATEWAY (lo usa POS sin importar este
-// módulo).
+// Global solo para exponer sus contratos: BILLING_GATEWAY (lo usa POS) e
+// INVOICE_PDF (Documentos), sin que importen este módulo.
 @Global()
 @Module({
   imports: [FilesModule],
@@ -40,6 +41,7 @@ import { RemissionNotesService } from './services/remission-notes.service';
   providers: [
     PosInvoicingService,
     { provide: BILLING_GATEWAY, useExisting: PosInvoicingService },
+    { provide: INVOICE_PDF, useExisting: InvoicesRepository },
     InvoicesService,
     PreprintedInvoicesService,
     BillingSeriesService,
@@ -60,6 +62,6 @@ import { RemissionNotesService } from './services/remission-notes.service';
     BillingOnPaymentListener,
     InterestInvoiceOnReceiptListener,
   ],
-  exports: [BILLING_GATEWAY],
+  exports: [BILLING_GATEWAY, INVOICE_PDF],
 })
 export class BillingModule {}

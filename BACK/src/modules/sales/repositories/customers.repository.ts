@@ -11,6 +11,7 @@ import { CreateCustomerDto } from '../dto/create-customer.dto';
 // La fecha de nacimiento llega como texto AAAA-MM-DD y se guarda como día.
 export type CustomerData = Omit<CreateCustomerDto, 'birthDate'> & {
   birthDate?: Date | null;
+  locationUpdatedAt?: Date;
 };
 
 // Datos del cliente en los que busca el listado.
@@ -147,6 +148,30 @@ export class CustomersRepository {
 
   update(tenantId: string, id: string, dto: Partial<CustomerData>) {
     return this.prisma.customer.update({ where: { id }, data: dto });
+  }
+
+  // Solo si es más nueva que la última ubicación guardada: las correcciones
+  // de las entregas pueden llegar fuera de orden.
+  correctLocation(
+    tenantId: string,
+    id: string,
+    location: { latitude: number; longitude: number; correctedAt: Date },
+  ) {
+    return this.prisma.customer.updateMany({
+      where: {
+        id,
+        tenantId,
+        OR: [
+          { locationUpdatedAt: null },
+          { locationUpdatedAt: { lt: location.correctedAt } },
+        ],
+      },
+      data: {
+        latitude: location.latitude,
+        longitude: location.longitude,
+        locationUpdatedAt: location.correctedAt,
+      },
+    });
   }
 
   // updateMany para que el tenant forme parte del filtro de la escritura.

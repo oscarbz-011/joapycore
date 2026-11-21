@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
+import type { ReceiptPdf } from '../../../common/contracts/document-pdf.contract';
 import { PrismaClientOrTx } from '../../../prisma/types';
 
 const RECEIPT_INCLUDE = {
@@ -43,8 +44,15 @@ const RECEIPT_INCLUDE = {
 } satisfies Prisma.PaymentReceiptInclude;
 
 @Injectable()
-export class PaymentReceiptsRepository {
+export class PaymentReceiptsRepository implements ReceiptPdf {
   constructor(private readonly prisma: PrismaService) {}
+
+  async attachReceiptPdf(tenantId: string, receiptId: string, fileId: string) {
+    await this.prisma.paymentReceipt.updateMany({
+      where: { id: receiptId, tenantId },
+      data: { pdfFileId: fileId },
+    });
+  }
 
   findById(tenantId: string, id: string) {
     return this.prisma.paymentReceipt.findFirst({

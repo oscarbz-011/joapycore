@@ -29,8 +29,10 @@ describe('DeliveryTrackingService', () => {
       findFirst: jest.Mock;
       findUnique: jest.Mock;
     };
-    customer: { updateMany: jest.Mock };
+    $transaction: jest.Mock;
   };
+  const tx = {};
+  let outbox: { enqueue: jest.Mock; dispatch: jest.Mock };
   let deliveryNotesRepository: {
     findById: jest.Mock;
     findMine: jest.Mock;
@@ -54,7 +56,13 @@ describe('DeliveryTrackingService', () => {
         findFirst: jest.fn(),
         findUnique: jest.fn(),
       },
-      customer: { updateMany: jest.fn() },
+      $transaction: jest.fn((callback: (t: unknown) => unknown) =>
+        callback(tx),
+      ),
+    };
+    outbox = {
+      enqueue: jest.fn().mockResolvedValue('outbox-1'),
+      dispatch: jest.fn().mockResolvedValue(true),
     };
     deliveryNotesRepository = {
       findById: jest.fn(),
@@ -81,6 +89,8 @@ describe('DeliveryTrackingService', () => {
       deliveryNotesService as any,
       eventEmitter as any,
       deliveryRoutesService as any,
+      prisma as any,
+      outbox as any,
     );
   });
 
@@ -352,6 +362,7 @@ describe('DeliveryTrackingService', () => {
           checkpoint: 'LEFT_WAREHOUSE',
           recordedById: 'user-1',
         }),
+        tx,
       );
     });
 
@@ -372,14 +383,17 @@ describe('DeliveryTrackingService', () => {
       expect(trackingEventsRepository.create).toHaveBeenCalled();
     });
 
-    it('syncs the customer location when locationConfirmed=false with new coordinates', async () => {
+    it('sends the corrected location to Sales through the outbox', async () => {
       deliveryNotesRepository.findById.mockResolvedValue(
         makeNote({
           assignmentMode: 'INTERNAL_EMPLOYEE',
           assignedEmployeeId: 'emp-1',
         }),
       );
-      trackingEventsRepository.create.mockResolvedValue({ id: 'evt-1' });
+      trackingEventsRepository.create.mockResolvedValue({
+        id: 'evt-1',
+        recordedAt: new Date('2026-11-18T10:00:00.000Z'),
+      });
 
       await service.recordTrackingEvent(
         'tenant-1',
@@ -389,13 +403,23 @@ describe('DeliveryTrackingService', () => {
         ['logistics:manage'],
       );
 
-      expect(prisma.customer.updateMany).toHaveBeenCalledWith({
-        where: { id: 'cust-1', tenantId: 'tenant-1' },
-        data: { latitude: -25.3, longitude: -57.6 },
-      });
+      expect(outbox.enqueue).toHaveBeenCalledWith(
+        tx,
+        'tenant-1',
+        'delivery.location.corrected',
+        {
+          tenantId: 'tenant-1',
+          deliveryNoteId: 'note-1',
+          customerId: 'cust-1',
+          latitude: -25.3,
+          longitude: -57.6,
+          correctedAt: '2026-11-18T10:00:00.000Z',
+        },
+      );
+      expect(outbox.dispatch).toHaveBeenCalledWith('outbox-1');
     });
 
-    it('does not touch the customer when locationConfirmed=true', async () => {
+    it('does not correct the customer when locationConfirmed=true', async () => {
       deliveryNotesRepository.findById.mockResolvedValue(
         makeNote({
           assignmentMode: 'INTERNAL_EMPLOYEE',
@@ -412,7 +436,8 @@ describe('DeliveryTrackingService', () => {
         ['logistics:manage'],
       );
 
-      expect(prisma.customer.updateMany).not.toHaveBeenCalled();
+      expect(outbox.enqueue).not.toHaveBeenCalled();
+      expect(outbox.dispatch).not.toHaveBeenCalled();
     });
 
     it('delegates to DeliveryNotesService.markDelivered when checkpoint=DELIVERED', async () => {

@@ -9,8 +9,8 @@ export const AWAITING_DELIVERY: SaleOrderStatus[] = [
 ];
 
 /**
- * Datos de otros módulos (empleados de RRHH, clientes, pedidos) que Logística
- * lee o actualiza. Quedan agrupados acá para que los servicios no consulten
+ * Datos de otros módulos (empleados de RRHH, pedidos) que Logística lee.
+ * Quedan agrupados acá para que los servicios no consulten
  * Prisma directo y el acoplamiento de datos sea visible en un solo lugar.
  */
 @Injectable()
@@ -61,18 +61,6 @@ export class LogisticsSourcesRepository {
       where: { userId },
     });
     return employee?.tenantId === tenantId ? employee : null;
-  }
-
-  updateCustomerLocation(
-    tenantId: string,
-    customerId: string,
-    latitude: number,
-    longitude: number,
-  ) {
-    return this.prisma.customer.updateMany({
-      where: { id: customerId, tenantId },
-      data: { latitude, longitude },
-    });
   }
 
   async findOrderStatus(tenantId: string, saleOrderId: string) {

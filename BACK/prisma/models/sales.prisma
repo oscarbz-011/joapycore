@@ -101,8 +101,9 @@ model Customer {
   // del mapa. La fuente de verdad de qué pasó en una entrega puntual es
   // DeliveryTrackingEvent, no esto; se sincroniza acá solo cuando el
   // repartidor confirma que corrigió la ubicación.
-  latitude  Decimal? @db.Decimal(9, 6)
-  longitude Decimal? @db.Decimal(9, 6)
+  latitude          Decimal?  @db.Decimal(9, 6)
+  longitude         Decimal?  @db.Decimal(9, 6)
+  locationUpdatedAt DateTime? @map("location_updated_at")
 
   isActive  Boolean   @default(true) @map("is_active")
   deletedAt DateTime? @map("deleted_at")

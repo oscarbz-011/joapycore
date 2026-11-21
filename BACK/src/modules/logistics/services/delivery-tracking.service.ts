@@ -14,6 +14,8 @@ import { DeliveryRoutesService } from './delivery-routes.service';
 import { AssignDeliveryDto } from '../dto/assign-delivery.dto';
 import { RecordTrackingEventDto } from '../dto/record-tracking-event.dto';
 import type { AuditLogEvent } from '../../../audit/audit-log.event';
+import { OutboxService } from '../../../outbox/outbox.service';
+import { PrismaService } from '../../../prisma/prisma.service';
 
 const VALID_STATUSES = [
   'PENDING',
@@ -31,6 +33,9 @@ export class DeliveryTrackingService {
     private readonly deliveryNotesService: DeliveryNotesService,
     private readonly eventEmitter: EventBus,
     private readonly deliveryRoutesService: DeliveryRoutesService,
+    // Solo para abrir la transacción; los accesos a datos van por repositorios.
+    private readonly prisma: PrismaService,
+    private readonly outbox: OutboxService,
   ) {}
 
   // Lectura cross-módulo vía repositorio (no importa ninguna clase de hr).
@@ -175,29 +180,45 @@ export class DeliveryTrackingService {
       }
     }
 
-    const event = await this.trackingEventsRepository.create(tenantId, {
-      deliveryNoteId,
-      source: 'MANUAL',
-      checkpoint: dto.checkpoint,
-      latitude: dto.latitude,
-      longitude: dto.longitude,
-      locationConfirmed: dto.locationConfirmed,
-      notes: dto.notes,
-      recordedById: userId,
-    });
-
-    if (
-      dto.locationConfirmed === false &&
-      dto.latitude != null &&
-      dto.longitude != null
-    ) {
-      await this.sources.updateCustomerLocation(
-        tenantId,
-        note.saleOrder.customerId,
-        dto.latitude,
-        dto.longitude,
-      );
-    }
+    const { latitude, longitude } = dto;
+    const corrected =
+      dto.locationConfirmed === false && latitude != null && longitude != null;
+    const { event, correctionId } = await this.prisma.$transaction(
+      async (tx) => {
+        const event = await this.trackingEventsRepository.create(
+          tenantId,
+          {
+            deliveryNoteId,
+            source: 'MANUAL',
+            checkpoint: dto.checkpoint,
+            latitude,
+            longitude,
+            locationConfirmed: dto.locationConfirmed,
+            notes: dto.notes,
+            recordedById: userId,
+          },
+          tx,
+        );
+        // El cliente es de Ventas: la corrección le llega por el outbox.
+        const correctionId = corrected
+          ? await this.outbox.enqueue(
+              tx,
+              tenantId,
+              'delivery.location.corrected',
+              {
+                tenantId,
+                deliveryNoteId,
+                customerId: note.saleOrder.customerId,
+                latitude,
+                longitude,
+                correctedAt: event.recordedAt.toISOString(),
+              },
+            )
+          : null;
+        return { event, correctionId };
+      },
+    );
+    if (correctionId) await this.outbox.dispatch(correctionId);
 
     if (dto.checkpoint === 'DELIVERED') {
       await this.deliveryNotesService.markDelivered(

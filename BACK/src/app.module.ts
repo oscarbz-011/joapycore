@@ -28,6 +28,10 @@ import { InventoryModule } from './modules/inventory/inventory.module';
 import { InventoryContractsModule } from './modules/inventory/inventory-contracts.module';
 import { PaymentsContractsModule } from './modules/payments/payments-contracts.module';
 import { FinanceContractsModule } from './modules/finance/finance-contracts.module';
+import { BranchesContractsModule } from './modules/branches/branches-contracts.module';
+import { WarehousesContractsModule } from './modules/warehouses/warehouses-contracts.module';
+import { UsersContractsModule } from './users/users-contracts.module';
+import { ProcurementContractsModule } from './modules/procurement/procurement-contracts.module';
 import { PaymentsModule } from './modules/payments/payments.module';
 import { PosModule } from './modules/pos/pos.module';
 import { ProcurementModule } from './modules/procurement/procurement.module';
@@ -74,6 +78,10 @@ import { CalendarModule } from './calendar/calendar.module';
     InventoryContractsModule,
     PaymentsContractsModule,
     FinanceContractsModule,
+    BranchesContractsModule,
+    WarehousesContractsModule,
+    UsersContractsModule,
+    ProcurementContractsModule,
     ProcurementModule,
     ProductionModule,
     SalesModule,

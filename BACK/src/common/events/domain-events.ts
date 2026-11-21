@@ -92,6 +92,10 @@ export interface DomainEvents {
     type: string;
     quantity: number;
   };
+  // Primer lote del que salió cada renglón de una venta entregada.
+  'inventory.batch.consumed': SaleOrderRef & {
+    lines: { saleItemId: string; batchId: string }[];
+  };
   'production.order.completed': Tenant & {
     productionOrderId: string;
     productId: string;
@@ -122,6 +126,13 @@ export interface DomainEvents {
   'delivery.assigned': DeliveryRef;
   'delivery.seller.requested': DeliveryRef;
   'delivery.tracking.recorded': DeliveryRef;
+  // El repartidor marcó que el cliente no estaba en la ubicación guardada.
+  'delivery.location.corrected': DeliveryRef & {
+    customerId: string;
+    latitude: number;
+    longitude: number;
+    correctedAt: string;
+  };
   'delivery.route.changed': Tenant;
 
   'pos.session.opened': Tenant & {

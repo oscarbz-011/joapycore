@@ -1,5 +1,9 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { OnDomainEvent } from '../../../common/events/on-domain-event.decorator';
+import {
+  INVOICE_PDF,
+  type InvoicePdf,
+} from '../../../common/contracts/document-pdf.contract';
 import { TemplateKind } from '@prisma/client';
 import { numberToWordsEs } from '../../../common/utils/number-to-words.util';
 import { DocxTemplateService } from '../../../files/docx/docx-template.service';
@@ -76,6 +80,7 @@ export class InvoiceOnIssueListener {
     private readonly filesService: FilesService,
     private readonly pdfService: PdfService,
     private readonly docxTemplateService: DocxTemplateService,
+    @Inject(INVOICE_PDF) private readonly invoicePdf: InvoicePdf,
   ) {}
 
   // Este listener forma parte de la transacción lógica de emisión. Nest
@@ -291,12 +296,11 @@ export class InvoiceOnIssueListener {
       { module: 'billing', entityType: 'invoice', entityId: invoice.id },
     );
 
-    await this.sources.setInvoicePdf(
+    await this.invoicePdf.attachInvoicePdf(
       event.tenantId,
       invoice.id,
       fileRecord.id,
-      event.attemptAt,
-      event.expectedStatus,
+      { issuedAt: event.attemptAt, status: event.expectedStatus },
     );
   }
 }

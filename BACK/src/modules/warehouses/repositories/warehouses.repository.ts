@@ -1,4 +1,6 @@
 import { Injectable } from '@nestjs/common';
+import type { Prisma } from '@prisma/client';
+import type { WarehouseSetup } from '../../../common/contracts/warehouse-setup.contract';
 import { PrismaService } from '../../../prisma/prisma.service';
 
 export interface CreateWarehouseData {
@@ -17,7 +19,7 @@ export interface UpdateWarehouseData {
 }
 
 @Injectable()
-export class WarehousesRepository {
+export class WarehousesRepository implements WarehouseSetup {
   constructor(private readonly prisma: PrismaService) {}
 
   findAll(tenantId: string) {
@@ -45,6 +47,21 @@ export class WarehousesRepository {
     return this.prisma.warehouse.create({
       data: { tenantId, ...data },
       include: { branch: { select: { id: true, name: true } } },
+    });
+  }
+
+  createMainWarehouse(
+    tx: Prisma.TransactionClient,
+    tenantId: string,
+    branchId: string,
+  ) {
+    return tx.warehouse.create({
+      data: {
+        tenantId,
+        branchId,
+        name: 'Depósito Principal',
+        isDefault: true,
+      },
     });
   }
 

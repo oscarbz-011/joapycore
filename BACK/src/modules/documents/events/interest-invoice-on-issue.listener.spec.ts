@@ -61,6 +61,7 @@ describe('InterestInvoiceOnIssueListener', () => {
   };
   let pdfService: { renderTemplate: jest.Mock; renderHtmlTemplate: jest.Mock };
   let docxTemplateService: { fillTemplate: jest.Mock; convertToPdf: jest.Mock };
+  let invoicePdf: { attachInvoicePdf: jest.Mock };
   let listener: InterestInvoiceOnIssueListener;
 
   beforeEach(() => {
@@ -85,12 +86,14 @@ describe('InterestInvoiceOnIssueListener', () => {
       convertToPdf: jest.fn().mockResolvedValue(Buffer.from('pdf-from-docx')),
     };
 
+    invoicePdf = { attachInvoicePdf: jest.fn() };
     listener = new InterestInvoiceOnIssueListener(
       new DocumentSourcesRepository(prisma as any),
       documentsRepository as any,
       filesService as any,
       pdfService as any,
       docxTemplateService as any,
+      invoicePdf,
     );
   });
 
@@ -105,7 +108,7 @@ describe('InterestInvoiceOnIssueListener', () => {
     });
 
     expect(filesService.upload).not.toHaveBeenCalled();
-    expect(prisma.invoice.updateMany).not.toHaveBeenCalled();
+    expect(invoicePdf.attachInvoicePdf).not.toHaveBeenCalled();
   });
 
   it('does not regenerate an invoice that already has its PDF', async () => {
@@ -279,16 +282,12 @@ describe('InterestInvoiceOnIssueListener', () => {
         entityId: INVOICE_ID,
       }),
     );
-    expect(prisma.invoice.updateMany).toHaveBeenCalledWith({
-      where: {
-        id: INVOICE_ID,
-        tenantId: TENANT,
-        status: 'PAID',
-        pdfFileId: null,
-        issuedAt: new Date('2026-08-26'),
-      },
-      data: { pdfFileId: 'file-1' },
-    });
+    expect(invoicePdf.attachInvoicePdf).toHaveBeenCalledWith(
+      TENANT,
+      INVOICE_ID,
+      'file-1',
+      { issuedAt: new Date('2026-08-26'), status: 'PAID' },
+    );
   });
 
   it('uses the DOCX template (fill + convert) instead of Puppeteer when configured', async () => {
@@ -342,6 +341,6 @@ describe('InterestInvoiceOnIssueListener', () => {
         total: 350_000,
       }),
     ).resolves.toBeUndefined();
-    expect(prisma.invoice.updateMany).not.toHaveBeenCalled();
+    expect(invoicePdf.attachInvoicePdf).not.toHaveBeenCalled();
   });
 });

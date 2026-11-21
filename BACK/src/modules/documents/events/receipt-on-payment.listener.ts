@@ -1,5 +1,9 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { OnDomainEvent } from '../../../common/events/on-domain-event.decorator';
+import {
+  RECEIPT_PDF,
+  type ReceiptPdf,
+} from '../../../common/contracts/document-pdf.contract';
 import { TemplateKind } from '@prisma/client';
 import { numberToWordsEs } from '../../../common/utils/number-to-words.util';
 import { DocxTemplateService } from '../../../files/docx/docx-template.service';
@@ -51,6 +55,7 @@ export class ReceiptOnPaymentListener {
     private readonly filesService: FilesService,
     private readonly pdfService: PdfService,
     private readonly docxTemplateService: DocxTemplateService,
+    @Inject(RECEIPT_PDF) private readonly receiptPdf: ReceiptPdf,
   ) {}
 
   @OnDomainEvent('payment.receipt.created')
@@ -189,6 +194,10 @@ export class ReceiptOnPaymentListener {
       },
     );
 
-    await this.sources.setReceiptPdf(event.tenantId, receipt.id, fileRecord.id);
+    await this.receiptPdf.attachReceiptPdf(
+      event.tenantId,
+      receipt.id,
+      fileRecord.id,
+    );
   }
 }

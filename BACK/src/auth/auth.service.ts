@@ -1,5 +1,6 @@
 import {
   ConflictException,
+  Inject,
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -26,6 +27,14 @@ import { PermissionsResolver } from './services/permissions.resolver';
 import { issuedBeforeCutoff } from './services/session-state.cache';
 import { SESSION_INVALIDATE_EVENT } from '../common/events/session-invalidate.event';
 import { TenantContext } from '../prisma/tenant-context';
+import {
+  BRANCH_SETUP,
+  type BranchSetup,
+} from '../common/contracts/branch-setup.contract';
+import {
+  WAREHOUSE_SETUP,
+  type WarehouseSetup,
+} from '../common/contracts/warehouse-setup.contract';
 
 const SALT_ROUNDS = 10;
 const OWNER_ROLE_NAME = 'Owner';
@@ -46,6 +55,8 @@ export class AuthService {
     private readonly tenantModulesRepository: TenantModulesRepository,
     private readonly refreshTokensRepository: RefreshTokensRepository,
     private readonly permissionsResolver: PermissionsResolver,
+    @Inject(BRANCH_SETUP) private readonly branchSetup: BranchSetup,
+    @Inject(WAREHOUSE_SETUP) private readonly warehouseSetup: WarehouseSetup,
   ) {}
 
   // Crea la empresa: todavía no hay una en el contexto.
@@ -107,7 +118,8 @@ export class AuthService {
         dto.industry,
         tx,
       );
-      await this.tenantsRepository.createHeadquarters(tenant.id, tx);
+      const branch = await this.branchSetup.createHeadquarters(tx, tenant.id);
+      await this.warehouseSetup.createMainWarehouse(tx, tenant.id, branch.id);
       return createdUser;
     });
 

@@ -10,6 +10,7 @@ interface CreateUserData {
   firstName: string;
   lastName: string;
   username?: string;
+  branchId?: string;
   mustChangePassword?: boolean;
   tempPasswordEncrypted?: string;
   tempPasswordExpiresAt?: Date;
@@ -28,8 +29,22 @@ export class UsersRepository {
 
   // Email is globally unique across the platform (one account = one tenant for v1),
   // so login must look it up without a tenant filter.
-  findByEmail(email: string) {
-    return this.prisma.user.findUnique({ where: { email } });
+  findByEmail(email: string, client: PrismaClientOrTx = this.prisma) {
+    return client.user.findUnique({ where: { email } });
+  }
+
+  // El usuario es único en toda la plataforma porque el login no pide empresa:
+  // se elige uno libre sin el filtro de la seguridad de filas, sin mostrar de
+  // quién es el ocupado. Usa su propia conexión: la de una transacción ya
+  // viene con la empresa puesta.
+  async findUsernamesStartingWith(prefix: string): Promise<string[]> {
+    const users = await TenantContext.runAsPlatform(() =>
+      this.prisma.user.findMany({
+        where: { username: { startsWith: prefix } },
+        select: { username: true },
+      }),
+    );
+    return users.flatMap((u) => (u.username ? [u.username] : []));
   }
 
   findByEmailInsensitive(email: string) {
@@ -103,8 +118,13 @@ export class UsersRepository {
     return client.user.create({ data: { ...data, username, tenantId } });
   }
 
-  async update(tenantId: string, id: string, data: Prisma.UserUpdateInput) {
-    const result = await this.prisma.user.updateMany({
+  async update(
+    tenantId: string,
+    id: string,
+    data: Prisma.UserUncheckedUpdateManyInput,
+    client: PrismaClientOrTx = this.prisma,
+  ) {
+    const result = await client.user.updateMany({
       where: { id, tenantId },
       data,
     });

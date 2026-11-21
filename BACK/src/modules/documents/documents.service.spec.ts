@@ -1318,6 +1318,7 @@ describe('InvoiceOnIssueListener', () => {
       filesService as never,
       pdfService as never,
       {} as never,
+      {} as never,
     );
 
     await expect(

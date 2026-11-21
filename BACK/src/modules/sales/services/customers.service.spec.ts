@@ -367,6 +367,54 @@ describe('CustomersService', () => {
       );
       expect(result.firstName).toBe('Ana');
     });
+
+    // Una corrección de una entrega que llegue tarde no pisa este cambio.
+    it('stamps when the pin was moved by hand', async () => {
+      customersRepository.findById.mockResolvedValue(makeCustomer());
+      customersRepository.update.mockResolvedValue(makeCustomer());
+
+      await service.update('tenant-1', 'cust-1', {
+        latitude: -25.3,
+        longitude: -57.6,
+      });
+
+      expect(customersRepository.update).toHaveBeenCalledWith(
+        'tenant-1',
+        'cust-1',
+        expect.objectContaining({ locationUpdatedAt: expect.any(Date) }),
+      );
+    });
+
+    it('does not stamp a save that resends the same coordinates', async () => {
+      customersRepository.findById.mockResolvedValue(
+        makeCustomer({ latitude: -25.3, longitude: -57.6 }),
+      );
+      customersRepository.update.mockResolvedValue(makeCustomer());
+
+      await service.update('tenant-1', 'cust-1', {
+        latitude: -25.3,
+        longitude: -57.6,
+      });
+
+      expect(customersRepository.update).toHaveBeenCalledWith(
+        'tenant-1',
+        'cust-1',
+        expect.not.objectContaining({ locationUpdatedAt: expect.anything() }),
+      );
+    });
+
+    it('leaves the pin timestamp alone when the location is not edited', async () => {
+      customersRepository.findById.mockResolvedValue(makeCustomer());
+      customersRepository.update.mockResolvedValue(makeCustomer());
+
+      await service.update('tenant-1', 'cust-1', { firstName: 'Ana' });
+
+      expect(customersRepository.update).toHaveBeenCalledWith(
+        'tenant-1',
+        'cust-1',
+        expect.not.objectContaining({ locationUpdatedAt: expect.anything() }),
+      );
+    });
   });
 
   // ── fecha de nacimiento ────────────────────────────────────────────────────

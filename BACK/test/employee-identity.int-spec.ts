@@ -3,12 +3,14 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import { randomUUID } from 'node:crypto';
 import { EventBus } from '../src/common/events/event-bus';
 import { buildUsernameBase } from '../src/common/utils/username.util';
-import { EmployeeAccountsRepository } from '../src/modules/hr/repositories/employee-accounts.repository';
 import { EmployeesRepository } from '../src/modules/hr/repositories/employees.repository';
+import { HrSourcesRepository } from '../src/modules/hr/repositories/hr-sources.repository';
+import { PositionsRepository } from '../src/modules/hr/repositories/positions.repository';
 import { EmployeesService } from '../src/modules/hr/services/employees.service';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { TenantContext } from '../src/prisma/tenant-context';
 import { UsersRepository } from '../src/users/repositories/users.repository';
+import { UserAccountsService } from '../src/users/services/user-accounts.service';
 
 // Una empresa nunca ve ni deduce los usuarios de otra. El nombre de usuario es
 // único en toda la plataforma, así que se elige uno libre sin decir de quién es
@@ -30,7 +32,9 @@ describeAsApp('alta de empleado con datos de otra empresa (PostgreSQL)', () => {
     new EmployeesRepository(prisma),
     prisma,
     new EventBus(new EventEmitter2()),
-    new EmployeeAccountsRepository(prisma),
+    new UserAccountsService(new UsersRepository(prisma)),
+    new PositionsRepository(prisma),
+    new HrSourcesRepository(prisma),
   );
   const asA = <T>(fn: () => Promise<T>) => TenantContext.run(tenantA, fn);
   const dto = (documentNumber: string, email: string) => ({

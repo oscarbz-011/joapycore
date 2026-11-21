@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { OnDomainEvent } from '../../../common/events/on-domain-event.decorator';
+import { OutboxService } from '../../../outbox/outbox.service';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { StockMovementsRepository } from '../repositories/stock-movements.repository';
 import { StockSourcesRepository } from '../repositories/stock-sources.repository';
@@ -22,6 +23,7 @@ export class InventoryOnSaleDeliveredListener {
     private readonly stockEntryService: StockEntryService,
     private readonly stockSources: StockSourcesRepository,
     private readonly stockMovements: StockMovementsRepository,
+    private readonly outbox: OutboxService,
   ) {}
 
   @OnDomainEvent('sale.order.stock_out', {
@@ -48,7 +50,8 @@ export class InventoryOnSaleDeliveredListener {
     );
     if (!order) return;
 
-    await this.prisma.$transaction(async (tx) => {
+    const eventId = await this.prisma.$transaction(async (tx) => {
+      const lines: { saleItemId: string; batchId: string }[] = [];
       for (const item of order.items) {
         if (!item.productId) continue; // línea libre / servicio
         if (item.product?.isSerialized || !item.product?.usesLots) continue;
@@ -68,13 +71,18 @@ export class InventoryOnSaleDeliveredListener {
           tx,
         );
         if (firstBatchId) {
-          await this.stockSources.setSaleOrderItemBatch(
-            item.id,
-            firstBatchId,
-            tx,
-          );
+          lines.push({ saleItemId: item.id, batchId: firstBatchId });
         }
       }
+      if (lines.length === 0) return null;
+      // Ventas anota el lote en su renglón; viaja en la misma transacción
+      // que el consumo para que no se pierda.
+      return this.outbox.enqueue(tx, tenantId, 'inventory.batch.consumed', {
+        tenantId,
+        saleOrderId,
+        lines,
+      });
     });
+    if (eventId) await this.outbox.dispatch(eventId);
   }
 }
