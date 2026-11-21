@@ -9,6 +9,7 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { IntegrationsService } from '../integrations/integrations.service';
 import { CommunicationsService } from './communications.service';
+import { CommunicationsSourcesRepository } from './communications-sources.repository';
 import { renderInvoiceTemplate } from './communications-template';
 import {
   CommunicationIdentityDto,
@@ -50,6 +51,7 @@ export class CommunicationHubService {
     private readonly integrations: IntegrationsService,
     private readonly events: EventBus,
     private readonly core: CommunicationsService,
+    private readonly sources: CommunicationsSourcesRepository,
   ) {}
 
   async settings(tenantId: string) {
@@ -87,10 +89,7 @@ export class CommunicationHubService {
   }
 
   private async invoice(tenantId: string, id: string) {
-    const invoice = await this.prisma.invoice.findFirst({
-      where: { id, tenantId },
-      select: { id: true, saleOrder: { select: { customerId: true } } },
-    });
+    const invoice = await this.sources.invoiceCustomer(tenantId, id);
     if (!invoice) throw new NotFoundException('Factura no encontrada');
     return invoice;
   }

@@ -12,7 +12,6 @@ import { randomUUID } from 'node:crypto';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { ProductUnitsRepository } from '../src/modules/inventory/repositories/product-units.repository';
 import { StockMovementsRepository } from '../src/modules/inventory/repositories/stock-movements.repository';
-import { StockLocationsRepository } from '../src/modules/inventory/repositories/stock-locations.repository';
 import { StockSourcesRepository } from '../src/modules/inventory/repositories/stock-sources.repository';
 import { ProductsRepository } from '../src/modules/inventory/repositories/products.repository';
 import { StockLedgerService } from '../src/modules/inventory/services/stock-ledger.service';
@@ -30,7 +29,6 @@ describe('StockLedgerService.assertAvailable (PostgreSQL)', () => {
     ledger = new StockLedgerService(
       new StockMovementsRepository(prisma),
       new ProductUnitsRepository(prisma),
-      new StockLocationsRepository(prisma),
       new StockSourcesRepository(prisma),
       new ProductsRepository(prisma),
     );

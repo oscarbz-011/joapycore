@@ -14,6 +14,7 @@ import {
 import { ClosePosSessionDto } from '../dto/close-pos-session.dto';
 import { OpenPosSessionDto } from '../dto/open-pos-session.dto';
 import { PosSessionsRepository } from '../repositories/pos-sessions.repository';
+import { PosSourcesRepository } from '../repositories/pos-sources.repository';
 import { PosTerminalsService } from './pos-terminals.service';
 
 function toNum(value: unknown): number {
@@ -30,6 +31,7 @@ export class PosSessionsService {
     private readonly posTerminalsService: PosTerminalsService,
     private readonly eventEmitter: EventBus,
     @Inject(BILLING_GATEWAY) private readonly billing: BillingGateway,
+    private readonly sources: PosSourcesRepository,
   ) {}
 
   async open(tenantId: string, dto: OpenPosSessionDto, cashierId: string) {
@@ -109,10 +111,7 @@ export class PosSessionsService {
       throw new UnprocessableEntityException('Esta sesión ya está cerrada');
     }
 
-    const cashSum = await this.posSessionsRepository.sumCashPayments(
-      tenantId,
-      id,
-    );
+    const cashSum = await this.sources.sumCashPayments(tenantId, id);
     const expectedCash =
       toNum(session.openingCash) + toNum(cashSum._sum.amount);
     const difference = Math.round((dto.closingCash - expectedCash) * 100) / 100;

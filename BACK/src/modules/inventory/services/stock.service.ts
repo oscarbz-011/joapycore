@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { AlertsService } from '../../alerts/services/alerts.service';
 import { FilterStockDto } from '../dto/filter-stock.dto';
 import { StockRepository } from '../repositories/stock.repository';
+import { StockSourcesRepository } from '../repositories/stock-sources.repository';
 
 export type ReorderPointSource = 'PRODUCT' | 'ALERT';
 
@@ -10,6 +11,7 @@ export class StockService {
   constructor(
     private readonly stockRepository: StockRepository,
     private readonly alertsService: AlertsService,
+    private readonly sources: StockSourcesRepository,
   ) {}
 
   /**
@@ -18,10 +20,15 @@ export class StockService {
    * esté activa. 0 = sin punto de reposición: solo se marca al quedar en cero.
    */
   async findAll(tenantId: string, filters: FilterStockDto) {
-    const [result, alertThreshold] = await Promise.all([
-      this.stockRepository.findAll(tenantId, filters),
+    const [warehouses, alertThreshold] = await Promise.all([
+      this.sources.findWarehouses(tenantId),
       this.alertsService.findActiveThreshold(tenantId, 'STOCK_LOW'),
     ]);
+    const result = await this.stockRepository.findAll(
+      tenantId,
+      filters,
+      warehouses,
+    );
     return {
       ...result,
       items: result.items.map((row) => {

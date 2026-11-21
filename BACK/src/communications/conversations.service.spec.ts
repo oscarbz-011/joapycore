@@ -2,6 +2,7 @@ import { NotFoundException, ServiceUnavailableException } from '@nestjs/common';
 import { EventBus } from '../common/events/event-bus';
 import { ConversationsRepository } from './conversations.repository';
 import { ConversationsService } from './conversations.service';
+import { CommunicationsSourcesRepository } from './communications-sources.repository';
 
 const customer = (id: string, firstName: string) => ({
   id,
@@ -23,15 +24,18 @@ describe('ConversationsService', () => {
       | 'list'
       | 'lastMessages'
       | 'problemGroups'
-      | 'customer'
-      | 'customers'
-      | 'customerIdsMatching'
       | 'threadRefs'
       | 'threadTotal'
       | 'messages'
       | 'notes'
       | 'users'
       | 'createNote'
+    >
+  >;
+  let sources: jest.Mocked<
+    Pick<
+      CommunicationsSourcesRepository,
+      'customer' | 'customers' | 'customerIdsMatching'
     >
   >;
   let events: { emit: jest.Mock };
@@ -43,9 +47,6 @@ describe('ConversationsService', () => {
       list: jest.fn().mockResolvedValue([]),
       lastMessages: jest.fn().mockResolvedValue([]),
       problemGroups: jest.fn().mockResolvedValue([]),
-      customer: jest.fn().mockResolvedValue(customer('c1', 'María')),
-      customers: jest.fn().mockResolvedValue([]),
-      customerIdsMatching: jest.fn().mockResolvedValue([]),
       threadRefs: jest.fn().mockResolvedValue([]),
       threadTotal: jest.fn().mockResolvedValue(0),
       messages: jest.fn().mockResolvedValue([]),
@@ -53,10 +54,16 @@ describe('ConversationsService', () => {
       users: jest.fn().mockResolvedValue([]),
       createNote: jest.fn().mockResolvedValue({ id: 'note-1' }),
     };
+    sources = {
+      customer: jest.fn().mockResolvedValue(customer('c1', 'María')),
+      customers: jest.fn().mockResolvedValue([]),
+      customerIdsMatching: jest.fn().mockResolvedValue([]),
+    };
     events = { emit: jest.fn() };
     service = new ConversationsService(
       repository as unknown as ConversationsRepository,
       events as unknown as EventBus,
+      sources as unknown as CommunicationsSourcesRepository,
     );
   });
 
@@ -94,7 +101,7 @@ describe('ConversationsService', () => {
           total: 1,
         },
       ]);
-      repository.customers.mockResolvedValue([customer('c1', 'María')]);
+      sources.customers.mockResolvedValue([customer('c1', 'María')]);
       repository.lastMessages.mockResolvedValue([
         {
           id: 'm3',
@@ -138,12 +145,12 @@ describe('ConversationsService', () => {
         page: 1,
         limit: 20,
       });
-      expect(repository.customers).toHaveBeenCalledWith('tenant-a', ['c1']);
+      expect(sources.customers).toHaveBeenCalledWith('tenant-a', ['c1']);
       expect(repository.lastMessages).toHaveBeenCalledWith('tenant-a', ['c1']);
     });
 
     it('searches contacts by name inside the tenant', async () => {
-      repository.customerIdsMatching.mockResolvedValue(['c1']);
+      sources.customerIdsMatching.mockResolvedValue(['c1']);
 
       await service.list('tenant-a', {
         ...page,
@@ -151,7 +158,7 @@ describe('ConversationsService', () => {
         search: 'maria',
       });
 
-      expect(repository.customerIdsMatching).toHaveBeenCalledWith(
+      expect(sources.customerIdsMatching).toHaveBeenCalledWith(
         'tenant-a',
         'maria',
       );
@@ -202,12 +209,12 @@ describe('ConversationsService', () => {
 
   describe('thread', () => {
     it('does not open the conversation of a contact from another tenant', async () => {
-      repository.customer.mockResolvedValue(null);
+      sources.customer.mockResolvedValue(null);
 
       await expect(
         service.thread('tenant-a', 'CUSTOMER', 'c-other', page),
       ).rejects.toBeInstanceOf(NotFoundException);
-      expect(repository.customer).toHaveBeenCalledWith('tenant-a', 'c-other');
+      expect(sources.customer).toHaveBeenCalledWith('tenant-a', 'c-other');
       expect(repository.threadRefs).not.toHaveBeenCalled();
     });
 
@@ -272,7 +279,7 @@ describe('ConversationsService', () => {
     });
 
     it('does not write a note on a contact from another tenant', async () => {
-      repository.customer.mockResolvedValue(null);
+      sources.customer.mockResolvedValue(null);
 
       await expect(
         service.createNote('tenant-a', 'user-1', 'CUSTOMER', 'c-other', {

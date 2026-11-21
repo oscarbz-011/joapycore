@@ -10,6 +10,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CommunicationsEmailProvider } from './communications-email.provider';
 import { CommunicationsRepository } from './communications.repository';
 import { CommunicationsService } from './communications.service';
+import { CommunicationsSourcesRepository } from './communications-sources.repository';
 import { InvoiceCommunicationListener } from './invoice-communication.listener';
 
 jest.mock('../integrations/integrations.service', () => ({
@@ -116,6 +117,7 @@ describe('invoice.issued automatic communication', () => {
       files as unknown as FilesService,
       provider as unknown as CommunicationsEmailProvider,
       new EventBus(new EventEmitter2()),
+      new CommunicationsSourcesRepository(prisma as unknown as PrismaService),
     );
     listener = new InvoiceCommunicationListener(communications);
   });

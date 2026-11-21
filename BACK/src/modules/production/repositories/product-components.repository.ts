@@ -68,15 +68,6 @@ export class ProductComponentsRepository {
     return this.prisma.productComponent.deleteMany({ where: { tenantId, id } });
   }
 
-  // Producto + su tipo, para validar que la receta se arme sobre algo
-  // fabricado y que el componente exista en el mismo tenant.
-  findProduct(tenantId: string, id: string) {
-    return this.prisma.product.findFirst({
-      where: { tenantId, id, deletedAt: null },
-      select: { id: true, name: true, kind: true, unit: true },
-    });
-  }
-
   // Los componentes directos de un producto — lo usa la detección de ciclos
   // del servicio para recorrer la receta hacia abajo.
   findComponentIds(tenantId: string, productId: string) {

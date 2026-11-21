@@ -37,6 +37,7 @@ import { UpdateProductSupplierDto } from '../dto/update-product-supplier.dto';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { WarehousesRepository } from '../../warehouses/repositories/warehouses.repository';
 import { StockMovementsRepository } from '../repositories/stock-movements.repository';
+import { StockSourcesRepository } from '../repositories/stock-sources.repository';
 import type { Prisma } from '@prisma/client';
 import {
   orderByFrom,
@@ -85,6 +86,7 @@ export class ProductsService {
     private readonly prisma: PrismaService,
     private readonly warehousesRepository: WarehousesRepository,
     private readonly stockMovementsRepository: StockMovementsRepository,
+    private readonly sources: StockSourcesRepository,
   ) {}
 
   findAll(tenantId: string, filters: ProductFilters) {
@@ -155,9 +157,7 @@ export class ProductsService {
     // revende). Los defaults de flujo salen del tipo salvo que vengan explícitos.
     const kind =
       dto.kind ??
-      defaultKindForIndustry(
-        await this.productsRepository.findTenantIndustry(tenantId),
-      );
+      defaultKindForIndustry(await this.sources.findTenantIndustry(tenantId));
     const flags = KIND_DEFAULT_FLAGS[kind];
     const salesChannels =
       dto.salesChannels ?? defaultSalesChannelsForKind(kind);

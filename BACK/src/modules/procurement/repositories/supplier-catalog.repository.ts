@@ -88,13 +88,6 @@ export class SupplierCatalogRepository {
     });
   }
 
-  findProductsForMatching(tenantId: string, productIds: string[]) {
-    return this.prisma.product.findMany({
-      where: { tenantId, id: { in: productIds }, deletedAt: null },
-      select: { id: true, name: true, model: true },
-    });
-  }
-
   // Ítems todavía sin vincular de proveedores activos cuya descripción
   // contiene alguna de las palabras buscadas. Es un primer filtro amplio: el
   // orden y el corte los decide rankLinkSuggestions.
@@ -223,13 +216,6 @@ export class SupplierCatalogRepository {
   supplierExists(tenantId: string, supplierId: string) {
     return this.prisma.supplier.findFirst({
       where: { tenantId, id: supplierId, deletedAt: null },
-      select: { id: true, name: true },
-    });
-  }
-
-  productExists(tenantId: string, productId: string) {
-    return this.prisma.product.findFirst({
-      where: { tenantId, id: productId, deletedAt: null },
       select: { id: true, name: true },
     });
   }

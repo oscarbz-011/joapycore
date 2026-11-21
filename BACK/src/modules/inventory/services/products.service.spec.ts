@@ -39,7 +39,6 @@ describe('ProductsService', () => {
     softDelete: jest.Mock;
     getStock: jest.Mock;
     getSerializedStock: jest.Mock;
-    findTenantIndustry: jest.Mock;
   };
   let productUnitsRepository: {
     createMany: jest.Mock;
@@ -64,6 +63,7 @@ describe('ProductsService', () => {
   let eventEmitter: { emit: jest.Mock };
   let prisma: { $transaction: jest.Mock };
   let warehousesRepository: { findById: jest.Mock };
+  let sources: { findTenantIndustry: jest.Mock };
   let stockMovementsRepository: {
     lockProducts: jest.Mock;
     sumByProductsAndWarehouse: jest.Mock;
@@ -80,7 +80,6 @@ describe('ProductsService', () => {
       getStock: jest.fn().mockResolvedValue(10),
       getSerializedStock: jest.fn().mockResolvedValue(3),
       // Rubro del tenant — define el ProductKind por defecto al crear.
-      findTenantIndustry: jest.fn().mockResolvedValue('ELECTRODOMESTICOS'),
     };
     productUnitsRepository = {
       createMany: jest.fn(),
@@ -109,6 +108,9 @@ describe('ProductsService', () => {
     warehousesRepository = {
       findById: jest.fn().mockResolvedValue({ id: 'wh-1', isActive: true }),
     };
+    sources = {
+      findTenantIndustry: jest.fn().mockResolvedValue('ELECTRODOMESTICOS'),
+    };
     stockMovementsRepository = {
       lockProducts: jest.fn(),
       sumByProductsAndWarehouse: jest
@@ -126,6 +128,7 @@ describe('ProductsService', () => {
       prisma as any,
       warehousesRepository as any,
       stockMovementsRepository as any,
+      sources as any,
     );
   });
 
@@ -319,7 +322,7 @@ describe('ProductsService', () => {
     // ── Multi-rubro: tipo de producto ────────────────────────────────────
 
     it('defaults to RESALE for a tenant that resells (ferretería)', async () => {
-      productsRepository.findTenantIndustry.mockResolvedValue('FERRETERIA');
+      sources.findTenantIndustry.mockResolvedValue('FERRETERIA');
       productsRepository.create.mockResolvedValue(makeProduct());
 
       await service.create('tenant-1', baseDto);
@@ -335,7 +338,7 @@ describe('ProductsService', () => {
     });
 
     it('defaults to MANUFACTURED for a carpintería — lo que vende, lo fabrica', async () => {
-      productsRepository.findTenantIndustry.mockResolvedValue('MUEBLERIA');
+      sources.findTenantIndustry.mockResolvedValue('MUEBLERIA');
       productsRepository.create.mockResolvedValue(makeProduct());
 
       await service.create('tenant-1', baseDto);
@@ -352,7 +355,7 @@ describe('ProductsService', () => {
     });
 
     it('falls back to RESALE when the tenant has no rubro', async () => {
-      productsRepository.findTenantIndustry.mockResolvedValue(null);
+      sources.findTenantIndustry.mockResolvedValue(null);
       productsRepository.create.mockResolvedValue(makeProduct());
 
       await service.create('tenant-1', baseDto);
@@ -364,7 +367,7 @@ describe('ProductsService', () => {
     });
 
     it('an explicit kind wins over the rubro default', async () => {
-      productsRepository.findTenantIndustry.mockResolvedValue('MUEBLERIA');
+      sources.findTenantIndustry.mockResolvedValue('MUEBLERIA');
       productsRepository.create.mockResolvedValue(makeProduct());
 
       await service.create('tenant-1', { ...baseDto, kind: 'RAW_MATERIAL' });
@@ -379,11 +382,11 @@ describe('ProductsService', () => {
         }),
       );
       // No hace falta consultar el rubro si el caller ya definió el tipo.
-      expect(productsRepository.findTenantIndustry).not.toHaveBeenCalled();
+      expect(sources.findTenantIndustry).not.toHaveBeenCalled();
     });
 
     it('explicit channels win over the kind defaults — el tornillo que además se vende suelto', async () => {
-      productsRepository.findTenantIndustry.mockResolvedValue('MUEBLERIA');
+      sources.findTenantIndustry.mockResolvedValue('MUEBLERIA');
       productsRepository.create.mockResolvedValue(makeProduct());
 
       await service.create('tenant-1', {

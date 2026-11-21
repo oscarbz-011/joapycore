@@ -71,14 +71,6 @@ export class PosSessionsRepository {
     });
   }
 
-  // Sum of CASH payments collected under this session — the basis for expectedCash.
-  sumCashPayments(tenantId: string, sessionId: string) {
-    return this.prisma.salePayment.aggregate({
-      where: { tenantId, posSessionId: sessionId, paymentMethod: 'CASH' },
-      _sum: { amount: true },
-    });
-  }
-
   create(tenantId: string, data: CreatePosSessionData) {
     return this.prisma.posSession.create({
       data: { tenantId, ...data, status: 'OPEN', openedAt: new Date() },

@@ -16,6 +16,8 @@ const row = (id: string, stockMin: number) => ({
   unassignedStock: 0,
 });
 
+const WAREHOUSES = [{ id: 'wh-1', name: 'Central', isActive: true }];
+
 describe('StockService', () => {
   const setup = (threshold: number | null) => {
     const repository = {
@@ -27,22 +29,32 @@ describe('StockService', () => {
     const alerts = {
       findActiveThreshold: jest.fn().mockResolvedValue(threshold),
     };
+    const sources = {
+      findWarehouses: jest.fn().mockResolvedValue(WAREHOUSES),
+    };
     return {
       repository,
       alerts,
-      service: new StockService(repository as any, alerts as any),
+      sources,
+      service: new StockService(
+        repository as any,
+        alerts as any,
+        sources as any,
+      ),
     };
   };
 
   it('delegates tenant and filters to the stock repository', async () => {
-    const { service, repository, alerts } = setup(null);
+    const { service, repository, alerts, sources } = setup(null);
 
     await service.findAll('tenant-1', { warehouseId: 'wh-1', search: 'tv' });
 
-    expect(repository.findAll).toHaveBeenCalledWith('tenant-1', {
-      warehouseId: 'wh-1',
-      search: 'tv',
-    });
+    expect(sources.findWarehouses).toHaveBeenCalledWith('tenant-1');
+    expect(repository.findAll).toHaveBeenCalledWith(
+      'tenant-1',
+      { warehouseId: 'wh-1', search: 'tv' },
+      WAREHOUSES,
+    );
     expect(alerts.findActiveThreshold).toHaveBeenCalledWith(
       'tenant-1',
       'STOCK_LOW',

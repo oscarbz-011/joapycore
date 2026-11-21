@@ -12,6 +12,7 @@ import type { CommunicationMessage } from '@prisma/client';
 import type { AuditLogEvent } from '../audit/audit-log.event';
 import { FilesService } from '../files/files.service';
 import { CommunicationsRepository } from './communications.repository';
+import { CommunicationsSourcesRepository } from './communications-sources.repository';
 import {
   CommunicationDeliveryError,
   CommunicationsEmailProvider,
@@ -67,6 +68,7 @@ export class CommunicationsService {
     private readonly files: FilesService,
     private readonly provider: CommunicationsEmailProvider,
     private readonly events: EventBus,
+    private readonly sources: CommunicationsSourcesRepository,
   ) {}
 
   /**
@@ -131,7 +133,7 @@ export class CommunicationsService {
     const idempotencyKey = `invoice:${invoiceId}:issued`;
     const existing = await this.repository.byKey(tenantId, idempotencyKey);
     if (existing) return existing;
-    const invoice = await this.repository.invoice(tenantId, invoiceId);
+    const invoice = await this.sources.invoice(tenantId, invoiceId);
     if (!invoice)
       throw knownPreparationFailure(
         new NotFoundException('Factura no encontrada'),
@@ -313,10 +315,7 @@ export class CommunicationsService {
     if (!message) return;
     let accepted = false;
     try {
-      const invoice = await this.repository.invoice(
-        tenantId,
-        message.invoiceId,
-      );
+      const invoice = await this.sources.invoice(tenantId, message.invoiceId);
       if (!invoice || !['ISSUED', 'PAID'].includes(invoice.status)) {
         throw new CommunicationDeliveryError(
           'INVOICE_NOT_ISSUED',

@@ -11,6 +11,7 @@ import { createOutbox } from './support/outbox';
 import { FilesService } from '../src/files/files.service';
 import { IntegrationsService } from '../src/integrations/integrations.service';
 import { CommunicationsRepository } from '../src/communications/communications.repository';
+import { CommunicationsSourcesRepository } from '../src/communications/communications-sources.repository';
 import { CommunicationsService } from '../src/communications/communications.service';
 import {
   CommunicationsEmailProvider,
@@ -93,6 +94,7 @@ integration(
         files as unknown as FilesService,
         transport as unknown as CommunicationsEmailProvider,
         new EventBus(events),
+        new CommunicationsSourcesRepository(prisma),
       );
       hub = new CommunicationHubService(
         prisma,
@@ -103,6 +105,7 @@ integration(
         } as unknown as IntegrationsService,
         new EventBus(events),
         core,
+        new CommunicationsSourcesRepository(prisma),
       );
       const durable = createOutbox(prisma, events);
       outbox = durable.outbox;

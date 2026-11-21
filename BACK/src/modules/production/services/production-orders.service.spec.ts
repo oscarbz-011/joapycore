@@ -53,9 +53,8 @@ describe('ProductionOrdersService', () => {
     updateStatus: jest.Mock;
     updateItemUsedQuantity: jest.Mock;
     findRecipe: jest.Mock;
-    findProduct: jest.Mock;
-    getStock: jest.Mock;
   };
+  let sources: { findProduct: jest.Mock; getStock: jest.Mock };
   let eventEmitter: { emit: jest.Mock; emitAsync: jest.Mock };
   let prisma: { $transaction: jest.Mock };
 
@@ -75,6 +74,8 @@ describe('ProductionOrdersService', () => {
           component: { id: 'tablero-1', name: 'Tablero MDF', unit: 'unidad' },
         },
       ]),
+    };
+    sources = {
       findProduct: jest.fn().mockResolvedValue(makeProduct()),
       // Stock de sobra por defecto.
       getStock: jest.fn().mockResolvedValue(new Map([['tablero-1', 100]])),
@@ -90,6 +91,7 @@ describe('ProductionOrdersService', () => {
       prisma as any,
       repository as any,
       eventEmitter as any,
+      sources as any,
     );
   });
 
@@ -117,7 +119,7 @@ describe('ProductionOrdersService', () => {
     it.each(['RESALE', 'RAW_MATERIAL'])(
       'refuses to produce a %s product',
       async (kind) => {
-        repository.findProduct.mockResolvedValue(makeProduct({ kind }));
+        sources.findProduct.mockResolvedValue(makeProduct({ kind }));
 
         await expect(service.create('tenant-1', 'user-1', dto)).rejects.toThrow(
           /Solo se puede producir un producto fabricado/,
@@ -134,7 +136,7 @@ describe('ProductionOrdersService', () => {
     });
 
     it('refuses a serialized product: no hay de dónde sacar los N/S', async () => {
-      repository.findProduct.mockResolvedValue(
+      sources.findProduct.mockResolvedValue(
         makeProduct({ isSerialized: true }),
       );
 
@@ -144,9 +146,7 @@ describe('ProductionOrdersService', () => {
     });
 
     it('refuses a product that is not ACTIVE', async () => {
-      repository.findProduct.mockResolvedValue(
-        makeProduct({ status: 'DRAFT' }),
-      );
+      sources.findProduct.mockResolvedValue(makeProduct({ status: 'DRAFT' }));
 
       await expect(
         service.create('tenant-1', 'user-1', dto),
@@ -154,7 +154,7 @@ describe('ProductionOrdersService', () => {
     });
 
     it('throws NotFoundException when the product does not exist', async () => {
-      repository.findProduct.mockResolvedValue(null);
+      sources.findProduct.mockResolvedValue(null);
 
       await expect(
         service.create('tenant-1', 'user-1', dto),
@@ -176,7 +176,7 @@ describe('ProductionOrdersService', () => {
     });
 
     it('refuses to start without enough raw material, naming what is missing', async () => {
-      repository.getStock.mockResolvedValue(new Map([['tablero-1', 2]]));
+      sources.getStock.mockResolvedValue(new Map([['tablero-1', 2]]));
 
       await expect(service.start('tenant-1', 'po-1')).rejects.toThrow(
         /Tablero MDF \(necesita 6, hay 2\)/,
@@ -247,7 +247,7 @@ describe('ProductionOrdersService', () => {
     });
 
     it('re-checks stock at completion — pudo consumirse en otra orden mientras tanto', async () => {
-      repository.getStock.mockResolvedValue(new Map([['tablero-1', 1]]));
+      sources.getStock.mockResolvedValue(new Map([['tablero-1', 1]]));
 
       await expect(
         service.complete('tenant-1', 'po-1', {}, 'user-1'),

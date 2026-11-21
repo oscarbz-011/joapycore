@@ -3,7 +3,7 @@ import { FilesModule } from '../../files/files.module';
 import { PosSalesController } from './controllers/pos-sales.controller';
 import { PosSessionsController } from './controllers/pos-sessions.controller';
 import { PosTerminalsController } from './controllers/pos-terminals.controller';
-import { PosSalesRepository } from './repositories/pos-sales.repository';
+import { PosSourcesRepository } from './repositories/pos-sources.repository';
 import { PosSessionsRepository } from './repositories/pos-sessions.repository';
 import { PosTerminalsRepository } from './repositories/pos-terminals.repository';
 import { PosSalesService } from './services/pos-sales.service';
@@ -23,7 +23,7 @@ import { PosTerminalsService } from './services/pos-terminals.service';
     PosSalesService,
     PosTerminalsRepository,
     PosSessionsRepository,
-    PosSalesRepository,
+    PosSourcesRepository,
   ],
 })
 export class PosModule {}

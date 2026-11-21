@@ -23,7 +23,6 @@ import { BillingSeriesService } from '../src/modules/billing/services/billing-se
 import { RemissionNotesService } from '../src/modules/billing/services/remission-notes.service';
 import { ProductUnitsRepository } from '../src/modules/inventory/repositories/product-units.repository';
 import { ProductsRepository } from '../src/modules/inventory/repositories/products.repository';
-import { StockLocationsRepository } from '../src/modules/inventory/repositories/stock-locations.repository';
 import { StockMovementsRepository } from '../src/modules/inventory/repositories/stock-movements.repository';
 import { StockSourcesRepository } from '../src/modules/inventory/repositories/stock-sources.repository';
 import { StockLedgerService } from '../src/modules/inventory/services/stock-ledger.service';
@@ -86,7 +85,6 @@ describe('RemissionNotesService (PostgreSQL)', () => {
       new StockLedgerService(
         new StockMovementsRepository(prisma),
         new ProductUnitsRepository(prisma),
-        new StockLocationsRepository(prisma),
         new StockSourcesRepository(prisma),
         new ProductsRepository(prisma),
       ),

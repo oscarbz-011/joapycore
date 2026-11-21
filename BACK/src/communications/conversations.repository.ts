@@ -1,9 +1,5 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import {
-  accentVariants,
-  normalizeSearch,
-} from '../common/pagination/pagination';
 import { PrismaService } from '../prisma/prisma.service';
 
 export type ContactType = 'CUSTOMER';
@@ -19,16 +15,6 @@ export type ConversationRow = {
 export type ThreadRef = { id: string; kind: 'MESSAGE' | 'NOTE' };
 
 const PROBLEM_STATUSES = ['FAILED', 'UNKNOWN'] as const;
-const CUSTOMER_SUMMARY = {
-  id: true,
-  customerCode: true,
-  firstName: true,
-  secondFirstName: true,
-  lastName: true,
-  secondLastName: true,
-  email: true,
-  phone: true,
-} satisfies Prisma.CustomerSelect;
 const THREAD_MESSAGE = {
   id: true,
   entityType: true,
@@ -130,52 +116,6 @@ export class ConversationsRepository {
       },
       _count: { _all: true },
     });
-  }
-
-  customer(tenantId: string, id: string) {
-    return this.prisma.customer.findFirst({
-      where: { tenantId, id },
-      select: CUSTOMER_SUMMARY,
-    });
-  }
-
-  customers(tenantId: string, ids: string[]) {
-    return this.prisma.customer.findMany({
-      where: { tenantId, id: { in: ids } },
-      select: CUSTOMER_SUMMARY,
-    });
-  }
-
-  async customerIdsMatching(tenantId: string, search: string) {
-    const words = search.split(/\s+/).filter(Boolean);
-    const rows = await this.prisma.customer.findMany({
-      where: {
-        tenantId,
-        AND: words.map((word) => ({
-          OR: [
-            { searchText: { contains: normalizeSearch(word) } },
-            // Base creada sin migraciones: no tiene ese texto.
-            {
-              searchText: null,
-              OR: accentVariants(word).flatMap((variant) => [
-                {
-                  firstName: {
-                    contains: variant,
-                    mode: 'insensitive' as const,
-                  },
-                },
-                {
-                  lastName: { contains: variant, mode: 'insensitive' as const },
-                },
-              ]),
-            },
-          ],
-        })),
-      },
-      select: { id: true },
-      take: 500,
-    });
-    return rows.map((row) => row.id);
   }
 
   threadRefs(

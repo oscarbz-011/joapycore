@@ -11,6 +11,7 @@ import { CollectionVisitsRepository } from '../repositories/collection-visits.re
 import { PaymentAgreementsRepository } from '../repositories/payment-agreements.repository';
 import { CollectionNotesRepository } from '../repositories/collection-notes.repository';
 import { DelinquencyReportsRepository } from '../repositories/delinquency-reports.repository';
+import { CollectionsSourcesRepository } from '../repositories/collections-sources.repository';
 import type { CreateCollectionRouteDto } from '../dto/create-collection-route.dto';
 import type { AddVisitDto } from '../dto/add-visit.dto';
 import type { UpdateVisitResultDto } from '../dto/update-visit-result.dto';
@@ -35,6 +36,7 @@ export class CobranzasService {
     private readonly notesRepo: CollectionNotesRepository,
     private readonly delinquencyReportsRepo: DelinquencyReportsRepository,
     private readonly eventEmitter: EventBus,
+    private readonly sources: CollectionsSourcesRepository,
   ) {}
 
   // ── Morosos ────────────────────────────────────────────────────────────────
@@ -359,7 +361,7 @@ export class CobranzasService {
         this.routesRepo.countOpen(tenantId),
         this.routesRepo.countOnDate(tenantId, startOfBusinessDay()),
         this.agreementsRepo.countActive(tenantId),
-        this.delinquencyReportsRepo.countOverdueInstallments(tenantId),
+        this.sources.countOverdueInstallments(tenantId),
       ]);
 
     const totalCollected = await this.routesRepo.sumCollectedOfClosed(tenantId);

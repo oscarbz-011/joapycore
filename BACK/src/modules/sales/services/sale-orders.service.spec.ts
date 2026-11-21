@@ -242,10 +242,11 @@ describe('SaleOrdersService', () => {
       new StockLedgerService(
         new StockMovementsRepository(prisma as any),
         new ProductUnitsRepository(prisma as any),
-        {
-          findById: jest.fn().mockResolvedValue({ id: 'wh-1', isActive: true }),
-        } as any,
-        new StockSourcesRepository(prisma as any),
+        Object.assign(new StockSourcesRepository(prisma as any), {
+          findWarehouse: jest
+            .fn()
+            .mockResolvedValue({ id: 'wh-1', isActive: true }),
+        }),
         new ProductsRepository(prisma as any),
       ),
       outbox as any,

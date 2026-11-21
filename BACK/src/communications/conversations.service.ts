@@ -8,6 +8,7 @@ import {
   ContactType,
   ConversationsRepository,
 } from './conversations.repository';
+import { CommunicationsSourcesRepository } from './communications-sources.repository';
 import {
   CommunicationNoteDto,
   CommunicationPageDto,
@@ -15,7 +16,7 @@ import {
 } from './hub.dto';
 
 type CustomerRow = NonNullable<
-  Awaited<ReturnType<ConversationsRepository['customer']>>
+  Awaited<ReturnType<CommunicationsSourcesRepository['customer']>>
 >;
 
 type MessageRow = Awaited<
@@ -52,6 +53,7 @@ export class ConversationsService {
   constructor(
     private readonly repository: ConversationsRepository,
     private readonly events: EventBus,
+    private readonly sources: CommunicationsSourcesRepository,
   ) {}
 
   private async requireEnabled(tenantId: string) {
@@ -64,7 +66,7 @@ export class ConversationsService {
   }
 
   private async contact(tenantId: string, type: ContactType, id: string) {
-    const customer = await this.repository.customer(tenantId, id);
+    const customer = await this.sources.customer(tenantId, id);
     if (!customer) throw new NotFoundException('Contacto no encontrado');
     return contactOf(type, customer);
   }
@@ -78,7 +80,7 @@ export class ConversationsService {
       onlyProblems,
       search,
       matchingContactIds: search
-        ? await this.repository.customerIdsMatching(tenantId, search)
+        ? await this.sources.customerIdsMatching(tenantId, search)
         : [],
       page,
       limit,
@@ -86,7 +88,7 @@ export class ConversationsService {
     const ids = rows.map((row) => row.contactId);
     const [customers, lastMessages] = ids.length
       ? await Promise.all([
-          this.repository.customers(tenantId, ids),
+          this.sources.customers(tenantId, ids),
           this.repository.lastMessages(tenantId, ids),
         ])
       : [[], []];

@@ -5,7 +5,6 @@ import { ProductUnitsRepository } from './repositories/product-units.repository'
 import { ProductsRepository } from './repositories/products.repository';
 import { StockMovementsRepository } from './repositories/stock-movements.repository';
 import { StockLedgerService } from './services/stock-ledger.service';
-import { StockLocationsRepository } from './repositories/stock-locations.repository';
 import { StockSourcesRepository } from './repositories/stock-sources.repository';
 
 /**
@@ -19,7 +18,6 @@ import { StockSourcesRepository } from './repositories/stock-sources.repository'
     ProductsRepository,
     ProductUnitsRepository,
     StockMovementsRepository,
-    StockLocationsRepository,
     StockSourcesRepository,
     StockLedgerService,
     { provide: PRODUCT_CATALOG, useExisting: ProductsRepository },

@@ -13,7 +13,6 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import { EventBus } from '../src/common/events/event-bus';
 import { randomUUID } from 'node:crypto';
 import { ProductUnitsRepository } from '../src/modules/inventory/repositories/product-units.repository';
-import { StockLocationsRepository } from '../src/modules/inventory/repositories/stock-locations.repository';
 import { StockSourcesRepository } from '../src/modules/inventory/repositories/stock-sources.repository';
 import { ProductsRepository } from '../src/modules/inventory/repositories/products.repository';
 import { StockMovementsRepository } from '../src/modules/inventory/repositories/stock-movements.repository';
@@ -60,7 +59,6 @@ describe('Entrega → descuento de stock (PostgreSQL)', () => {
       new StockLedgerService(
         new StockMovementsRepository(prisma),
         new ProductUnitsRepository(prisma),
-        new StockLocationsRepository(prisma),
         new StockSourcesRepository(prisma),
         new ProductsRepository(prisma),
       ),

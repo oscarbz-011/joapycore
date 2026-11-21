@@ -12,6 +12,7 @@ import {
   PurchaseOrdersRepository,
   orderSequence,
 } from '../repositories/purchase-orders.repository';
+import { ProcurementSourcesRepository } from '../repositories/procurement-sources.repository';
 import { CreatePurchaseOrderDto } from '../dto/create-purchase-order.dto';
 import type { AuditLogEvent } from '../../../audit/audit-log.event';
 import { startOfBusinessDay } from '../../../common/utils/business-date.util';
@@ -55,6 +56,7 @@ export class PurchaseOrdersService {
     private readonly prisma: PrismaService,
     private readonly purchaseOrdersRepository: PurchaseOrdersRepository,
     private readonly eventEmitter: EventBus,
+    private readonly sources: ProcurementSourcesRepository,
   ) {}
 
   findAll(tenantId: string) {
@@ -92,7 +94,7 @@ export class PurchaseOrdersService {
     // frenar la carga de catálogo, pero para operar tiene que estar completa
     // — ver ProductsService.missingToActivate.
     const productIds = [...new Set(dto.items.map((i) => i.productId))];
-    const products = await this.purchaseOrdersRepository.findProductStatuses(
+    const products = await this.sources.findProductStatuses(
       tenantId,
       productIds,
     );

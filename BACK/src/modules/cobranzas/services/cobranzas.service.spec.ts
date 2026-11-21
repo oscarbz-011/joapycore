@@ -2,6 +2,7 @@ import { NotFoundException } from '@nestjs/common';
 import { CobranzasService } from './cobranzas.service';
 import { CollectionRoutesRepository } from '../repositories/collection-routes.repository';
 import { DelinquencyReportsRepository } from '../repositories/delinquency-reports.repository';
+import { CollectionsSourcesRepository } from '../repositories/collections-sources.repository';
 import { PaymentAgreementsRepository } from '../repositories/payment-agreements.repository';
 
 function makeReport(overrides = {}) {
@@ -40,6 +41,7 @@ describe('CobranzasService — Morosos', () => {
       {} as any, // notesRepo
       delinquencyReportsRepo as any,
       eventEmitter as any,
+      {} as any, // sources
     );
   });
 
@@ -176,6 +178,7 @@ describe('CobranzasService — KPIs', () => {
       {} as any, // notesRepo
       new DelinquencyReportsRepository(prisma as any),
       { emit: jest.fn() } as any,
+      new CollectionsSourcesRepository(prisma as any),
     );
 
     const kpis = await service.getKpis('tenant-1');

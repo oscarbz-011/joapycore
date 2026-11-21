@@ -41,58 +41,53 @@ export interface StockResult {
 export class StockRepository {
   constructor(private readonly prisma: PrismaService) {}
 
+  /** `warehouses`: los depósitos de la empresa, activos primero. */
   async findAll(
     tenantId: string,
     filters: FilterStockDto,
+    warehouses: StockWarehouse[],
   ): Promise<StockResult> {
-    const [warehouses, products] = await Promise.all([
-      this.prisma.warehouse.findMany({
-        where: { tenantId },
-        select: { id: true, name: true, isActive: true },
-        orderBy: [{ isActive: 'desc' }, { name: 'asc' }],
-      }),
-      this.prisma.product.findMany({
-        where: {
-          tenantId,
-          deletedAt: null,
-          // Pedir un producto puntual devuelve su ubicación aunque no sea
-          // vendible: una materia prima también puede tener stock sin depósito.
-          ...(filters.productId
-            ? { id: filters.productId }
-            : { status: 'ACTIVE', salesChannels: { isEmpty: false } }),
-          ...(filters.categoryId && { categoryId: filters.categoryId }),
-          ...(filters.brandId && { brandId: filters.brandId }),
-          ...(filters.search && {
-            OR: [
-              {
-                name: {
-                  contains: filters.search,
-                  mode: 'insensitive' as const,
-                },
+    const products = await this.prisma.product.findMany({
+      where: {
+        tenantId,
+        deletedAt: null,
+        // Pedir un producto puntual devuelve su ubicación aunque no sea
+        // vendible: una materia prima también puede tener stock sin depósito.
+        ...(filters.productId
+          ? { id: filters.productId }
+          : { status: 'ACTIVE', salesChannels: { isEmpty: false } }),
+        ...(filters.categoryId && { categoryId: filters.categoryId }),
+        ...(filters.brandId && { brandId: filters.brandId }),
+        ...(filters.search && {
+          OR: [
+            {
+              name: {
+                contains: filters.search,
+                mode: 'insensitive' as const,
               },
-              {
-                model: {
-                  contains: filters.search,
-                  mode: 'insensitive' as const,
-                },
+            },
+            {
+              model: {
+                contains: filters.search,
+                mode: 'insensitive' as const,
               },
-            ],
-          }),
-        },
-        select: {
-          id: true,
-          name: true,
-          model: true,
-          isSerialized: true,
-          salesChannels: true,
-          salePrice: true,
-          stockMin: true,
-          category: { select: { id: true, name: true } },
-          brand: { select: { id: true, name: true } },
-        },
-        orderBy: { name: 'asc' },
-      }),
-    ]);
+            },
+          ],
+        }),
+      },
+      select: {
+        id: true,
+        name: true,
+        model: true,
+        isSerialized: true,
+        salesChannels: true,
+        salePrice: true,
+        stockMin: true,
+        category: { select: { id: true, name: true } },
+        brand: { select: { id: true, name: true } },
+      },
+      orderBy: { name: 'asc' },
+    });
 
     const plainIds = products
       .filter((product) => !product.isSerialized)

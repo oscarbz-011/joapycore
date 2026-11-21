@@ -7,41 +7,13 @@ export const KNOWN_BOUNDARY_DEBT: Record<string, string[]> = {
     'write:DelinquencyReport',
   ],
 
-  // Lecturas fuera del repositorio de fuentes.
-  'modules/cobranzas/repositories/delinquency-reports.repository.ts': [
-    'read:Installment',
-  ],
+  // Lecturas de módulos que se pueden apagar y de los que el lector no depende.
   'modules/inventory/repositories/product-suppliers.repository.ts': [
     'read:Supplier',
-  ],
-  'modules/inventory/repositories/products.repository.ts': ['read:Tenant'],
-  'modules/inventory/repositories/stock-locations.repository.ts': [
-    'read:Warehouse',
-  ],
-  'modules/inventory/repositories/stock.repository.ts': ['read:Warehouse'],
-  'modules/pos/repositories/pos-sales.repository.ts': ['read:SaleOrder'],
-  'modules/pos/repositories/pos-sessions.repository.ts': ['read:SalePayment'],
-  'modules/procurement/repositories/purchase-orders.repository.ts': [
-    'read:Product',
-  ],
-  'modules/procurement/repositories/supplier-catalog.repository.ts': [
-    'read:Product',
-  ],
-  'modules/production/repositories/product-components.repository.ts': [
-    'read:Product',
-  ],
-  'modules/production/repositories/production-orders.repository.ts': [
-    'read:Product',
-    'read:StockMovement',
   ],
   'modules/reports/repositories/reports.repository.ts': [
     'read:AccountsReceivable',
     'read:Product',
     'read:SaleOrder',
   ],
-
-  // Plataforma (fuera de src/modules) sobre tablas de módulos.
-  'communications/communications.repository.ts': ['read:Invoice'],
-  'communications/conversations.repository.ts': ['read:Customer'],
-  'communications/hub.service.ts': ['read:Invoice'],
 };

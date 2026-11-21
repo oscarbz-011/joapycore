@@ -17,6 +17,7 @@ import { SuppliersRepository } from './repositories/suppliers.repository';
 import { AccountsPayableRepository } from './repositories/accounts-payable.repository';
 import { SupplierPaymentsRepository } from './repositories/supplier-payments.repository';
 import { SupplierCatalogRepository } from './repositories/supplier-catalog.repository';
+import { ProcurementSourcesRepository } from './repositories/procurement-sources.repository';
 import { PurchaseOrdersService } from './services/purchase-orders.service';
 import { PurchaseReceiptsService } from './services/purchase-receipts.service';
 import { SuppliersService } from './services/suppliers.service';
@@ -58,6 +59,7 @@ import { ProcurementOnReceiptListener } from './events/procurement-on-receipt.li
     SupplierCatalogService,
     CatalogParserService,
     SupplierCatalogRepository,
+    ProcurementSourcesRepository,
     ProcurementOnReceiptListener,
   ],
 })
