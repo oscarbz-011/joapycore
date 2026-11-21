@@ -6,11 +6,4 @@ export const KNOWN_BOUNDARY_DEBT: Record<string, string[]> = {
   'modules/finance/repositories/finance-sources.repository.ts': [
     'write:DelinquencyReport',
   ],
-
-  // Lecturas de módulos que se pueden apagar y de los que el lector no depende.
-  'modules/reports/repositories/reports.repository.ts': [
-    'read:AccountsReceivable',
-    'read:Product',
-    'read:SaleOrder',
-  ],
 };

@@ -1,27 +1,28 @@
-import { Injectable } from '@nestjs/common';
-import { ReportsRepository } from '../repositories/reports.repository';
+import { Inject, Injectable } from '@nestjs/common';
+import {
+  RECEIVABLES_REPORT_SOURCE,
+  SALES_REPORT_SOURCE,
+  STOCK_REPORT_SOURCE,
+  type ReceivablesReportSource,
+  type SalesReportSource,
+  type StockReportSource,
+} from '../../../common/contracts/report-sources.contract';
 import { startOfBusinessDay } from '../../../common/utils/business-date.util';
-import { CLOSED_SALE_STATUSES } from '../../../common/constants/sale-status.constant';
 
 @Injectable()
 export class ReportsService {
-  constructor(private readonly reportsRepository: ReportsRepository) {}
+  constructor(
+    @Inject(SALES_REPORT_SOURCE) private readonly sales: SalesReportSource,
+    @Inject(STOCK_REPORT_SOURCE) private readonly stock: StockReportSource,
+    @Inject(RECEIVABLES_REPORT_SOURCE)
+    private readonly receivables: ReceivablesReportSource,
+  ) {}
 
   async salesReport(tenantId: string, dateFrom?: string, dateTo?: string) {
-    const where = {
-      tenantId,
-      status: { in: CLOSED_SALE_STATUSES },
-      ...(dateFrom || dateTo
-        ? {
-            orderDate: {
-              ...(dateFrom && { gte: new Date(dateFrom) }),
-              ...(dateTo && { lte: new Date(dateTo) }),
-            },
-          }
-        : {}),
-    };
-
-    const orders = await this.reportsRepository.findSaleOrdersForReport(where);
+    const orders = await this.sales.closedOrders(tenantId, {
+      from: dateFrom ? new Date(dateFrom) : undefined,
+      to: dateTo ? new Date(dateTo) : undefined,
+    });
 
     const totalRevenue = orders.reduce(
       (acc, o) =>
@@ -78,8 +79,7 @@ export class ReportsService {
   }
 
   async stockReport(tenantId: string) {
-    const products =
-      await this.reportsRepository.findProductsWithMovements(tenantId);
+    const products = await this.stock.productsWithMovements(tenantId);
 
     const items = products.map((p) => {
       const stock = p.stockMovements.reduce((acc, m) => {
@@ -125,7 +125,7 @@ export class ReportsService {
   }
 
   async receivablesReport(tenantId: string) {
-    const ars = await this.reportsRepository.findReceivablesForReport(tenantId);
+    const ars = await this.receivables.receivables(tenantId);
 
     // Vencimientos = días de calendario: se comparan contra el día de hoy en
     // Paraguay, no contra el instante actual.
