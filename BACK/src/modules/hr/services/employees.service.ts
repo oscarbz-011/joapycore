@@ -45,6 +45,17 @@ export class EmployeesService {
   }
 
   async create(tenantId: string, dto: CreateEmployeeDto) {
+    const holder = await this.employeesRepository.findByDocument(
+      tenantId,
+      dto.documentType,
+      dto.documentNumber,
+    );
+    if (holder) {
+      throw new ConflictException(
+        `Ya hay un empleado con el documento ${dto.documentType} ${dto.documentNumber}: ${holder.firstName} ${holder.lastName}`,
+      );
+    }
+
     const employeeNumber =
       await this.employeesRepository.nextEmployeeNumber(tenantId);
     const employeeCode = await this.generateEmployeeCode(

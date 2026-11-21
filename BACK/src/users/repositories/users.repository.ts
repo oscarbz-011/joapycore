@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import { TenantContext } from '../../prisma/tenant-context';
 import { PrismaClientOrTx } from '../../prisma/types';
 
 interface CreateUserData {
@@ -32,14 +33,17 @@ export class UsersRepository {
     return client.user.findUnique({ where: { email } });
   }
 
-  async findUsernamesStartingWith(
-    prefix: string,
-    client: PrismaClientOrTx = this.prisma,
-  ): Promise<string[]> {
-    const users = await client.user.findMany({
-      where: { username: { startsWith: prefix } },
-      select: { username: true },
-    });
+  // El usuario es único en toda la plataforma porque el login no pide empresa:
+  // se elige uno libre sin el filtro de la seguridad de filas, sin mostrar de
+  // quién es el ocupado. Usa su propia conexión: la de una transacción ya
+  // viene con la empresa puesta.
+  async findUsernamesStartingWith(prefix: string): Promise<string[]> {
+    const users = await TenantContext.runAsPlatform(() =>
+      this.prisma.user.findMany({
+        where: { username: { startsWith: prefix } },
+        select: { username: true },
+      }),
+    );
     return users.flatMap((u) => (u.username ? [u.username] : []));
   }
 
@@ -92,9 +96,12 @@ export class UsersRepository {
     const base = `${normalize(firstName)}.${normalize(lastName)}`;
     let candidate = base;
     let suffix = 2;
-    while (
-      await this.prisma.user.findUnique({ where: { username: candidate } })
-    ) {
+    // Único en toda la plataforma: se busca sin el filtro de la seguridad de filas.
+    const isTaken = (username: string) =>
+      TenantContext.runAsPlatform(() =>
+        this.prisma.user.findUnique({ where: { username } }),
+      );
+    while (await isTaken(candidate)) {
       candidate = `${base}${suffix++}`;
     }
     return candidate;

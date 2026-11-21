@@ -31,10 +31,7 @@ export class UserAccountsService implements UserAccounts {
       throw new ConflictException('El email ya está en uso');
     }
     const base = buildUsernameBase(account.firstName, account.lastName);
-    const taken = await this.usersRepository.findUsernamesStartingWith(
-      base,
-      tx,
-    );
+    const taken = await this.usersRepository.findUsernamesStartingWith(base);
     const temp = await this.newTempPassword();
     const user = await this.usersRepository.create(
       tenantId,

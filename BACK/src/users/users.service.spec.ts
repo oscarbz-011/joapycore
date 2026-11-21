@@ -527,6 +527,10 @@ describe('UsersService', () => {
         'user-1',
         ['role-2'],
       );
+      expect(eventEmitter.emit).toHaveBeenCalledWith(
+        'auth.permissions.changed',
+        { tenantId: 'tenant-1', userId: 'user-1' },
+      );
     });
 
     it('throws BadRequestException if a role ID does not belong to this tenant', async () => {
@@ -567,6 +571,10 @@ describe('UsersService', () => {
         'tenant-1',
         'user-1',
         ['perm-1'],
+      );
+      expect(eventEmitter.emit).toHaveBeenCalledWith(
+        'auth.permissions.changed',
+        { tenantId: 'tenant-1', userId: 'user-1' },
       );
     });
 

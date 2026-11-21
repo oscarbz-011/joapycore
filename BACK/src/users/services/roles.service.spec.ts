@@ -188,6 +188,10 @@ describe('RolesService', () => {
         'role-1',
         perms.map((p) => p.id),
       );
+      expect(eventEmitter.emit).toHaveBeenCalledWith(
+        'auth.permissions.changed',
+        { tenantId: 'tenant-1' },
+      );
     });
   });
 });
