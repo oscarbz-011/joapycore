@@ -28,13 +28,6 @@ export class ProductSuppliersRepository {
     });
   }
 
-  supplierExistsForTenant(tenantId: string, supplierId: string) {
-    return this.prisma.supplier.findFirst({
-      where: { tenantId, id: supplierId, isActive: true, deletedAt: null },
-      select: { id: true },
-    });
-  }
-
   create(
     tenantId: string,
     productId: string,

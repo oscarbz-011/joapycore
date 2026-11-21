@@ -8,9 +8,6 @@ export const KNOWN_BOUNDARY_DEBT: Record<string, string[]> = {
   ],
 
   // Lecturas de módulos que se pueden apagar y de los que el lector no depende.
-  'modules/inventory/repositories/product-suppliers.repository.ts': [
-    'read:Supplier',
-  ],
   'modules/reports/repositories/reports.repository.ts': [
     'read:AccountsReceivable',
     'read:Product',

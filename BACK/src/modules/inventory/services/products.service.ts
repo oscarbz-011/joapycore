@@ -1,11 +1,16 @@
 import {
   BadRequestException,
   ConflictException,
+  Inject,
   Injectable,
   NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { EventBus } from '../../../common/events/event-bus';
+import {
+  SUPPLIER_DIRECTORY,
+  type SupplierDirectory,
+} from '../../../common/contracts/supplier-directory.contract';
 import { randomUUID } from 'crypto';
 import {
   MovementReason,
@@ -87,6 +92,7 @@ export class ProductsService {
     private readonly warehousesRepository: WarehousesRepository,
     private readonly stockMovementsRepository: StockMovementsRepository,
     private readonly sources: StockSourcesRepository,
+    @Inject(SUPPLIER_DIRECTORY) private readonly suppliers: SupplierDirectory,
   ) {}
 
   findAll(tenantId: string, filters: ProductFilters) {
@@ -559,11 +565,7 @@ export class ProductsService {
   ) {
     await this.findOne(tenantId, productId);
 
-    const supplier =
-      await this.productSuppliersRepository.supplierExistsForTenant(
-        tenantId,
-        dto.supplierId,
-      );
+    const supplier = await this.suppliers.findActive(tenantId, dto.supplierId);
     if (!supplier) throw new BadRequestException('Proveedor no encontrado');
 
     const existing = await this.productSuppliersRepository.findOne(
