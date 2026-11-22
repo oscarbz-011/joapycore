@@ -16,6 +16,7 @@ import type { JwtPayload } from '../../../common/types/jwt-payload.interface';
 import { AdvancePaymentDto } from '../dto/advance-payment.dto';
 import { PayInstallmentDto } from '../dto/pay-installment.dto';
 import { PayInstallmentsDto } from '../dto/pay-installments.dto';
+import { PayCustomerInstallmentsDto } from '../dto/pay-customer-installments.dto';
 import { LoansService } from '../services/loans.service';
 
 @ApiTags('Finance')
@@ -47,6 +48,39 @@ export class LoansController {
     @Param('saleOrderId') saleOrderId: string,
   ) {
     return this.loansService.findByOrder(tenantId, saleOrderId);
+  }
+
+  @Get('by-customer/:customerId')
+  @Permissions('finance:read')
+  @ApiOperation({
+    summary: 'Préstamos vigentes de un cliente, más viejos primero',
+  })
+  findActiveByCustomer(
+    @CurrentTenant() tenantId: string,
+    @Param('customerId') customerId: string,
+  ) {
+    return this.loansService.findActiveByCustomer(tenantId, customerId);
+  }
+
+  @Post('by-customer/:customerId/pay-installments')
+  @HttpCode(HttpStatus.OK)
+  @Permissions('finance:payments:apply')
+  @ApiOperation({
+    summary:
+      'Cobrar cuotas de varias ventas del cliente — un recibo, o uno por venta',
+  })
+  payCustomerInstallments(
+    @CurrentTenant() tenantId: string,
+    @CurrentUser() user: JwtPayload,
+    @Param('customerId') customerId: string,
+    @Body() dto: PayCustomerInstallmentsDto,
+  ) {
+    return this.loansService.payCustomerInstallments(
+      tenantId,
+      customerId,
+      dto,
+      user.sub,
+    );
   }
 
   @Get('receipts/:id')

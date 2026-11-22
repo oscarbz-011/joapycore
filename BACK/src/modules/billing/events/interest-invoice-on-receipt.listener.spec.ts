@@ -4,19 +4,27 @@ import { InterestInvoiceOnReceiptListener } from './interest-invoice-on-receipt.
 const TENANT = 'tenant-1';
 const RECEIPT_ID = 'receipt-1';
 
-function makeReceipt(overrides: Record<string, unknown> = {}) {
+const SALE_LOAN = {
+  saleOrder: {
+    invoice: { invoicePrefix: '001-001-', invoiceNumber: '0000011' },
+  },
+};
+
+// Cada ítem trae la venta de su cuota: un recibo puede cubrir varias.
+function makeReceipt(
+  overrides: { loan?: unknown; items?: Record<string, unknown>[] } = {},
+) {
+  const loan = overrides.loan ?? SALE_LOAN;
   return {
     id: RECEIPT_ID,
     tenantId: TENANT,
     branchId: 'branch-1',
     issuedAt: new Date('2026-08-26'),
-    items: [],
-    loan: {
-      saleOrder: {
-        invoice: { invoicePrefix: '001-001-', invoiceNumber: '0000011' },
-      },
-    },
-    ...overrides,
+    items: (overrides.items ?? []).map((item) => ({
+      installmentId: `inst-${String(item.installmentNumber)}`,
+      installment: { loan },
+      ...item,
+    })),
   };
 }
 
@@ -218,5 +226,41 @@ describe('InterestInvoiceOnReceiptListener', () => {
     await expect(
       listener.handle({ tenantId: TENANT, receiptId: RECEIPT_ID }),
     ).resolves.toBeUndefined();
+  });
+
+  it('references the invoice of each sale when the receipt covers several', async () => {
+    const otherSale = {
+      saleOrder: {
+        invoice: { invoicePrefix: '001-001-', invoiceNumber: '0000018' },
+      },
+    };
+    prisma.paymentReceipt.findFirst.mockResolvedValue({
+      ...makeReceipt(),
+      items: [
+        {
+          installmentId: 'a-2',
+          installmentNumber: 2,
+          amountApplied: 10_000,
+          kind: 'INTEREST_COMPONENT',
+          installment: { loan: SALE_LOAN },
+        },
+        {
+          installmentId: 'b-1',
+          installmentNumber: 1,
+          amountApplied: 20_000,
+          kind: 'INTEREST_COMPONENT',
+          installment: { loan: otherSale },
+        },
+      ],
+    });
+
+    await listener.handle({ tenantId: TENANT, receiptId: RECEIPT_ID });
+
+    const items =
+      invoicesService.createInterestInvoiceFromReceipt.mock.calls[0][1].items;
+    expect(items.map((i: { description: string }) => i.description)).toEqual([
+      'Intereses moratorios correspondientes a la cuota N° 1 de la Factura a Crédito N° 001-001-0000018',
+      'Intereses moratorios correspondientes a la cuota N° 2 de la Factura a Crédito N° 001-001-0000011',
+    ]);
   });
 });

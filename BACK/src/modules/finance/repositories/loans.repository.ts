@@ -26,6 +26,14 @@ export class LoansRepository {
           id: true,
           orderDate: true,
           branchId: true,
+          invoice: {
+            select: {
+              id: true,
+              invoicePrefix: true,
+              invoiceNumber: true,
+              issuedAt: true,
+            },
+          },
           items: {
             select: {
               id: true,
@@ -44,6 +52,15 @@ export class LoansRepository {
       where: { tenantId },
       include: this.include,
       orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  // Más viejas primero: es el orden en que se muestran y se desempatan.
+  findActiveByCustomer(tenantId: string, customerId: string) {
+    return this.prisma.loan.findMany({
+      where: { tenantId, customerId, status: 'ACTIVE' },
+      include: this.include,
+      orderBy: { createdAt: 'asc' },
     });
   }
 

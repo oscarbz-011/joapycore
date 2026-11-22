@@ -14,6 +14,7 @@ import { PdfService } from '../../../files/pdf/pdf.service';
 import { DocumentSourcesRepository } from '../repositories/document-sources.repository';
 import { DEFAULT_PAYMENT_RECEIPT_TEMPLATE } from '../constants/default-templates.constant';
 import { DocumentsRepository } from '../repositories/documents.repository';
+import { receiptItemLabels } from '../utils/receipt-items.util';
 import type { DomainEvents } from '../../../common/events/domain-events';
 
 type PaymentReceiptCreatedEvent = DomainEvents['payment.receipt.pdf.requested'];
@@ -116,10 +117,10 @@ export class ReceiptOnPaymentListener {
     const tableVariables: Record<string, PdfTableVariable> = {
       'recibo.items': {
         headers: ['Item', 'Concepto', 'Guaraníes'],
-        rows: receipt.items.map((item) => [
-          String(item.installmentNumber),
-          `Cuota N° ${item.installmentNumber}`,
-          formatMoney(item.amountApplied),
+        rows: receiptItemLabels(receipt.items).map(([item, concept], i) => [
+          item,
+          concept,
+          formatMoney(receipt.items[i].amountApplied),
         ]),
       },
     };

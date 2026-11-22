@@ -46,10 +46,23 @@ export class BillingSourcesRepository {
     return this.prisma.paymentReceipt.findFirst({
       where: { id: receiptId, tenantId },
       include: {
-        items: true,
-        loan: {
+        items: {
           include: {
-            saleOrder: { include: { invoice: true } },
+            installment: {
+              select: {
+                loan: {
+                  select: {
+                    saleOrder: {
+                      select: {
+                        invoice: {
+                          select: { invoicePrefix: true, invoiceNumber: true },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
           },
         },
       },

@@ -114,7 +114,34 @@ export class DocumentSourcesRepository {
         customer: true,
         branch: true,
         collectedBy: true,
-        items: { orderBy: { installmentNumber: 'asc' } },
+        items: {
+          orderBy: { installmentNumber: 'asc' },
+          include: {
+            installment: {
+              select: {
+                loanId: true,
+                loan: {
+                  select: {
+                    saleOrder: {
+                      select: {
+                        invoice: {
+                          select: { invoicePrefix: true, invoiceNumber: true },
+                        },
+                        items: {
+                          select: {
+                            description: true,
+                            product: { select: { name: true } },
+                          },
+                          take: 1,
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
       },
     });
   }

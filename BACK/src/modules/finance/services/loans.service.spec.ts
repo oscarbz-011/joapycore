@@ -133,6 +133,7 @@ describe('LoansService', () => {
       findById: jest.fn(),
       findOverdue: jest.fn(),
       findPendingByLoan: jest.fn(),
+      findPendingByIds: jest.fn(),
       update: jest.fn(),
       // Sin recargos vigentes por default — los tests de mora los sobrescriben.
       findOpenChargesByInstallments: jest.fn().mockResolvedValue([]),
@@ -1006,6 +1007,190 @@ describe('LoansService', () => {
           paymentMethod: 'CASH',
         }),
       ).rejects.toThrow(UnprocessableEntityException);
+    });
+  });
+
+  describe('payCustomerInstallments', () => {
+    const installment = (
+      id: string,
+      loanId: string,
+      number: number,
+      extra: Record<string, unknown> = {},
+    ) => ({
+      id,
+      number,
+      amount: 300,
+      paidAmount: 0,
+      status: 'OVERDUE',
+      loan: {
+        id: loanId,
+        customerId: 'customer-1',
+        status: 'ACTIVE',
+        saleOrder: { branchId: null },
+      },
+      ...extra,
+    });
+
+    beforeEach(() => {
+      installmentsRepo.findPendingByIds.mockResolvedValue([
+        installment('a-1', 'loan-a', 1),
+        installment('b-3', 'loan-b', 3),
+      ] as never);
+      installmentsRepo.findByLoan.mockResolvedValue([
+        { id: 'x', status: 'PENDING' },
+      ] as never);
+    });
+
+    const pay = (separateReceipts?: boolean) =>
+      service.payCustomerInstallments(TENANT, 'customer-1', {
+        items: [
+          { installmentId: 'a-1', amount: 300 },
+          { installmentId: 'b-3', amount: 100 },
+        ],
+        paymentMethod: 'CASH',
+        separateReceipts,
+      });
+
+    it('pays installments of several sales in a single receipt', async () => {
+      const result = await pay();
+
+      expect(paymentReceiptCreateMock).toHaveBeenCalledTimes(1);
+      const data = paymentReceiptCreateMock.mock.calls[0][0].data;
+      expect(data).toMatchObject({
+        loanId: null,
+        customerId: 'customer-1',
+        totalAmount: 400,
+      });
+      expect(
+        data.items.create.map(
+          (i: { installmentId: string }) => i.installmentId,
+        ),
+      ).toEqual(['a-1', 'b-3']);
+      expect(result.receipts).toHaveLength(1);
+      expect(eventEmitter.emitAsync).toHaveBeenCalledTimes(1);
+    });
+
+    it('issues one receipt per sale when asked', async () => {
+      const result = await pay(true);
+
+      expect(paymentReceiptCreateMock).toHaveBeenCalledTimes(2);
+      expect(
+        paymentReceiptCreateMock.mock.calls.map(([arg]) => [
+          arg.data.loanId,
+          arg.data.totalAmount,
+        ]),
+      ).toEqual([
+        ['loan-a', 300],
+        ['loan-b', 100],
+      ]);
+      expect(result.receipts).toHaveLength(2);
+    });
+
+    it('keeps the sale on the receipt when every installment is of one sale', async () => {
+      installmentsRepo.findPendingByIds.mockResolvedValue([
+        installment('a-1', 'loan-a', 1),
+        installment('a-2', 'loan-a', 2),
+      ] as never);
+
+      await service.payCustomerInstallments(TENANT, 'customer-1', {
+        items: [
+          { installmentId: 'a-1', amount: 300 },
+          { installmentId: 'a-2', amount: 300 },
+        ],
+        paymentMethod: 'CASH',
+        separateReceipts: true,
+      });
+
+      expect(paymentReceiptCreateMock).toHaveBeenCalledTimes(1);
+      expect(paymentReceiptCreateMock.mock.calls[0][0].data.loanId).toBe(
+        'loan-a',
+      );
+    });
+
+    it('closes each sale that ends fully paid', async () => {
+      installmentsRepo.findByLoan.mockImplementation(((
+        _tenant: string,
+        loanId: string,
+      ) =>
+        Promise.resolve(
+          loanId === 'loan-a'
+            ? [{ id: 'a-1', status: 'PAID' }]
+            : [{ id: 'b-3', status: 'PARTIAL' }],
+        )) as never);
+
+      await pay();
+
+      expect(loansRepo.updateStatus).toHaveBeenCalledTimes(1);
+      expect(loansRepo.updateStatus).toHaveBeenCalledWith('loan-a', 'PAID');
+    });
+
+    it.each([
+      [
+        'another customer',
+        {
+          loan: {
+            id: 'loan-z',
+            customerId: 'customer-2',
+            status: 'ACTIVE',
+            saleOrder: { branchId: null },
+          },
+        },
+      ],
+      [
+        'a cancelled sale',
+        {
+          loan: {
+            id: 'loan-z',
+            customerId: 'customer-1',
+            status: 'CANCELLED',
+            saleOrder: { branchId: null },
+          },
+        },
+      ],
+    ])('rejects an installment of %s', async (_label, extra) => {
+      installmentsRepo.findPendingByIds.mockResolvedValue([
+        installment('a-1', 'loan-a', 1),
+        installment('b-3', 'loan-b', 3, extra),
+      ] as never);
+
+      await expect(pay()).rejects.toThrow(UnprocessableEntityException);
+      expect(paymentReceiptCreateMock).not.toHaveBeenCalled();
+    });
+
+    it('rejects an installment that is not pending', async () => {
+      installmentsRepo.findPendingByIds.mockResolvedValue([
+        installment('a-1', 'loan-a', 1),
+      ] as never);
+
+      await expect(pay()).rejects.toThrow(UnprocessableEntityException);
+      expect(paymentReceiptCreateMock).not.toHaveBeenCalled();
+    });
+
+    it('rejects more than an installment owes', async () => {
+      await expect(
+        service.payCustomerInstallments(TENANT, 'customer-1', {
+          items: [{ installmentId: 'a-1', amount: 301 }],
+          paymentMethod: 'CASH',
+        }),
+      ).rejects.toThrow(UnprocessableEntityException);
+    });
+
+    it('rejects a repeated installment and an empty payment', async () => {
+      await expect(
+        service.payCustomerInstallments(TENANT, 'customer-1', {
+          items: [
+            { installmentId: 'a-1', amount: 100 },
+            { installmentId: 'a-1', amount: 100 },
+          ],
+          paymentMethod: 'CASH',
+        }),
+      ).rejects.toThrow('Hay una cuota repetida');
+      await expect(
+        service.payCustomerInstallments(TENANT, 'customer-1', {
+          items: [],
+          paymentMethod: 'CASH',
+        }),
+      ).rejects.toThrow('Elegí al menos una cuota');
     });
   });
 });

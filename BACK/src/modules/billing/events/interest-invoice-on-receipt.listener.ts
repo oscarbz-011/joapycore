@@ -57,30 +57,33 @@ export class InterestInvoiceOnReceiptListener {
     );
     if (interestItems.length === 0) return;
 
-    const saleInvoice = receipt.loan.saleOrder.invoice;
-    const invoiceRef = saleInvoice
-      ? ` de la Factura a Crédito N° ${saleInvoice.invoicePrefix ?? ''}${saleInvoice.invoiceNumber ?? ''}`
-      : '';
-
     // Un ítem por cuota cubierta en este cobro — suma todos los componentes
-    // (gastos administrativos, mora, etc.) de esa cuota en una sola línea,
-    // tal como lo pidió el usuario ("Intereses moratorios correspondientes
-    // a la cuota N° X de la Factura a Crédito N° Y").
-    const byInstallment = new Map<number, number>();
+    // (gastos administrativos, mora, etc.) de esa cuota en una sola línea:
+    // "Intereses moratorios correspondientes a la cuota N° X de la Factura a
+    // Crédito N° Y". Un recibo puede cubrir cuotas de varias ventas.
+    const byInstallment = new Map<
+      string,
+      { number: number; total: number; invoiceRef: string }
+    >();
     for (const item of interestItems) {
-      const prev = byInstallment.get(item.installmentNumber) ?? 0;
-      byInstallment.set(
-        item.installmentNumber,
-        prev + Number(item.amountApplied),
-      );
+      const saleInvoice = item.installment.loan.saleOrder.invoice;
+      const prev = byInstallment.get(item.installmentId) ?? {
+        number: item.installmentNumber,
+        total: 0,
+        invoiceRef: saleInvoice
+          ? ` de la Factura a Crédito N° ${saleInvoice.invoicePrefix ?? ''}${saleInvoice.invoiceNumber ?? ''}`
+          : '',
+      };
+      prev.total += Number(item.amountApplied);
+      byInstallment.set(item.installmentId, prev);
     }
 
-    const items = [...byInstallment.entries()]
-      .sort(([a], [b]) => a - b)
-      .map(([installmentNumber, total]) => {
+    const items = [...byInstallment.values()]
+      .sort((a, b) => a.number - b.number)
+      .map(({ number, total, invoiceRef }) => {
         const { ivaAmount, unitPriceWithoutIva } = ivaBreakdown(total);
         return {
-          description: `Intereses moratorios correspondientes a la cuota N° ${installmentNumber}${invoiceRef}`,
+          description: `Intereses moratorios correspondientes a la cuota N° ${number}${invoiceRef}`,
           quantity: 1,
           unitPrice: total,
           total,

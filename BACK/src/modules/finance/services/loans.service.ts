@@ -12,6 +12,7 @@ import { LoansRepository } from '../repositories/loans.repository';
 import { PaymentReceiptsRepository } from '../repositories/payment-receipts.repository';
 import type { PayInstallmentDto } from '../dto/pay-installment.dto';
 import type { PayInstallmentsDto } from '../dto/pay-installments.dto';
+import type { PayCustomerInstallmentsDto } from '../dto/pay-customer-installments.dto';
 import type { AdvancePaymentDto } from '../dto/advance-payment.dto';
 import type { AuditLogEvent } from '../../../audit/audit-log.event';
 
@@ -123,6 +124,16 @@ export class LoansService {
     };
   }
 
+  async findActiveByCustomer(tenantId: string, customerId: string) {
+    const loans = await this.loansRepository.findActiveByCustomer(
+      tenantId,
+      customerId,
+    );
+    return Promise.all(
+      loans.map((loan) => this.withMoraPolicy(tenantId, loan)),
+    );
+  }
+
   findOverdueInstallments(tenantId: string) {
     return this.installmentsRepository.findOverdue(tenantId);
   }
@@ -195,7 +206,7 @@ export class LoansService {
     tx: Prisma.TransactionClient,
     tenantId: string,
     params: {
-      loanId: string;
+      loanId: string | null;
       customerId: string;
       branchId: string | null;
       items: ReceiptItemInput[];
@@ -779,6 +790,142 @@ export class LoansService {
       receipt,
     );
     return { loan: updatedLoan, receipt: finalReceipt };
+  }
+
+  // Cuotas de varias ventas del mismo cliente en un solo cobro. Por defecto
+  // sale un recibo con todas; con separateReceipts, uno por venta.
+  async payCustomerInstallments(
+    tenantId: string,
+    customerId: string,
+    dto: PayCustomerInstallmentsDto,
+    userId?: string,
+  ) {
+    const ids = dto.items.map((i) => i.installmentId);
+    if (ids.length === 0) {
+      throw new UnprocessableEntityException('Elegí al menos una cuota');
+    }
+    if (new Set(ids).size !== ids.length) {
+      throw new UnprocessableEntityException('Hay una cuota repetida');
+    }
+
+    const pending = await this.installmentsRepository.findPendingByIds(
+      tenantId,
+      ids,
+    );
+    const pendingById = new Map(pending.map((i) => [i.id, i]));
+    const chargesByInstallment = await this.getOpenCharges(ids);
+
+    for (const item of dto.items) {
+      const inst = pendingById.get(item.installmentId);
+      if (
+        !inst ||
+        inst.loan.customerId !== customerId ||
+        inst.loan.status !== 'ACTIVE'
+      ) {
+        throw new UnprocessableEntityException(
+          `La cuota ${item.installmentId} no es una cuota pendiente de este cliente`,
+        );
+      }
+      const charges = chargesByInstallment.get(item.installmentId) ?? [];
+      const outstanding =
+        Math.ceil(toNum(inst.amount)) -
+        toNum(inst.paidAmount) +
+        charges.reduce((sum, c) => sum + c.amount, 0);
+      if (item.amount > outstanding) {
+        throw new UnprocessableEntityException(
+          `El monto para la cuota #${inst.number} (${item.amount}) supera su saldo (${outstanding})`,
+        );
+      }
+    }
+
+    const paymentDate = dto.paymentDate
+      ? new Date(dto.paymentDate)
+      : new Date();
+    const loanIds = [
+      ...new Set(
+        dto.items.map((i) => pendingById.get(i.installmentId)!.loan.id),
+      ),
+    ];
+    const branchOf = (loanId: string) =>
+      pending.find((i) => i.loan.id === loanId)?.loan.saleOrder.branchId ??
+      null;
+
+    const receipts = await this.prisma.$transaction(async (tx) => {
+      const byLoan = new Map<
+        string,
+        { items: ReceiptItemInput[]; total: number }
+      >();
+      for (const item of dto.items) {
+        const inst = pendingById.get(item.installmentId)!;
+        const result = await this.applyPaymentToInstallment(
+          tx,
+          inst,
+          chargesByInstallment.get(item.installmentId) ?? [],
+          item.amount,
+          dto.paymentMethod,
+          paymentDate,
+          dto.notes,
+        );
+        const group = byLoan.get(inst.loan.id) ?? { items: [], total: 0 };
+        group.items.push(...result.items);
+        group.total += item.amount;
+        byLoan.set(inst.loan.id, group);
+      }
+
+      const common = {
+        customerId,
+        paymentMethod: dto.paymentMethod,
+        paymentReference: dto.paymentReference,
+        collectedById: userId,
+      };
+      if (dto.separateReceipts && loanIds.length > 1) {
+        const created: Awaited<
+          ReturnType<LoansService['createPaymentReceipt']>
+        >[] = [];
+        for (const loanId of loanIds) {
+          const group = byLoan.get(loanId)!;
+          created.push(
+            await this.createPaymentReceipt(tx, tenantId, {
+              ...common,
+              loanId,
+              branchId: branchOf(loanId),
+              items: group.items,
+              totalAmount: group.total,
+            }),
+          );
+        }
+        return created;
+      }
+      return [
+        await this.createPaymentReceipt(tx, tenantId, {
+          ...common,
+          loanId: loanIds.length === 1 ? loanIds[0] : null,
+          branchId: branchOf(loanIds[0]),
+          items: loanIds.flatMap((loanId) => byLoan.get(loanId)!.items),
+          totalAmount: dto.items.reduce((sum, i) => sum + i.amount, 0),
+        }),
+      ];
+    });
+
+    for (const loanId of loanIds) {
+      this.eventEmitter.emit('audit.log', {
+        tenantId,
+        module: 'finance',
+        action: 'loan.payment.registered',
+        resourceId: loanId,
+      } satisfies AuditLogEvent);
+      await this.checkAndCloseLoan(tenantId, loanId);
+    }
+
+    const finalReceipts: Awaited<
+      ReturnType<LoansService['findReceiptById']>
+    >[] = [];
+    for (const receipt of receipts) {
+      finalReceipts.push(
+        await this.emitReceiptCreatedAndRefetch(tenantId, receipt),
+      );
+    }
+    return { receipts: finalReceipts };
   }
 
   // Advance payment: REDUCE_INSTALLMENTS cancels from end; REDUCE_AMOUNT redistributes balance
