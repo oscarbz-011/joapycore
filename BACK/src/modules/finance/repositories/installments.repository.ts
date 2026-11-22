@@ -80,6 +80,26 @@ export class InstallmentsRepository {
     return client.installment.create({ data });
   }
 
+  findPendingByIds(tenantId: string, ids: string[]) {
+    return this.prisma.installment.findMany({
+      where: {
+        tenantId,
+        id: { in: ids },
+        status: { in: ['PENDING', 'PARTIAL', 'OVERDUE'] },
+      },
+      include: {
+        loan: {
+          select: {
+            id: true,
+            customerId: true,
+            status: true,
+            saleOrder: { select: { branchId: true } },
+          },
+        },
+      },
+    });
+  }
+
   findPendingByLoan(tenantId: string, loanId: string) {
     return this.prisma.installment.findMany({
       where: {

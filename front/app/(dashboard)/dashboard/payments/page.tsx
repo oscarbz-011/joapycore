@@ -2,12 +2,11 @@
 
 import { paymentMethodLabel } from "@/lib/payment-methods";
 
-import { Fragment, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import {
   CreditCard,
-  ChevronRight,
   AlertTriangle,
   Search,
 } from "lucide-react";
@@ -218,11 +217,9 @@ function CollectionsWidget({
 function ARRow({
   ar,
   onClick,
-  indent,
 }: {
   ar: AccountsReceivable;
   onClick: () => void;
-  indent?: boolean;
 }) {
   const { isCredit, paid, total, pending } = effectiveAmounts(ar);
   const urgency = arUrgency(ar);
@@ -230,12 +227,18 @@ function ARRow({
   return (
     <tr
       onClick={onClick}
-      className="cursor-pointer hover:bg-muted/20 transition-colors"
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onClick();
+        }
+      }}
+      tabIndex={0}
+      className="cursor-pointer hover:bg-muted/20 transition-colors focus-visible:outline-2 focus-visible:outline-ring"
     >
       <td
         className={cn(
           "px-4 py-3",
-          indent && "pl-11",
           accent && cn("border-l-[3px]", ACCENT_BORDER[accent]),
         )}
       >
@@ -318,9 +321,6 @@ export default function PaymentsPage() {
   const [pendingRange, setPendingRange] = useState<CollectionsRange | "all">(
     "all",
   );
-  const [expandedCustomers, setExpandedCustomers] = useState<Set<string>>(
-    new Set(),
-  );
 
   const { data: arList = [], isLoading } = useQuery({
     queryKey: ["accounts-receivable"],
@@ -359,9 +359,8 @@ export default function PaymentsPage() {
     return true;
   });
 
-  // Agrupa las cuentas por cobrar por cliente — un cliente con varios
-  // productos a crédito activos aparece una sola vez, con un dropdown para
-  // ver cada producto (y su propio recibo) por separado.
+  // Un cliente con varios productos activos aparece en una sola fila; el
+  // detalle de cada uno se ve en la pantalla del cliente.
   const groupsByCustomer = new Map<string, AccountsReceivable[]>();
   for (const ar of filtered) {
     const key = ar.invoice.saleOrder.customer.id;
@@ -370,17 +369,8 @@ export default function PaymentsPage() {
   const groups = Array.from(groupsByCustomer.values());
   const pagination = usePagination(groups);
 
-  function toggleExpanded(customerId: string) {
-    setExpandedCustomers((prev) => {
-      const next = new Set(prev);
-      if (next.has(customerId)) next.delete(customerId);
-      else next.add(customerId);
-      return next;
-    });
-  }
-
-  function openPanel(ar: AccountsReceivable) {
-    router.push(`/dashboard/payments/${ar.id}`);
+  function openCustomer(customerId: string) {
+    router.push(`/dashboard/payments/customers/${customerId}`);
   }
 
   // Vencimiento real de cada cuenta — para crédito, la cuota más próxima sin
@@ -544,13 +534,14 @@ export default function PaymentsPage() {
                       <ARRow
                         key={ar.id}
                         ar={ar}
-                        onClick={() => openPanel(ar)}
+                        onClick={() =>
+                          openCustomer(ar.invoice.saleOrder.customer.id)
+                        }
                       />
                     );
                   }
 
                   const customer = group[0].invoice.saleOrder.customer;
-                  const isExpanded = expandedCustomers.has(customer.id);
                   const agg = group.reduce(
                     (acc, ar) => {
                       const a = effectiveAmounts(ar);
@@ -576,11 +567,19 @@ export default function PaymentsPage() {
                         : null;
 
                   return (
-                    <Fragment key={customer.id}>
-                      <tr
-                        onClick={() => toggleExpanded(customer.id)}
-                        className="cursor-pointer hover:bg-muted/20 transition-colors bg-muted/10"
-                      >
+                    <tr
+                      key={customer.id}
+                      onClick={() => openCustomer(customer.id)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          openCustomer(customer.id);
+                        }
+                      }}
+                      tabIndex={0}
+                      aria-label={`Ver las cuentas de ${customer.firstName} ${customer.lastName}`}
+                      className="cursor-pointer hover:bg-muted/20 transition-colors bg-muted/10 focus-visible:outline-2 focus-visible:outline-ring"
+                    >
                         <td
                           className={cn(
                             "px-4 py-3",
@@ -588,25 +587,14 @@ export default function PaymentsPage() {
                               cn("border-l-[3px]", ACCENT_BORDER[groupAccent]),
                           )}
                         >
-                          <div className="flex items-center gap-2">
-                            <ChevronRight
-                              size={14}
-                              className={cn(
-                                "shrink-0 text-muted-foreground/60 transition-transform",
-                                isExpanded && "rotate-90",
-                              )}
-                            />
-                            <div>
-                              <div className="font-medium text-foreground">
-                                {customer.firstName} {customer.lastName}
-                              </div>
-                              {customer.email && (
-                                <div className="text-xs text-muted-foreground/60">
-                                  {customer.email}
-                                </div>
-                              )}
-                            </div>
+                          <div className="font-medium text-foreground">
+                            {customer.firstName} {customer.lastName}
                           </div>
+                          {customer.email && (
+                            <div className="text-xs text-muted-foreground/60">
+                              {customer.email}
+                            </div>
+                          )}
                         </td>
                         <td
                           className="px-4 py-3 text-xs text-muted-foreground"
@@ -640,17 +628,7 @@ export default function PaymentsPage() {
                         <td className="px-4 py-3 text-right font-mono font-medium text-foreground">
                           {formatPrice(agg.pending)}
                         </td>
-                      </tr>
-                      {isExpanded &&
-                        group.map((ar) => (
-                          <ARRow
-                            key={ar.id}
-                            ar={ar}
-                            onClick={() => openPanel(ar)}
-                            indent
-                          />
-                        ))}
-                    </Fragment>
+                    </tr>
                   );
                 })}
               </tbody>

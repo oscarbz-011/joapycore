@@ -97,7 +97,8 @@ model Installment {
 model PaymentReceipt {
   id               String        @id @default(uuid())
   tenantId         String        @map("tenant_id")
-  loanId           String        @map("loan_id")
+  // Null cuando el recibo cubre cuotas de más de una venta del cliente.
+  loanId           String?       @map("loan_id")
   customerId       String        @map("customer_id")
   branchId         String?       @map("branch_id")
   establecimiento  String        @map("establecimiento")
@@ -112,7 +113,7 @@ model PaymentReceipt {
   pdfFileId        String?       @unique @map("pdf_file_id")
 
   tenant          Tenant               @relation(fields: [tenantId], references: [id])
-  loan            Loan                 @relation(fields: [loanId], references: [id])
+  loan            Loan?                @relation(fields: [loanId], references: [id])
   customer        Customer             @relation(fields: [customerId], references: [id])
   branch          Branch?              @relation(fields: [branchId], references: [id])
   collectedBy     User?                @relation(fields: [collectedById], references: [id])
