@@ -102,6 +102,20 @@ export function selectedByLoan(loans: Loan[], selection: Selection): SelectedIns
     .filter((group) => group.length > 0);
 }
 
+/** Resumen de un producto para su fila plegada. */
+export function loanProgress(
+  loan: Loan,
+  selection: Selection,
+): { paidCount: number; total: number; selectedCount: number; selectedAmount: number } {
+  const chosen = loan.installments.filter((inst) => selection[inst.id] != null);
+  return {
+    paidCount: loan.installments.filter((inst) => inst.status === 'PAID').length,
+    total: loan.installments.length,
+    selectedCount: chosen.length,
+    selectedAmount: chosen.reduce((sum, inst) => sum + selection[inst.id], 0),
+  };
+}
+
 /** Nombre corto del producto de una venta, para títulos y recibos. */
 export function loanTitle(loan: Loan): string {
   const [first, ...rest] = loan.saleOrder.items;

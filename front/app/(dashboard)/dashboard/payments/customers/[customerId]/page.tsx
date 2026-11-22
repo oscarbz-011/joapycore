@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useQuery, useQueryClient, type UseQueryResult } from "@tanstack/react-query";
-import { AlertTriangle, ArrowLeft, FileText } from "lucide-react";
+import { AlertTriangle, ArrowLeft, ChevronDown, FileText } from "lucide-react";
 import { apiErrorMessage } from "@/lib/api/api-error";
 import { financeApi, type Loan } from "@/lib/api/finance";
 import { paymentsApi, type AccountsReceivable } from "@/lib/api/payments";
@@ -12,6 +12,7 @@ import { arUrgency } from "@/lib/ar-urgency";
 import {
   customerSummary,
   loanInvoiceRef,
+  loanProgress,
   loanTitle,
   selectAllAcross,
   selectByAmountAcross,
@@ -132,6 +133,7 @@ function CreditSection({
   const [amount, setAmount] = useState(0);
   const [paying, setPaying] = useState(false);
   const [invoiceId, setInvoiceId] = useState<string | null>(null);
+  const [openLoans, setOpenLoans] = useState<Set<string>>(new Set());
   // Elegir a mano deja sin efecto el monto tipeado.
   const pick = (next: Selection) => {
     setSelection(next);
@@ -173,6 +175,15 @@ function CreditSection({
     : undefined;
   const paid = loans.reduce((sum, loan) => sum + loanSummary(loan.installments).paid, 0);
   const financed = loans.reduce((sum, loan) => sum + Number(loan.totalAmount), 0);
+  // Con un solo producto no hace falta plegarlo.
+  const isLoanOpen = (loanId: string) => loans.length === 1 || openLoans.has(loanId);
+  const allOpen = loans.every((loan) => isLoanOpen(loan.id));
+  const toggleLoan = (loanId: string) =>
+    setOpenLoans((current) => {
+      const next = new Set(current);
+      if (!next.delete(loanId)) next.add(loanId);
+      return next;
+    });
 
   return (
     <>
@@ -211,6 +222,17 @@ function CreditSection({
               Cuotas de {loans.length} {loans.length === 1 ? "producto" : "productos"}
             </h2>
             <div className="flex flex-wrap gap-2">
+              {loans.length > 1 && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() =>
+                    setOpenLoans(allOpen ? new Set() : new Set(loans.map((loan) => loan.id)))
+                  }
+                >
+                  {allOpen ? "Contraer todos" : "Expandir todos"}
+                </Button>
+              )}
               <Button
                 variant="outline"
                 size="sm"
@@ -233,15 +255,20 @@ function CreditSection({
             </div>
           </div>
 
-          {loans.map((loan) => (
-            <LoanPanel
-              key={loan.id}
-              loan={loan}
-              selection={selection}
-              onToggle={(inst) => pick(toggle(selection, inst))}
-              onShowInvoice={setInvoiceId}
-            />
-          ))}
+          <div className="space-y-2">
+            {loans.map((loan) => (
+              <LoanPanel
+                key={loan.id}
+                loan={loan}
+                open={isLoanOpen(loan.id)}
+                collapsible={loans.length > 1}
+                onOpenChange={() => toggleLoan(loan.id)}
+                selection={selection}
+                onToggle={(inst) => pick(toggle(selection, inst))}
+                onShowInvoice={setInvoiceId}
+              />
+            ))}
+          </div>
         </div>
 
         <aside aria-label="Cobrar" className={cn(PANEL, "h-fit space-y-4 xl:sticky xl:top-4")}>
@@ -336,74 +363,170 @@ function CreditSection({
 
 function LoanPanel({
   loan,
+  open,
+  collapsible,
+  onOpenChange,
   selection,
   onToggle,
   onShowInvoice,
 }: {
   loan: Loan;
+  open: boolean;
+  collapsible: boolean;
+  onOpenChange: () => void;
   selection: Selection;
   onToggle: Parameters<typeof InstallmentsTable>[0]["onToggle"];
   onShowInvoice: (invoiceId: string) => void;
 }) {
+  const [showPaid, setShowPaid] = useState(false);
   const summary = loanSummary(loan.installments);
+  const progress = loanProgress(loan, selection);
   const title = loanTitle(loan);
   const invoice = loanInvoiceRef(loan);
+  const bodyId = `loan-${loan.id}`;
+  const installments = showPaid
+    ? loan.installments
+    : loan.installments.filter((inst) => inst.status !== "PAID");
   const overdueDays = loan.installments
     .map((inst) => installmentUrgency(inst))
     .filter((urgency) => urgency.level === "overdue")
     .map((urgency) => urgency.days);
 
-  return (
-    <section aria-label={title} className={PANEL}>
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <div className="flex flex-wrap items-center gap-2">
-            <h3 className="font-semibold">{title}</h3>
-            {summary.overdueCount > 0 && (
-              <Badge variant="destructive" className="gap-1">
-                <AlertTriangle size={10} aria-hidden />
-                {summary.overdueCount} {summary.overdueCount === 1 ? "vencida" : "vencidas"}
-              </Badge>
-            )}
-          </div>
-          <p className="mt-0.5 text-xs text-muted-foreground tabular-nums">
-            {[
-              invoice ? `Factura ${invoice}` : null,
-              `Venta del ${formatDatePY(loan.saleOrder.orderDate, "local")}`,
-              `${loan.totalInstallments} cuotas de ${formatPrice(Number(loan.installments[0]?.amount ?? 0))}`,
-              `Debe ${formatPrice(summary.owedToday)}`,
-            ]
-              .filter(Boolean)
-              .join(" · ")}
-          </p>
+  const heading = (
+    <div className="grid min-w-0 flex-1 gap-x-6 gap-y-2 sm:grid-cols-[minmax(0,1.6fr)_repeat(4,minmax(0,1fr))] sm:items-center">
+      <div className="min-w-0">
+        <div className="flex flex-wrap items-center gap-2">
+          <h3 className="truncate font-semibold">{title}</h3>
+          {summary.overdueCount > 0 && (
+            <Badge variant="destructive" className="gap-1">
+              <AlertTriangle size={10} aria-hidden />
+              {summary.overdueCount} {summary.overdueCount === 1 ? "vencida" : "vencidas"}
+            </Badge>
+          )}
         </div>
-        {loan.saleOrder.invoice && (
-          <Button variant="outline" size="sm" onClick={() => onShowInvoice(loan.saleOrder.invoice!.id)}>
-            <FileText aria-hidden />
-            Ver factura
-          </Button>
-        )}
-      </div>
-
-      {summary.overdueCount > 0 && summary.charges === 0 && (
-        <p className="mt-3 rounded-2xl bg-warn-subtle px-3 py-2 text-xs text-foreground">
-          {zeroChargeNotice({
-            graceDays: loan.moraPolicy?.graceDays ?? 0,
-            hasMoraComponents: (loan.moraPolicy?.components.length ?? 0) > 0,
-            overdueDays,
-          })}
+        <p className="mt-0.5 truncate text-xs text-muted-foreground tabular-nums">
+          {[invoice ? `Factura ${invoice}` : null, `Venta del ${formatDatePY(loan.saleOrder.orderDate, "local")}`]
+            .filter(Boolean)
+            .join(" · ")}
         </p>
+      </div>
+      <Stat label="Cuotas pagadas" value={`${progress.paidCount} de ${progress.total}`} />
+      <Stat
+        label="Próxima cuota"
+        value={summary.nextDue ? formatDatePY(summary.nextDue.dueDate, "utc") : "—"}
+        tone={summary.overdueCount > 0 ? "danger" : undefined}
+      />
+      <Stat label="Debe" value={formatPrice(summary.owedToday)} />
+      <Stat
+        label="A cobrar ahora"
+        value={progress.selectedCount > 0 ? formatPrice(progress.selectedAmount) : "—"}
+        hint={
+          progress.selectedCount > 0
+            ? `${progress.selectedCount} ${progress.selectedCount === 1 ? "cuota" : "cuotas"}`
+            : undefined
+        }
+        tone={progress.selectedCount > 0 ? "selected" : undefined}
+      />
+    </div>
+  );
+
+  return (
+    <section
+      aria-label={title}
+      className={cn(
+        "rounded-3xl bg-card shadow-sm ring-1 ring-foreground/5",
+        progress.selectedCount > 0 && "ring-2 ring-primary/40",
+      )}
+    >
+      {collapsible ? (
+        <button
+          type="button"
+          aria-expanded={open}
+          aria-controls={bodyId}
+          onClick={onOpenChange}
+          className="flex w-full items-center gap-3 rounded-3xl px-5 py-4 text-left hover:bg-muted/20 focus-visible:outline-2 focus-visible:outline-ring"
+        >
+          <ChevronDown
+            size={16}
+            aria-hidden
+            className={cn("shrink-0 text-muted-foreground transition-transform", !open && "-rotate-90")}
+          />
+          {heading}
+        </button>
+      ) : (
+        <div className="flex items-center gap-3 px-5 py-4">{heading}</div>
       )}
 
-      <div className="mt-4 overflow-x-auto">
-        <InstallmentsTable
-          installments={loan.installments}
-          selection={selection}
-          onToggle={onToggle}
-          productLabel={title}
-        />
-      </div>
+      {open && (
+        <div id={bodyId} className="border-t border-border px-5 pb-5 pt-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-xs text-muted-foreground tabular-nums">
+              {loan.totalInstallments} cuotas de {formatPrice(Number(loan.installments[0]?.amount ?? 0))}
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {progress.paidCount > 0 && (
+                <Button variant="ghost" size="sm" onClick={() => setShowPaid((value) => !value)}>
+                  {showPaid ? "Ocultar pagadas" : `Mostrar pagadas (${progress.paidCount})`}
+                </Button>
+              )}
+              {loan.saleOrder.invoice && (
+                <Button variant="outline" size="sm" onClick={() => onShowInvoice(loan.saleOrder.invoice!.id)}>
+                  <FileText aria-hidden />
+                  Ver factura
+                </Button>
+              )}
+            </div>
+          </div>
+
+          {summary.overdueCount > 0 && summary.charges === 0 && (
+            <p className="mt-3 rounded-2xl bg-warn-subtle px-3 py-2 text-xs text-foreground">
+              {zeroChargeNotice({
+                graceDays: loan.moraPolicy?.graceDays ?? 0,
+                hasMoraComponents: (loan.moraPolicy?.components.length ?? 0) > 0,
+                overdueDays,
+              })}
+            </p>
+          )}
+
+          <div className="mt-3 overflow-x-auto">
+            <InstallmentsTable
+              installments={installments}
+              selection={selection}
+              onToggle={onToggle}
+              productLabel={title}
+            />
+          </div>
+        </div>
+      )}
     </section>
+  );
+}
+
+function Stat({
+  label,
+  value,
+  hint,
+  tone,
+}: {
+  label: string;
+  value: string;
+  hint?: string;
+  tone?: "danger" | "selected";
+}) {
+  return (
+    <div className="min-w-0">
+      <p className="text-[11px] text-muted-foreground">{label}</p>
+      <p
+        className={cn(
+          "truncate text-sm font-medium tabular-nums",
+          tone === "danger" && "text-destructive",
+          tone === "selected" && "text-primary",
+        )}
+      >
+        {value}
+        {hint && <span className="ml-1 text-xs font-normal text-muted-foreground">({hint})</span>}
+      </p>
+    </div>
   );
 }
 

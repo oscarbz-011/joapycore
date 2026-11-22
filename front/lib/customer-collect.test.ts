@@ -3,6 +3,7 @@ import type { Installment, Loan } from './api/finance';
 import {
   customerSummary,
   loanInvoiceRef,
+  loanProgress,
   loanTitle,
   selectAllAcross,
   selectByAmountAcross,
@@ -148,5 +149,22 @@ describe('loan labels', () => {
     const sale = loan('x', []);
     sale.saleOrder.items.push({ id: 'j', quantity: 1, description: 'Instalación', product: null });
     expect(loanTitle(sale)).toBe('Ventilador y 1 más');
+  });
+});
+
+describe('loanProgress', () => {
+  it('counts what is paid and what is chosen to collect now', () => {
+    const sale = loan('a', [
+      inst('a', 1, '2026-08-05', { status: 'PAID', paidAmount: 100_000 }),
+      inst('a', 2, '2026-09-05'),
+      inst('a', 3, '2026-10-05'),
+    ]);
+
+    expect(loanProgress(sale, { 'a-2': 100_000, 'a-3': 40_000, 'b-1': 1 })).toEqual({
+      paidCount: 1,
+      total: 3,
+      selectedCount: 2,
+      selectedAmount: 140_000,
+    });
   });
 });
