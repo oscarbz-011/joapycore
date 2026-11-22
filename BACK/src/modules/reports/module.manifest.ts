@@ -1,6 +1,6 @@
 import { defineModule } from '../../common/modules/module-manifest';
 
-// Solo lee: los reportes cruzan datos de varios módulos.
+// Sin datos propios: los pide por contrato a cada dueño (report-sources).
 export const reportsManifest = defineModule({
   key: 'reports',
   kind: 'core',

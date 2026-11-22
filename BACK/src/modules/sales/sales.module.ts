@@ -1,6 +1,9 @@
 import { Global, Module } from '@nestjs/common';
 import { SALES_GATEWAY } from '../../common/contracts/sales-gateway.contract';
 import { QUOTE_PDF } from '../../common/contracts/document-pdf.contract';
+import { SALES_REPORT_SOURCE } from '../../common/contracts/report-sources.contract';
+import { SalesReportRepository } from './repositories/sales-report.repository';
+import { SalesReportSourceService } from './services/sales-report-source.service';
 import { CombosController } from './controllers/combos.controller';
 import { CustomersController } from './controllers/customers.controller';
 import { SaleOrdersController } from './controllers/sale-orders.controller';
@@ -23,8 +26,8 @@ import { CreditSourcesRepository } from './repositories/credit-sources.repositor
 import { SalesSourcesRepository } from './repositories/sales-sources.repository';
 import { TenantsModule } from '../../tenants/tenants.module';
 
-// Global solo para exponer sus contratos: SALES_GATEWAY (lo usa POS) y
-// QUOTE_PDF (Documentos), sin que importen este módulo. Inventario llega por los contratos de InventoryContractsModule.
+// Global solo para exponer sus contratos: SALES_GATEWAY (lo usa POS),
+// QUOTE_PDF (Documentos) y SALES_REPORT_SOURCE (Reportes), sin que importen este módulo. Inventario llega por los contratos de InventoryContractsModule.
 @Global()
 @Module({
   imports: [TenantsModule],
@@ -52,8 +55,11 @@ import { TenantsModule } from '../../tenants/tenants.module';
     SalesOnBatchConsumedListener,
     SalesOnLocationCorrectedListener,
     { provide: SALES_GATEWAY, useExisting: SaleOrdersService },
+    SalesReportRepository,
+    SalesReportSourceService,
     { provide: QUOTE_PDF, useExisting: SaleOrdersRepository },
+    { provide: SALES_REPORT_SOURCE, useExisting: SalesReportSourceService },
   ],
-  exports: [SALES_GATEWAY, QUOTE_PDF],
+  exports: [SALES_GATEWAY, QUOTE_PDF, SALES_REPORT_SOURCE],
 })
 export class SalesModule {}

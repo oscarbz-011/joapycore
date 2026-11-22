@@ -16,6 +16,7 @@ import {
   SupplierCatalogRepository,
   type CatalogFilters,
 } from '../repositories/supplier-catalog.repository';
+import { ProcurementSourcesRepository } from '../repositories/procurement-sources.repository';
 import { CatalogParserService, type RowError } from './catalog-parser.service';
 import {
   CatalogValidityDto,
@@ -48,6 +49,7 @@ export class SupplierCatalogService {
     private readonly repository: SupplierCatalogRepository,
     private readonly parser: CatalogParserService,
     private readonly eventEmitter: EventBus,
+    private readonly sources: ProcurementSourcesRepository,
   ) {}
 
   async findBySupplier(
@@ -67,7 +69,7 @@ export class SupplierCatalogService {
   // ese mismo producto. Solo propone: vincular sigue siendo una decisión de
   // quien usa el comparador.
   async findLinkSuggestions(tenantId: string, productIds: string[]) {
-    const products = await this.repository.findProductsForMatching(
+    const products = await this.sources.findProductsForMatching(
       tenantId,
       productIds,
     );
@@ -223,10 +225,7 @@ export class SupplierCatalogService {
     await this.getItemOrFail(tenantId, id);
 
     if (dto.productId) {
-      const product = await this.repository.productExists(
-        tenantId,
-        dto.productId,
-      );
+      const product = await this.sources.productExists(tenantId, dto.productId);
       if (!product) throw new NotFoundException('Producto no encontrado');
     }
 

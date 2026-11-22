@@ -132,7 +132,19 @@ Cada punto es una rama y un PR propios. El orden sugerido es este; se ajusta al 
 | El registro crea la Casa Matriz y el Depósito Principal | Contratos `BRANCH_SETUP` y `WAREHOUSE_SETUP`, dentro de la transacción del registro |
 | Finanzas escribe `DelinquencyReport` | **Queda para la reestructuración de Finanzas** (decisión del usuario, 2026-11-18): es probable que préstamos y cobranzas terminen en la misma área |
 
-**C4b, lecturas: pendiente.** Si el dueño es del núcleo, la lectura pasa al repositorio de fuentes del que lee. Si el dueño se puede apagar, pasa a un contrato que con el módulo apagado devuelve vacío.
+**C4b, lecturas: hecho (2026-11).** Si el que lee depende del dueño, o el dueño es del núcleo o de la plataforma, la lectura pasa a su repositorio de fuentes (`*-sources.repository.ts`): con el dueño apagado el que lee también lo está. Si el dueño se puede apagar y el que lee no depende de él, pasa a un contrato que con el módulo apagado devuelve vacío.
+
+| Lectura ajena | Reemplazo |
+|---|---|
+| Cobranzas cuenta cuotas vencidas | `CollectionsSourcesRepository` |
+| Inventario lee depósitos y el rubro de la empresa | `StockSourcesRepository` |
+| POS lee sus ventas y el efectivo cobrado | `PosSourcesRepository` |
+| Compras y Producción leen productos y stock | `ProcurementSourcesRepository`, `ProductionSourcesRepository` |
+| Comunicaciones lee facturas y clientes (sus rutas exigen Facturación) | `CommunicationsSourcesRepository` |
+| Inventario valida el proveedor de un producto | Contrato `SUPPLIER_DIRECTORY` de Compras |
+| Reportes lee ventas, productos y cuentas por cobrar | Contratos `SALES_REPORT_SOURCE`, `STOCK_REPORT_SOURCE` y `RECEIVABLES_REPORT_SOURCE` de cada dueño |
+
+La deuda de límites queda en una sola entrada: la escritura de `DelinquencyReport`. El test de arquitectura no cuenta como lectura un `include` que cruza módulos: esos van por las relaciones ya congeladas en `module-relation-debt.ts`.
 
 ### C5. Datos iniciales declarativos por módulo
 

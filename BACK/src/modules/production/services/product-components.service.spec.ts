@@ -28,9 +28,10 @@ describe('ProductComponentsService', () => {
     create: jest.Mock;
     update: jest.Mock;
     delete: jest.Mock;
-    findProduct: jest.Mock;
     findComponentIds: jest.Mock;
   };
+
+  let sources: { findProduct: jest.Mock };
 
   beforeEach(() => {
     repository = {
@@ -40,17 +41,17 @@ describe('ProductComponentsService', () => {
       create: jest.fn().mockResolvedValue({ id: 'pc-1' }),
       update: jest.fn(),
       delete: jest.fn(),
-      findProduct: jest.fn(),
       findComponentIds: jest.fn().mockResolvedValue([]),
     };
-    service = new ProductComponentsService(repository as any);
+    sources = { findProduct: jest.fn() };
+    service = new ProductComponentsService(repository as any, sources as any);
   });
 
   const dto = { componentId: 'tablero-1', quantity: 3 };
 
   describe('addComponent', () => {
     it('adds a component to a manufactured product', async () => {
-      repository.findProduct
+      sources.findProduct
         .mockResolvedValueOnce(makeProduct())
         .mockResolvedValueOnce(
           makeProduct({
@@ -73,7 +74,7 @@ describe('ProductComponentsService', () => {
     it.each(['RESALE', 'RAW_MATERIAL'])(
       'refuses to build a recipe on a %s product',
       async (kind) => {
-        repository.findProduct.mockResolvedValue(makeProduct({ kind }));
+        sources.findProduct.mockResolvedValue(makeProduct({ kind }));
 
         await expect(
           service.addComponent('tenant-1', 'mesa-1', dto),
@@ -84,7 +85,7 @@ describe('ProductComponentsService', () => {
     );
 
     it('refuses a product as its own component', async () => {
-      repository.findProduct.mockResolvedValue(makeProduct());
+      sources.findProduct.mockResolvedValue(makeProduct());
 
       await expect(
         service.addComponent('tenant-1', 'mesa-1', {
@@ -95,7 +96,7 @@ describe('ProductComponentsService', () => {
     });
 
     it('refuses a duplicate component instead of creating a second row', async () => {
-      repository.findProduct
+      sources.findProduct
         .mockResolvedValueOnce(makeProduct())
         .mockResolvedValueOnce(
           makeProduct({ id: 'tablero-1', name: 'Tablero MDF' }),
@@ -108,7 +109,7 @@ describe('ProductComponentsService', () => {
     });
 
     it('throws NotFoundException when the component does not exist', async () => {
-      repository.findProduct
+      sources.findProduct
         .mockResolvedValueOnce(makeProduct())
         .mockResolvedValueOnce(null);
 
@@ -120,7 +121,7 @@ describe('ProductComponentsService', () => {
     // ── Ciclos ────────────────────────────────────────────────────────────
 
     it('refuses a direct cycle (A lleva B, B ya lleva A)', async () => {
-      repository.findProduct
+      sources.findProduct
         .mockResolvedValueOnce(makeProduct())
         .mockResolvedValueOnce(makeProduct({ id: 'tablero-1' }));
       // La receta del componente ya incluye al producto que se está armando.
@@ -136,7 +137,7 @@ describe('ProductComponentsService', () => {
     });
 
     it('refuses an indirect cycle (A → B → C → A)', async () => {
-      repository.findProduct
+      sources.findProduct
         .mockResolvedValueOnce(makeProduct())
         .mockResolvedValueOnce(makeProduct({ id: 'tablero-1' }));
       repository.findComponentIds
@@ -149,7 +150,7 @@ describe('ProductComponentsService', () => {
     });
 
     it('does not loop forever when the existing recipe already has a cycle', async () => {
-      repository.findProduct
+      sources.findProduct
         .mockResolvedValueOnce(makeProduct())
         .mockResolvedValueOnce(makeProduct({ id: 'tablero-1' }));
       // tablero → pata → tablero: sin el set de visitados, esto colgaría.
@@ -169,7 +170,7 @@ describe('ProductComponentsService', () => {
 
   describe('findByProduct', () => {
     it('throws NotFoundException when the product does not exist', async () => {
-      repository.findProduct.mockResolvedValue(null);
+      sources.findProduct.mockResolvedValue(null);
 
       await expect(
         service.findByProduct('tenant-1', 'ghost'),

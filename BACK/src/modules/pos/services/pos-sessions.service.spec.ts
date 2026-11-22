@@ -23,12 +23,12 @@ function makeSession(overrides = {}) {
 
 describe('PosSessionsService', () => {
   let service: PosSessionsService;
+  let sources: { sumCashPayments: jest.Mock };
   let posSessionsRepository: {
     findActiveByTerminal: jest.Mock;
     findActiveByCashier: jest.Mock;
     findById: jest.Mock;
     findAll: jest.Mock;
-    sumCashPayments: jest.Mock;
     create: jest.Mock;
     close: jest.Mock;
   };
@@ -37,12 +37,12 @@ describe('PosSessionsService', () => {
   let billing: { findSeries: jest.Mock };
 
   beforeEach(() => {
+    sources = { sumCashPayments: jest.fn() };
     posSessionsRepository = {
       findActiveByTerminal: jest.fn(),
       findActiveByCashier: jest.fn(),
       findById: jest.fn(),
       findAll: jest.fn(),
-      sumCashPayments: jest.fn(),
       create: jest.fn(),
       close: jest.fn(),
     };
@@ -57,6 +57,7 @@ describe('PosSessionsService', () => {
       posTerminalsService as any,
       eventEmitter as any,
       billing as any,
+      sources as any,
     );
   });
 
@@ -167,7 +168,7 @@ describe('PosSessionsService', () => {
       posSessionsRepository.findById.mockResolvedValue(
         makeSession({ openingCash: 500_000 }),
       );
-      posSessionsRepository.sumCashPayments.mockResolvedValue({
+      sources.sumCashPayments.mockResolvedValue({
         _sum: { amount: 150_000 },
       });
       posSessionsRepository.close.mockImplementation((id, data) =>
@@ -196,7 +197,7 @@ describe('PosSessionsService', () => {
       posSessionsRepository.findById.mockResolvedValue(
         makeSession({ openingCash: 500_000 }),
       );
-      posSessionsRepository.sumCashPayments.mockResolvedValue({
+      sources.sumCashPayments.mockResolvedValue({
         _sum: { amount: 150_000 },
       });
       posSessionsRepository.close.mockImplementation((id, data) =>

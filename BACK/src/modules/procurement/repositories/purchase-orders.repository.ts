@@ -169,17 +169,6 @@ export class PurchaseOrdersRepository implements PurchaseOrderPdf {
     return client.purchaseOrderStatusChange.create({ data });
   }
 
-  // Estado de las fichas que se van a comprar — se valida en el servicio
-  // (ver PurchaseOrdersService.create) que estén ACTIVE antes de armar la
-  // orden. Se consulta desde acá, y no inyectando el repositorio de
-  // Inventario, para no acoplar el módulo de Compras al de Inventario.
-  findProductStatuses(tenantId: string, ids: string[]) {
-    return this.prisma.product.findMany({
-      where: { tenantId, id: { in: ids }, deletedAt: null },
-      select: { id: true, name: true, status: true, isPurchasable: true },
-    });
-  }
-
   // El correlativo es por empresa y no se reinicia con el año, así que el
   // número más alto es siempre el del año más reciente y alcanza con ordenar
   // el texto (mismo criterio que los presupuestos, PRES-AA-000001).

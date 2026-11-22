@@ -1,37 +1,28 @@
 import { ReportsService } from './reports.service';
-import { ReportsRepository } from '../repositories/reports.repository';
 
 describe('ReportsService.salesReport', () => {
-  const findSaleOrdersForReport = jest.fn();
-  const service = new ReportsService({
-    findSaleOrdersForReport,
-  } as unknown as ReportsRepository);
+  const closedOrders = jest.fn();
+  const service = new ReportsService(
+    { closedOrders },
+    { productsWithMovements: jest.fn() },
+    { receivables: jest.fn() },
+  );
 
   beforeEach(() => {
-    findSaleOrdersForReport.mockReset().mockResolvedValue([]);
+    closedOrders.mockReset().mockResolvedValue([]);
   });
 
-  it('includes paid and delivered sales, scoped to the tenant', async () => {
-    await service.salesReport('tenant-1');
+  it('asks Ventas for the closed sales of the tenant and the period', async () => {
+    await service.salesReport('tenant-1', '2026-11-01', '2026-11-30');
 
-    const where = findSaleOrdersForReport.mock.calls[0][0];
-    expect(where.tenantId).toBe('tenant-1');
-    expect(where.status.in).toEqual(
-      expect.arrayContaining([
-        'PAYMENT_RECEIVED',
-        'CONFIRMED',
-        'INVOICED',
-        'DELIVERED',
-      ]),
-    );
-    expect(where.status.in).not.toContain('PENDING');
-    expect(where.status.in).not.toContain('QUOTED');
-    expect(where.status.in).not.toContain('CANCELLED');
-    expect(where.status.in).not.toContain('PENDING_CREDIT_APPROVAL');
+    expect(closedOrders).toHaveBeenCalledWith('tenant-1', {
+      from: new Date('2026-11-01'),
+      to: new Date('2026-11-30'),
+    });
   });
 
   it('adds delivered sales to the revenue', async () => {
-    findSaleOrdersForReport.mockResolvedValue([
+    closedOrders.mockResolvedValue([
       {
         status: 'DELIVERED',
         orderDate: new Date('2026-11-02T12:00:00Z'),
@@ -43,5 +34,12 @@ describe('ReportsService.salesReport', () => {
 
     expect(report.summary.totalRevenue).toBe(300);
     expect(report.summary.ordersCount).toBe(1);
+  });
+
+  it('reports nothing while Ventas is off', async () => {
+    const report = await service.salesReport('tenant-1');
+
+    expect(report.summary).toMatchObject({ totalRevenue: 0, ordersCount: 0 });
+    expect(report.byMonth).toEqual([]);
   });
 });

@@ -24,7 +24,6 @@ import { InstallmentsRepository } from '../src/modules/finance/repositories/inst
 import { LoansRepository } from '../src/modules/finance/repositories/loans.repository';
 import { LoanCreditsService } from '../src/modules/finance/services/loan-credits.service';
 import { ProductUnitsRepository } from '../src/modules/inventory/repositories/product-units.repository';
-import { StockLocationsRepository } from '../src/modules/inventory/repositories/stock-locations.repository';
 import { StockMovementsRepository } from '../src/modules/inventory/repositories/stock-movements.repository';
 import { StockSourcesRepository } from '../src/modules/inventory/repositories/stock-sources.repository';
 import { ProductsRepository } from '../src/modules/inventory/repositories/products.repository';
@@ -55,7 +54,6 @@ describe('CreditNotesService (PostgreSQL)', () => {
     const stockLedger = new StockLedgerService(
       new StockMovementsRepository(prisma),
       new ProductUnitsRepository(prisma),
-      new StockLocationsRepository(prisma),
       new StockSourcesRepository(prisma),
       new ProductsRepository(prisma),
     );

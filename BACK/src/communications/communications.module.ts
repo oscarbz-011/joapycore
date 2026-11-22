@@ -3,6 +3,7 @@ import { FilesModule } from '../files/files.module';
 import { IntegrationsModule } from '../integrations/integrations.module';
 import { PlatformEmailModule } from '../platform-email/platform-email.module';
 import { CommunicationsRepository } from './communications.repository';
+import { CommunicationsSourcesRepository } from './communications-sources.repository';
 import { CommunicationsService } from './communications.service';
 import { CommunicationsEmailProvider } from './communications-email.provider';
 import { CommunicationsWorker } from './communications.worker';
@@ -18,6 +19,7 @@ import { InvoiceCommunicationListener } from './invoice-communication.listener';
   controllers: [CommunicationHubController, ConversationsController],
   providers: [
     CommunicationsRepository,
+    CommunicationsSourcesRepository,
     CommunicationsService,
     CommunicationsEmailProvider,
     CommunicationsWorker,

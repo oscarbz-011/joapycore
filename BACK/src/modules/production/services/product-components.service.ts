@@ -6,12 +6,16 @@ import {
 } from '@nestjs/common';
 import { ProductKind } from '@prisma/client';
 import { ProductComponentsRepository } from '../repositories/product-components.repository';
+import { ProductionSourcesRepository } from '../repositories/production-sources.repository';
 import { CreateProductComponentDto } from '../dto/create-product-component.dto';
 import { UpdateProductComponentDto } from '../dto/update-product-component.dto';
 
 @Injectable()
 export class ProductComponentsService {
-  constructor(private readonly repository: ProductComponentsRepository) {}
+  constructor(
+    private readonly repository: ProductComponentsRepository,
+    private readonly sources: ProductionSourcesRepository,
+  ) {}
 
   async findByProduct(tenantId: string, productId: string) {
     await this.getProductOrFail(tenantId, productId);
@@ -108,7 +112,7 @@ export class ProductComponentsService {
   }
 
   private async getProductOrFail(tenantId: string, id: string) {
-    const product = await this.repository.findProduct(tenantId, id);
+    const product = await this.sources.findProduct(tenantId, id);
     if (!product) throw new NotFoundException('Producto no encontrado');
     return product;
   }

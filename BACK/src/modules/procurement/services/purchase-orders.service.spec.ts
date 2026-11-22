@@ -34,7 +34,6 @@ describe('PurchaseOrdersService', () => {
     updateStatus: jest.Mock;
     findItem: jest.Mock;
     updateItemReceivedQty: jest.Mock;
-    findProductStatuses: jest.Mock;
     findLastOrderNumber: jest.Mock;
     findCatalogItems: jest.Mock;
     transition: jest.Mock;
@@ -43,6 +42,7 @@ describe('PurchaseOrdersService', () => {
     advanceApplied: jest.Mock;
     findSupplierTerms: jest.Mock;
   };
+  let sources: { findProductStatuses: jest.Mock };
   let eventEmitter: { emit: jest.Mock };
   let prisma: { $transaction: jest.Mock };
 
@@ -55,6 +55,15 @@ describe('PurchaseOrdersService', () => {
       updateStatus: jest.fn().mockResolvedValue(undefined),
       findItem: jest.fn(),
       updateItemReceivedQty: jest.fn(),
+      findLastOrderNumber: jest.fn().mockResolvedValue(null),
+      findCatalogItems: jest.fn().mockResolvedValue([]),
+      transition: jest.fn().mockResolvedValue({ count: 1 }),
+      setExpectedDate: jest.fn().mockResolvedValue({ count: 1 }),
+      recordStatusChange: jest.fn(),
+      advanceApplied: jest.fn().mockResolvedValue(0),
+      findSupplierTerms: jest.fn().mockResolvedValue({ advancePercent: null }),
+    };
+    sources = {
       // Por defecto, ficha completa: los tests que no van sobre el estado del
       // producto no tienen que saber que esta validación existe.
       findProductStatuses: jest.fn().mockResolvedValue([
@@ -65,13 +74,6 @@ describe('PurchaseOrdersService', () => {
           isPurchasable: true,
         },
       ]),
-      findLastOrderNumber: jest.fn().mockResolvedValue(null),
-      findCatalogItems: jest.fn().mockResolvedValue([]),
-      transition: jest.fn().mockResolvedValue({ count: 1 }),
-      setExpectedDate: jest.fn().mockResolvedValue({ count: 1 }),
-      recordStatusChange: jest.fn(),
-      advanceApplied: jest.fn().mockResolvedValue(0),
-      findSupplierTerms: jest.fn().mockResolvedValue({ advancePercent: null }),
     };
     eventEmitter = { emit: jest.fn() };
 
@@ -87,6 +89,7 @@ describe('PurchaseOrdersService', () => {
       prisma as any,
       purchaseOrdersRepository as any,
       eventEmitter as any,
+      sources as any,
     );
   });
 
@@ -224,7 +227,7 @@ describe('PurchaseOrdersService', () => {
     it.each(['INACTIVE', 'BLOCKED'])(
       'refuses to buy a product in %s',
       async (status) => {
-        purchaseOrdersRepository.findProductStatuses.mockResolvedValue([
+        sources.findProductStatuses.mockResolvedValue([
           {
             id: 'prod-1',
             name: 'Heladera Samsung',
@@ -242,7 +245,7 @@ describe('PurchaseOrdersService', () => {
     );
 
     it('names the product and its state in the error', async () => {
-      purchaseOrdersRepository.findProductStatuses.mockResolvedValue([
+      sources.findProductStatuses.mockResolvedValue([
         {
           id: 'prod-1',
           name: 'Heladera Samsung',
@@ -257,7 +260,7 @@ describe('PurchaseOrdersService', () => {
     });
 
     it('refuses to buy a manufactured product — el mueble sale de producción, no de un proveedor', async () => {
-      purchaseOrdersRepository.findProductStatuses.mockResolvedValue([
+      sources.findProductStatuses.mockResolvedValue([
         {
           id: 'prod-1',
           name: 'Mesa de comedor 6 sillas',
@@ -274,7 +277,7 @@ describe('PurchaseOrdersService', () => {
     });
 
     it('buys a raw material — la materia prima sí entra por compra', async () => {
-      purchaseOrdersRepository.findProductStatuses.mockResolvedValue([
+      sources.findProductStatuses.mockResolvedValue([
         {
           id: 'prod-1',
           name: 'Tablero MDF 18mm',
@@ -298,7 +301,7 @@ describe('PurchaseOrdersService', () => {
       items: [{ productId: 'prod-1', quantity: 2, unitCost: 100 }],
     };
     const withStatus = (status: string) =>
-      purchaseOrdersRepository.findProductStatuses.mockResolvedValue([
+      sources.findProductStatuses.mockResolvedValue([
         { id: 'prod-1', name: 'Abridor', status, isPurchasable: true },
       ]);
 

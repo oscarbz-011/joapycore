@@ -4,13 +4,41 @@ import { PrismaService } from '../../../prisma/prisma.service';
 import { PrismaClientOrTx } from '../../../prisma/types';
 
 /**
- * Lecturas de los documentos que originan movimientos de stock (facturas,
- * pedidos, recepciones), acotadas a lo que Inventario necesita en sus
- * listeners.
+ * Lecturas de datos de otros módulos que Inventario necesita: los documentos
+ * que originan movimientos de stock (facturas, pedidos, recepciones), los
+ * depósitos y el rubro de la empresa.
  */
 @Injectable()
 export class StockSourcesRepository {
   constructor(private readonly prisma: PrismaService) {}
+
+  findWarehouse(
+    tenantId: string,
+    warehouseId: string,
+    client: PrismaClientOrTx = this.prisma,
+  ) {
+    return client.warehouse.findFirst({
+      where: { id: warehouseId, tenantId },
+      select: { id: true, name: true, isActive: true },
+    });
+  }
+
+  findWarehouses(tenantId: string) {
+    return this.prisma.warehouse.findMany({
+      where: { tenantId },
+      select: { id: true, name: true, isActive: true },
+      orderBy: [{ isActive: 'desc' }, { name: 'asc' }],
+    });
+  }
+
+  // El rubro define con qué tipo nace un producto si no se indica.
+  async findTenantIndustry(tenantId: string) {
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { id: tenantId },
+      select: { industry: true },
+    });
+    return tenant?.industry ?? null;
+  }
 
   findSaleItemsForReturn(
     tenantId: string,

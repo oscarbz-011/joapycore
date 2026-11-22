@@ -7,6 +7,7 @@ import { randomUUID } from 'node:crypto';
 import type { CommunicationMessageStatus } from '@prisma/client';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { ConversationsRepository } from '../src/communications/conversations.repository';
+import { CommunicationsSourcesRepository } from '../src/communications/communications-sources.repository';
 import { ConversationsService } from '../src/communications/conversations.service';
 
 const url = process.env.COMMUNICATIONS_TEST_DATABASE_URL;
@@ -62,6 +63,7 @@ integration('Communication conversations (isolated PostgreSQL)', () => {
     service = new ConversationsService(
       new ConversationsRepository(prisma),
       new EventBus(new EventEmitter2()),
+      new CommunicationsSourcesRepository(prisma),
     );
     for (const id of [tenantA, tenantB]) {
       await prisma.tenant.create({ data: { id, name: `Conversations ${id}` } });

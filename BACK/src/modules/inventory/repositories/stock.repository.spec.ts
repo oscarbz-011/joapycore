@@ -1,18 +1,17 @@
 import { Prisma } from '@prisma/client';
 import { StockRepository } from './stock.repository';
 
+const WAREHOUSES = [
+  { id: 'wh-active', name: 'Central', isActive: true },
+  { id: 'wh-inactive', name: 'Anterior', isActive: false },
+];
+
 describe('StockRepository', () => {
   let repository: StockRepository;
   let prisma: any;
 
   beforeEach(() => {
     prisma = {
-      warehouse: {
-        findMany: jest.fn().mockResolvedValue([
-          { id: 'wh-active', name: 'Central', isActive: true },
-          { id: 'wh-inactive', name: 'Anterior', isActive: false },
-        ]),
-      },
       product: {
         findMany: jest.fn().mockResolvedValue([
           {
@@ -88,7 +87,7 @@ describe('StockRepository', () => {
   });
 
   it('projects movement and serialized stock, zero rows, null locations, and inactive locations with quantity', async () => {
-    const result = await repository.findAll('tenant-1', {});
+    const result = await repository.findAll('tenant-1', {}, WAREHOUSES);
 
     expect(prisma.product.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -132,9 +131,11 @@ describe('StockRepository', () => {
   });
 
   it('keeps company totals and zero rows when one warehouse is selected', async () => {
-    const result = await repository.findAll('tenant-1', {
-      warehouseId: 'wh-inactive',
-    });
+    const result = await repository.findAll(
+      'tenant-1',
+      { warehouseId: 'wh-inactive' },
+      WAREHOUSES,
+    );
 
     expect(
       result.items.find((row) => row.product.id === 'plain'),
@@ -161,7 +162,7 @@ describe('StockRepository', () => {
   });
 
   it('exposes the sale price as a number and the reorder threshold of each product', async () => {
-    const result = await repository.findAll('tenant-1', {});
+    const result = await repository.findAll('tenant-1', {}, WAREHOUSES);
 
     expect(result.items.map((row) => row.product)).toEqual([
       expect.objectContaining({
@@ -175,7 +176,7 @@ describe('StockRepository', () => {
   });
 
   it('returns a requested product even when it is not eligible for sale', async () => {
-    await repository.findAll('tenant-1', { productId: 'plain' });
+    await repository.findAll('tenant-1', { productId: 'plain' }, WAREHOUSES);
 
     const where = prisma.product.findMany.mock.calls[0][0].where;
     expect(where).toMatchObject({

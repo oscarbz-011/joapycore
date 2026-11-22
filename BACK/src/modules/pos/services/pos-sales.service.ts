@@ -21,8 +21,8 @@ import { PrismaService } from '../../../prisma/prisma.service';
 import { CreatePosSaleDto } from '../dto/create-pos-sale.dto';
 import {
   PosSalesHistoryFilters,
-  PosSalesRepository,
-} from '../repositories/pos-sales.repository';
+  PosSourcesRepository,
+} from '../repositories/pos-sources.repository';
 import { PosSessionsRepository } from '../repositories/pos-sessions.repository';
 
 // La venta y su factura se guardan juntas; en una máquina lenta pueden
@@ -50,7 +50,7 @@ export class PosSalesService {
     private readonly prisma: PrismaService,
     private readonly outbox: OutboxService,
     private readonly posSessionsRepository: PosSessionsRepository,
-    private readonly posSalesRepository: PosSalesRepository,
+    private readonly sources: PosSourcesRepository,
     private readonly eventEmitter: EventBus,
   ) {}
 
@@ -176,10 +176,7 @@ export class PosSalesService {
     saleOrderId: string,
     copy: boolean,
   ) {
-    const sale = await this.posSalesRepository.findForReceipt(
-      tenantId,
-      saleOrderId,
-    );
+    const sale = await this.sources.findForReceipt(tenantId, saleOrderId);
     if (!sale?.posSession) throw new NotFoundException('Venta no encontrada');
     const fiscal = await this.billing.findReceiptBySaleOrder(
       tenantId,
@@ -212,10 +209,10 @@ export class PosSalesService {
   }
 
   listBySession(tenantId: string, sessionId: string) {
-    return this.posSalesRepository.findBySession(tenantId, sessionId);
+    return this.sources.findBySession(tenantId, sessionId);
   }
 
   listHistory(tenantId: string, filters: PosSalesHistoryFilters) {
-    return this.posSalesRepository.findHistory(tenantId, filters);
+    return this.sources.findHistory(tenantId, filters);
   }
 }

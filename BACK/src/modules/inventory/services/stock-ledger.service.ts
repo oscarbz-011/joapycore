@@ -23,7 +23,6 @@ import {
 import { ProductUnitsRepository } from '../repositories/product-units.repository';
 import { ProductsRepository } from '../repositories/products.repository';
 import { StockMovementsRepository } from '../repositories/stock-movements.repository';
-import { StockLocationsRepository } from '../repositories/stock-locations.repository';
 import { StockSourcesRepository } from '../repositories/stock-sources.repository';
 
 /**
@@ -35,7 +34,6 @@ export class StockLedgerService implements StockLedger {
   constructor(
     private readonly stockMovements: StockMovementsRepository,
     private readonly productUnits: ProductUnitsRepository,
-    private readonly stockLocations: StockLocationsRepository,
     private readonly stockSources: StockSourcesRepository,
     private readonly products: ProductsRepository,
   ) {}
@@ -172,7 +170,7 @@ export class StockLedgerService implements StockLedger {
     tenantId: string,
     warehouseId: string,
   ): Promise<void> {
-    const warehouse = await this.stockLocations.findById(
+    const warehouse = await this.stockSources.findWarehouse(
       tenantId,
       warehouseId,
       tx,

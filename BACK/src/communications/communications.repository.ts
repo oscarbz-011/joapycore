@@ -35,16 +35,6 @@ export class CommunicationsRepository {
     });
   }
 
-  invoice(tenantId: string, invoiceId: string) {
-    return this.prisma.invoice.findFirst({
-      where: { tenantId, id: invoiceId },
-      include: {
-        tenant: { select: { name: true, razonSocial: true } },
-        saleOrder: { include: { customer: true } },
-      },
-    });
-  }
-
   actor(tenantId: string, userId: string) {
     return this.prisma.user.findFirst({
       where: { tenantId, id: userId, status: 'ACTIVE' },

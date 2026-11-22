@@ -7,9 +7,18 @@ export interface PosSalesHistoryFilters {
   to?: Date;
 }
 
+/** Lecturas de las ventas y los pagos de Ventas que POS muestra y arquea. */
 @Injectable()
-export class PosSalesRepository {
+export class PosSourcesRepository {
   constructor(private readonly prisma: PrismaService) {}
+
+  // Base del efectivo esperado al cerrar la caja.
+  sumCashPayments(tenantId: string, sessionId: string) {
+    return this.prisma.salePayment.aggregate({
+      where: { tenantId, posSessionId: sessionId, paymentMethod: 'CASH' },
+      _sum: { amount: true },
+    });
+  }
 
   private get include() {
     return {

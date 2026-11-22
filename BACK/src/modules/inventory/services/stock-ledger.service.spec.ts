@@ -11,7 +11,7 @@ describe('StockLedgerService', () => {
     findBySerialForUpdate: jest.Mock;
     assignToSaleItem: jest.Mock;
   };
-  let stockLocations: { findById: jest.Mock };
+  let stockSources: { findWarehouse: jest.Mock };
 
   beforeEach(() => {
     stockMovements = {
@@ -27,18 +27,20 @@ describe('StockLedgerService', () => {
       findBySerialForUpdate: jest.fn(),
       assignToSaleItem: jest.fn(),
     };
-    stockLocations = {
-      findById: jest.fn().mockResolvedValue({ id: 'wh-1', isActive: true }),
+    stockSources = {
+      findWarehouse: jest
+        .fn()
+        .mockResolvedValue({ id: 'wh-1', isActive: true }),
     };
     service = new (StockLedgerService as any)(
       stockMovements as any,
       productUnits as any,
-      stockLocations,
+      stockSources,
     );
   });
 
   it('rejects demand from an inactive warehouse', async () => {
-    stockLocations.findById.mockResolvedValue({
+    stockSources.findWarehouse.mockResolvedValue({
       id: 'wh-1',
       isActive: false,
     });
@@ -136,7 +138,6 @@ describe('StockLedgerService', () => {
       ledger = new StockLedgerService(
         movements as any,
         units as any,
-        {} as any,
         sources as any,
         {} as any,
       );
@@ -234,7 +235,7 @@ describe('StockLedgerService', () => {
       receiveUnits: jest.Mock;
       loseInTransit: jest.Mock;
     };
-    let locations: { findById: jest.Mock };
+    let locations: { findWarehouse: jest.Mock };
     let products: { findForTransfer: jest.Mock };
     let ledger: StockLedgerService;
 
@@ -260,10 +261,12 @@ describe('StockLedgerService', () => {
         loseInTransit: jest.fn().mockResolvedValue(1),
       };
       locations = {
-        findById: jest.fn().mockImplementation((_t: string, id: string) => ({
-          id,
-          isActive: true,
-        })),
+        findWarehouse: jest
+          .fn()
+          .mockImplementation((_t: string, id: string) => ({
+            id,
+            isActive: true,
+          })),
       };
       products = {
         findForTransfer: jest.fn().mockResolvedValue([
@@ -275,7 +278,6 @@ describe('StockLedgerService', () => {
         movements as any,
         units as any,
         locations as any,
-        {} as any,
         products as any,
       );
     });
@@ -363,7 +365,10 @@ describe('StockLedgerService', () => {
           toWarehouseId: 'wh-a',
         }),
       ).rejects.toThrow('distintos');
-      locations.findById.mockResolvedValueOnce({ id: 'wh-a', isActive: false });
+      locations.findWarehouse.mockResolvedValueOnce({
+        id: 'wh-a',
+        isActive: false,
+      });
       await expect(
         ledger.dispatch(
           tx,
@@ -442,7 +447,6 @@ describe('StockLedgerService', () => {
           { productId: 'p-tv', serialNumber: 'SN-2' },
         ]),
       } as any,
-      {} as any,
       {} as any,
       {} as any,
     );

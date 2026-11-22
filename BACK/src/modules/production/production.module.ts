@@ -3,6 +3,7 @@ import { ProductComponentsController } from './controllers/product-components.co
 import { ProductionOrdersController } from './controllers/production-orders.controller';
 import { ProductComponentsRepository } from './repositories/product-components.repository';
 import { ProductionOrdersRepository } from './repositories/production-orders.repository';
+import { ProductionSourcesRepository } from './repositories/production-sources.repository';
 import { ProductComponentsService } from './services/product-components.service';
 import { ProductionOrdersService } from './services/production-orders.service';
 
@@ -17,6 +18,7 @@ import { ProductionOrdersService } from './services/production-orders.service';
     ProductionOrdersService,
     ProductComponentsRepository,
     ProductionOrdersRepository,
+    ProductionSourcesRepository,
   ],
 })
 export class ProductionModule {}

@@ -86,17 +86,6 @@ export class ProductsRepository {
     });
   }
 
-  // El rubro del tenant define con qué ProductKind nace un producto cuando el
-  // caller no lo especifica (ver defaultKindForIndustry). Se consulta desde
-  // acá para que la llamada cruda a Prisma quede en el repositorio.
-  async findTenantIndustry(tenantId: string) {
-    const tenant = await this.prisma.tenant.findUnique({
-      where: { id: tenantId },
-      select: { industry: true },
-    });
-    return tenant?.industry ?? null;
-  }
-
   create(
     tenantId: string,
     data: Omit<Prisma.ProductUncheckedCreateInput, 'tenantId'>,

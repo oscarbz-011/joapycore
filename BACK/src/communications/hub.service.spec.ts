@@ -9,6 +9,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { IntegrationsService } from '../integrations/integrations.service';
 import { CommunicationsService } from './communications.service';
 import { CommunicationHubService } from './hub.service';
+import { CommunicationsSourcesRepository } from './communications-sources.repository';
 import {
   CommunicationIdentityDto,
   CommunicationMessagesQueryDto,
@@ -79,6 +80,7 @@ describe('CommunicationHubService isolation and controls', () => {
       integrations as unknown as IntegrationsService,
       events as unknown as EventBus,
       core as unknown as CommunicationsService,
+      new CommunicationsSourcesRepository(prisma as unknown as PrismaService),
     );
   });
 

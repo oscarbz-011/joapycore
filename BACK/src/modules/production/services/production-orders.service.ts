@@ -11,6 +11,7 @@ import {
 } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { ProductionOrdersRepository } from '../repositories/production-orders.repository';
+import { ProductionSourcesRepository } from '../repositories/production-sources.repository';
 import { CreateProductionOrderDto } from '../dto/create-production-order.dto';
 import { CompleteProductionOrderDto } from '../dto/complete-production-order.dto';
 import type { AuditLogEvent } from '../../../audit/audit-log.event';
@@ -29,6 +30,7 @@ export class ProductionOrdersService {
     private readonly prisma: PrismaService,
     private readonly repository: ProductionOrdersRepository,
     private readonly eventEmitter: EventBus,
+    private readonly sources: ProductionSourcesRepository,
   ) {}
 
   findAll(tenantId: string, status?: ProductionOrderStatus) {
@@ -47,7 +49,7 @@ export class ProductionOrdersService {
     userId: string,
     dto: CreateProductionOrderDto,
   ) {
-    const product = await this.repository.findProduct(tenantId, dto.productId);
+    const product = await this.sources.findProduct(tenantId, dto.productId);
     if (!product) throw new NotFoundException('Producto no encontrado');
 
     if (product.kind !== ProductKind.MANUFACTURED) {
@@ -270,7 +272,7 @@ export class ProductionOrdersService {
         quantity: toNum(i.plannedQuantity),
       }));
 
-    const stock = await this.repository.getStock(
+    const stock = await this.sources.getStock(
       tenantId,
       lines.map((l) => l.componentId),
     );

@@ -11,7 +11,6 @@ describe('SupplierCatalogService', () => {
   let repository: {
     findBySupplier: jest.Mock;
     findOffers: jest.Mock;
-    findProductsForMatching: jest.Mock;
     findUnlinkedMatching: jest.Mock;
     findSearchCandidates: jest.Mock;
     findLinkedBarcodes: jest.Mock;
@@ -21,6 +20,9 @@ describe('SupplierCatalogService', () => {
     delete: jest.Mock;
     upsert: jest.Mock;
     supplierExists: jest.Mock;
+  };
+  let sources: {
+    findProductsForMatching: jest.Mock;
     productExists: jest.Mock;
   };
   let parser: { parse: jest.Mock };
@@ -32,7 +34,6 @@ describe('SupplierCatalogService', () => {
     repository = {
       findBySupplier: jest.fn().mockResolvedValue([]),
       findOffers: jest.fn().mockResolvedValue([]),
-      findProductsForMatching: jest.fn().mockResolvedValue([]),
       findUnlinkedMatching: jest.fn().mockResolvedValue([]),
       findSearchCandidates: jest.fn().mockResolvedValue([]),
       findLinkedBarcodes: jest.fn().mockResolvedValue([]),
@@ -44,6 +45,9 @@ describe('SupplierCatalogService', () => {
       supplierExists: jest
         .fn()
         .mockResolvedValue({ id: 'sup-1', name: 'Maderera' }),
+    };
+    sources = {
+      findProductsForMatching: jest.fn().mockResolvedValue([]),
       productExists: jest
         .fn()
         .mockResolvedValue({ id: 'prod-1', name: 'Tablero' }),
@@ -59,6 +63,7 @@ describe('SupplierCatalogService', () => {
       repository as never,
       parser as never,
       eventEmitter as never,
+      sources as never,
     );
   });
 
@@ -280,7 +285,7 @@ describe('SupplierCatalogService', () => {
     };
 
     it('proposes the unlinked items that look like the product', async () => {
-      repository.findProductsForMatching.mockResolvedValue([product]);
+      sources.findProductsForMatching.mockResolvedValue([product]);
       repository.findUnlinkedMatching.mockResolvedValue([
         {
           id: 'item-b',
@@ -294,10 +299,9 @@ describe('SupplierCatalogService', () => {
         'prod-1',
       ]);
 
-      expect(repository.findProductsForMatching).toHaveBeenCalledWith(
-        'tenant-1',
-        ['prod-1'],
-      );
+      expect(sources.findProductsForMatching).toHaveBeenCalledWith('tenant-1', [
+        'prod-1',
+      ]);
       expect(repository.findUnlinkedMatching).toHaveBeenCalledWith('tenant-1', [
         'abridor',
         'vinho',
@@ -366,7 +370,7 @@ describe('SupplierCatalogService', () => {
     // Mismo código de barras = mismo producto, aunque el otro proveedor lo
     // describa con otras palabras.
     it('proposes an unlinked item that shares the barcode of a linked one', async () => {
-      repository.findProductsForMatching.mockResolvedValue([product]);
+      sources.findProductsForMatching.mockResolvedValue([product]);
       repository.findLinkedBarcodes.mockResolvedValue([
         { productId: 'prod-1', barcode: '7891234567890' },
       ]);
@@ -403,7 +407,7 @@ describe('SupplierCatalogService', () => {
         barcode: '7891234567890',
         description: 'ABRIDOR DE VINO',
       };
-      repository.findProductsForMatching.mockResolvedValue([product]);
+      sources.findProductsForMatching.mockResolvedValue([product]);
       repository.findLinkedBarcodes.mockResolvedValue([
         { productId: 'prod-1', barcode: '7891234567890' },
       ]);
@@ -435,11 +439,11 @@ describe('SupplierCatalogService', () => {
       expect(repository.update).toHaveBeenCalledWith('tenant-1', 'item-1', {
         productId: null,
       });
-      expect(repository.productExists).not.toHaveBeenCalled();
+      expect(sources.productExists).not.toHaveBeenCalled();
     });
 
     it('throws NotFoundException when the product does not exist', async () => {
-      repository.productExists.mockResolvedValue(null);
+      sources.productExists.mockResolvedValue(null);
 
       await expect(
         service.mapToProduct('tenant-1', 'item-1', { productId: 'ghost' }),
