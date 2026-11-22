@@ -47,7 +47,17 @@ export interface Loan {
   status: LoanStatus;
   createdAt: string;
   customer: { id: string; firstName: string; lastName: string };
-  saleOrder: { id: string; orderDate: string; items: LoanOrderItem[] };
+  saleOrder: {
+    id: string;
+    orderDate: string;
+    items: LoanOrderItem[];
+    invoice?: {
+      id: string;
+      invoicePrefix: string | null;
+      invoiceNumber: string | null;
+      issuedAt: string | null;
+    } | null;
+  };
   installments: Installment[];
   moraPolicy?: {
     graceDays: number;
@@ -73,6 +83,11 @@ export interface PayInstallmentsPayload {
   paymentDate?: string;
   paymentReference?: string;
   notes?: string;
+}
+
+export interface PayCustomerInstallmentsPayload extends PayInstallmentsPayload {
+  // Un recibo por venta en lugar de uno solo con todas las cuotas.
+  separateReceipts?: boolean;
 }
 
 export type PaymentReceiptItemKind = "PRINCIPAL" | "INTEREST_COMPONENT";
@@ -109,7 +124,8 @@ export interface PaymentReceipt {
   issuedAt: string;
   pdfFileId: string | null;
   items: PaymentReceiptItem[];
-  loan: { id: string; saleOrderId: string };
+  // Null si el recibo cubre cuotas de más de una venta.
+  loan: { id: string; saleOrderId: string } | null;
   customer: {
     id: string;
     firstName: string;
@@ -159,6 +175,18 @@ export const financeApi = {
   ): Promise<{ loan: Loan; receipt: PaymentReceipt }> =>
     apiClient
       .post(`/finance/loans/${loanId}/pay-installments`, dto)
+      .then((r) => r.data),
+
+  // Préstamos vigentes del cliente, del más viejo al más nuevo.
+  getLoansByCustomer: (customerId: string): Promise<Loan[]> =>
+    apiClient.get(`/finance/loans/by-customer/${customerId}`).then((r) => r.data),
+
+  payCustomerInstallments: (
+    customerId: string,
+    dto: PayCustomerInstallmentsPayload,
+  ): Promise<{ receipts: PaymentReceipt[] }> =>
+    apiClient
+      .post(`/finance/loans/by-customer/${customerId}/pay-installments`, dto)
       .then((r) => r.data),
 
   getReceipt: (id: string): Promise<PaymentReceipt> =>
