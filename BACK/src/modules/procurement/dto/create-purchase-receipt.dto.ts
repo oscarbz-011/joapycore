@@ -43,10 +43,9 @@ export class ReceiptItemDto {
 }
 
 export class CreatePurchaseReceiptDto {
-  @ApiPropertyOptional({ description: 'Depósito donde ingresa la mercadería' })
-  @IsOptional()
-  @IsUUID()
-  warehouseId?: string;
+  @ApiProperty({ description: 'Depósito donde ingresa la mercadería' })
+  @IsUUID(undefined, { message: 'Elegí el depósito de ingreso' })
+  warehouseId: string;
 
   @ApiPropertyOptional()
   @IsOptional()

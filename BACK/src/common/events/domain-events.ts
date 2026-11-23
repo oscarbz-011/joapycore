@@ -111,7 +111,7 @@ export interface DomainEvents {
   'purchase.receipt.created': Tenant & {
     purchaseOrderId: string;
     purchaseReceiptId: string;
-    warehouseId?: string;
+    warehouseId: string;
   };
 
   'delivery.note.created': Tenant & {

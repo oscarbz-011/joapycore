@@ -8,6 +8,7 @@ import { ProductStatus } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { PurchaseOrdersRepository } from '../repositories/purchase-orders.repository';
 import { PurchaseReceiptsRepository } from '../repositories/purchase-receipts.repository';
+import { ProcurementSourcesRepository } from '../repositories/procurement-sources.repository';
 import { CreatePurchaseReceiptDto } from '../dto/create-purchase-receipt.dto';
 import type { AuditLogEvent } from '../../../audit/audit-log.event';
 
@@ -17,6 +18,7 @@ export class PurchaseReceiptsService {
     private readonly prisma: PrismaService,
     private readonly purchaseOrdersRepository: PurchaseOrdersRepository,
     private readonly purchaseReceiptsRepository: PurchaseReceiptsRepository,
+    private readonly sources: ProcurementSourcesRepository,
     private readonly eventEmitter: EventBus,
   ) {}
 
@@ -47,6 +49,18 @@ export class PurchaseReceiptsService {
     if (!['CONFIRMED', 'PARTIALLY_RECEIVED'].includes(order.status)) {
       throw new UnprocessableEntityException(
         'Order must be CONFIRMED to receive items',
+      );
+    }
+
+    // El ingreso al stock ocurre después, en Inventario: si el depósito no
+    // sirve, fallaría sin aviso con la recepción y la deuda ya guardadas.
+    const warehouse = await this.sources.findWarehouse(
+      tenantId,
+      dto.warehouseId,
+    );
+    if (!warehouse?.isActive) {
+      throw new UnprocessableEntityException(
+        'El depósito de ingreso no existe o está inactivo',
       );
     }
 
