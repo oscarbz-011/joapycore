@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { OnDomainEvent } from '../../../common/events/on-domain-event.decorator';
+import { EventBus } from '../../../common/events/event-bus';
 import { MovementReason } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { ProductUnitsRepository } from '../repositories/product-units.repository';
@@ -24,6 +25,7 @@ export class InventoryOnPurchaseReceiptListener {
     private readonly stockSources: StockSourcesRepository,
     private readonly stockMovements: StockMovementsRepository,
     private readonly productUnits: ProductUnitsRepository,
+    private readonly eventEmitter: EventBus,
   ) {}
 
   @OnDomainEvent('purchase.receipt.created')
@@ -46,7 +48,7 @@ export class InventoryOnPurchaseReceiptListener {
     );
     if (!receipt) return;
 
-    await this.prisma.$transaction(async (tx) => {
+    const entered = await this.prisma.$transaction(async (tx) => {
       // Idempotencia: si esta recepción ya generó movimientos, no repetir.
       const itemIds = receipt.items.map((i) => i.id);
       const alreadyProcessed = await this.stockMovements.exists(
@@ -55,7 +57,7 @@ export class InventoryOnPurchaseReceiptListener {
       );
       const alreadyProcessedUnits =
         await this.productUnits.existsForReceiptItems(tenantId, itemIds, tx);
-      if (alreadyProcessed || alreadyProcessedUnits) return;
+      if (alreadyProcessed || alreadyProcessedUnits) return false;
 
       for (const item of receipt.items) {
         await this.stockEntryService.registerEntry(
@@ -99,6 +101,17 @@ export class InventoryOnPurchaseReceiptListener {
           tx,
         );
       }
+      return true;
     });
+
+    if (!entered) return;
+    for (const item of receipt.items) {
+      this.eventEmitter.emit('stock.movement.created', {
+        tenantId,
+        productId: item.productId,
+        type: 'IN',
+        quantity: item.quantity,
+      });
+    }
   }
 }
