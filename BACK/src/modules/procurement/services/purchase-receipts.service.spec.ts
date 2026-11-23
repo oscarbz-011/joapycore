@@ -47,6 +47,7 @@ describe('PurchaseReceiptsService', () => {
   };
   let sources: { findWarehouse: jest.Mock };
   let eventEmitter: { emit: jest.Mock };
+  let outbox: { enqueue: jest.Mock; dispatch: jest.Mock };
   let prisma: { $transaction: jest.Mock };
   let tx: { purchaseOrderItem: { findMany: jest.Mock } };
 
@@ -73,6 +74,10 @@ describe('PurchaseReceiptsService', () => {
         .mockResolvedValue({ id: 'wh-1', isActive: true }),
     };
     eventEmitter = { emit: jest.fn() };
+    outbox = {
+      enqueue: jest.fn().mockResolvedValue('event-1'),
+      dispatch: jest.fn().mockResolvedValue(true),
+    };
     tx = { purchaseOrderItem: { findMany: jest.fn().mockResolvedValue([]) } };
     prisma = { $transaction: jest.fn().mockImplementation((cb) => cb(tx)) };
 
@@ -82,6 +87,7 @@ describe('PurchaseReceiptsService', () => {
       purchaseReceiptsRepository as any,
       sources as any,
       eventEmitter as any,
+      outbox as any,
     );
   });
 
@@ -317,14 +323,21 @@ describe('PurchaseReceiptsService', () => {
       'user-1',
     );
 
-    expect(eventEmitter.emit).toHaveBeenCalledWith(
+    expect(outbox.enqueue).toHaveBeenCalledWith(
+      tx,
+      'tenant-1',
       'purchase.receipt.created',
-      expect.objectContaining({
+      {
         tenantId: 'tenant-1',
         purchaseOrderId: 'po-1',
         purchaseReceiptId: 'receipt-1',
         warehouseId: 'wh-1',
-      }),
+      },
+    );
+    expect(outbox.dispatch).toHaveBeenCalledWith('event-1');
+    expect(eventEmitter.emit).not.toHaveBeenCalledWith(
+      'purchase.receipt.created',
+      expect.anything(),
     );
     expect(eventEmitter.emit).toHaveBeenCalledWith(
       'audit.log',

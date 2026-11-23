@@ -6,6 +6,7 @@ import {
 import { EventBus } from '../../../common/events/event-bus';
 import { ProductStatus } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
+import { OutboxService } from '../../../outbox/outbox.service';
 import { PurchaseOrdersRepository } from '../repositories/purchase-orders.repository';
 import { PurchaseReceiptsRepository } from '../repositories/purchase-receipts.repository';
 import { ProcurementSourcesRepository } from '../repositories/procurement-sources.repository';
@@ -20,6 +21,7 @@ export class PurchaseReceiptsService {
     private readonly purchaseReceiptsRepository: PurchaseReceiptsRepository,
     private readonly sources: ProcurementSourcesRepository,
     private readonly eventEmitter: EventBus,
+    private readonly outbox: OutboxService,
   ) {}
 
   findByOrder(tenantId: string, orderId: string) {
@@ -112,7 +114,7 @@ export class PurchaseReceiptsService {
       }
     }
 
-    const receipt = await this.prisma.$transaction(async (tx) => {
+    const { receipt, eventId } = await this.prisma.$transaction(async (tx) => {
       const receiptNumber =
         await this.purchaseReceiptsRepository.nextReceiptNumber(tenantId, tx);
       const created = await this.purchaseReceiptsRepository.create(
@@ -181,15 +183,23 @@ export class PurchaseReceiptsService {
         );
       }
 
-      return created;
+      // El ingreso al stock y la cuenta por pagar se reintentan si fallan, y
+      // si se agotan los reintentos quedan en "Procesos con errores".
+      const eventId = await this.outbox.enqueue(
+        tx,
+        tenantId,
+        'purchase.receipt.created',
+        {
+          tenantId,
+          purchaseOrderId: orderId,
+          purchaseReceiptId: created.id,
+          warehouseId: dto.warehouseId,
+        },
+      );
+      return { receipt: created, eventId };
     });
 
-    this.eventEmitter.emit('purchase.receipt.created', {
-      tenantId,
-      purchaseOrderId: orderId,
-      purchaseReceiptId: receipt.id,
-      warehouseId: dto.warehouseId,
-    });
+    await this.outbox.dispatch(eventId);
     this.eventEmitter.emit('audit.log', {
       tenantId,
       userId,

@@ -208,7 +208,7 @@ describe('ProcurementOnReceiptListener', () => {
     );
   });
 
-  it('logs and swallows errors instead of throwing (best-effort, never blocks the receipt)', async () => {
+  it('lets a failure reach the outbox so it is retried', async () => {
     prisma.purchaseReceipt.findFirst.mockRejectedValue(new Error('boom'));
 
     await expect(
@@ -218,6 +218,6 @@ describe('ProcurementOnReceiptListener', () => {
         warehouseId: 'wh-1',
         purchaseReceiptId: 'receipt-1',
       }),
-    ).resolves.toBeUndefined();
+    ).rejects.toThrow('boom');
   });
 });
