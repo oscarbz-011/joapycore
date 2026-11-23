@@ -99,6 +99,9 @@ export const PERMISSIONS = [
   'warehouses:manage',
   // Audit
   'audit:read',
+  // Procesos automáticos que fallaron (outbox)
+  'processes:read',
+  'processes:retry',
   // Alerts
   'alerts:read',
   'alerts:manage',
