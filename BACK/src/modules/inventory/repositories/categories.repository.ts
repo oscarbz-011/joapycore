@@ -1,71 +1,23 @@
 import { Injectable } from '@nestjs/common';
-import { Industry } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { PrismaClientOrTx } from '../../../prisma/types';
-
-// Categorías sembradas al registrar el tenant, según su rubro. La clave pasó
-// de texto libre al enum Industry — antes un rubro mal escrito caía en
-// 'default' sin que nadie se enterara.
-const DEFAULT_CATEGORIES: Record<Industry, string[]> = {
-  ELECTRODOMESTICOS: [
-    'Heladeras y Freezers',
-    'Lavarropas y Secarropas',
-    'Televisores y Monitores',
-    'Cocinas y Hornos',
-    'Aire Acondicionado y Calefacción',
-    'Audio y Home Theater',
-    'Pequeños Electrodomésticos',
-    'Accesorios y Cables',
-  ],
-  FERRETERIA: [
-    'Herramientas Manuales',
-    'Herramientas Eléctricas',
-    'Materiales de Construcción',
-    'Pinturas y Revestimientos',
-    'Plomería',
-    'Electricidad',
-    'Fijaciones y Tornillería',
-    'Seguridad',
-  ],
-  SUPERMERCADO: [
-    'Almacén',
-    'Bebidas',
-    'Lácteos y Huevos',
-    'Carnes y Fiambres',
-    'Frutas y Verduras',
-    'Limpieza y Hogar',
-    'Cuidado Personal',
-    'Congelados',
-  ],
-  // Carpintería/mueblería: mezcla materia prima (madera, herrajes) con
-  // producto terminado propio (los muebles) — ver ProductKind.
-  MUEBLERIA: [
-    'Muebles Terminados',
-    'Maderas y Tableros',
-    'Herrajes y Fijaciones',
-    'Adhesivos y Selladores',
-    'Pinturas y Barnices',
-    'Tapicería y Telas',
-    'Insumos de Taller',
-  ],
-  SERVICIOS: ['Servicios', 'Insumos', 'Repuestos'],
-  OTRO: ['General', 'Otros'],
-};
-
-// Fallback cuando el tenant no eligió rubro (industry null).
-const FALLBACK_CATEGORIES = DEFAULT_CATEGORIES.OTRO;
 
 @Injectable()
 export class CategoriesRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  seedDefaults(
+  /** Incluye las inactivas: los datos iniciales no las vuelven a crear. */
+  allNames(tenantId: string, client: PrismaClientOrTx = this.prisma) {
+    return client.category
+      .findMany({ where: { tenantId }, select: { name: true } })
+      .then((rows) => rows.map((row) => row.name));
+  }
+
+  createNames(
     tenantId: string,
-    industry: Industry | null | undefined,
+    names: readonly string[],
     client: PrismaClientOrTx = this.prisma,
   ) {
-    const names = industry ? DEFAULT_CATEGORIES[industry] : FALLBACK_CATEGORIES;
-    if (names.length === 0) return Promise.resolve();
     return client.category.createMany({
       data: names.map((name) => ({ tenantId, name })),
       skipDuplicates: true,

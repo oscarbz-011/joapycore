@@ -13,6 +13,7 @@ import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { JwtPayload } from '../common/types/jwt-payload.interface';
 import { parseDurationMs } from '../common/utils/duration.util';
 import { PrismaService } from '../prisma/prisma.service';
+import { OutboxService } from '../outbox/outbox.service';
 import { RolesRepository } from '../users/repositories/roles.repository';
 import { UsersRepository } from '../users/repositories/users.repository';
 import { toSafeUser } from '../users/entities/user.entity';
@@ -57,6 +58,7 @@ export class AuthService {
     private readonly permissionsResolver: PermissionsResolver,
     @Inject(BRANCH_SETUP) private readonly branchSetup: BranchSetup,
     @Inject(WAREHOUSE_SETUP) private readonly warehouseSetup: WarehouseSetup,
+    private readonly outbox: OutboxService,
   ) {}
 
   // Crea la empresa: todavía no hay una en el contexto.
@@ -73,7 +75,7 @@ export class AuthService {
     const permissions = await this.rolesRepository.findAllPermissions();
     const passwordHash = await bcrypt.hash(dto.password, SALT_ROUNDS);
 
-    const user = await this.prisma.$transaction(async (tx) => {
+    const { user, eventId } = await this.prisma.$transaction(async (tx) => {
       const tenant = await this.tenantsRepository.create(
         {
           name: dto.tenantName,
@@ -120,7 +122,14 @@ export class AuthService {
       );
       const branch = await this.branchSetup.createHeadquarters(tx, tenant.id);
       await this.warehouseSetup.createMainWarehouse(tx, tenant.id, branch.id);
-      return createdUser;
+      // Los datos iniciales de los módulos se reintentan si fallan.
+      const eventId = await this.outbox.enqueue(
+        tx,
+        tenant.id,
+        'tenant.registered',
+        { tenantId: tenant.id, industry: dto.industry },
+      );
+      return { user: createdUser, eventId };
     });
 
     const tokens = await this.issueTokens(user);
@@ -128,10 +137,7 @@ export class AuthService {
       userId: user.id,
       tenantId: user.tenantId,
     });
-    this.eventEmitter.emit('tenant.registered', {
-      tenantId: user.tenantId,
-      industry: dto.industry,
-    });
+    await this.outbox.dispatch(eventId);
     this.eventEmitter.emit('audit.log', {
       tenantId: user.tenantId,
       userId: user.id,

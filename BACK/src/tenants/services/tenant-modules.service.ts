@@ -3,7 +3,8 @@ import {
   Injectable,
   UnprocessableEntityException,
 } from '@nestjs/common';
-import { EventBus } from '../../common/events/event-bus';
+import { OutboxService } from '../../outbox/outbox.service';
+import { PrismaService } from '../../prisma/prisma.service';
 import {
   ALL_TENANT_MODULES,
   MODULE_CATALOG,
@@ -18,7 +19,8 @@ export class TenantModulesService {
   constructor(
     private readonly tenantModulesRepository: TenantModulesRepository,
     private readonly tenantModulesCache: TenantModulesCache,
-    private readonly eventEmitter: EventBus,
+    private readonly prisma: PrismaService,
+    private readonly outbox: OutboxService,
   ) {}
 
   // Igual para todas las empresas: el front lo usa en vez de tener su copia.
@@ -101,21 +103,26 @@ export class TenantModulesService {
     }
 
     await this.tenantModulesRepository.backfillMissing(tenantId);
-    for (const key of affected) {
-      await this.tenantModulesRepository.setActive(tenantId, key, active);
-    }
+    const eventIds = await this.prisma.$transaction(async (tx) => {
+      for (const key of affected) {
+        await this.tenantModulesRepository.setActive(tenantId, key, active, tx);
+      }
+      if (!active) return [];
+      const ids: string[] = [];
+      for (const key of affected.filter((k) => !activeMap.get(k))) {
+        ids.push(
+          await this.outbox.enqueue(tx, tenantId, 'tenant.module.activated', {
+            tenantId,
+            moduleName: key,
+          }),
+        );
+      }
+      return ids;
+    });
     // Sin esto el cambio tardaría hasta el TTL en verse; con esto el próximo
     // request ya lee el estado nuevo.
     this.tenantModulesCache.invalidate(tenantId);
-
-    if (active) {
-      for (const key of affected.filter((k) => !activeMap.get(k))) {
-        this.eventEmitter.emit('tenant.module.activated', {
-          tenantId,
-          moduleName: key,
-        });
-      }
-    }
+    for (const id of eventIds) await this.outbox.dispatch(id);
 
     return this.tenantModulesRepository.findAllForTenant(tenantId);
   }

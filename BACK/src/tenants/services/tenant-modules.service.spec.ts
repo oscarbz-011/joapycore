@@ -23,7 +23,9 @@ describe('TenantModulesService', () => {
     backfillMissing: jest.Mock;
   };
   let cache: { invalidate: jest.Mock; getActiveModules: jest.Mock };
-  let eventEmitter: { emit: jest.Mock };
+  let outbox: { enqueue: jest.Mock; dispatch: jest.Mock };
+  const tx = { tx: true };
+  let prisma: { $transaction: jest.Mock };
 
   beforeEach(() => {
     repo = {
@@ -32,11 +34,21 @@ describe('TenantModulesService', () => {
       backfillMissing: jest.fn().mockResolvedValue(undefined),
     };
     cache = { invalidate: jest.fn(), getActiveModules: jest.fn() };
-    eventEmitter = { emit: jest.fn() };
+    let next = 0;
+    outbox = {
+      enqueue: jest.fn(() => Promise.resolve(`event-${++next}`)),
+      dispatch: jest.fn().mockResolvedValue(true),
+    };
+    prisma = {
+      $transaction: jest.fn((callback: (t: unknown) => unknown) =>
+        callback(tx),
+      ),
+    };
     service = new TenantModulesService(
       repo as any,
       cache as any,
-      eventEmitter as any,
+      prisma as any,
+      outbox as any,
     );
   });
 
@@ -163,13 +175,21 @@ describe('TenantModulesService', () => {
 
         await service.setActive('tenant-1', 'sales', true);
 
-        expect(repo.setActive).toHaveBeenCalledWith('tenant-1', 'sales', true);
+        expect(repo.setActive).toHaveBeenCalledWith(
+          'tenant-1',
+          'sales',
+          true,
+          tx,
+        );
         expect(repo.setActive).toHaveBeenCalledWith(
           'tenant-1',
           'billing',
           true,
+          tx,
         );
-        expect(eventEmitter.emit).toHaveBeenCalledWith(
+        expect(outbox.enqueue).toHaveBeenCalledWith(
+          tx,
+          'tenant-1',
           'tenant.module.activated',
           { tenantId: 'tenant-1', moduleName: 'billing' },
         );
@@ -185,11 +205,17 @@ describe('TenantModulesService', () => {
 
         await service.setActive('tenant-1', 'sales', false);
 
-        expect(repo.setActive).toHaveBeenCalledWith('tenant-1', 'sales', false);
+        expect(repo.setActive).toHaveBeenCalledWith(
+          'tenant-1',
+          'sales',
+          false,
+          tx,
+        );
         expect(repo.setActive).toHaveBeenCalledWith(
           'tenant-1',
           'billing',
           false,
+          tx,
         );
       });
 
@@ -233,7 +259,12 @@ describe('TenantModulesService', () => {
 
       const result = await service.setActive('tenant-1', 'sales', true);
 
-      expect(repo.setActive).toHaveBeenCalledWith('tenant-1', 'sales', true);
+      expect(repo.setActive).toHaveBeenCalledWith(
+        'tenant-1',
+        'sales',
+        true,
+        tx,
+      );
       expect(result).toBeDefined();
     });
 
@@ -249,7 +280,10 @@ describe('TenantModulesService', () => {
 
       await service.setActive('tenant-1', 'documents', true);
 
-      expect(eventEmitter.emit).toHaveBeenCalledWith(
+      expect(outbox.dispatch).toHaveBeenCalledWith('event-1');
+      expect(outbox.enqueue).toHaveBeenCalledWith(
+        tx,
+        'tenant-1',
         'tenant.module.activated',
         {
           tenantId: 'tenant-1',
@@ -288,7 +322,7 @@ describe('TenantModulesService', () => {
 
       await service.setActive('tenant-1', 'documents', true);
 
-      expect(eventEmitter.emit).not.toHaveBeenCalled();
+      expect(outbox.enqueue).not.toHaveBeenCalled();
     });
 
     it('deactivates a module without dependents', async () => {
@@ -300,7 +334,7 @@ describe('TenantModulesService', () => {
 
       await service.setActive('tenant-1', 'hr', false);
 
-      expect(repo.setActive).toHaveBeenCalledWith('tenant-1', 'hr', false);
+      expect(repo.setActive).toHaveBeenCalledWith('tenant-1', 'hr', false, tx);
     });
   });
 });

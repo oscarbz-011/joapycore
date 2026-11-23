@@ -11,6 +11,7 @@ import type { Prisma } from '@prisma/client';
 export const PLATFORM_TABLES: readonly Prisma.ModelName[] = [
   'Tenant',
   'TenantModule',
+  'TenantModuleData',
   'TenantIntegration',
   'User',
   'UserPermission',

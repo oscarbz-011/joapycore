@@ -11,6 +11,7 @@ jest.mock('bcryptjs');
 describe('AuthService', () => {
   let service: AuthService;
   let prisma: { $transaction: jest.Mock };
+  let outbox: { enqueue: jest.Mock; dispatch: jest.Mock };
   let tx: object;
   let branchSetup: { createHeadquarters: jest.Mock };
   let warehouseSetup: { createMainWarehouse: jest.Mock };
@@ -69,6 +70,10 @@ describe('AuthService', () => {
     };
     warehouseSetup = {
       createMainWarehouse: jest.fn().mockResolvedValue({ id: 'wh-1' }),
+    };
+    outbox = {
+      enqueue: jest.fn().mockResolvedValue('event-1'),
+      dispatch: jest.fn().mockResolvedValue(true),
     };
     prisma = {
       $transaction: jest.fn((callback: (t: unknown) => unknown) =>
@@ -135,6 +140,7 @@ describe('AuthService', () => {
       permissionsResolver as any,
       branchSetup,
       warehouseSetup,
+      outbox as any,
     );
   });
 
@@ -197,6 +203,18 @@ describe('AuthService', () => {
         userId: 'user-1',
         tenantId: 'tenant-1',
       });
+      // Los datos iniciales se cargan por el outbox, con reintento.
+      expect(outbox.enqueue).toHaveBeenCalledWith(
+        tx,
+        'tenant-1',
+        'tenant.registered',
+        { tenantId: 'tenant-1', industry: Industry.ELECTRODOMESTICOS },
+      );
+      expect(outbox.dispatch).toHaveBeenCalledWith('event-1');
+      expect(eventEmitter.emit).not.toHaveBeenCalledWith(
+        'tenant.registered',
+        expect.anything(),
+      );
       expect(result.accessToken).toBe('signed-access-token');
       expect(result.user).not.toHaveProperty('passwordHash');
     });

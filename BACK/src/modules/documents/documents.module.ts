@@ -8,8 +8,8 @@ import { QuoteOnCreateListener } from './events/quote-on-create.listener';
 import { PurchaseOrderPdfListener } from './events/purchase-order-pdf.listener';
 import { ReceiptOnPaymentListener } from './events/receipt-on-payment.listener';
 import { SaleContractOnInvoiceListener } from './events/sale-contract-on-invoice.listener';
-import { SeedBillingTemplatesOnTenantRegisteredListener } from './events/seed-billing-templates-on-tenant-registered.listener';
-import { SeedDefaultCategoriesOnModuleActivatedListener } from './events/seed-default-categories-on-module-activated.listener';
+import { BillingTemplatesInitialData } from './data/billing-templates.initial-data';
+import { DocumentCategoriesInitialData } from './data/categories.initial-data';
 import { DocumentCategoriesRepository } from './repositories/document-categories.repository';
 import { DocumentSourcesRepository } from './repositories/document-sources.repository';
 import { DocumentsRepository } from './repositories/documents.repository';
@@ -24,11 +24,11 @@ import { DocumentsService } from './services/documents.service';
     DocumentSourcesRepository,
     DocumentCategoriesRepository,
     SaleContractOnInvoiceListener,
-    SeedDefaultCategoriesOnModuleActivatedListener,
+    DocumentCategoriesInitialData,
     InvoiceOnIssueListener,
     InterestInvoiceOnIssueListener,
     ReceiptOnPaymentListener,
-    SeedBillingTemplatesOnTenantRegisteredListener,
+    BillingTemplatesInitialData,
     QuoteOnCreateListener,
     PurchaseOrderPdfListener,
   ],

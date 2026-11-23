@@ -7,6 +7,7 @@ import {
   TemplateKind,
 } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
+import { PrismaClientOrTx } from '../../../prisma/types';
 
 export type { DocContentFormat, DocType, DocVisibility, TemplateKind };
 
@@ -128,6 +129,25 @@ export class DocumentsRepository {
 
   create(data: CreateDocumentData) {
     return this.prisma.document.create({ data, include: this.include });
+  }
+
+  createMany(
+    data: readonly CreateDocumentData[],
+    client: PrismaClientOrTx = this.prisma,
+  ) {
+    return client.document.createMany({ data: [...data] });
+  }
+
+  /** Incluye las dadas de baja: los datos iniciales no las vuelven a crear. */
+  templateKinds(tenantId: string, client: PrismaClientOrTx = this.prisma) {
+    return client.document
+      .findMany({
+        where: { tenantId, isTemplate: true, templateKind: { not: null } },
+        select: { templateKind: true },
+      })
+      .then((rows) =>
+        rows.flatMap((row) => (row.templateKind ? [row.templateKind] : [])),
+      );
   }
 
   update(tenantId: string, id: string, data: UpdateDocumentData) {

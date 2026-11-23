@@ -14,7 +14,10 @@ type TenantModuleActivatedEvent = DomainEvents['tenant.module.activated'];
 export class LogisticsOnModuleActivatedListener {
   constructor(private readonly deliveryNotes: DeliveryNotesService) {}
 
-  @OnDomainEvent('tenant.module.activated')
+  @OnDomainEvent('tenant.module.activated', {
+    consumer: 'logistics.delivery-notes-on-activation',
+    suppressErrors: false,
+  })
   async handle(event: TenantModuleActivatedEvent): Promise<void> {
     if (event.moduleName !== 'logistics') return;
     await this.deliveryNotes.syncWithSales(event.tenantId);
