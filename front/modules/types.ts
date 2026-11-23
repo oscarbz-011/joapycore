@@ -30,6 +30,8 @@ export interface NavEntry {
    */
   anyPermission?: string[];
   modules?: string[];
+  /** Su contador también se ve con la sección cerrada. */
+  badgeWhenClosed?: boolean;
 }
 
 export interface ModuleRoute {

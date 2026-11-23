@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { OnDomainEvent } from '../../../common/events/on-domain-event.decorator';
 import { EventBus } from '../../../common/events/event-bus';
 import { MovementReason } from '@prisma/client';
@@ -16,8 +16,6 @@ type PurchaseReceiptCreatedEvent = DomainEvents['purchase.receipt.created'];
 // ProductBatch directamente (ver COMPRAS_INVENTARIO_LOGISTICA.md).
 @Injectable()
 export class InventoryOnPurchaseReceiptListener {
-  private readonly logger = new Logger(InventoryOnPurchaseReceiptListener.name);
-
   constructor(
     // Solo para abrir la transacción; los accesos a datos van por repositorios.
     private readonly prisma: PrismaService,
@@ -28,18 +26,11 @@ export class InventoryOnPurchaseReceiptListener {
     private readonly eventEmitter: EventBus,
   ) {}
 
-  @OnDomainEvent('purchase.receipt.created')
+  @OnDomainEvent('purchase.receipt.created', {
+    consumer: 'inventory.stock-from-receipt',
+    suppressErrors: false,
+  })
   async handle(event: PurchaseReceiptCreatedEvent) {
-    try {
-      await this.process(event);
-    } catch (error) {
-      this.logger.error(
-        `No se pudo procesar el ingreso de stock de la recepción ${event.purchaseReceiptId}: ${(error as Error).message}`,
-      );
-    }
-  }
-
-  private async process(event: PurchaseReceiptCreatedEvent) {
     const { tenantId, purchaseReceiptId } = event;
 
     const receipt = await this.stockSources.findPurchaseReceiptWithItems(

@@ -177,6 +177,31 @@ describe('JoapyCore API (e2e)', () => {
     expect(inbox.body).toEqual([]);
   });
 
+  it('shows the owner the failed processes of the company and validates the retry', async () => {
+    const auth = `Bearer ${tokens.accessToken}`;
+    await request(http).get('/processes/failed').expect(401);
+    const list = await request(http)
+      .get('/processes/failed')
+      .set('Authorization', auth)
+      .expect(200);
+    expect(list.body).toEqual([]);
+    const count = await request(http)
+      .get('/processes/failed/count')
+      .set('Authorization', auth)
+      .expect(200);
+    expect(count.body).toEqual({ count: 0 });
+    await request(http)
+      .post('/processes/failed/not-a-uuid/retry')
+      .set('Authorization', auth)
+      .send({})
+      .expect(400);
+    await request(http)
+      .post(`/processes/failed/${randomUUID()}/retry`)
+      .set('Authorization', auth)
+      .send({ consumer: 'payments.receivable-from-invoice' })
+      .expect(404);
+  });
+
   it('rotates the refresh token and rejects the one already used', async () => {
     const res = await request(http)
       .post('/auth/refresh')

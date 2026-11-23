@@ -23,4 +23,10 @@ describe('closedGroupBadge', () => {
     expect(closedGroupBadge([{ badge: 12 }, { badge: 3 }, {}])).toBe(15);
     expect(closedGroupBadge([{}, {}])).toBe(0);
   });
+
+  it('adds up only the entries that ask for it when the group does not', () => {
+    expect(
+      closedGroupBadge([{ badge: 4 }, { badge: 2, badgeWhenClosed: true }], false),
+    ).toBe(2);
+  });
 });

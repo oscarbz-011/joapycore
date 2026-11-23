@@ -1,4 +1,10 @@
-import { Injectable, Logger } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  Logger,
+  NotFoundException,
+  UnprocessableEntityException,
+} from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { Prisma } from '@prisma/client';
@@ -121,6 +127,55 @@ export class OutboxService {
       new Date(now.getTime() + backoffMs(event.attempts)),
     );
     return false;
+  }
+
+  /**
+   * Reintento pedido por un administrador. Un evento trabado tiene un intento
+   * más con todos sus consumidores pendientes; un consumidor que falló sin
+   * reintento se vuelve a llamar solo a él. Devuelve si quedó resuelto.
+   */
+  async retry(
+    tenantId: string,
+    eventId: string,
+    consumerName: string | null,
+  ): Promise<{ resolved: boolean }> {
+    const event = await this.outboxRepository.findForRetry(tenantId, eventId);
+    if (!event) throw new NotFoundException('Proceso no encontrado');
+
+    if (event.status === 'FAILED' && event.attempts >= OUTBOX_MAX_ATTEMPTS) {
+      await this.outboxRepository.reopenStuck(
+        tenantId,
+        eventId,
+        OUTBOX_MAX_ATTEMPTS,
+      );
+      return { resolved: await this.dispatch(eventId) };
+    }
+
+    const delivery = consumerName
+      ? await this.outboxRepository.findDelivery(
+          tenantId,
+          eventId,
+          consumerName,
+        )
+      : null;
+    if (delivery?.status !== 'DONE' || delivery.lastError === null) {
+      throw new ConflictException('Este proceso ya no tiene errores');
+    }
+    const consumer = this.consumers
+      .consumersOf(event.eventName)
+      .find((c) => c.consumer === consumerName);
+    if (!consumer) {
+      throw new UnprocessableEntityException(
+        'Este proceso ya no existe en el sistema',
+      );
+    }
+    await this.deliver(eventId, tenantId, consumer, event.payload);
+    const after = await this.outboxRepository.findDelivery(
+      tenantId,
+      eventId,
+      consumer.consumer,
+    );
+    return { resolved: after?.lastError === null };
   }
 
   /** Devuelve el error si el consumidor falló y hay que reintentarlo. */

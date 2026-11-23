@@ -185,6 +185,14 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
     permissions: [{ key: "audit:read", label: "Ver registro de auditoría" }],
   },
   {
+    module: "processes",
+    label: "Procesos con errores",
+    permissions: [
+      { key: "processes:read", label: "Ver los procesos automáticos que fallaron" },
+      { key: "processes:retry", label: "Reintentar procesos automáticos" },
+    ],
+  },
+  {
     module: "alerts",
     label: "Alertas",
     permissions: [

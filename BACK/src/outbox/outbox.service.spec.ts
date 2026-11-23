@@ -1,3 +1,8 @@
+import {
+  ConflictException,
+  NotFoundException,
+  UnprocessableEntityException,
+} from '@nestjs/common';
 import { OutboxConsumersRegistry } from './outbox-consumers.registry';
 import type { OutboxConsumer } from './outbox-consumers.registry';
 import {
@@ -38,6 +43,9 @@ function setup(consumers: OutboxConsumer[] = [consumer('a'), consumer('b')]) {
     markFailed: jest.fn(),
     findDue: jest.fn().mockResolvedValue([]),
     deleteDoneBefore: jest.fn().mockResolvedValue({ count: 0 }),
+    findForRetry: jest.fn(),
+    reopenStuck: jest.fn().mockResolvedValue(true),
+    findDelivery: jest.fn(),
   };
   const events = { emit: jest.fn() };
   const registry = new OutboxConsumersRegistry(
@@ -239,5 +247,94 @@ describe('OutboxService', () => {
     expect(backoffMs(1)).toBe(30_000);
     expect(backoffMs(2)).toBe(60_000);
     expect(backoffMs(20)).toBe(60 * 60_000);
+  });
+
+  describe('retry requested by an administrator', () => {
+    const stuck = {
+      id: 'ev-1',
+      tenantId: 't1',
+      eventName: 'invoice.issued',
+      payload: PAYLOAD,
+      status: 'FAILED',
+      attempts: OUTBOX_MAX_ATTEMPTS,
+    };
+
+    it('gives a stuck event one more attempt now', async () => {
+      const { service, repo } = setup();
+      repo.findForRetry.mockResolvedValue(stuck);
+      const dispatch = jest.spyOn(service, 'dispatch').mockResolvedValue(true);
+
+      await expect(service.retry('t1', 'ev-1', 'a')).resolves.toEqual({
+        resolved: true,
+      });
+
+      expect(repo.findForRetry).toHaveBeenCalledWith('t1', 'ev-1');
+      expect(repo.reopenStuck).toHaveBeenCalledWith(
+        't1',
+        'ev-1',
+        OUTBOX_MAX_ATTEMPTS,
+      );
+      expect(dispatch).toHaveBeenCalledWith('ev-1');
+    });
+
+    it('calls again only the consumer that failed without retry', async () => {
+      const { service, repo, consumers } = setup();
+      repo.findForRetry.mockResolvedValue({ ...stuck, status: 'DONE' });
+      repo.findDelivery
+        .mockResolvedValueOnce({ status: 'DONE', lastError: 'pdf down' })
+        .mockResolvedValueOnce({ status: 'DONE', lastError: null });
+
+      await expect(service.retry('t1', 'ev-1', 'b')).resolves.toEqual({
+        resolved: true,
+      });
+
+      expect(consumers[0].handle).not.toHaveBeenCalled();
+      expect(consumers[1].handle).toHaveBeenCalledWith(PAYLOAD);
+      expect(repo.reopenStuck).not.toHaveBeenCalled();
+    });
+
+    it('reports it unresolved when the consumer fails again', async () => {
+      const { service, repo } = setup();
+      repo.findForRetry.mockResolvedValue({ ...stuck, status: 'DONE' });
+      repo.findDelivery.mockResolvedValue({
+        status: 'DONE',
+        lastError: 'pdf down',
+      });
+
+      await expect(service.retry('t1', 'ev-1', 'a')).resolves.toEqual({
+        resolved: false,
+      });
+    });
+
+    it('does not touch an event of another company', async () => {
+      const { service, repo } = setup();
+      repo.findForRetry.mockResolvedValue(null);
+
+      await expect(service.retry('t2', 'ev-1', 'a')).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
+      expect(repo.reopenStuck).not.toHaveBeenCalled();
+    });
+
+    it('refuses a process that no longer has errors', async () => {
+      const { service, repo, consumers } = setup();
+      repo.findForRetry.mockResolvedValue({ ...stuck, status: 'DONE' });
+      repo.findDelivery.mockResolvedValue({ status: 'DONE', lastError: null });
+
+      await expect(service.retry('t1', 'ev-1', 'a')).rejects.toBeInstanceOf(
+        ConflictException,
+      );
+      expect(consumers[0].handle).not.toHaveBeenCalled();
+    });
+
+    it('refuses a consumer that no longer exists', async () => {
+      const { service, repo } = setup();
+      repo.findForRetry.mockResolvedValue({ ...stuck, status: 'DONE' });
+      repo.findDelivery.mockResolvedValue({ status: 'DONE', lastError: 'x' });
+
+      await expect(service.retry('t1', 'ev-1', 'gone')).rejects.toBeInstanceOf(
+        UnprocessableEntityException,
+      );
+    });
   });
 });

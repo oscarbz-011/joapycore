@@ -97,6 +97,18 @@ describe('menú generado desde los manifiestos', () => {
     expect(labels(['sales'], [])).not.toContain('Ventas');
   });
 
+  it('offers the failed processes only to who can see them, counting with Sistema closed', () => {
+    const entry = (permissions: string[]) =>
+      buildNavigation([], permissions)
+        .find((g) => g.label === 'Sistema')
+        ?.items.find((i) => i.label === 'Procesos con errores');
+    expect(entry(['processes:read'])).toMatchObject({
+      href: '/dashboard/settings/processes',
+      badgeWhenClosed: true,
+    });
+    expect(entry(['audit:read'])).toBeUndefined();
+  });
+
   it('does not show a section made only of switched-off entries', () => {
     expect(labels(['procurement'], ['procurement:read'])).not.toContain('Tesorería');
     expect(itemsOf('Tesorería', ['procurement'], ['procurement:payables:read'])).toEqual([

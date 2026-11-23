@@ -26,7 +26,7 @@ import { SupplierCatalogService } from './services/supplier-catalog.service';
 import { CatalogParserService } from './services/catalog-parser.service';
 import { ProcurementOnReceiptListener } from './events/procurement-on-receipt.listener';
 
-// Sin imports de otros módulos de negocio: la recepción de compra emite
+// Sin imports de otros módulos de negocio: la recepción de compra publica por el outbox
 // `purchase.receipt.created` y tanto inventory (stock) como el propio
 // procurement (AccountsPayable, ver ProcurementOnReceiptListener) reaccionan
 // cada uno con su propio listener — procurement no conoce ni toca tablas de

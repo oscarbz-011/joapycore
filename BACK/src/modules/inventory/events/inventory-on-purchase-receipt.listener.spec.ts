@@ -130,12 +130,14 @@ describe('InventoryOnPurchaseReceiptListener', () => {
     prisma.purchaseReceipt.findFirst.mockResolvedValue(makeReceipt());
     stockEntryService.registerEntry.mockRejectedValue(new Error('boom'));
 
-    await listener.handle({
-      tenantId: 'tenant-1',
-      purchaseOrderId: 'po-1',
-      purchaseReceiptId: 'receipt-1',
-      warehouseId: 'wh-1',
-    });
+    await expect(
+      listener.handle({
+        tenantId: 'tenant-1',
+        purchaseOrderId: 'po-1',
+        purchaseReceiptId: 'receipt-1',
+        warehouseId: 'wh-1',
+      }),
+    ).rejects.toThrow('boom');
 
     expect(eventEmitter.emit).not.toHaveBeenCalled();
   });
@@ -168,7 +170,12 @@ describe('InventoryOnPurchaseReceiptListener', () => {
             batchNumber: null,
             expiresAt: null,
             serialNumbers: ['SN1', 'SN2'],
-            product: { isSerialized: true, usesLots: false },
+            product: {
+              isSerialized: true,
+              usesLots: false,
+              salesChannels: [],
+              salesChannelsOnReceipt: [],
+            },
           },
         ],
       }),
@@ -188,7 +195,9 @@ describe('InventoryOnPurchaseReceiptListener', () => {
     );
   });
 
-  it('logs and swallows errors instead of throwing (best-effort, never blocks the receipt)', async () => {
+  // El outbox reintenta y, si se agotan los intentos, lo muestra en
+  // "Procesos con errores": el error no se puede tragar acá.
+  it('lets a failure reach the outbox so it is retried', async () => {
     prisma.purchaseReceipt.findFirst.mockRejectedValue(new Error('boom'));
 
     await expect(
@@ -198,7 +207,7 @@ describe('InventoryOnPurchaseReceiptListener', () => {
         purchaseReceiptId: 'receipt-1',
         warehouseId: 'wh-1',
       }),
-    ).resolves.toBeUndefined();
+    ).rejects.toThrow('boom');
   });
   describe('products waiting for their first receipt to be sold', () => {
     const event = {

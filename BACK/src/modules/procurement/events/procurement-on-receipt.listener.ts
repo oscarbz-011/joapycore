@@ -30,18 +30,11 @@ export class ProcurementOnReceiptListener {
     private readonly prisma: PrismaService,
   ) {}
 
-  @OnDomainEvent('purchase.receipt.created')
+  @OnDomainEvent('purchase.receipt.created', {
+    consumer: 'procurement.payable-from-receipt',
+    suppressErrors: false,
+  })
   async handle(event: PurchaseReceiptCreatedEvent) {
-    try {
-      await this.process(event);
-    } catch (error) {
-      this.logger.error(
-        `No se pudo generar la cuenta por pagar de la recepción ${event.purchaseReceiptId}: ${(error as Error).message}`,
-      );
-    }
-  }
-
-  private async process(event: PurchaseReceiptCreatedEvent) {
     const { tenantId, purchaseReceiptId } = event;
 
     // Idempotencia: si el evento se repite, no duplicar la cuenta —

@@ -13,9 +13,13 @@ import { usePendingNotifications } from "../../../../lib/use-pending-notificatio
 import { CompanySwitcher, JoapyCoreBrand } from "./company-switcher";
 import { closedGroupBadge, isNavItemActive } from "@/lib/sidebar-nav";
 import { COMMUNICATIONS_PATH } from "@/lib/api/communications";
+import { FAILED_PROCESSES_PATH, processesApi } from "@/lib/api/processes";
 import { useCommunicationsAttention } from "@/components/communications/inbox/use-communications";
 import { CHAT_PATH, useChatUnread } from "@/components/chat/use-chat";
 import { buildNavigation, type NavGroup } from "@/modules/navigation";
+
+// Un proceso trabado no avisa por WebSocket: se vuelve a contar cada tanto.
+const FAILED_PROCESSES_REFRESH_MS = 5 * 60_000;
 
 // ── ModuleGroup ────────────────────────────────────────────────────────────────
 
@@ -32,7 +36,7 @@ function ModuleGroup({ group }: { group: NavGroup }) {
 
   const [open, setOpen] = useState(hasActive);
   const Icon = group.icon;
-  const closedBadge = group.badgeWhenClosed ? closedGroupBadge(visibleItems) : 0;
+  const closedBadge = closedGroupBadge(visibleItems, !!group.badgeWhenClosed);
 
   if (visibleItems.length === 0) return null;
 
@@ -161,6 +165,13 @@ export function Sidebar() {
   });
   const alertBadge = alertConfigs.filter((c) => c.isActive).length || undefined;
 
+  const { data: failedProcesses } = useQuery({
+    queryKey: ["failed-processes", "count"],
+    queryFn: processesApi.countFailed,
+    enabled: permissions.includes("processes:read"),
+    refetchInterval: FAILED_PROCESSES_REFRESH_MS,
+  });
+
   const { counts: pendingCounts } = usePendingNotifications(
     permissions,
     activeModules,
@@ -174,6 +185,7 @@ export function Sidebar() {
     [COMMUNICATIONS_PATH]: communications.total || undefined,
     [CHAT_PATH]: chatUnread || undefined,
     "/dashboard/settings/alerts": alertBadge,
+    [FAILED_PROCESSES_PATH]: failedProcesses?.count || undefined,
     "/dashboard/billing": pendingCounts.invoices,
     "/dashboard/billing/approvals": pendingCounts.approvals,
     "/dashboard/payments": pendingCounts.overdueAR,

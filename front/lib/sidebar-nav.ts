@@ -4,7 +4,17 @@ export function isNavItemActive(pathname: string, href: string, matchPrefix = fa
   return matchPrefix && pathname.startsWith(`${href}/`);
 }
 
-/** Lo pendiente de un grupo cerrado: la suma de lo que muestran sus entradas. */
-export function closedGroupBadge(items: readonly { badge?: number }[]): number {
-  return items.reduce((total, item) => total + (item.badge ?? 0), 0);
+/**
+ * Lo pendiente de un grupo cerrado: la suma de sus entradas, o solo de las
+ * que piden verse cerradas cuando el grupo no lo pide para todas.
+ */
+export function closedGroupBadge(
+  items: readonly { badge?: number; badgeWhenClosed?: boolean }[],
+  allEntries = true,
+): number {
+  return items.reduce(
+    (total, item) =>
+      total + (allEntries || item.badgeWhenClosed ? (item.badge ?? 0) : 0),
+    0,
+  );
 }
