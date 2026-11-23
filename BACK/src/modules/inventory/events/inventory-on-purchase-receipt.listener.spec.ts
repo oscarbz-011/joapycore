@@ -37,6 +37,7 @@ describe('InventoryOnPurchaseReceiptListener', () => {
     $transaction: jest.Mock;
   };
   let stockEntryService: { registerEntry: jest.Mock };
+  let eventEmitter: { emit: jest.Mock };
   let tx: {
     stockMovement: { findFirst: jest.Mock };
     productUnit: { findFirst: jest.Mock };
@@ -54,6 +55,7 @@ describe('InventoryOnPurchaseReceiptListener', () => {
       $transaction: jest.fn().mockImplementation((cb) => cb(tx)),
     };
     stockEntryService = { registerEntry: jest.fn() };
+    eventEmitter = { emit: jest.fn() };
 
     listener = new InventoryOnPurchaseReceiptListener(
       prisma as any,
@@ -61,6 +63,7 @@ describe('InventoryOnPurchaseReceiptListener', () => {
       new StockSourcesRepository(prisma as any),
       new StockMovementsRepository(prisma as any),
       new ProductUnitsRepository(prisma as any),
+      eventEmitter as any,
     );
   });
 
@@ -103,6 +106,40 @@ describe('InventoryOnPurchaseReceiptListener', () => {
     );
   });
 
+  // Las pantallas de stock, lotes y productos se refrescan con este aviso:
+  // sale después de confirmar el ingreso, no al guardar la recepción.
+  it('announces each stock entry once it is saved', async () => {
+    prisma.purchaseReceipt.findFirst.mockResolvedValue(makeReceipt());
+
+    await listener.handle({
+      tenantId: 'tenant-1',
+      purchaseOrderId: 'po-1',
+      purchaseReceiptId: 'receipt-1',
+      warehouseId: 'wh-1',
+    });
+
+    expect(eventEmitter.emit).toHaveBeenCalledWith('stock.movement.created', {
+      tenantId: 'tenant-1',
+      productId: 'prod-1',
+      type: 'IN',
+      quantity: 5,
+    });
+  });
+
+  it('announces nothing when the stock entry fails', async () => {
+    prisma.purchaseReceipt.findFirst.mockResolvedValue(makeReceipt());
+    stockEntryService.registerEntry.mockRejectedValue(new Error('boom'));
+
+    await listener.handle({
+      tenantId: 'tenant-1',
+      purchaseOrderId: 'po-1',
+      purchaseReceiptId: 'receipt-1',
+      warehouseId: 'wh-1',
+    });
+
+    expect(eventEmitter.emit).not.toHaveBeenCalled();
+  });
+
   it('is idempotent — skips if this receipt already generated movements', async () => {
     prisma.purchaseReceipt.findFirst.mockResolvedValue(makeReceipt());
     tx.stockMovement.findFirst.mockResolvedValue({ id: 'existing-movement' });
@@ -115,6 +152,7 @@ describe('InventoryOnPurchaseReceiptListener', () => {
     });
 
     expect(stockEntryService.registerEntry).not.toHaveBeenCalled();
+    expect(eventEmitter.emit).not.toHaveBeenCalled();
   });
 
   it('passes serial numbers only for serialized products', async () => {

@@ -1,3 +1,17 @@
+// Pantallas de Inventario que muestran cantidades, lotes o unidades.
+const INVENTORY_STOCK_KEYS: string[][] = [
+  ['products'],
+  ['stock-movements'],
+  ['inventory-stock'],
+  ['inventory-products'],
+  ['inventory-products-active'],
+  ['inventory-product'],
+  ['inventory-movements'],
+  ['inventory-product-movements'],
+  ['inventory-product-units'],
+  ['product-batches'],
+];
+
 export const WS_EVENT_MAP: Record<string, string[][]> = {
   // Chat interno: llegan solo a quien participa de la conversación.
   'chat.message':      [['chat']],
@@ -20,7 +34,7 @@ export const WS_EVENT_MAP: Record<string, string[][]> = {
   'invoice.cancelled':        [['invoices']],
   'payment.registered':       [['accounts-receivable']],
   'payment.ar.completed':     [['accounts-receivable'], ['invoices']],
-  'stock.movement.created':   [['products'], ['stock-movements']],
+  'stock.movement.created':   INVENTORY_STOCK_KEYS,
   'installment.paid':         [['loans']],
   'employee.created':         [['hr-employees']],
   'employee.terminated':      [['hr-employees']],
@@ -39,7 +53,7 @@ export const WS_EVENT_MAP: Record<string, string[][]> = {
   'delivery.dispatched':      [['logistics-deliveries'], ['logistics-routes']],
   'delivery.note.delivered':  [['logistics-deliveries'], ['order-delivery'], ['logistics-routes'], ['sale-orders']],
   // Venta entregada (por Logística o desde Ventas): sale del stock.
-  'sale.order.stock_out':     [['sale-orders'], ['products'], ['stock-movements']],
+  'sale.order.stock_out':     [['sale-orders'], ...INVENTORY_STOCK_KEYS],
   // Planificación de rutas: cambia qué entregas van en cada ruta y, con
   // eso, las que cada repartidor tiene asignadas.
   'delivery.route.changed':   [['logistics-routes'], ['logistics-route'], ['logistics-my-routes'], ['logistics-unplanned'], ['logistics-deliveries'], ['logistics-mine']],

@@ -23,6 +23,7 @@ import {
   type ReceiptItemPayload,
 } from '@/lib/api/procurement';
 import { warehousesApi } from '@/lib/api/warehouses';
+import { initialReceiptWarehouseId, receivingWarehouses } from '@/lib/receipt-warehouse';
 import { daysOverdue } from '@/lib/overdue';
 import { PURCHASE_ORDER_STATUS_LABEL } from '@/lib/purchase-order-status';
 
@@ -130,10 +131,12 @@ export function ReceiveModal({
   const [error, setError] = useState('');
   const advanceWarning = receiveAdvanceWarning(order.advance);
 
-  const { data: warehouses = [] } = useQuery({
+  const warehousesQuery = useQuery({
     queryKey: ['warehouses'],
     queryFn: warehousesApi.listWarehouses,
   });
+  const warehouses = receivingWarehouses(warehousesQuery.data ?? []);
+  const selectedWarehouseId = warehouseId || initialReceiptWarehouseId(warehouses);
 
   function updateLine(itemId: string, patch: Partial<ReceiptLineState>) {
     setLines((prev) => ({ ...prev, [itemId]: { ...prev[itemId], ...patch } }));
@@ -154,7 +157,7 @@ export function ReceiveModal({
         };
       });
       return procurementApi.createReceipt(order.id, {
-        warehouseId: warehouseId || undefined,
+        warehouseId: selectedWarehouseId,
         notes: notes.trim() || undefined,
         items,
       });
@@ -194,18 +197,26 @@ export function ReceiveModal({
           </p>
 
           <div className="space-y-1">
-            <Label>Depósito de ingreso</Label>
-            <Select value={warehouseId || 'none'} onValueChange={(v) => setWarehouseId(v && v !== 'none' ? v : '')}>
-              <SelectTrigger className="w-full">
+            <Label htmlFor="receipt-warehouse">Depósito de ingreso *</Label>
+            <Select value={selectedWarehouseId || null} onValueChange={(v) => setWarehouseId(v ?? '')}>
+              <SelectTrigger id="receipt-warehouse" className="w-full" disabled={!warehouses.length}>
                 <span className="flex-1 text-left text-sm truncate">
-                  {warehouses.find((w) => w.id === warehouseId)?.name ?? '— Sin especificar —'}
+                  {warehouses.find((w) => w.id === selectedWarehouseId)?.name ??
+                    (warehousesQuery.isLoading ? 'Cargando depósitos…' : 'Elegí el depósito')}
                 </span>
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="none">— Sin especificar —</SelectItem>
                 {warehouses.map((w) => <SelectItem key={w.id} value={w.id}>{w.name}</SelectItem>)}
               </SelectContent>
             </Select>
+            {warehousesQuery.isError && (
+              <p className="text-xs text-destructive">No se pudieron cargar los depósitos.</p>
+            )}
+            {!warehousesQuery.isLoading && !warehousesQuery.isError && !warehouses.length && (
+              <p className="text-xs text-muted-foreground">
+                No hay depósitos activos. Creá o activá uno para recibir mercadería.
+              </p>
+            )}
           </div>
 
           {pendingItems.map((item) => {
@@ -292,7 +303,10 @@ export function ReceiveModal({
 
           <div className="flex justify-end gap-3 pt-2 border-t border-border">
             <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
-            <Button onClick={() => { setError(''); mutation.mutate(); }} disabled={mutation.isPending}>
+            <Button
+              onClick={() => { setError(''); mutation.mutate(); }}
+              disabled={mutation.isPending || !selectedWarehouseId}
+            >
               {mutation.isPending ? 'Registrando...' : 'Confirmar recepción'}
             </Button>
           </div>

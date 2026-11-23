@@ -280,7 +280,7 @@ export interface ReceiptItemPayload {
 }
 
 export interface CreatePurchaseReceiptPayload {
-  warehouseId?: string;
+  warehouseId: string;
   notes?: string;
   items: ReceiptItemPayload[];
 }

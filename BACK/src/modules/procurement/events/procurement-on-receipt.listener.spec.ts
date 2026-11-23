@@ -57,6 +57,7 @@ describe('ProcurementOnReceiptListener', () => {
     await listener.handle({
       tenantId: 'tenant-1',
       purchaseOrderId: 'po-1',
+      warehouseId: 'wh-1',
       purchaseReceiptId: 'ghost',
     });
 
@@ -69,6 +70,7 @@ describe('ProcurementOnReceiptListener', () => {
     await listener.handle({
       tenantId: 'tenant-1',
       purchaseOrderId: 'po-1',
+      warehouseId: 'wh-1',
       purchaseReceiptId: 'receipt-1',
     });
 
@@ -82,6 +84,7 @@ describe('ProcurementOnReceiptListener', () => {
     await listener.handle({
       tenantId: 'tenant-1',
       purchaseOrderId: 'po-1',
+      warehouseId: 'wh-1',
       purchaseReceiptId: 'receipt-1',
     });
 
@@ -104,6 +107,7 @@ describe('ProcurementOnReceiptListener', () => {
     const event = {
       tenantId: 'tenant-1',
       purchaseOrderId: 'po-1',
+      warehouseId: 'wh-1',
       purchaseReceiptId: 'receipt-1',
     };
 
@@ -192,6 +196,7 @@ describe('ProcurementOnReceiptListener', () => {
     await listener.handle({
       tenantId: 'tenant-1',
       purchaseOrderId: 'po-1',
+      warehouseId: 'wh-1',
       purchaseReceiptId: 'receipt-1',
     });
 
@@ -210,6 +215,7 @@ describe('ProcurementOnReceiptListener', () => {
       listener.handle({
         tenantId: 'tenant-1',
         purchaseOrderId: 'po-1',
+        warehouseId: 'wh-1',
         purchaseReceiptId: 'receipt-1',
       }),
     ).resolves.toBeUndefined();

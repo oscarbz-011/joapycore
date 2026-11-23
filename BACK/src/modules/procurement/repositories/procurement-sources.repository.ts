@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../prisma/prisma.service';
 
-/** Lecturas de los productos de Inventario que Compras necesita. */
+/** Lecturas de Inventario y de Depósitos que Compras necesita. */
 @Injectable()
 export class ProcurementSourcesRepository {
   constructor(private readonly prisma: PrismaService) {}
@@ -25,6 +25,13 @@ export class ProcurementSourcesRepository {
     return this.prisma.product.findFirst({
       where: { tenantId, id: productId, deletedAt: null },
       select: { id: true, name: true },
+    });
+  }
+
+  findWarehouse(tenantId: string, id: string) {
+    return this.prisma.warehouse.findFirst({
+      where: { tenantId, id },
+      select: { id: true, isActive: true },
     });
   }
 }

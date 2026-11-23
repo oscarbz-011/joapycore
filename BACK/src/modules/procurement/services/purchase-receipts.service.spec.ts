@@ -45,6 +45,7 @@ describe('PurchaseReceiptsService', () => {
     findByOrder: jest.Mock;
     findById: jest.Mock;
   };
+  let sources: { findWarehouse: jest.Mock };
   let eventEmitter: { emit: jest.Mock };
   let prisma: { $transaction: jest.Mock };
   let tx: { purchaseOrderItem: { findMany: jest.Mock } };
@@ -66,6 +67,11 @@ describe('PurchaseReceiptsService', () => {
       findByOrder: jest.fn(),
       findById: jest.fn().mockResolvedValue({ id: 'receipt-1' }),
     };
+    sources = {
+      findWarehouse: jest
+        .fn()
+        .mockResolvedValue({ id: 'wh-1', isActive: true }),
+    };
     eventEmitter = { emit: jest.fn() };
     tx = { purchaseOrderItem: { findMany: jest.fn().mockResolvedValue([]) } };
     prisma = { $transaction: jest.fn().mockImplementation((cb) => cb(tx)) };
@@ -74,6 +80,7 @@ describe('PurchaseReceiptsService', () => {
       prisma as any,
       purchaseOrdersRepository as any,
       purchaseReceiptsRepository as any,
+      sources as any,
       eventEmitter as any,
     );
   });
@@ -85,6 +92,7 @@ describe('PurchaseReceiptsService', () => {
 
     await expect(
       service.create('tenant-1', 'po-1', {
+        warehouseId: 'wh-1',
         items: [{ purchaseOrderItemId: 'item-1', quantity: 5 }],
       }),
     ).rejects.toBeInstanceOf(UnprocessableEntityException);
@@ -95,6 +103,7 @@ describe('PurchaseReceiptsService', () => {
 
     await expect(
       service.create('tenant-1', 'ghost', {
+        warehouseId: 'wh-1',
         items: [{ purchaseOrderItemId: 'item-1', quantity: 5 }],
       }),
     ).rejects.toBeInstanceOf(NotFoundException);
@@ -107,6 +116,7 @@ describe('PurchaseReceiptsService', () => {
 
     await expect(
       service.create('tenant-1', 'po-1', {
+        warehouseId: 'wh-1',
         items: [{ purchaseOrderItemId: 'item-1', quantity: 5 }],
       }),
     ).rejects.toBeInstanceOf(UnprocessableEntityException);
@@ -117,6 +127,7 @@ describe('PurchaseReceiptsService', () => {
 
     await expect(
       service.create('tenant-1', 'po-1', {
+        warehouseId: 'wh-1',
         items: [
           { purchaseOrderItemId: 'item-1', quantity: 3 },
           { purchaseOrderItemId: 'item-1', quantity: 2 },
@@ -138,6 +149,7 @@ describe('PurchaseReceiptsService', () => {
 
     await expect(
       service.create('tenant-1', 'po-1', {
+        warehouseId: 'wh-1',
         items: [
           {
             purchaseOrderItemId: 'item-1',
@@ -161,10 +173,31 @@ describe('PurchaseReceiptsService', () => {
 
     await expect(
       service.create('tenant-1', 'po-1', {
+        warehouseId: 'wh-1',
         items: [{ purchaseOrderItemId: 'item-1', quantity: 4 }],
       }),
     ).rejects.toThrow(/Completá la ficha/);
     expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  // Sin un depósito activo la mercadería no puede entrar al stock: se rechaza
+  // antes de guardar la recepción y su cuenta por pagar.
+  it.each([
+    ['does not exist', null],
+    ['is inactive', { id: 'wh-1', isActive: false }],
+  ])('rejects the receipt when the warehouse %s', async (_case, warehouse) => {
+    purchaseOrdersRepository.findById.mockResolvedValue(makeOrder());
+    sources.findWarehouse.mockResolvedValue(warehouse);
+
+    await expect(
+      service.create('tenant-1', 'po-1', {
+        warehouseId: 'wh-1',
+        items: [{ purchaseOrderItemId: 'item-1', quantity: 4 }],
+      }),
+    ).rejects.toThrow(/depósito/);
+    expect(sources.findWarehouse).toHaveBeenCalledWith('tenant-1', 'wh-1');
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+    expect(eventEmitter.emit).not.toHaveBeenCalled();
   });
 
   it('creates a partial receipt and leaves the order PARTIALLY_RECEIVED', async () => {
@@ -176,6 +209,7 @@ describe('PurchaseReceiptsService', () => {
     ]);
 
     await service.create('tenant-1', 'po-1', {
+      warehouseId: 'wh-1',
       items: [{ purchaseOrderItemId: 'item-1', quantity: 4 }],
     });
 
@@ -196,6 +230,7 @@ describe('PurchaseReceiptsService', () => {
     purchaseOrdersRepository.findById.mockResolvedValue(
       makeOrder({
         status: 'CONFIRMED',
+        warehouseId: 'wh-1',
         items: [makeOrderItem({ quantity: 10, receivedQty: 0 })],
       }),
     );
@@ -206,7 +241,10 @@ describe('PurchaseReceiptsService', () => {
     await service.create(
       'tenant-1',
       'po-1',
-      { items: [{ purchaseOrderItemId: 'item-1', quantity: 4 }] },
+      {
+        warehouseId: 'wh-1',
+        items: [{ purchaseOrderItemId: 'item-1', quantity: 4 }],
+      },
       'user-1',
     );
 
@@ -226,6 +264,7 @@ describe('PurchaseReceiptsService', () => {
     purchaseOrdersRepository.findById.mockResolvedValue(
       makeOrder({
         status: 'PARTIALLY_RECEIVED',
+        warehouseId: 'wh-1',
         items: [makeOrderItem({ quantity: 10, receivedQty: 4 })],
       }),
     );
@@ -234,6 +273,7 @@ describe('PurchaseReceiptsService', () => {
     ]);
 
     await service.create('tenant-1', 'po-1', {
+      warehouseId: 'wh-1',
       items: [{ purchaseOrderItemId: 'item-1', quantity: 2 }],
     });
 
@@ -249,6 +289,7 @@ describe('PurchaseReceiptsService', () => {
     ]);
 
     await service.create('tenant-1', 'po-1', {
+      warehouseId: 'wh-1',
       items: [{ purchaseOrderItemId: 'item-1', quantity: 10 }],
     });
 
