@@ -148,9 +148,34 @@ La deuda de límites queda en una sola entrada: la escritura de `DelinquencyRepo
 
 ### C5. Datos iniciales declarativos por módulo
 
-- Una carpeta `data/` por módulo (JSON) que se aplica en `tenant.module.activated` y en `tenant.registered`.
-- Tabla `TenantModuleData` (`tenantId`, `module`, `dataVersion`). Solo crea lo que falta y nunca pisa lo que el tenant ya editó.
-- Casos para migrar: las categorías por defecto de Inventario (hoy solo en el registro), las plantillas de Documentos y las categorías de Documentos.
+**Hecho (2026-11).**
+
+**Cómo se declaran.** Cada módulo declara sus datos en `src/modules/<módulo>/data/<conjunto>.data.ts`, con `defineInitialData`:
+- **nombre estable** del conjunto;
+- **módulo** que tiene que estar activo;
+- **versiones**, de 1 en 1;
+- **qué hacer la primera vez** si la empresa ya tiene datos del conjunto: `keep` respeta su lista y `fill` crea lo que falte.
+
+Son archivos TypeScript y no JSON, para que el compilador revise el formato y el build no tenga que copiar archivos aparte.
+
+**Quién los escribe.** El provider `<conjunto>.initial-data.ts`, marcado con `@InitialData()`, escribe en las tablas del propio módulo.
+
+**Registro.** La tabla `TenantModuleData` (`tenantId`, `dataSet`, `version`) guarda la última versión aplicada. Cada versión agrega solo sus elementos nuevos, así que lo que la empresa borró o renombró no vuelve. Las claves existentes incluyen los elementos dados de baja.
+
+**Cuándo se aplican.** `InitialDataService` aplica:
+- al registrar la empresa (`tenant.registered`);
+- al activar un módulo (`tenant.module.activated`);
+- al arrancar el sistema, para las versiones nuevas de un despliegue.
+
+Los dos eventos pasan por el outbox con consumidores con nombre y reintento. Un lock por empresa y conjunto evita duplicados si dos aplicaciones corren a la vez.
+
+| Conjunto | Activo con | La primera vez |
+|---|---|---|
+| `inventory.categories`, por rubro | Inventario | `keep` |
+| `documents.categories` | Documentos | `keep` |
+| `documents.billing-templates` (factura y recibo) | Facturación | `fill`, por tipo de plantilla |
+
+Reemplaza tres siembras sueltas que fallaban en silencio. El listener de Logística de `tenant.module.activated` pasa a ser el consumidor `logistics.delivery-notes-on-activation`.
 
 ## Verificación de cada rama
 
