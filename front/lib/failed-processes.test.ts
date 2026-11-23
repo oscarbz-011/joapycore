@@ -8,6 +8,18 @@ describe('processLabel', () => {
     );
   });
 
+  it('names the loading of the initial data of a company and of a module', () => {
+    expect(processLabel({ consumer: 'initial-data.tenant-registered' })).toBe(
+      'Cargar los datos iniciales de la empresa nueva',
+    );
+    expect(processLabel({ consumer: 'initial-data.module-activated' })).toBe(
+      'Cargar los datos iniciales de un módulo activado',
+    );
+    expect(processLabel({ consumer: 'logistics.delivery-notes-on-activation' })).toBe(
+      'Crear las entregas pendientes al activar Logística',
+    );
+  });
+
   it('never shows the internal name of an unknown process', () => {
     expect(processLabel({ consumer: 'something.new' })).toBe('Proceso automático');
     expect(processLabel({ consumer: null })).toBe('Procesar un movimiento automático');
