@@ -11,6 +11,7 @@ import {
 import { COMMUNICATIONS_PATH } from '@/lib/api/communications';
 import { CALENDAR_PATH } from '@/lib/calendar';
 import { CHAT_PATH } from '@/lib/chat';
+import { FAILED_PROCESSES_PATH } from '@/lib/api/processes';
 import { NOTES_PATH } from '@/lib/notes';
 import type { FrontModuleManifest } from '../types';
 
@@ -90,6 +91,12 @@ export const platformManifest: FrontModuleManifest = {
     { section: 'sistema', label: 'Alertas', href: '/dashboard/settings/alerts' },
     {
       section: 'sistema',
+      label: 'Procesos con errores',
+      href: FAILED_PROCESSES_PATH,
+      badgeWhenClosed: true,
+    },
+    {
+      section: 'sistema',
       label: 'Integraciones',
       href: '/dashboard/settings?tab=integrations',
       anyPermission: ['integrations:read'],
@@ -126,5 +133,6 @@ export const platformManifest: FrontModuleManifest = {
     { prefix: '/dashboard/settings/roles', anyPermission: ['roles:manage'] },
     { prefix: '/dashboard/settings/audit', anyPermission: ['audit:read'] },
     { prefix: '/dashboard/settings/alerts', anyPermission: ['alerts:manage'] },
+    { prefix: FAILED_PROCESSES_PATH, anyPermission: ['processes:read'] },
   ],
 };

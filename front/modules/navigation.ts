@@ -8,6 +8,7 @@ export interface NavItem {
   href: string;
   stub?: boolean;
   badge?: number;
+  badgeWhenClosed?: boolean;
 }
 
 export interface NavGroup extends NavSection {
@@ -56,6 +57,7 @@ export function buildNavigation(
             label: entry.label,
             href: entry.href,
             ...(entry.stub ? { stub: true } : {}),
+            ...(entry.badgeWhenClosed ? { badgeWhenClosed: true } : {}),
           }))
         : [];
       return { ...section, items };
