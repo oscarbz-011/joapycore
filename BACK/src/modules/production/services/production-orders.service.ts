@@ -10,6 +10,7 @@ import {
   ProductionOrderStatus,
 } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
+import { money } from '../../../common/money/money';
 import { ProductionOrdersRepository } from '../repositories/production-orders.repository';
 import { ProductionSourcesRepository } from '../repositories/production-sources.repository';
 import { CreateProductionOrderDto } from '../dto/create-production-order.dto';
@@ -172,6 +173,7 @@ export class ProductionOrdersService {
         byComponent.get(item.componentId) ?? toNum(item.plannedQuantity),
     }));
 
+    this.assertWholeQuantities(order, consumed);
     await this.assertEnoughStock(tenantId, order, consumed);
 
     await this.prisma.$transaction(async (tx) => {
@@ -249,6 +251,27 @@ export class ProductionOrdersService {
   // No se puede fabricar con materia prima que no está. Se valida al iniciar
   // (temprano, para no arrancar algo inviable) y otra vez al completar, porque
   // entre medio pudo consumirse en otra orden o venderse.
+  // El stock todavía se lleva en unidades enteras: guardar un decimal lo
+  // truncaría en silencio (0,5 litros quedaban como 0).
+  private assertWholeQuantities(
+    order: { quantity: unknown; product?: { name: string } | null },
+    consumed: { componentName: string; quantity: number }[],
+  ) {
+    const fractional = consumed
+      .filter((line) => !money(line.quantity).isInteger())
+      .map((line) => `${line.componentName} (${line.quantity})`);
+    if (!money(order.quantity as string).isInteger()) {
+      fractional.unshift(
+        `${order.product?.name ?? 'El producto'} a producir (${String(order.quantity)})`,
+      );
+    }
+    if (fractional.length > 0) {
+      throw new UnprocessableEntityException(
+        `El stock todavía se lleva en unidades enteras y estas cantidades tienen decimales: ${fractional.join(', ')}`,
+      );
+    }
+  }
+
   private async assertEnoughStock(
     tenantId: string,
     order: {

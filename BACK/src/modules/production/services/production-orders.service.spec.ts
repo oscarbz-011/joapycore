@@ -256,6 +256,35 @@ describe('ProductionOrdersService', () => {
       expect(eventEmitter.emitAsync).not.toHaveBeenCalled();
     });
 
+    // Hasta que el stock admita decimales: 0,5 litros se guardaban como 0.
+    it('refuses a consumption with decimals instead of losing them in the stock', async () => {
+      await expect(
+        service.complete(
+          'tenant-1',
+          'po-1',
+          { consumptions: [{ componentId: 'tablero-1', usedQuantity: 0.5 }] },
+          'user-1',
+        ),
+      ).rejects.toThrow(/unidades enteras.*\(0\.5\)/);
+
+      expect(repository.updateItemUsedQuantity).not.toHaveBeenCalled();
+      expect(eventEmitter.emitAsync).not.toHaveBeenCalled();
+    });
+
+    it('refuses an order to produce a fraction of a product', async () => {
+      repository.findById.mockResolvedValue(
+        makeOrder({
+          status: 'IN_PROGRESS',
+          quantity: 1.5,
+          product: { id: 'mesa-1', name: 'Mesa', unit: 'unidad' },
+        }),
+      );
+
+      await expect(
+        service.complete('tenant-1', 'po-1', {}, 'user-1'),
+      ).rejects.toThrow(/Mesa a producir \(1\.5\)/);
+    });
+
     it('refuses to complete an order that is not IN_PROGRESS', async () => {
       repository.findById.mockResolvedValue(makeOrder({ status: 'DRAFT' }));
 
