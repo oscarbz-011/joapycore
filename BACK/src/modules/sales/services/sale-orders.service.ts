@@ -17,6 +17,11 @@ import {
   SaleOrderStatus,
 } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
+import { splitInstallments, sumMoney } from '../../../common/money/money';
+import {
+  chargedUnitPrice,
+  saleAmounts,
+} from '../../../common/money/sale-amounts';
 import { TenantModulesCache } from '../../../tenants/services/tenant-modules.cache';
 import { AdjustOrderDto } from '../dto/adjust-order.dto';
 import { CollectPaymentDto } from '../dto/collect-payment.dto';
@@ -626,7 +631,7 @@ export class SaleOrdersService implements SalesGateway {
             item.id,
             {
               financedUnitPrice: creditInterestRate
-                ? toNum(item.unitPrice) * (1 + creditInterestRate / 100)
+                ? chargedUnitPrice(item.unitPrice, creditInterestRate)
                 : undefined,
             },
             tx,
@@ -737,27 +742,22 @@ export class SaleOrdersService implements SalesGateway {
     items: Array<{ quantity: number; unitPrice: number }>;
     surchargeType?: MarkupType | null;
     surchargeAmount?: number | null;
-  }): { subtotal: number; total: number } {
-    const subtotal = dto.items.reduce(
-      (sum, i) => sum + i.quantity * i.unitPrice,
-      0,
-    );
-    let total = subtotal;
-    if (dto.surchargeAmount) {
-      total =
-        dto.surchargeType === 'FIXED'
-          ? subtotal + dto.surchargeAmount
-          : subtotal * (1 + dto.surchargeAmount / 100);
-    }
+  }) {
+    const amounts = saleAmounts({
+      lines: dto.items,
+      surcharge: {
+        type: dto.surchargeType ?? null,
+        amount: dto.surchargeAmount ?? null,
+      },
+    });
     return {
-      subtotal: Math.round(subtotal * 100) / 100,
-      total: Math.round(total * 100) / 100,
+      subtotal: sumMoney(amounts.lines.map((l) => l.total)),
+      total: amounts.total,
     };
   }
 
-  // Misma fórmula que LoansService.createFromOrder() — duplicada a propósito
-  // porque `sales` no puede importar del módulo `finance` (reglas de
-  // arquitectura, ver CLAUDE.md). Si se toca una, tocar la otra.
+  // La cuota más alta del plan (la primera lleva la diferencia del reparto),
+  // calculada igual que el préstamo que se genera después.
   private computeProposedMonthlyPayment(order: {
     items: Array<{ unitPrice: unknown; quantity: number }>;
     surchargeAmount: unknown;
@@ -765,21 +765,20 @@ export class SaleOrdersService implements SalesGateway {
     interestRate: unknown;
     installments: number | null;
   }): number {
-    const itemsTotal = order.items.reduce(
-      (sum, i) => sum + toNum(i.unitPrice) * i.quantity,
-      0,
-    );
-    const surcharge = order.surchargeAmount
-      ? order.surchargeType === 'FIXED'
-        ? toNum(order.surchargeAmount)
-        : itemsTotal * (toNum(order.surchargeAmount) / 100)
-      : 0;
-    const principal = itemsTotal + surcharge;
-    const interestRate = order.interestRate ? toNum(order.interestRate) : 0;
-    const totalAmount = principal * (1 + interestRate / 100);
+    const { total } = saleAmounts({
+      lines: order.items.map((i) => ({
+        unitPrice: i.unitPrice as string,
+        quantity: i.quantity,
+      })),
+      surcharge: {
+        type: order.surchargeType,
+        amount: order.surchargeAmount as string | null,
+      },
+      interestRate: order.interestRate as string | null,
+    });
     return order.installments
-      ? Math.round(totalAmount / order.installments)
-      : totalAmount;
+      ? splitInstallments(total, order.installments)[0].toNumber()
+      : total.toNumber();
   }
 
   // Ingresos declarados de los garantes ya cargados en el pedido — un
@@ -838,7 +837,7 @@ export class SaleOrdersService implements SalesGateway {
           // contrato generado no tengan que recalcularlo ni confiar en el
           // precio contado.
           financedUnitPrice: interestRate
-            ? item.unitPrice * (1 + interestRate / 100)
+            ? chargedUnitPrice(item.unitPrice, interestRate)
             : undefined,
           comboId: item.comboId ?? null,
           comboGroupId: item.comboGroupId ?? null,

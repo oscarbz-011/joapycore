@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import {
   ForbiddenException,
   NotFoundException,
@@ -502,7 +503,9 @@ describe('SaleOrdersService', () => {
 
       expect(tx.saleOrderItem.create).toHaveBeenCalledWith(
         expect.objectContaining({
-          data: expect.objectContaining({ financedUnitPrice: 2_500_000 * 1.2 }),
+          data: expect.objectContaining({
+            financedUnitPrice: new Prisma.Decimal(3000000),
+          }),
         }),
       );
     });
@@ -1642,7 +1645,7 @@ describe('SaleOrdersService', () => {
           data: expect.objectContaining({
             saleOrderId: 'order-1',
             productId: 'prod-1',
-            financedUnitPrice: 2_500_000 * 1.25,
+            financedUnitPrice: new Prisma.Decimal(3125000),
           }),
         }),
       );
@@ -1651,8 +1654,8 @@ describe('SaleOrdersService', () => {
         data: {
           installments: 6,
           interestRate: 25,
-          subtotal: 2_500_000,
-          total: 2_500_000,
+          subtotal: new Prisma.Decimal(2500000),
+          total: new Prisma.Decimal(2500000),
         },
       });
       expect(eventEmitter.emit).toHaveBeenCalledWith(
@@ -1692,7 +1695,7 @@ describe('SaleOrdersService', () => {
       expect(tx.saleOrderItem.create).not.toHaveBeenCalled();
       expect(tx.saleOrderItem.update).toHaveBeenCalledWith({
         where: { id: 'item-1' },
-        data: { financedUnitPrice: 2_000_000 * 1.25 },
+        data: { financedUnitPrice: new Prisma.Decimal(2500000) },
       });
     });
   });

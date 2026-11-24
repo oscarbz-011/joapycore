@@ -1,13 +1,14 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { EventBus } from '../../../common/events/event-bus';
 import { OnDomainEvent } from '../../../common/events/on-domain-event.decorator';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { BillingSourcesRepository } from '../repositories/billing-sources.repository';
 import { InvoicesRepository } from '../repositories/invoices.repository';
+import { money, sumMoney } from '../../../common/money/money';
+import { saleAmounts } from '../../../common/money/sale-amounts';
 import {
-  effectiveUnitPrice,
+  surchargeInvoiceItem,
   toInvoiceItem,
-  toNum,
 } from '../utils/invoice-items.util';
 import type { DomainEvents } from '../../../common/events/domain-events';
 
@@ -15,6 +16,8 @@ type SaleOrderCompletedEvent = DomainEvents['sale.payment.collected'];
 
 @Injectable()
 export class BillingOnSaleListener {
+  private readonly logger = new Logger(BillingOnSaleListener.name);
+
   constructor(
     // Solo para abrir la transacción; los accesos a datos van por repositorios.
     private readonly prisma: PrismaService,
@@ -53,25 +56,27 @@ export class BillingOnSaleListener {
     );
     if (!order) return;
 
-    // For credit sales, the invoice total is the full financed amount (principal + interest),
-    // which lives in the Loan created when credit was approved. For cash sales, sum the items.
-    let total: number;
+    // Las líneas, el recargo y el total salen de la misma fórmula que el
+    // préstamo: a crédito, la suma de las cuotas es el total facturado.
+    const { surcharge } = saleAmounts({
+      lines: order.items,
+      surcharge: { type: order.surchargeType, amount: order.surchargeAmount },
+      interestRate: order.saleType === 'CREDIT' ? order.interestRate : null,
+    });
+    const items = order.items.map(toInvoiceItem);
+    if (!surcharge.isZero()) items.push(surchargeInvoiceItem(surcharge));
+    const total = sumMoney(items.map((item) => item.total));
+
     if (order.saleType === 'CREDIT') {
       const loan = await this.billingSources.findLoanTotalBySaleOrder(
         tenantId,
         saleOrderId,
       );
-      total = loan
-        ? toNum(loan.totalAmount)
-        : order.items.reduce(
-            (sum, item) => sum + effectiveUnitPrice(item) * item.quantity,
-            0,
-          );
-    } else {
-      total = order.items.reduce(
-        (sum, item) => sum + effectiveUnitPrice(item) * item.quantity,
-        0,
-      );
+      if (loan && !money(loan.totalAmount).equals(total)) {
+        this.logger.warn(
+          `La factura del pedido ${saleOrderId} (${total.toString()}) no coincide con su crédito (${money(loan.totalAmount).toString()}): el crédito es anterior a los montos exactos`,
+        );
+      }
     }
 
     const invoice = await this.prisma.$transaction(async (tx) => {
@@ -80,9 +85,9 @@ export class BillingOnSaleListener {
         tx,
       );
 
-      for (const item of order.items) {
+      for (const item of items) {
         await this.invoicesRepository.createItem(
-          { tenantId, invoiceId: inv.id, ...toInvoiceItem(item) },
+          { tenantId, invoiceId: inv.id, ...item },
           tx,
         );
       }

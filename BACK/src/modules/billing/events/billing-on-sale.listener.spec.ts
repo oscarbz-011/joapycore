@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import { BillingSourcesRepository } from '../repositories/billing-sources.repository';
 import { BillingOnSaleListener } from './billing-on-sale.listener';
 
@@ -9,9 +10,9 @@ function makeItem(overrides: Record<string, unknown> = {}) {
     id: 'item-1',
     productId: 'prod-1',
     quantity: 2,
-    unitPrice: 500_000,
+    unitPrice: new Prisma.Decimal(500000),
     financedUnitPrice: null,
-    product: { name: 'Heladera', ivaTaxRate: 10 },
+    product: { name: 'Heladera', ivaTaxRate: new Prisma.Decimal(10) },
     ...overrides,
   };
 }
@@ -70,16 +71,19 @@ describe('BillingOnSaleListener', () => {
   it('sums item cash prices for a CASH sale', async () => {
     prisma.saleOrder.findFirst.mockResolvedValue({
       saleType: 'CASH',
-      items: [makeItem({ quantity: 2, unitPrice: 500_000 })],
+      items: [makeItem({ quantity: 2, unitPrice: new Prisma.Decimal(500000) })],
     });
     await listener.handle({ tenantId: TENANT, saleOrderId: ORDER_ID });
 
     expect(invoicesRepository.create).toHaveBeenCalledWith(
-      expect.objectContaining({ total: 1_000_000 }),
+      expect.objectContaining({ total: new Prisma.Decimal(1000000) }),
       expect.anything(),
     );
     expect(invoicesRepository.createItem).toHaveBeenCalledWith(
-      expect.objectContaining({ unitPrice: 500_000, total: 1_000_000 }),
+      expect.objectContaining({
+        unitPrice: new Prisma.Decimal(500000),
+        total: new Prisma.Decimal(1000000),
+      }),
       expect.anything(),
     );
   });
@@ -88,20 +92,20 @@ describe('BillingOnSaleListener', () => {
     prisma.saleOrder.findFirst.mockResolvedValue({
       saleType: 'CASH',
       items: [
-        makeItem({ quantity: 1, unitPrice: 110_000 }),
+        makeItem({ quantity: 1, unitPrice: new Prisma.Decimal(110000) }),
         makeItem({
           quantity: 2,
-          unitPrice: 52_500,
-          product: { name: 'Arroz', ivaTaxRate: 5 },
+          unitPrice: new Prisma.Decimal(52500),
+          product: { name: 'Arroz', ivaTaxRate: new Prisma.Decimal(5) },
         }),
         makeItem({
           quantity: 1,
-          unitPrice: 30_000,
-          product: { name: 'Libro', ivaTaxRate: 0 },
+          unitPrice: new Prisma.Decimal(30000),
+          product: { name: 'Libro', ivaTaxRate: new Prisma.Decimal(0) },
         }),
         makeItem({
           quantity: 1,
-          unitPrice: 22_000,
+          unitPrice: new Prisma.Decimal(22000),
           product: null,
           description: 'Flete',
         }),
@@ -113,82 +117,173 @@ describe('BillingOnSaleListener', () => {
     expect(items).toEqual([
       expect.objectContaining({
         description: 'Heladera',
-        ivaRate: 10,
-        ivaAmount: 10_000,
-        unitPriceWithoutIva: 100_000,
+        ivaRate: new Prisma.Decimal(10),
+        ivaAmount: new Prisma.Decimal(10000),
+        unitPriceWithoutIva: new Prisma.Decimal(100000),
       }),
       expect.objectContaining({
         description: 'Arroz',
-        total: 105_000,
-        ivaRate: 5,
-        ivaAmount: 5_000,
-        unitPriceWithoutIva: 50_000,
+        total: new Prisma.Decimal(105000),
+        ivaRate: new Prisma.Decimal(5),
+        ivaAmount: new Prisma.Decimal(5000),
+        unitPriceWithoutIva: new Prisma.Decimal(50000),
       }),
       expect.objectContaining({
         description: 'Libro',
-        ivaRate: 0,
-        ivaAmount: 0,
-        unitPriceWithoutIva: 30_000,
+        ivaRate: new Prisma.Decimal(0),
+        ivaAmount: new Prisma.Decimal(0),
+        unitPriceWithoutIva: new Prisma.Decimal(30000),
       }),
       expect.objectContaining({
         description: 'Flete',
-        ivaRate: 10,
-        ivaAmount: 2_000,
+        ivaRate: new Prisma.Decimal(10),
+        ivaAmount: new Prisma.Decimal(2000),
       }),
     ]);
   });
 
-  it('uses Loan.totalAmount as the invoice total for a CREDIT sale', async () => {
-    prisma.loan.findFirst.mockResolvedValue({ totalAmount: 1_200_000 });
+  it('invoices a CREDIT sale for the total of its loan, from the financed lines', async () => {
+    prisma.loan.findFirst.mockResolvedValue({
+      totalAmount: new Prisma.Decimal(1200000),
+    });
 
     prisma.saleOrder.findFirst.mockResolvedValue({
       saleType: 'CREDIT',
       items: [
         makeItem({
           quantity: 2,
-          unitPrice: 500_000,
-          financedUnitPrice: 600_000,
+          unitPrice: new Prisma.Decimal(500000),
+          financedUnitPrice: new Prisma.Decimal(600000),
         }),
       ],
     });
     await listener.handle({ tenantId: TENANT, saleOrderId: ORDER_ID });
 
     expect(invoicesRepository.create).toHaveBeenCalledWith(
-      expect.objectContaining({ total: 1_200_000 }),
+      expect.objectContaining({ total: new Prisma.Decimal(1200000) }),
       expect.anything(),
     );
   });
 
+  // Todo lo que se cobra va en la factura; a crédito el recargo lleva el
+  // interés, como en el préstamo, y las líneas suman el total de las cuotas.
+  it('adds the delivery surcharge as a line with IVA 10%, financed in a CREDIT sale', async () => {
+    prisma.loan.findFirst.mockResolvedValue({
+      totalAmount: new Prisma.Decimal(1210000),
+    });
+    prisma.saleOrder.findFirst.mockResolvedValue({
+      saleType: 'CREDIT',
+      interestRate: new Prisma.Decimal(10),
+      surchargeType: 'FIXED',
+      surchargeAmount: new Prisma.Decimal(100000),
+      items: [
+        makeItem({
+          quantity: 2,
+          unitPrice: new Prisma.Decimal(500000),
+          financedUnitPrice: new Prisma.Decimal(550000),
+        }),
+      ],
+    });
+    const warn = jest.spyOn(listener['logger'], 'warn');
+
+    await listener.handle({ tenantId: TENANT, saleOrderId: ORDER_ID });
+
+    expect(invoicesRepository.createItem).toHaveBeenCalledWith(
+      expect.objectContaining({
+        description: 'Recargo de entrega',
+        quantity: 1,
+        unitPrice: new Prisma.Decimal(110000),
+        total: new Prisma.Decimal(110000),
+        ivaRate: new Prisma.Decimal(10),
+        ivaAmount: new Prisma.Decimal(10000),
+        saleOrderItemId: null,
+      }),
+      expect.anything(),
+    );
+    expect(invoicesRepository.create).toHaveBeenCalledWith(
+      expect.objectContaining({ total: new Prisma.Decimal(1210000) }),
+      expect.anything(),
+    );
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it('charges the surcharge of a CASH sale without interest', async () => {
+    prisma.saleOrder.findFirst.mockResolvedValue({
+      saleType: 'CASH',
+      interestRate: new Prisma.Decimal(10),
+      surchargeType: 'PERCENTAGE',
+      surchargeAmount: new Prisma.Decimal(5),
+      items: [makeItem({ quantity: 2, unitPrice: new Prisma.Decimal(500000) })],
+    });
+
+    await listener.handle({ tenantId: TENANT, saleOrderId: ORDER_ID });
+
+    expect(invoicesRepository.create).toHaveBeenCalledWith(
+      expect.objectContaining({ total: new Prisma.Decimal(1050000) }),
+      expect.anything(),
+    );
+  });
+
+  it('warns when a loan from before the exact amounts does not match the invoice', async () => {
+    prisma.loan.findFirst.mockResolvedValue({
+      totalAmount: new Prisma.Decimal('1199999.5'),
+    });
+    prisma.saleOrder.findFirst.mockResolvedValue({
+      saleType: 'CREDIT',
+      items: [
+        makeItem({
+          quantity: 2,
+          unitPrice: new Prisma.Decimal(500000),
+          financedUnitPrice: new Prisma.Decimal(600000),
+        }),
+      ],
+    });
+    const warn = jest
+      .spyOn(listener['logger'], 'warn')
+      .mockImplementation(() => undefined);
+
+    await listener.handle({ tenantId: TENANT, saleOrderId: ORDER_ID });
+
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('no coincide'));
+  });
+
   it('uses financedUnitPrice (not the cash unitPrice) for CREDIT sale invoice items', async () => {
-    prisma.loan.findFirst.mockResolvedValue({ totalAmount: 1_200_000 });
+    prisma.loan.findFirst.mockResolvedValue({
+      totalAmount: new Prisma.Decimal(1200000),
+    });
 
     prisma.saleOrder.findFirst.mockResolvedValue({
       saleType: 'CREDIT',
       items: [
         makeItem({
           quantity: 2,
-          unitPrice: 500_000,
-          financedUnitPrice: 600_000,
+          unitPrice: new Prisma.Decimal(500000),
+          financedUnitPrice: new Prisma.Decimal(600000),
         }),
       ],
     });
     await listener.handle({ tenantId: TENANT, saleOrderId: ORDER_ID });
 
     expect(invoicesRepository.createItem).toHaveBeenCalledWith(
-      expect.objectContaining({ unitPrice: 600_000, total: 1_200_000 }),
+      expect.objectContaining({
+        unitPrice: new Prisma.Decimal(600000),
+        total: new Prisma.Decimal(1200000),
+      }),
       expect.anything(),
     );
   });
 
   it('falls back to the cash unitPrice for CREDIT sale items with no financedUnitPrice (legacy items)', async () => {
-    prisma.loan.findFirst.mockResolvedValue({ totalAmount: 1_000_000 });
+    prisma.loan.findFirst.mockResolvedValue({
+      totalAmount: new Prisma.Decimal(1000000),
+    });
 
     prisma.saleOrder.findFirst.mockResolvedValue({
       saleType: 'CREDIT',
       items: [
         makeItem({
           quantity: 2,
-          unitPrice: 500_000,
+          unitPrice: new Prisma.Decimal(500000),
           financedUnitPrice: null,
         }),
       ],
@@ -196,7 +291,10 @@ describe('BillingOnSaleListener', () => {
     await listener.handle({ tenantId: TENANT, saleOrderId: ORDER_ID });
 
     expect(invoicesRepository.createItem).toHaveBeenCalledWith(
-      expect.objectContaining({ unitPrice: 500_000, total: 1_000_000 }),
+      expect.objectContaining({
+        unitPrice: new Prisma.Decimal(500000),
+        total: new Prisma.Decimal(1000000),
+      }),
       expect.anything(),
     );
   });
@@ -209,15 +307,15 @@ describe('BillingOnSaleListener', () => {
       items: [
         makeItem({
           quantity: 2,
-          unitPrice: 500_000,
-          financedUnitPrice: 600_000,
+          unitPrice: new Prisma.Decimal(500000),
+          financedUnitPrice: new Prisma.Decimal(600000),
         }),
       ],
     });
     await listener.handle({ tenantId: TENANT, saleOrderId: ORDER_ID });
 
     expect(invoicesRepository.create).toHaveBeenCalledWith(
-      expect.objectContaining({ total: 1_200_000 }),
+      expect.objectContaining({ total: new Prisma.Decimal(1200000) }),
       expect.anything(),
     );
   });

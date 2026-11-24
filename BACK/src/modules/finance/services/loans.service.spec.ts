@@ -6,7 +6,7 @@ import { EventBus } from '../../../common/events/event-bus';
 import { Test, TestingModule } from '@nestjs/testing';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { PayInstallmentDto } from '../dto/pay-installment.dto';
-import { PaymentMethod } from '@prisma/client';
+import { PaymentMethod, Prisma } from '@prisma/client';
 import { InstallmentsRepository } from '../repositories/installments.repository';
 import { LoansRepository } from '../repositories/loans.repository';
 import { FinanceSourcesRepository } from '../repositories/finance-sources.repository';
@@ -40,9 +40,9 @@ const mockOrder = {
   customerId: 'customer-1',
   saleType: 'CREDIT',
   installments: 2,
-  interestRate: { toNumber: () => 10 },
+  interestRate: new Prisma.Decimal(10),
   items: [
-    { productId: 'prod-1', quantity: 2, unitPrice: { toNumber: () => 500 } },
+    { productId: 'prod-1', quantity: 2, unitPrice: new Prisma.Decimal(500) },
   ],
 };
 
@@ -376,7 +376,10 @@ describe('LoansService', () => {
       // items = 2 * 500 = 1000; +100 recargo fijo = 1100 principal; interés 10% -> 1210 total
       expect(createSpy).toHaveBeenCalledWith(
         expect.objectContaining({
-          data: expect.objectContaining({ principal: 1100, totalAmount: 1210 }),
+          data: expect.objectContaining({
+            principal: new Prisma.Decimal(1100),
+            totalAmount: new Prisma.Decimal(1210),
+          }),
         }),
       );
     });
@@ -405,7 +408,10 @@ describe('LoansService', () => {
       // items = 1000; +10% recargo = 100 -> 1100 principal; interés 10% -> 1210 total
       expect(createSpy).toHaveBeenCalledWith(
         expect.objectContaining({
-          data: expect.objectContaining({ principal: 1100, totalAmount: 1210 }),
+          data: expect.objectContaining({
+            principal: new Prisma.Decimal(1100),
+            totalAmount: new Prisma.Decimal(1210),
+          }),
         }),
       );
     });
@@ -429,9 +435,48 @@ describe('LoansService', () => {
 
       expect(createSpy).toHaveBeenCalledWith(
         expect.objectContaining({
-          data: expect.objectContaining({ principal: 1000 }),
+          data: expect.objectContaining({
+            principal: new Prisma.Decimal(1000),
+          }),
         }),
       );
+    });
+
+    // La norma: la suma de las cuotas coincide al guaraní con el total, y la
+    // diferencia va en la primera (antes 1.000.000 en 3 cuotas sumaba 999.999).
+    it('splits the total into installments that add up to it exactly', async () => {
+      loansRepo.findBySaleOrder.mockResolvedValue(null);
+      (prisma.saleOrder.findFirst as jest.Mock).mockResolvedValue({
+        ...mockOrder,
+        interestRate: null,
+        installments: 3,
+        items: [
+          {
+            productId: 'prod-1',
+            quantity: 1,
+            unitPrice: new Prisma.Decimal(1000000),
+          },
+        ],
+      });
+      const installmentCreate = jest.fn().mockResolvedValue({});
+      (prisma.$transaction as jest.Mock).mockImplementationOnce(
+        (fn: (tx: unknown) => unknown) =>
+          fn({
+            loan: {
+              create: jest.fn().mockResolvedValue({ id: LOAN_ID }),
+              findUniqueOrThrow: jest.fn().mockResolvedValue(mockLoan),
+            },
+            installment: { create: installmentCreate },
+          }),
+      );
+
+      await service.createFromOrder(TENANT, ORDER_ID);
+
+      const amounts = installmentCreate.mock.calls.map(
+        ([arg]: [{ data: { amount: Prisma.Decimal } }]) =>
+          arg.data.amount.toString(),
+      );
+      expect(amounts).toEqual(['333334', '333333', '333333']);
     });
   });
 

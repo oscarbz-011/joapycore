@@ -1,31 +1,58 @@
+import {
+  money,
+  roundGuaranies,
+  type Money,
+  type MoneyValue,
+} from '../../../common/money/money';
+
 type Numeric = number | { toNumber(): number };
 
 export function toNum(value: Numeric): number {
   return typeof value === 'object' ? value.toNumber() : value;
 }
 
-// Precio con interés ya aplicado cuando existe (ventas a crédito) — cae al
-// precio contado para ventas al contado o ítems de ventas a crédito creados
-// antes de que este campo existiera.
+/**
+ * Precio cobrado: con el interés ya aplicado en las ventas a crédito, y en
+ * guaraníes enteros (los ítems anteriores a los montos exactos tenían centavos).
+ */
 export function effectiveUnitPrice(item: {
-  unitPrice: Numeric;
-  financedUnitPrice?: Numeric | null;
-}): number {
-  return item.financedUnitPrice != null
-    ? toNum(item.financedUnitPrice)
-    : toNum(item.unitPrice);
+  unitPrice: MoneyValue;
+  financedUnitPrice?: MoneyValue | null;
+}): Money {
+  return roundGuaranies(item.financedUnitPrice ?? item.unitPrice);
 }
 
-// Un ítem cargado a mano, sin producto, tributa la tasa general.
+// Un ítem cargado a mano, sin producto, tributa la tasa general; el recargo
+// de entrega o zona es un servicio y también.
 const DEFAULT_IVA_RATE = 10;
 
 export interface SaleItemForInvoice {
   id?: string;
   quantity: number;
-  unitPrice: Numeric;
-  financedUnitPrice?: Numeric | null;
+  unitPrice: MoneyValue;
+  financedUnitPrice?: MoneyValue | null;
   description?: string | null;
-  product?: { name: string; ivaTaxRate: Numeric } | null;
+  product?: { name: string; ivaTaxRate: MoneyValue } | null;
+}
+
+function withIva(
+  description: string,
+  quantity: number,
+  unitPrice: Money,
+  ivaRateValue: MoneyValue,
+) {
+  const ivaRate = money(ivaRateValue);
+  const total = unitPrice.mul(quantity);
+  const divisor = ivaRate.plus(100);
+  return {
+    description,
+    quantity,
+    unitPrice,
+    total,
+    ivaRate,
+    ivaAmount: roundGuaranies(total.mul(ivaRate).div(divisor)),
+    unitPriceWithoutIva: roundGuaranies(unitPrice.mul(100).div(divisor)),
+  };
 }
 
 /**
@@ -33,20 +60,21 @@ export interface SaleItemForInvoice {
  * Decreto 6539/05): el precio cobrado ya trae el impuesto.
  */
 export function toInvoiceItem(item: SaleItemForInvoice) {
-  const unitPrice = effectiveUnitPrice(item);
-  const total = unitPrice * item.quantity;
-  const ivaRate = item.product
-    ? toNum(item.product.ivaTaxRate)
-    : DEFAULT_IVA_RATE;
-  const ivaAmount = Math.round((total * ivaRate) / (100 + ivaRate));
   return {
-    description: item.product?.name ?? item.description ?? 'Ítem',
-    quantity: item.quantity,
-    unitPrice,
-    total,
-    ivaRate,
-    ivaAmount,
-    unitPriceWithoutIva: Math.round((unitPrice * 100) / (100 + ivaRate)),
+    ...withIva(
+      item.product?.name ?? item.description ?? 'Ítem',
+      item.quantity,
+      effectiveUnitPrice(item),
+      item.product?.ivaTaxRate ?? DEFAULT_IVA_RATE,
+    ),
     saleOrderItemId: item.id ?? null,
+  };
+}
+
+/** Todo lo que se cobra va en la factura: el recargo es una línea más. */
+export function surchargeInvoiceItem(amount: Money) {
+  return {
+    ...withIva('Recargo de entrega', 1, amount, DEFAULT_IVA_RATE),
+    saleOrderItemId: null,
   };
 }
