@@ -1,4 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { roundGuaranies, type MoneyValue } from '../../../common/money/money';
+import { saleAmounts } from '../../../common/money/sale-amounts';
 import { OnDomainEvent } from '../../../common/events/on-domain-event.decorator';
 import { DocType, TemplateKind } from '@prisma/client';
 import { DocxTemplateService } from '../../../files/docx/docx-template.service';
@@ -108,15 +110,46 @@ function buildPairedInstallmentsTable(
   };
 }
 
-// Precio con interés ya aplicado cuando existe (ventas a crédito) — cae al
-// precio contado para ventas al contado o ítems creados antes de este campo.
-function effectiveUnitPrice(item: {
-  unitPrice: unknown;
-  financedUnitPrice?: unknown;
-}): number {
-  return item.financedUnitPrice != null
-    ? Number(item.financedUnitPrice)
-    : Number(item.unitPrice);
+// Las mismas filas que la factura: precio con interés en guaraníes enteros y
+// el recargo de entrega como una línea más, así suman el total del crédito.
+function contractItemRows(saleOrder: {
+  items: {
+    quantity: number;
+    unitPrice: MoneyValue;
+    financedUnitPrice: MoneyValue | null;
+    description: string | null;
+    product: { name: string } | null;
+  }[];
+  surchargeType: string | null;
+  surchargeAmount: MoneyValue | null;
+  interestRate: MoneyValue | null;
+}): string[][] {
+  const rows = saleOrder.items.map((item) => {
+    const unitPrice = roundGuaranies(item.financedUnitPrice ?? item.unitPrice);
+    return [
+      item.product?.name ?? item.description ?? '—',
+      String(item.quantity),
+      formatMoney(unitPrice),
+      formatMoney(unitPrice.mul(item.quantity)),
+    ];
+  });
+  const { surcharge } = saleAmounts({
+    lines: saleOrder.items,
+    surcharge: {
+      type: saleOrder.surchargeType,
+      amount: saleOrder.surchargeAmount,
+    },
+    interestRate: saleOrder.interestRate,
+  });
+  if (!surcharge.isZero()) {
+    rows.push([
+      'Recargo de entrega',
+      '1',
+      formatMoney(surcharge),
+      formatMoney(surcharge),
+    ]);
+  }
+  return rows;
 }
 
 // Genera automáticamente el contrato de compra-venta cuando se emite la
@@ -254,15 +287,7 @@ export class SaleContractOnInvoiceListener {
     const tableVariables: Record<string, PdfTableVariable> = {
       'venta.items': {
         headers: ['Producto', 'Cantidad', 'Precio unitario', 'Subtotal'],
-        rows: saleOrder.items.map((item) => {
-          const unitPrice = effectiveUnitPrice(item);
-          return [
-            item.product?.name ?? item.description ?? '—',
-            String(item.quantity),
-            formatMoney(unitPrice),
-            formatMoney(unitPrice * item.quantity),
-          ];
-        }),
+        rows: contractItemRows(saleOrder),
       },
       'credito.cuotas': {
         headers: ['Nro. cuota', 'Fecha vencimiento', 'Importe cuota'],

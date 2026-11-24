@@ -17,7 +17,12 @@ import {
   SaleOrderStatus,
 } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
-import { splitInstallments, sumMoney } from '../../../common/money/money';
+import {
+  money,
+  splitInstallments,
+  sumMoney,
+  type MoneyValue,
+} from '../../../common/money/money';
 import {
   chargedUnitPrice,
   saleAmounts,
@@ -61,6 +66,14 @@ const PRODUCT_STATUS_LABEL: Record<ProductStatus, string> = {
   INACTIVE: 'descontinuado',
   BLOCKED: 'bloqueado',
 };
+
+interface CreditOrderAmounts {
+  items: Array<{ unitPrice: unknown; quantity: number }>;
+  surchargeAmount: unknown;
+  surchargeType: string | null;
+  interestRate: unknown;
+  installments: number | null;
+}
 
 function toNum(value: unknown): number {
   if (typeof value === 'object' && value !== null && 'toNumber' in value) {
@@ -189,20 +202,21 @@ export class SaleOrdersService implements SalesGateway {
         tenantId,
         order.customerId,
       );
-      const currentDebt = activeLoans.reduce((sum, loan) => {
-        const paid = loan.installments.reduce(
-          (s, i) => s + toNum(i.paidAmount),
-          0,
-        );
-        return sum + Math.max(toNum(loan.totalAmount) - paid, 0);
-      }, 0);
-      const orderTotal = (
-        order.items as Array<{ unitPrice: unknown; quantity: number }>
-      ).reduce((sum, i) => sum + toNum(i.unitPrice) * i.quantity, 0);
-      const limit = toNum(customer.creditLimit);
-      if (currentDebt + orderTotal > limit) {
+      const currentDebt = sumMoney(
+        activeLoans.map((loan) => {
+          const balance = money(loan.totalAmount).minus(
+            sumMoney(loan.installments.map((i) => i.paidAmount)),
+          );
+          return balance.isNegative() ? 0 : balance;
+        }),
+      );
+      // Lo que se va a deber: con el recargo y el interés, como la deuda
+      // activa, que también se cuenta sobre el total financiado.
+      const orderTotal = this.financedTotal(order);
+      const limit = money(customer.creditLimit);
+      if (currentDebt.plus(orderTotal).greaterThan(limit)) {
         throw new UnprocessableEntityException(
-          `El cliente supera su límite de crédito (${limit}). Deuda activa: ${currentDebt}, pedido: ${orderTotal}.`,
+          `El cliente supera su límite de crédito (${limit.toString()}). Deuda activa: ${currentDebt.toString()}, pedido: ${orderTotal.toString()}.`,
         );
       }
     }
@@ -756,26 +770,26 @@ export class SaleOrdersService implements SalesGateway {
     };
   }
 
-  // La cuota más alta del plan (la primera lleva la diferencia del reparto),
-  // calculada igual que el préstamo que se genera después.
-  private computeProposedMonthlyPayment(order: {
-    items: Array<{ unitPrice: unknown; quantity: number }>;
-    surchargeAmount: unknown;
-    surchargeType: string | null;
-    interestRate: unknown;
-    installments: number | null;
-  }): number {
-    const { total } = saleAmounts({
+  // El total que va a tener el préstamo: misma fórmula que el préstamo y la
+  // factura.
+  private financedTotal(order: CreditOrderAmounts) {
+    return saleAmounts({
       lines: order.items.map((i) => ({
-        unitPrice: i.unitPrice as string,
+        unitPrice: i.unitPrice as MoneyValue,
         quantity: i.quantity,
       })),
       surcharge: {
         type: order.surchargeType,
-        amount: order.surchargeAmount as string | null,
+        amount: order.surchargeAmount as MoneyValue | null,
       },
-      interestRate: order.interestRate as string | null,
-    });
+      interestRate: order.interestRate as MoneyValue | null,
+    }).total;
+  }
+
+  // La cuota más alta del plan (la primera lleva la diferencia del reparto),
+  // calculada igual que el préstamo que se genera después.
+  private computeProposedMonthlyPayment(order: CreditOrderAmounts): number {
+    const total = this.financedTotal(order);
     return order.installments
       ? splitInstallments(total, order.installments)[0].toNumber()
       : total.toNumber();

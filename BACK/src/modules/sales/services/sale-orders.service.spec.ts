@@ -1333,6 +1333,27 @@ describe('SaleOrdersService', () => {
       ).rejects.toBeInstanceOf(UnprocessableEntityException);
     });
 
+    // La deuda activa se cuenta sobre el total financiado: el pedido también,
+    // con el recargo y el interés que va a tener su préstamo.
+    it('counts the surcharge and the interest of the new order against the credit limit', async () => {
+      saleOrdersRepository.findById.mockResolvedValue(
+        makeOrder({
+          status: 'PENDING_CREDIT_APPROVAL',
+          items: [{ unitPrice: 900_000, quantity: 1 }],
+          surchargeType: 'FIXED',
+          surchargeAmount: 50_000,
+          interestRate: 10,
+        }),
+      );
+      prisma.customer.findFirst.mockResolvedValue({ creditLimit: 1_000_000 });
+      prisma.loan.findMany.mockResolvedValue([]);
+
+      // contado 950.000 entra en el límite; financiado 1.045.000 no
+      await expect(
+        service.approveCredit('tenant-1', 'order-1'),
+      ).rejects.toThrow(/pedido: 1045000/);
+    });
+
     it('allows approval when an active loan is almost fully paid — counts outstanding balance, not the original amount (regression)', async () => {
       saleOrdersRepository.findById.mockResolvedValue(
         makeOrder({
