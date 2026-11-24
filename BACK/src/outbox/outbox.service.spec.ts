@@ -116,6 +116,16 @@ describe('OutboxService', () => {
     expect(consumers[0].handle).not.toHaveBeenCalled();
   });
 
+  // Quien despacha ya guardó su transacción: un error acá no puede
+  // convertirse en un 500 de algo que sí se guardó.
+  it('does not throw when the database fails, the cron takes the event later', async () => {
+    const { service, repo, consumers } = setup();
+    repo.claim.mockRejectedValue(new Error('conexión perdida'));
+
+    await expect(service.dispatch('ev-1')).resolves.toBe(false);
+    expect(consumers[0].handle).not.toHaveBeenCalled();
+  });
+
   it('schedules a retry when a consumer fails, without blocking the others', async () => {
     const failing = consumer('a', {
       handle: jest.fn().mockRejectedValue(new Error('db down')),
