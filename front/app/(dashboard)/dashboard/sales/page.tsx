@@ -19,7 +19,9 @@ import {
   type LineItem,
   LineItemRow,
   CreditOptions,
+  installmentsText,
 } from "../../../../components/sales/order-line-items";
+import { installmentPlan, saleAmounts } from "@/lib/money";
 import {
   salesApi,
   combosApi,
@@ -83,15 +85,19 @@ function formatPrice(n: number) {
   }).format(n);
 }
 
-function orderSubtotal(order: SaleOrder) {
-  return order.items.reduce((sum, i) => sum + i.quantity * i.unitPrice, 0);
+function cashAmounts(order: SaleOrder) {
+  return saleAmounts({
+    lines: order.items,
+    surcharge: { type: order.surchargeType, amount: order.surchargeAmount },
+  });
 }
 
-function orderSurchargeAmount(order: SaleOrder, subtotal: number): number {
-  if (!order.surchargeType || !order.surchargeAmount) return 0;
-  return order.surchargeType === "PERCENTAGE"
-    ? subtotal * (order.surchargeAmount / 100)
-    : order.surchargeAmount;
+function orderSubtotal(order: SaleOrder) {
+  return cashAmounts(order).subtotal.toNumber();
+}
+
+function orderSurchargeAmount(order: SaleOrder): number {
+  return cashAmounts(order).surcharge.toNumber();
 }
 
 function itemUnitPrice(order: SaleOrder, item: SaleOrderItem): number {
@@ -101,14 +107,17 @@ function itemUnitPrice(order: SaleOrder, item: SaleOrderItem): number {
 }
 
 function orderTotal(order: SaleOrder) {
-  const sub = orderSubtotal(order);
-  const base = sub + orderSurchargeAmount(order, sub);
   if (order.saleType === "CREDIT") {
     if (order.loan?.totalAmount) return Number(order.loan.totalAmount);
-    if (order.interestRate)
-      return base * (1 + Number(order.interestRate) / 100);
+    if (order.interestRate) {
+      return saleAmounts({
+        lines: order.items,
+        surcharge: { type: order.surchargeType, amount: order.surchargeAmount },
+        interestRate: order.interestRate,
+      }).total.toNumber();
+    }
   }
-  return base;
+  return cashAmounts(order).total.toNumber();
 }
 
 // ── Status badge ───────────────────────────────────────────────────────────────
@@ -421,24 +430,25 @@ function CreateOrderModal({
       ? sellers
       : allUsers.filter((u) => u.status === "ACTIVE");
 
-  const subtotal = items.reduce((sum, i) => sum + i.quantity * i.unitPrice, 0);
-  const surchargeValue =
+  const surchargeInput =
     showSurcharge && surchargeAmount > 0
-      ? surchargeType === "PERCENTAGE"
-        ? subtotal * (surchargeAmount / 100)
-        : surchargeAmount
-      : 0;
-  const total = subtotal + surchargeValue;
+      ? { type: surchargeType, amount: surchargeAmount }
+      : null;
+  const cash = saleAmounts({ lines: items, surcharge: surchargeInput });
+  const subtotal = cash.subtotal.toNumber();
+  const surchargeValue = cash.surcharge.toNumber();
+  const total = cash.total.toNumber();
 
   const selectedCreditPlan = activePlans.find(
     (p) => p.installments === installments,
   );
-  const creditRate = selectedCreditPlan
-    ? Number(selectedCreditPlan.interestRate)
-    : 0;
   const financedTotal =
-    saleType === "CREDIT" && creditRate > 0
-      ? total * (1 + creditRate / 100)
+    saleType === "CREDIT" && selectedCreditPlan
+      ? saleAmounts({
+          lines: items,
+          surcharge: surchargeInput,
+          interestRate: selectedCreditPlan.interestRate,
+        }).total.toNumber()
       : total;
   const stockIssues = findStockIssues(items, products);
 
@@ -714,7 +724,8 @@ function CreateOrderModal({
 
             {saleType === "CREDIT" && (
               <CreditOptions
-                total={total}
+                lines={items}
+                surcharge={surchargeInput}
                 installments={installments}
                 onInstallmentsChange={setInstallments}
                 plans={activePlans}
@@ -980,7 +991,7 @@ function CreateOrderModal({
             {items.length > 0 && (
               <div className="flex justify-end items-baseline gap-3 border-t border-border pt-3">
                 {(surchargeValue > 0 ||
-                  (saleType === "CREDIT" && creditRate > 0)) && (
+                  (saleType === "CREDIT" && financedTotal !== total)) && (
                   <span className="text-xs text-muted-foreground line-through tabular-nums">
                     {formatPrice(surchargeValue > 0 ? subtotal : total)}
                   </span>
@@ -1291,7 +1302,7 @@ function OrderDetailPanel({
                 <span className="font-mono tabular-nums">
                   +
                   {formatPrice(
-                    orderSurchargeAmount(order, orderSubtotal(order)),
+                    orderSurchargeAmount(order),
                   )}
                 </span>
               </div>
@@ -1308,8 +1319,10 @@ function OrderDetailPanel({
           </div>
           {order.saleType === "CREDIT" && order.installments && (
             <p className="text-xs text-muted-foreground text-right mt-1">
-              {order.installments} cuotas de ≈{" "}
-              {formatPrice(Math.ceil(total / order.installments))}
+              {(() => {
+                const plan = installmentPlan(total, order.installments);
+                return plan ? installmentsText(plan) : null;
+              })()}
             </p>
           )}
         </div>

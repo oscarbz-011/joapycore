@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
+import { installmentPlan, saleAmounts, type SaleLine, type Surcharge } from "@/lib/money";
 
 // ── Compartido entre "Nuevo pedido" (sales/page.tsx) y "Ajustar pedido"
 // (sales/[id]/adjust/page.tsx) — mismo editor de líneas de producto y mismo
@@ -216,21 +217,35 @@ export function LineItemRow({
 
 // ── Credit plan selector ───────────────────────────────────────────────────────
 
+/** La primera cuota lleva la diferencia del reparto: se muestra aparte. */
+export function installmentsText(plan: {
+  count: number;
+  first: number;
+  rest: number | null;
+}) {
+  if (plan.rest === null || plan.rest === plan.first) {
+    return `${plan.count} ${plan.count === 1 ? "cuota" : "cuotas"} de ${formatPrice(plan.first)}`;
+  }
+  return `1 cuota de ${formatPrice(plan.first)} y ${plan.count - 1} de ${formatPrice(plan.rest)}`;
+}
+
 export function CreditOptions({
-  total,
+  lines,
+  surcharge,
   installments,
   onInstallmentsChange,
   plans,
 }: {
-  total: number;
+  lines: SaleLine[];
+  surcharge?: Surcharge | null;
   installments: number;
   onInstallmentsChange: (n: number) => void;
   plans: CreditPlan[];
 }) {
   const selectedPlan = plans.find((p) => p.installments === installments);
-  const rate = selectedPlan ? Number(selectedPlan.interestRate) : 0;
-  const monthly =
-    installments > 0 ? (total * (1 + rate / 100)) / installments : 0;
+  const rate = selectedPlan?.interestRate ?? 0;
+  const { total } = saleAmounts({ lines, surcharge, interestRate: rate });
+  const plan = installments > 0 ? installmentPlan(total, installments) : null;
 
   return (
     <div className="rounded-2xl border border-warn/30 bg-warn-subtle/50 p-4 space-y-3">
@@ -255,13 +270,12 @@ export function CreditOptions({
           ))}
         </div>
       </div>
-      {installments > 0 && total > 0 && selectedPlan && (
+      {plan && !total.isZero() && selectedPlan && (
         <p className="text-sm text-warn">
-          Cuota estimada: <strong>{formatPrice(Math.ceil(monthly))}</strong> /
-          mes
-          {rate > 0 && (
+          {installmentsText(plan)}
+          {Number(rate) > 0 && (
             <span className="text-xs ml-1 opacity-70">
-              ({rate}% interés total)
+              ({String(rate)}% interés total)
             </span>
           )}
         </p>

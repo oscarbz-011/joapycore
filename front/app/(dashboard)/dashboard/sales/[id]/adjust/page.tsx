@@ -25,6 +25,7 @@ import {
   CreditOptions,
 } from "../../../../../../components/sales/order-line-items";
 import { Button } from "@/components/ui/button";
+import { saleAmounts } from "@/lib/money";
 
 const ADJUSTMENT_LABELS: Record<string, string> = {
   LOWER_VALUE_PRODUCT: "Ofrecer un producto de menor valor",
@@ -80,7 +81,7 @@ export default function AdjustOrderPage() {
     setHydratedFor(order.id);
   }
 
-  const total = items.reduce((sum, i) => sum + i.quantity * i.unitPrice, 0);
+  const total = saleAmounts({ lines: items }).subtotal.toNumber();
 
   const stock = useSaleStock();
 
@@ -271,7 +272,11 @@ export default function AdjustOrderPage() {
       {order.saleType === "CREDIT" && (
         <div className="mb-6">
           <CreditOptions
-            total={total}
+            lines={items}
+            surcharge={{
+              type: order.surchargeType,
+              amount: order.surchargeAmount,
+            }}
             installments={installments}
             onInstallmentsChange={setInstallments}
             plans={activePlans}
