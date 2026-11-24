@@ -80,8 +80,22 @@ export class OutboxService {
     return row.id;
   }
 
-  /** Despacha un evento. Nunca lanza: un fallo queda programado para reintento. */
+  /**
+   * Despacha un evento. Nunca lanza: quien lo llama ya guardó su transacción,
+   * y un fallo queda programado para reintento o lo retoma el cron.
+   */
   async dispatch(id: string): Promise<boolean> {
+    try {
+      return await this.dispatchOnce(id);
+    } catch (error) {
+      this.logger.error(
+        `No se pudo despachar el evento ${id}; lo retoma el cron: ${(error as Error).message}`,
+      );
+      return false;
+    }
+  }
+
+  private async dispatchOnce(id: string): Promise<boolean> {
     const now = new Date();
     if (!(await this.outboxRepository.claim(id, now))) return false;
     const event = await this.outboxRepository.findById(id);

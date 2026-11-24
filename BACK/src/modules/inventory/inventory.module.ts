@@ -10,7 +10,7 @@ import { InventoryOnInvoiceListener } from './events/inventory-on-invoice.listen
 import { InventoryOnPurchaseReceiptListener } from './events/inventory-on-purchase-receipt.listener';
 import { InventoryOnProductionListener } from './events/inventory-on-production.listener';
 import { InventoryOnSaleDeliveredListener } from './events/inventory-on-sale-delivered.listener';
-import { InventoryOnTenantListener } from './events/inventory-on-tenant.listener';
+import { InventoryCategoriesInitialData } from './data/categories.initial-data';
 import { BrandsRepository } from './repositories/brands.repository';
 import { CategoriesRepository } from './repositories/categories.repository';
 import { ProductBatchesRepository } from './repositories/product-batches.repository';
@@ -56,7 +56,7 @@ import { AlertsModule } from '../alerts/alerts.module';
     StockMovementsRepository,
     StockRepository,
     StockSourcesRepository,
-    InventoryOnTenantListener,
+    InventoryCategoriesInitialData,
     InventoryOnInvoiceListener,
     InventoryOnPurchaseReceiptListener,
     InventoryOnProductionListener,

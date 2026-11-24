@@ -51,8 +51,13 @@ export class TenantModulesRepository {
       .then((rows) => rows.map((row) => row.moduleName));
   }
 
-  async setActive(tenantId: string, moduleName: string, active: boolean) {
-    const result = await this.prisma.tenantModule.updateMany({
+  async setActive(
+    tenantId: string,
+    moduleName: string,
+    active: boolean,
+    client: PrismaClientOrTx = this.prisma,
+  ) {
+    const result = await client.tenantModule.updateMany({
       where: { tenantId, moduleName },
       data: {
         active,

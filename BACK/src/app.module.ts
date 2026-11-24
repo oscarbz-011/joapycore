@@ -44,6 +44,7 @@ import { EmailModule } from './email/email.module';
 import { FilesModule } from './files/files.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { OutboxModule } from './outbox/outbox.module';
+import { InitialDataModule } from './initial-data/initial-data.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { TenantsModule } from './tenants/tenants.module';
 import { UsersModule } from './users/users.module';
@@ -70,6 +71,7 @@ import { CalendarModule } from './calendar/calendar.module';
     ScheduleModule.forRoot(),
     PrismaModule,
     OutboxModule,
+    InitialDataModule,
     AuthModule,
     UsersModule,
     TenantsModule,
