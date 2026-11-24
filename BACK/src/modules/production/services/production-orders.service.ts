@@ -248,9 +248,6 @@ export class ProductionOrdersService {
     return this.findOne(tenantId, id);
   }
 
-  // No se puede fabricar con materia prima que no está. Se valida al iniciar
-  // (temprano, para no arrancar algo inviable) y otra vez al completar, porque
-  // entre medio pudo consumirse en otra orden o venderse.
   // El stock todavía se lleva en unidades enteras: guardar un decimal lo
   // truncaría en silencio (0,5 litros quedaban como 0).
   private assertWholeQuantities(
@@ -272,6 +269,9 @@ export class ProductionOrdersService {
     }
   }
 
+  // No se puede fabricar con materia prima que no está. Se valida al iniciar
+  // (temprano, para no arrancar algo inviable) y otra vez al completar, porque
+  // entre medio pudo consumirse en otra orden o venderse.
   private async assertEnoughStock(
     tenantId: string,
     order: {

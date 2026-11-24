@@ -38,6 +38,10 @@ describe('money', () => {
       }
     });
 
+    it('gives the whole total to a single installment', () => {
+      expect(asStrings(splitInstallments(1277778, 1))).toEqual(['1277778']);
+    });
+
     it('refuses an amount that is not in whole guaraníes or an invalid count', () => {
       expect(() => splitInstallments('100.5', 2)).toThrow('guaraníes');
       expect(() => splitInstallments(100, 0)).toThrow('Cantidad de cuotas');
@@ -88,6 +92,18 @@ describe('saleAmounts', () => {
     });
     expect(result.surcharge.toString()).toBe('16667');
     expect(result.total.toString()).toBe('350000');
+  });
+
+  it('rounds a percentage surcharge with interest once, on the financed amount', () => {
+    // 33.333 × 7 % = 2.333,31; con 12 % de interés 2.613,3072 → 2.613
+    const result = saleAmounts({
+      lines: [{ unitPrice: 33333, quantity: 1 }],
+      surcharge: { type: 'PERCENTAGE', amount: 7 },
+      interestRate: 12,
+    });
+    expect(result.lines[0].unitPrice.toString()).toBe('37333');
+    expect(result.surcharge.toString()).toBe('2613');
+    expect(result.total.toString()).toBe('39946');
   });
 
   it('matches the unit price used on its own', () => {

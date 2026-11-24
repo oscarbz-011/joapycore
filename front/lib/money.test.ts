@@ -56,5 +56,13 @@ describe("money", () => {
     expect(percent.surcharge.toString()).toBe("16667");
     expect(percent.total.toString()).toBe("350000");
     expect(chargedUnitPrice(1000, null).toString()).toBe("1000");
+
+    const percentWithInterest = saleAmounts({
+      lines: [{ unitPrice: 33333, quantity: 1 }],
+      surcharge: { type: "PERCENTAGE", amount: 7 },
+      interestRate: 12,
+    });
+    expect(percentWithInterest.surcharge.toString()).toBe("2613");
+    expect(percentWithInterest.total.toString()).toBe("39946");
   });
 });
