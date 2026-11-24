@@ -218,6 +218,20 @@ describe('InitialDataService', () => {
     expect(working.create).toHaveBeenCalled();
   });
 
+  it('stops going through the companies when the system shuts down', async () => {
+    repository.tenantIds.mockResolvedValueOnce(['t-1', 't-2', 't-3']);
+    const apply = jest.spyOn(service, 'applyPending').mockImplementation(() => {
+      service.stop();
+      return Promise.resolve([]);
+    });
+
+    await expect(service.applyToAllTenants()).resolves.toEqual({
+      tenants: 1,
+      failed: 0,
+    });
+    expect(apply).toHaveBeenCalledTimes(1);
+  });
+
   it('goes through every company in chunks and counts the failures', async () => {
     const first = Array.from({ length: 200 }, (_, i) => `t-${i}`);
     repository.tenantIds

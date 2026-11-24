@@ -19,6 +19,7 @@ const MAX_TENANT_CHUNKS = 500;
 @Injectable()
 export class InitialDataService {
   private readonly logger = new Logger(InitialDataService.name);
+  private stopped = false;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -83,6 +84,11 @@ export class InitialDataService {
     return done;
   }
 
+  /** Corta el recorrido de todas las empresas al apagar el sistema. */
+  stop() {
+    this.stopped = true;
+  }
+
   /** Para las versiones publicadas después de que la empresa ya existía. */
   async applyToAllTenants(): Promise<{ tenants: number; failed: number }> {
     let afterId: string | undefined;
@@ -93,14 +99,15 @@ export class InitialDataService {
         this.repository.tenantIds(afterId, TENANT_CHUNK_SIZE),
       );
       for (const tenantId of ids) {
+        if (this.stopped) return { tenants, failed };
         try {
           await TenantContext.run(tenantId, () => this.applyPending(tenantId));
         } catch (error) {
           failed++;
           this.logger.warn(`Empresa ${tenantId}: ${(error as Error).message}`);
         }
+        tenants++;
       }
-      tenants += ids.length;
       if (ids.length < TENANT_CHUNK_SIZE) break;
       afterId = ids[ids.length - 1];
     }
