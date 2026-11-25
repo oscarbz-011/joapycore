@@ -1,3 +1,4 @@
+import { money, sumMoney, type MoneyValue } from '../../../common/money/money';
 import { numberToWordsEs } from '../../../common/utils/number-to-words.util';
 import type { PdfTableVariable } from '../../../files/pdf/tiptap-to-html.converter';
 
@@ -36,8 +37,8 @@ export interface PurchaseOrderForPdf {
   }[];
 }
 
-const formatMoney = (value: number) =>
-  value.toLocaleString('es-PY', { maximumFractionDigits: 0 });
+const formatMoney = (value: MoneyValue) =>
+  money(value).toNumber().toLocaleString('es-PY', { maximumFractionDigits: 0 });
 
 // orderDate y expectedDate son días de calendario (medianoche UTC del día
 // elegido): se imprimen en UTC para no correrlos un día.
@@ -63,19 +64,20 @@ export function buildPurchaseOrderVariables(order: PurchaseOrderForPdf): {
   const { tenant, supplier, branch } = order;
 
   const rows = order.items.map((item) => {
-    const unitCost = Number(item.unitCost);
+    const unitCost = money(item.unitCost as MoneyValue);
     return [
       item.supplierSku ?? '—',
       item.supplierDescription ?? item.product.name,
       String(item.quantity),
       item.product.unit,
       `Gs. ${formatMoney(unitCost)}`,
-      `Gs. ${formatMoney(unitCost * item.quantity)}`,
+      `Gs. ${formatMoney(money(unitCost).mul(item.quantity))}`,
     ];
   });
-  const total = order.items.reduce(
-    (sum, item) => sum + Number(item.unitCost) * item.quantity,
-    0,
+  const total = sumMoney(
+    order.items.map((item) =>
+      money(item.unitCost as MoneyValue).mul(item.quantity),
+    ),
   );
 
   const tenantPlace = joinPlace(tenant.address, tenant.city);
@@ -107,7 +109,7 @@ export function buildPurchaseOrderVariables(order: PurchaseOrderForPdf): {
         : 'Contado',
       'orden.notas': order.notes ?? '',
       'orden.total': formatMoney(total),
-      'orden.totalEnLetras': numberToWordsEs(total),
+      'orden.totalEnLetras': numberToWordsEs(total.toNumber()),
     },
     tableVariables: {
       'orden.items': {

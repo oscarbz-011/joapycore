@@ -103,7 +103,7 @@ export class ProductionOrdersService {
           tenantId,
           productionOrderId: created.id,
           componentId: line.componentId,
-          plannedQuantity: toNum(line.quantity) * dto.quantity,
+          plannedQuantity: money(line.quantity).mul(dto.quantity),
         })),
         tx,
       );

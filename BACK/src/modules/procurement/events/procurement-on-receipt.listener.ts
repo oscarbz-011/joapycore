@@ -1,3 +1,4 @@
+import { money, sumMoney } from '../../../common/money/money';
 import { Injectable, Logger } from '@nestjs/common';
 import { OnDomainEvent } from '../../../common/events/on-domain-event.decorator';
 import { PurchaseReceiptsRepository } from '../repositories/purchase-receipts.repository';
@@ -51,10 +52,9 @@ export class ProcurementOnReceiptListener {
     );
     if (!receipt) return;
 
-    const amount = receipt.items.reduce(
-      (sum, item) => sum + item.quantity * Number(item.unitCost),
-      0,
-    );
+    const amount = sumMoney(
+      receipt.items.map((item) => money(item.unitCost).mul(item.quantity)),
+    ).toNumber();
     // El plazo pactado en la orden, no el que el proveedor tenga hoy.
     const termDays = receipt.purchaseOrder.paymentTermDays;
     const dueDate = new Date(receipt.receivedAt.getTime() + termDays * DAY_MS);
