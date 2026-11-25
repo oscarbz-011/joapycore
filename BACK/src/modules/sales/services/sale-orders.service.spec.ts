@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import {
   ForbiddenException,
   NotFoundException,
@@ -502,7 +503,9 @@ describe('SaleOrdersService', () => {
 
       expect(tx.saleOrderItem.create).toHaveBeenCalledWith(
         expect.objectContaining({
-          data: expect.objectContaining({ financedUnitPrice: 2_500_000 * 1.2 }),
+          data: expect.objectContaining({
+            financedUnitPrice: new Prisma.Decimal(3000000),
+          }),
         }),
       );
     });
@@ -1330,6 +1333,27 @@ describe('SaleOrdersService', () => {
       ).rejects.toBeInstanceOf(UnprocessableEntityException);
     });
 
+    // La deuda activa se cuenta sobre el total financiado: el pedido también,
+    // con el recargo y el interés que va a tener su préstamo.
+    it('counts the surcharge and the interest of the new order against the credit limit', async () => {
+      saleOrdersRepository.findById.mockResolvedValue(
+        makeOrder({
+          status: 'PENDING_CREDIT_APPROVAL',
+          items: [{ unitPrice: 900_000, quantity: 1 }],
+          surchargeType: 'FIXED',
+          surchargeAmount: 50_000,
+          interestRate: 10,
+        }),
+      );
+      prisma.customer.findFirst.mockResolvedValue({ creditLimit: 1_000_000 });
+      prisma.loan.findMany.mockResolvedValue([]);
+
+      // contado 950.000 entra en el límite; financiado 1.045.000 no
+      await expect(
+        service.approveCredit('tenant-1', 'order-1'),
+      ).rejects.toThrow(/pedido: 1045000/);
+    });
+
     it('allows approval when an active loan is almost fully paid — counts outstanding balance, not the original amount (regression)', async () => {
       saleOrdersRepository.findById.mockResolvedValue(
         makeOrder({
@@ -1642,7 +1666,7 @@ describe('SaleOrdersService', () => {
           data: expect.objectContaining({
             saleOrderId: 'order-1',
             productId: 'prod-1',
-            financedUnitPrice: 2_500_000 * 1.25,
+            financedUnitPrice: new Prisma.Decimal(3125000),
           }),
         }),
       );
@@ -1651,8 +1675,8 @@ describe('SaleOrdersService', () => {
         data: {
           installments: 6,
           interestRate: 25,
-          subtotal: 2_500_000,
-          total: 2_500_000,
+          subtotal: new Prisma.Decimal(2500000),
+          total: new Prisma.Decimal(2500000),
         },
       });
       expect(eventEmitter.emit).toHaveBeenCalledWith(
@@ -1692,7 +1716,7 @@ describe('SaleOrdersService', () => {
       expect(tx.saleOrderItem.create).not.toHaveBeenCalled();
       expect(tx.saleOrderItem.update).toHaveBeenCalledWith({
         where: { id: 'item-1' },
-        data: { financedUnitPrice: 2_000_000 * 1.25 },
+        data: { financedUnitPrice: new Prisma.Decimal(2500000) },
       });
     });
   });

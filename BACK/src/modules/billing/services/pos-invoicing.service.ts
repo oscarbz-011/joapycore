@@ -19,6 +19,7 @@ import { BillingEventsRepository } from '../repositories/billing-events.reposito
 import { InvoicesRepository } from '../repositories/invoices.repository';
 import { buildFiscalReceipt } from '../utils/fiscal-receipt.util';
 import { toInvoiceItem } from '../utils/invoice-items.util';
+import { sumMoney } from '../../../common/money/money';
 import { BillingSeriesService, seriesProblem } from './billing-series.service';
 
 @Injectable()
@@ -90,7 +91,7 @@ export class PosInvoicingService implements BillingGateway {
     }
 
     const items = order.items.map(toInvoiceItem);
-    const total = items.reduce((sum, item) => sum + item.total, 0);
+    const total = sumMoney(items.map((item) => item.total));
     const invoice = await this.invoicesRepository.createPaid(
       tenantId,
       {
@@ -119,7 +120,8 @@ export class PosInvoicingService implements BillingGateway {
       invoiceId: invoice.id,
       saleOrderId: input.saleOrderId,
       paymentCondition: 'CASH',
-      total,
+      // Guaraníes enteros: el número es exacto.
+      total: total.toNumber(),
       dueDate: null,
       issuedById: input.issuedById,
     });

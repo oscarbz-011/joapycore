@@ -39,6 +39,15 @@ export class InventoryOnProductionListener {
 
   private async process(event: ProductionOrderCompletedEvent) {
     const { tenantId, productionOrderId } = event;
+    const quantities = [
+      event.quantity,
+      ...event.consumed.map((l) => l.quantity),
+    ];
+    if (!quantities.every((q) => Number.isInteger(q))) {
+      throw new Error(
+        `La orden de producción ${productionOrderId} trae cantidades con decimales y el stock se lleva en enteros`,
+      );
+    }
 
     await this.prisma.$transaction(async (tx) => {
       // Idempotencia: si esta orden ya generó movimientos, no repetir (mismo

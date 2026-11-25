@@ -17,6 +17,16 @@ import {
   SaleOrderStatus,
 } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
+import {
+  money,
+  splitInstallments,
+  sumMoney,
+  type MoneyValue,
+} from '../../../common/money/money';
+import {
+  chargedUnitPrice,
+  saleAmounts,
+} from '../../../common/money/sale-amounts';
 import { TenantModulesCache } from '../../../tenants/services/tenant-modules.cache';
 import { AdjustOrderDto } from '../dto/adjust-order.dto';
 import { CollectPaymentDto } from '../dto/collect-payment.dto';
@@ -56,6 +66,14 @@ const PRODUCT_STATUS_LABEL: Record<ProductStatus, string> = {
   INACTIVE: 'descontinuado',
   BLOCKED: 'bloqueado',
 };
+
+interface CreditOrderAmounts {
+  items: Array<{ unitPrice: unknown; quantity: number }>;
+  surchargeAmount: unknown;
+  surchargeType: string | null;
+  interestRate: unknown;
+  installments: number | null;
+}
 
 function toNum(value: unknown): number {
   if (typeof value === 'object' && value !== null && 'toNumber' in value) {
@@ -184,20 +202,21 @@ export class SaleOrdersService implements SalesGateway {
         tenantId,
         order.customerId,
       );
-      const currentDebt = activeLoans.reduce((sum, loan) => {
-        const paid = loan.installments.reduce(
-          (s, i) => s + toNum(i.paidAmount),
-          0,
-        );
-        return sum + Math.max(toNum(loan.totalAmount) - paid, 0);
-      }, 0);
-      const orderTotal = (
-        order.items as Array<{ unitPrice: unknown; quantity: number }>
-      ).reduce((sum, i) => sum + toNum(i.unitPrice) * i.quantity, 0);
-      const limit = toNum(customer.creditLimit);
-      if (currentDebt + orderTotal > limit) {
+      const currentDebt = sumMoney(
+        activeLoans.map((loan) => {
+          const balance = money(loan.totalAmount).minus(
+            sumMoney(loan.installments.map((i) => i.paidAmount)),
+          );
+          return balance.isNegative() ? 0 : balance;
+        }),
+      );
+      // Lo que se va a deber: con el recargo y el interés, como la deuda
+      // activa, que también se cuenta sobre el total financiado.
+      const orderTotal = this.financedTotal(order);
+      const limit = money(customer.creditLimit);
+      if (currentDebt.plus(orderTotal).greaterThan(limit)) {
         throw new UnprocessableEntityException(
-          `El cliente supera su límite de crédito (${limit}). Deuda activa: ${currentDebt}, pedido: ${orderTotal}.`,
+          `El cliente supera su límite de crédito (${limit.toString()}). Deuda activa: ${currentDebt.toString()}, pedido: ${orderTotal.toString()}.`,
         );
       }
     }
@@ -626,7 +645,7 @@ export class SaleOrdersService implements SalesGateway {
             item.id,
             {
               financedUnitPrice: creditInterestRate
-                ? toNum(item.unitPrice) * (1 + creditInterestRate / 100)
+                ? chargedUnitPrice(item.unitPrice, creditInterestRate)
                 : undefined,
             },
             tx,
@@ -737,49 +756,43 @@ export class SaleOrdersService implements SalesGateway {
     items: Array<{ quantity: number; unitPrice: number }>;
     surchargeType?: MarkupType | null;
     surchargeAmount?: number | null;
-  }): { subtotal: number; total: number } {
-    const subtotal = dto.items.reduce(
-      (sum, i) => sum + i.quantity * i.unitPrice,
-      0,
-    );
-    let total = subtotal;
-    if (dto.surchargeAmount) {
-      total =
-        dto.surchargeType === 'FIXED'
-          ? subtotal + dto.surchargeAmount
-          : subtotal * (1 + dto.surchargeAmount / 100);
-    }
+  }) {
+    const amounts = saleAmounts({
+      lines: dto.items,
+      surcharge: {
+        type: dto.surchargeType ?? null,
+        amount: dto.surchargeAmount ?? null,
+      },
+    });
     return {
-      subtotal: Math.round(subtotal * 100) / 100,
-      total: Math.round(total * 100) / 100,
+      subtotal: sumMoney(amounts.lines.map((l) => l.total)),
+      total: amounts.total,
     };
   }
 
-  // Misma fórmula que LoansService.createFromOrder() — duplicada a propósito
-  // porque `sales` no puede importar del módulo `finance` (reglas de
-  // arquitectura, ver CLAUDE.md). Si se toca una, tocar la otra.
-  private computeProposedMonthlyPayment(order: {
-    items: Array<{ unitPrice: unknown; quantity: number }>;
-    surchargeAmount: unknown;
-    surchargeType: string | null;
-    interestRate: unknown;
-    installments: number | null;
-  }): number {
-    const itemsTotal = order.items.reduce(
-      (sum, i) => sum + toNum(i.unitPrice) * i.quantity,
-      0,
-    );
-    const surcharge = order.surchargeAmount
-      ? order.surchargeType === 'FIXED'
-        ? toNum(order.surchargeAmount)
-        : itemsTotal * (toNum(order.surchargeAmount) / 100)
-      : 0;
-    const principal = itemsTotal + surcharge;
-    const interestRate = order.interestRate ? toNum(order.interestRate) : 0;
-    const totalAmount = principal * (1 + interestRate / 100);
+  // El total que va a tener el préstamo: misma fórmula que el préstamo y la
+  // factura.
+  private financedTotal(order: CreditOrderAmounts) {
+    return saleAmounts({
+      lines: order.items.map((i) => ({
+        unitPrice: i.unitPrice as MoneyValue,
+        quantity: i.quantity,
+      })),
+      surcharge: {
+        type: order.surchargeType,
+        amount: order.surchargeAmount as MoneyValue | null,
+      },
+      interestRate: order.interestRate as MoneyValue | null,
+    }).total;
+  }
+
+  // La cuota más alta del plan (la primera lleva la diferencia del reparto),
+  // calculada igual que el préstamo que se genera después.
+  private computeProposedMonthlyPayment(order: CreditOrderAmounts): number {
+    const total = this.financedTotal(order);
     return order.installments
-      ? Math.round(totalAmount / order.installments)
-      : totalAmount;
+      ? splitInstallments(total, order.installments)[0].toNumber()
+      : total.toNumber();
   }
 
   // Ingresos declarados de los garantes ya cargados en el pedido — un
@@ -838,7 +851,7 @@ export class SaleOrdersService implements SalesGateway {
           // contrato generado no tengan que recalcularlo ni confiar en el
           // precio contado.
           financedUnitPrice: interestRate
-            ? item.unitPrice * (1 + interestRate / 100)
+            ? chargedUnitPrice(item.unitPrice, interestRate)
             : undefined,
           comboId: item.comboId ?? null,
           comboGroupId: item.comboGroupId ?? null,

@@ -302,7 +302,7 @@ export class InvoicesRepository implements InvoicePdf {
     data: {
       saleOrderId: string;
       numbering: SeriesNumbering;
-      total: number;
+      total: Prisma.Decimal;
       issuedAt: Date;
       paymentMethod: PaymentMethod | null;
       anonymousBuyer: boolean;

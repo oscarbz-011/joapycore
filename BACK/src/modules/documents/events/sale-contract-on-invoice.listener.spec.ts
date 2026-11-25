@@ -196,6 +196,34 @@ describe('SaleContractOnInvoiceListener', () => {
     ]);
   });
 
+  // Las filas del contrato suman el total del crédito, igual que la factura.
+  it('adds the financed delivery surcharge as a row of venta.items', async () => {
+    prisma.saleOrder.findFirst.mockResolvedValue(
+      makeSaleOrder({
+        interestRate: 15,
+        surchargeType: 'FIXED',
+        surchargeAmount: 100000,
+        items: [
+          {
+            quantity: 1,
+            unitPrice: 5000000,
+            financedUnitPrice: 5750000,
+            description: null,
+            product: { name: 'Heladera' },
+          },
+        ],
+      }),
+    );
+
+    await listener.handle(baseEvent);
+
+    const [, , tableVariables] = pdfService.renderTemplate.mock.calls[0];
+    expect(tableVariables['venta.items'].rows).toEqual([
+      ['Heladera', '1', '5.750.000', '5.750.000'],
+      ['Recargo de entrega', '1', '115.000', '115.000'],
+    ]);
+  });
+
   it('falls back to the cash unitPrice in venta.items when financedUnitPrice is not set', async () => {
     await listener.handle(baseEvent);
 

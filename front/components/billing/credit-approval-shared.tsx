@@ -14,6 +14,7 @@ import {
 } from '../../lib/api/sales';
 import { creditBureauApi } from '../../lib/api/credit-bureau';
 import { formatDatePY } from '../../lib/date';
+import { saleAmounts } from '@/lib/money';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
@@ -41,26 +42,27 @@ export function formatDateShortLocal(iso: string) {
   return formatDatePY(iso, 'local');
 }
 
-// En estas vistas todos los pedidos son a crédito — el precio contado
-// (unitPrice) no es lo que va a pagar el cliente, financedUnitPrice ya
-// incluye el interés y es lo único que tiene sentido mostrar por línea.
-// OJO: no usar para el total del pedido (orderBase/orderTotal) — ahí
-// unitPrice es la base pre-interés correcta, aplicar el interés de nuevo
-// sobre financedUnitPrice lo duplicaría.
+// En estas vistas todos los pedidos son a crédito: se muestra lo que va a
+// pagar el cliente, con el interés ya aplicado.
 export function itemPrice(item: SaleOrderItem) {
-  return item.financedUnitPrice ?? item.unitPrice;
+  return Number(item.financedUnitPrice ?? item.unitPrice);
 }
 
-export function orderBase(order: SaleOrder) {
-  return order.items.reduce((s, i) => s + Number(i.unitPrice) * i.quantity, 0);
+// La misma fórmula que el préstamo y la factura: precio con interés por
+// unidad, recargo con el interés del crédito y total = suma de ambos.
+export function orderAmounts(order: SaleOrder) {
+  return saleAmounts({
+    lines: order.items,
+    surcharge: { type: order.surchargeType, amount: order.surchargeAmount },
+    interestRate: order.saleType === 'CREDIT' ? order.interestRate : null,
+  });
 }
 
 export function orderTotal(order: SaleOrder) {
-  if (order.saleType === 'CREDIT') {
-    if (order.loan?.totalAmount) return Number(order.loan.totalAmount);
-    if (order.interestRate) return orderBase(order) * (1 + Number(order.interestRate) / 100);
+  if (order.saleType === 'CREDIT' && order.loan?.totalAmount) {
+    return Number(order.loan.totalAmount);
   }
-  return orderBase(order);
+  return orderAmounts(order).total.toNumber();
 }
 
 export const TEXTAREA_CLS = 'w-full min-w-0 rounded-2xl border border-transparent bg-input/50 px-3 py-2 text-sm outline-none resize-none transition-[color,box-shadow,background-color] focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30';

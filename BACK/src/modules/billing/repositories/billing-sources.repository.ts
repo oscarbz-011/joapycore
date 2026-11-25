@@ -21,6 +21,9 @@ export class BillingSourcesRepository {
       where: { id: saleOrderId, tenantId },
       select: {
         saleType: true,
+        interestRate: true,
+        surchargeType: true,
+        surchargeAmount: true,
         items: {
           select: {
             id: true,

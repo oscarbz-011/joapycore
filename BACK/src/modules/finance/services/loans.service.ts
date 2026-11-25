@@ -6,6 +6,13 @@ import {
 import { EventBus } from '../../../common/events/event-bus';
 import { PaymentMethod, PaymentReceiptItemKind, Prisma } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
+import {
+  money,
+  roundGuaranies,
+  splitInstallments,
+  sumMoney,
+} from '../../../common/money/money';
+import { saleAmounts } from '../../../common/money/sale-amounts';
 import { FinanceSourcesRepository } from '../repositories/finance-sources.repository';
 import { InstallmentsRepository } from '../repositories/installments.repository';
 import { LoansRepository } from '../repositories/loans.repository';
@@ -416,23 +423,28 @@ export class LoansService {
       );
     }
 
-    const itemsTotal = order.items.reduce((sum, item) => {
-      return sum + toNum(item.unitPrice) * item.quantity;
-    }, 0);
+    // Misma fórmula que el pedido y la factura: la suma de las cuotas
+    // coincide al guaraní con el total facturado.
+    const interestRate = money(order.interestRate);
+    const cash = saleAmounts({
+      lines: order.items,
+      surcharge: {
+        type: order.surchargeType,
+        amount: order.surchargeAmount,
+      },
+    });
+    const financed = saleAmounts({
+      lines: order.items,
+      surcharge: {
+        type: order.surchargeType,
+        amount: order.surchargeAmount,
+      },
+      interestRate,
+    });
+    const principal = cash.total;
+    const totalAmount = financed.total;
+    const amounts = splitInstallments(totalAmount, order.installments);
 
-    // El recargo de entrega/zona también se financia — el preview del
-    // frontend en el modal "Nuevo pedido" ya lo incluye en su estimado, el
-    // préstamo real tiene que coincidir con eso.
-    const surcharge = order.surchargeAmount
-      ? order.surchargeType === 'FIXED'
-        ? toNum(order.surchargeAmount)
-        : itemsTotal * (toNum(order.surchargeAmount) / 100)
-      : 0;
-    const principal = itemsTotal + surcharge;
-
-    const interestRate = order.interestRate ? toNum(order.interestRate) : 0;
-    const totalAmount = principal * (1 + interestRate / 100);
-    const amountPerInstallment = Math.round(totalAmount / order.installments);
     const now = new Date();
 
     const dueDayOfMonth = await this.sources.findDueDayOfMonth(tenantId);
@@ -459,7 +471,7 @@ export class LoansService {
             loanId: loan.id,
             number: i,
             dueDate: addMonths(firstDueDate, i - 1),
-            amount: amountPerInstallment,
+            amount: amounts[i - 1],
           },
           tx,
         );
@@ -1027,16 +1039,19 @@ export class LoansService {
         );
       }
 
-      const newOutstanding = principalOutstanding - dto.amount;
+      // Los créditos anteriores a los montos exactos pueden tener centavos.
+      const newOutstanding = roundGuaranies(
+        sumMoney(
+          pending.map((i) => money(i.amount).minus(money(i.paidAmount))),
+        ).minus(money(dto.amount)),
+      );
       const count = pending.length;
-      const baseAmount = Math.floor(newOutstanding / count);
-      const remainder = newOutstanding - baseAmount * count;
+      const newAmounts = splitInstallments(newOutstanding, count);
 
       await this.prisma.$transaction(async (tx) => {
         for (let i = 0; i < count; i++) {
           const inst = pending[i];
-          const isLast = i === count - 1;
-          const newAmount = baseAmount + (isLast ? remainder : 0);
+          const newAmount = newAmounts[i];
           await this.installmentsRepository.update(
             inst.id,
             { amount: newAmount, paidAmount: 0, status: 'PENDING' },

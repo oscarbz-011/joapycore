@@ -7,10 +7,12 @@ import { useParams, useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, CheckCircle, XCircle, Wrench, Clock, CreditCard, ShieldAlert } from 'lucide-react';
 import { salesApi } from '../../../../../../lib/api/sales';
+import { installmentPlan } from '@/lib/money';
+import { installmentsText } from '@/components/sales/order-line-items';
 import {
   formatPrice,
   formatDate,
-  orderBase,
+  orderAmounts,
   orderTotal,
   itemPrice,
   BureauCheckForm,
@@ -86,7 +88,8 @@ export default function ApprovalDetailPage() {
 
   const seller = order.seller ?? order.createdBy;
   const total = orderTotal(order);
-  const subtotal = orderBase(order);
+  const surcharge = orderAmounts(order).surcharge.toNumber();
+  const plan = order.installments ? installmentPlan(total, order.installments) : null;
   const canDecide = order.status === 'PENDING_CREDIT_APPROVAL';
   const history = evaluation?.history;
   const hasLoans = !!history && history.activeLoans.length + history.finishedLoans.length > 0;
@@ -150,9 +153,7 @@ export default function ApprovalDetailPage() {
                   </p>
                   <p className="mt-0.5 text-lg font-bold tabular-nums text-foreground">{formatPrice(total)}</p>
                   <p className="text-[11px] text-muted-foreground">
-                    {order.installments
-                      ? `${order.installments} cuotas de ≈ ${formatPrice(evaluation.proposedMonthlyPayment)}`
-                      : 'Sin cuotas'}
+                    {plan ? installmentsText(plan) : 'Sin cuotas'}
                   </p>
                 </div>
 
@@ -246,10 +247,10 @@ export default function ApprovalDetailPage() {
                 </div>
               ))}
 
-              {order.surchargeAmount != null && order.surchargeType && (
+              {surcharge > 0 && (
                 <div className="flex justify-between text-xs text-warn pt-2 border-t border-border">
                   <span>Recargo{order.surchargeReason ? ` — ${order.surchargeReason}` : ''}{order.surchargeType === 'PERCENTAGE' ? ` (${order.surchargeAmount}%)` : ''}</span>
-                  <span className="font-mono tabular-nums">+{formatPrice(total - subtotal)}</span>
+                  <span className="font-mono tabular-nums">+{formatPrice(surcharge)}</span>
                 </div>
               )}
 

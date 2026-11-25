@@ -1,5 +1,5 @@
+import { Prisma } from '@prisma/client';
 import { NotFoundException } from '@nestjs/common';
-import type { Prisma } from '@prisma/client';
 import { PosInvoicingService } from './pos-invoicing.service';
 
 const tx = { marker: 'tx' } as unknown as Prisma.TransactionClient;
@@ -61,10 +61,10 @@ describe('PosInvoicingService', () => {
           {
             id: 'soi-1',
             quantity: 2,
-            unitPrice: 110_000,
+            unitPrice: new Prisma.Decimal(110000),
             financedUnitPrice: null,
             description: null,
-            product: { name: 'Licuadora', ivaTaxRate: 10 },
+            product: { name: 'Licuadora', ivaTaxRate: new Prisma.Decimal(10) },
           },
         ],
       }),
@@ -114,7 +114,7 @@ describe('PosInvoicingService', () => {
         {
           saleOrderId: 'order-1',
           numbering: NUMBERING,
-          total: 220_000,
+          total: new Prisma.Decimal(220000),
           issuedAt: AT,
           paymentMethod: 'CASH',
           anonymousBuyer: true,
@@ -122,11 +122,11 @@ describe('PosInvoicingService', () => {
             {
               description: 'Licuadora',
               quantity: 2,
-              unitPrice: 110_000,
-              total: 220_000,
-              ivaRate: 10,
-              ivaAmount: 20_000,
-              unitPriceWithoutIva: 100_000,
+              unitPrice: new Prisma.Decimal(110000),
+              total: new Prisma.Decimal(220000),
+              ivaRate: new Prisma.Decimal(10),
+              ivaAmount: new Prisma.Decimal(20000),
+              unitPriceWithoutIva: new Prisma.Decimal(100000),
               saleOrderItemId: 'soi-1',
             },
           ],
@@ -146,7 +146,7 @@ describe('PosInvoicingService', () => {
           invoiceId: 'inv-1',
           saleOrderId: 'order-1',
           paymentCondition: 'CASH',
-          total: 220_000,
+          total: 220000,
         }),
       );
       expect(result).toEqual({ invoiceId: 'inv-1', eventId: 'event-1' });
@@ -239,7 +239,7 @@ describe('PosInvoicingService', () => {
         issuedAt: AT,
         pdfFileId: null,
         status: 'PAID',
-        total: 220_000,
+        total: new Prisma.Decimal(220000),
       });
 
       service.requestPdf('tenant-1', 'inv-1');
@@ -262,7 +262,7 @@ describe('PosInvoicingService', () => {
         pdfFileId: null,
         modality: 'PREPRINTED',
         status: 'PAID',
-        total: 220_000,
+        total: new Prisma.Decimal(220000),
       });
 
       service.requestPdf('tenant-1', 'inv-1');
