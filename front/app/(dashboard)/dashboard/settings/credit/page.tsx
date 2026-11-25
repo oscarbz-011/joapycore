@@ -1,4 +1,5 @@
 "use client";
+import { chargedUnitPrice, installmentPlan } from "@/lib/money";
 
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -290,9 +291,8 @@ function PlanRow({
         <p className="text-xs text-muted-foreground/60">Por Gs. 1.000.000</p>
         <p className="text-xs font-medium text-muted-foreground">
           ≈ Gs.{" "}
-          {Math.round(
-            (1_000_000 * (1 + plan.interestRate / 100)) / plan.installments,
-          ).toLocaleString("es-PY")}{" "}
+          {(installmentPlan(chargedUnitPrice(1_000_000, plan.interestRate), plan.installments)?.first ?? 0)
+            .toLocaleString("es-PY")}{" "}
           /cuota
         </p>
       </div>

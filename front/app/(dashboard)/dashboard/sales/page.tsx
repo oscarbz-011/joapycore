@@ -21,7 +21,7 @@ import {
   CreditOptions,
   installmentsText,
 } from "../../../../components/sales/order-line-items";
-import { installmentPlan, saleAmounts } from "@/lib/money";
+import { installmentPlan, money, saleAmounts, sumMoney } from "@/lib/money";
 import {
   salesApi,
   combosApi,
@@ -274,10 +274,9 @@ function CreateOrderModal({
 
   function expandCombo(combo: SaleCombo) {
     const comboGroupId = crypto.randomUUID();
-    const listTotal = combo.items.reduce(
-      (sum, i) => sum + i.product.salePrice * i.quantity,
-      0,
-    );
+    const listTotal = sumMoney(
+      combo.items.map((i) => money(i.product.salePrice).mul(i.quantity)),
+    ).toNumber();
     const targetTotal =
       combo.priceMode === "FIXED"
         ? (combo.fixedPrice ?? 0)

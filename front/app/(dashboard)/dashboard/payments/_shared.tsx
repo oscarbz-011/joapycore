@@ -102,7 +102,7 @@ export function effectiveAmounts(ar: AccountsReceivable) {
       ? sumMoney(loan.installments.map((i) => i.paidAmount)).toNumber()
       : Number(ar.paidAmount);
   const total = isCredit && loan ? Number(loan.totalAmount) : Number(ar.amount);
-  return { isCredit, paid, total, pending: total - paid };
+  return { isCredit, paid, total, pending: money(total).minus(paid).toNumber() };
 }
 
 // [start, end) del rango elegido, como fechas ISO — mismo criterio día/semana

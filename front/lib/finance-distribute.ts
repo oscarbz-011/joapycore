@@ -1,4 +1,4 @@
-import { sumMoney } from '@/lib/money';
+import { money, sumMoney } from '@/lib/money';
 import type { Installment } from './api/finance';
 
 export interface DistributedItem {
@@ -16,7 +16,7 @@ export function chargesTotalOf(inst: Installment): number {
 }
 
 export function outstandingOf(inst: Installment): number {
-  return inst.amount - inst.paidAmount + chargesTotalOf(inst);
+  return money(inst.amount).minus(inst.paidAmount).plus(chargesTotalOf(inst)).toNumber();
 }
 
 // Mismo algoritmo greedy que LoansService.payByAmount() en el backend

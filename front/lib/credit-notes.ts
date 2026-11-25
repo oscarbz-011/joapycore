@@ -1,3 +1,4 @@
+import { money as exact, sumMoney } from '@/lib/money';
 import type {
   BillingEvent,
   BillingEventType,
@@ -123,10 +124,9 @@ export function creditDraftTotal(
 ): number {
   if (kind === 'TOTAL') return remaining;
   if (kind === 'AMOUNT') return Number.isFinite(amount) ? amount : 0;
-  return items.reduce(
-    (sum, item) => sum + item.unitPrice * (lines[item.invoiceItemId]?.quantity ?? 0),
-    0,
-  );
+  return sumMoney(
+    items.map((item) => exact(item.unitPrice).mul(lines[item.invoiceItemId]?.quantity ?? 0)),
+  ).toNumber();
 }
 
 /** Lo que descuenta de la deuda y lo que excede (y hay que resolver). */

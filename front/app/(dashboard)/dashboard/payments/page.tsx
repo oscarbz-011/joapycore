@@ -547,9 +547,9 @@ export default function PaymentsPage() {
                     (acc, ar) => {
                       const a = effectiveAmounts(ar);
                       return {
-                        paid: acc.paid + a.paid,
-                        total: acc.total + a.total,
-                        pending: acc.pending + a.pending,
+                        paid: sumMoney([acc.paid, a.paid]).toNumber(),
+                        total: sumMoney([acc.total, a.total]).toNumber(),
+                        pending: sumMoney([acc.pending, a.pending]).toNumber(),
                       };
                     },
                     { paid: 0, total: 0, pending: 0 },
