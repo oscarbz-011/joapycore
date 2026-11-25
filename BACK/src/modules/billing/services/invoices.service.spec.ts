@@ -667,11 +667,11 @@ describe('InvoicesService', () => {
             description:
               'Intereses moratorios correspondientes a la cuota N° 1 de la Factura a Crédito N° 001-001-0000011',
             quantity: 1,
-            unitPrice: 350_000,
-            total: 350_000,
+            unitPrice: new Prisma.Decimal(350000),
+            total: new Prisma.Decimal(350000),
             ivaRate: 10,
-            ivaAmount: 31_818,
-            unitPriceWithoutIva: 318_182,
+            ivaAmount: new Prisma.Decimal(31818),
+            unitPriceWithoutIva: new Prisma.Decimal(318182),
           },
         ],
         ...overrides,
@@ -681,7 +681,7 @@ describe('InvoicesService', () => {
     beforeEach(() => {
       invoicesRepository.createInterestInvoice.mockResolvedValue({
         id: 'inv-interest-1',
-        total: 350_000,
+        total: new Prisma.Decimal(350000),
         sequential: 5,
       });
     });
@@ -693,7 +693,7 @@ describe('InvoicesService', () => {
         'tenant-1',
         expect.objectContaining({
           paymentReceiptId: 'receipt-1',
-          total: 350_000,
+          total: new Prisma.Decimal(350000),
           items: makeParams().items,
         }),
         expect.anything(),
@@ -720,7 +720,7 @@ describe('InvoicesService', () => {
       seriesService.numberForAutomatic.mockResolvedValue(null);
       invoicesRepository.createInterestInvoice.mockResolvedValue({
         id: 'inv-interest-1',
-        total: 350_000,
+        total: new Prisma.Decimal(350000),
         sequential: null,
       });
 
@@ -745,20 +745,20 @@ describe('InvoicesService', () => {
             {
               description: 'Cuota N° 1',
               quantity: 1,
-              unitPrice: 100_000,
-              total: 100_000,
+              unitPrice: new Prisma.Decimal(100000),
+              total: new Prisma.Decimal(100000),
               ivaRate: 10,
-              ivaAmount: 9091,
-              unitPriceWithoutIva: 90_909,
+              ivaAmount: new Prisma.Decimal(9091),
+              unitPriceWithoutIva: new Prisma.Decimal(90909),
             },
             {
               description: 'Cuota N° 2',
               quantity: 1,
-              unitPrice: 50_000,
-              total: 50_000,
+              unitPrice: new Prisma.Decimal(50000),
+              total: new Prisma.Decimal(50000),
               ivaRate: 10,
-              ivaAmount: 4545,
-              unitPriceWithoutIva: 45_455,
+              ivaAmount: new Prisma.Decimal(4545),
+              unitPriceWithoutIva: new Prisma.Decimal(45455),
             },
           ],
         }),
@@ -766,7 +766,7 @@ describe('InvoicesService', () => {
 
       expect(invoicesRepository.createInterestInvoice).toHaveBeenCalledWith(
         'tenant-1',
-        expect.objectContaining({ total: 150_000 }),
+        expect.objectContaining({ total: new Prisma.Decimal(150000) }),
         expect.anything(),
       );
     });
@@ -780,7 +780,7 @@ describe('InvoicesService', () => {
           tenantId: 'tenant-1',
           invoiceId: 'inv-interest-1',
           paymentReceiptId: 'receipt-1',
-          total: 350_000,
+          total: 350000,
         }),
       );
       expect(eventEmitter.emit).toHaveBeenCalledWith(
@@ -802,7 +802,7 @@ describe('InvoicesService', () => {
       id: 'inv-interest-1',
       sequential: null,
       issuedAt: new Date('2026-08-26'),
-      total: 350_000,
+      total: new Prisma.Decimal(350000),
       paymentReceiptId: 'receipt-1',
       paymentReceipt: { branchId: 'branch-1' },
     };

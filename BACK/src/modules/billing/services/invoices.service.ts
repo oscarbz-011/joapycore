@@ -1,3 +1,4 @@
+import { sumMoney } from '../../../common/money/money';
 import {
   Injectable,
   NotFoundException,
@@ -432,15 +433,15 @@ export class InvoicesService {
       items: {
         description: string;
         quantity: number;
-        unitPrice: number;
-        total: number;
+        unitPrice: Prisma.Decimal;
+        total: Prisma.Decimal;
         ivaRate: number;
-        ivaAmount: number;
-        unitPriceWithoutIva: number;
+        ivaAmount: Prisma.Decimal;
+        unitPriceWithoutIva: Prisma.Decimal;
       }[];
     },
   ) {
-    const total = params.items.reduce((s, i) => s + i.total, 0);
+    const total = sumMoney(params.items.map((i) => i.total));
 
     const invoice = await this.prisma.$transaction(async (tx) => {
       const numbering = await this.seriesService.numberForAutomatic(
@@ -473,7 +474,7 @@ export class InvoicesService {
         tenantId,
         invoiceId: invoice.id,
         paymentReceiptId: params.paymentReceiptId,
-        total,
+        total: total.toNumber(),
       });
     }
 

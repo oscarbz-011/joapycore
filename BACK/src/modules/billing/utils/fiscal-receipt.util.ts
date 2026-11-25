@@ -4,10 +4,15 @@ import type {
   TaxpayerType,
 } from '@prisma/client';
 import type { FiscalReceipt } from '../../../common/contracts/billing-gateway.contract';
-import { toNum } from './invoice-items.util';
+import {
+  money,
+  roundGuaranies,
+  sumMoney,
+  type Money,
+} from '../../../common/money/money';
 import { resolvePreprintedLayout } from './preprinted-layout';
 
-type Numeric = number | { toNumber(): number };
+type Numeric = number | string | { toString(): string };
 
 interface ReceiptCustomer {
   firstName: string;
@@ -111,40 +116,45 @@ function buyerOf(invoice: InvoiceForReceipt): FiscalReceipt['buyer'] {
 }
 
 export function buildFiscalReceipt(invoice: InvoiceForReceipt): FiscalReceipt {
-  const totals = {
-    exempt: 0,
-    taxed5: 0,
-    taxed10: 0,
-    iva5: 0,
-    iva10: 0,
-    ivaTotal: 0,
-    total: toNum(invoice.total),
-  };
+  const sums: Record<
+    'exempt' | 'taxed5' | 'taxed10' | 'iva5' | 'iva10',
+    Money[]
+  > = { exempt: [], taxed5: [], taxed10: [], iva5: [], iva10: [] };
   const lines = invoice.items.map((item) => {
-    const total = toNum(item.total);
-    const ivaRate = item.ivaRate == null ? 0 : toNum(item.ivaRate);
+    const total = money(item.total);
+    const ivaRate = item.ivaRate == null ? 0 : money(item.ivaRate).toNumber();
     const ivaAmount =
       item.ivaAmount == null
-        ? Math.round((total * ivaRate) / (100 + ivaRate))
-        : toNum(item.ivaAmount);
+        ? roundGuaranies(total.mul(ivaRate).div(100 + ivaRate))
+        : money(item.ivaAmount);
     if (ivaRate === 5) {
-      totals.taxed5 += total;
-      totals.iva5 += ivaAmount;
+      sums.taxed5.push(total);
+      sums.iva5.push(ivaAmount);
     } else if (ivaRate === 10) {
-      totals.taxed10 += total;
-      totals.iva10 += ivaAmount;
+      sums.taxed10.push(total);
+      sums.iva10.push(ivaAmount);
     } else {
-      totals.exempt += total;
+      sums.exempt.push(total);
     }
     return {
       description: item.description,
       quantity: item.quantity,
-      unitPrice: toNum(item.unitPrice),
-      total,
+      unitPrice: money(item.unitPrice).toNumber(),
+      total: total.toNumber(),
       ivaRate,
     };
   });
-  totals.ivaTotal = totals.iva5 + totals.iva10;
+  const iva5 = sumMoney(sums.iva5);
+  const iva10 = sumMoney(sums.iva10);
+  const totals = {
+    exempt: sumMoney(sums.exempt).toNumber(),
+    taxed5: sumMoney(sums.taxed5).toNumber(),
+    taxed10: sumMoney(sums.taxed10).toNumber(),
+    iva5: iva5.toNumber(),
+    iva10: iva10.toNumber(),
+    ivaTotal: iva5.plus(iva10).toNumber(),
+    total: money(invoice.total).toNumber(),
+  };
 
   const branch =
     invoice.saleOrder?.branch ?? invoice.paymentReceipt?.branch ?? null;

@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import { BillingSourcesRepository } from '../repositories/billing-sources.repository';
 import { InterestInvoiceOnReceiptListener } from './interest-invoice-on-receipt.listener';
 
@@ -103,8 +104,8 @@ describe('InterestInvoiceOnReceiptListener', () => {
         items: [
           expect.objectContaining({
             description: expect.stringContaining('cuota N° 1'),
-            total: 80_000,
-            unitPrice: 80_000,
+            total: new Prisma.Decimal(80000),
+            unitPrice: new Prisma.Decimal(80000),
             quantity: 1,
           }),
         ],
@@ -180,8 +181,8 @@ describe('InterestInvoiceOnReceiptListener', () => {
     const call =
       invoicesService.createInterestInvoiceFromReceipt.mock.calls[0][1];
     expect(call.items).toHaveLength(2);
-    expect(call.items[0].total).toBe(10_000);
-    expect(call.items[1].total).toBe(20_000);
+    expect(Number(call.items[0].total)).toBe(10_000);
+    expect(Number(call.items[1].total)).toBe(20_000);
   });
 
   it('computes the 10% IVA-included breakdown per item', async () => {
@@ -203,8 +204,8 @@ describe('InterestInvoiceOnReceiptListener', () => {
       invoicesService.createInterestInvoiceFromReceipt.mock.calls[0][1]
         .items[0];
     expect(item.ivaRate).toBe(10);
-    expect(item.ivaAmount).toBe(10_000);
-    expect(item.unitPriceWithoutIva).toBe(100_000);
+    expect(Number(item.ivaAmount)).toBe(10_000);
+    expect(Number(item.unitPriceWithoutIva)).toBe(100_000);
   });
 
   it('is best-effort — does not throw if the invoice service rejects', async () => {

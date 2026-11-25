@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import { EventBus } from '../../../common/events/event-bus';
 import { PaymentsOnInstallmentListener } from './payments-on-installment.listener';
 import { AccountsReceivableRepository } from '../repositories/accounts-receivable.repository';
@@ -123,25 +124,25 @@ describe('PaymentsOnInstallmentListener', () => {
       );
     });
 
-    it('marks AR as PAID when paidAmount is within the 0.01 float tolerance of total', async () => {
-      // Decimal arithmetic can produce differences smaller than 1 cent; tolerance is 0.01
+    // Con Decimal no hay error de float que compensar: falta medio guaraní
+    // y la cuenta sigue abierta.
+    it('keeps the AR open while any amount is still owed', async () => {
       prisma.accountsReceivable.findFirst.mockResolvedValue({
         id: AR_ID,
-        amount: TOTAL_CREDIT,
-        paidAmount: TOTAL_CREDIT - 0.005,
+        amount: new Prisma.Decimal(TOTAL_CREDIT),
+        paidAmount: new Prisma.Decimal(TOTAL_CREDIT).minus('0.5'),
       });
 
       await listener.handle(baseEvent);
 
-      expect(arRepository.updateStatus).toHaveBeenCalledWith(AR_ID, 'PAID');
+      expect(arRepository.updateStatus).toHaveBeenCalledWith(AR_ID, 'PARTIAL');
     });
 
-    it('coerces Prisma Decimal objects to numbers before comparing', async () => {
-      // Prisma returns Decimal objects in some drivers; the listener must call .toNumber()
+    it('compares the Prisma Decimal values exactly', async () => {
       prisma.accountsReceivable.findFirst.mockResolvedValue({
         id: AR_ID,
-        amount: { toNumber: () => TOTAL_CREDIT },
-        paidAmount: { toNumber: () => TOTAL_CREDIT },
+        amount: new Prisma.Decimal(TOTAL_CREDIT),
+        paidAmount: new Prisma.Decimal(TOTAL_CREDIT),
       });
 
       await listener.handle(baseEvent);
