@@ -85,39 +85,35 @@ function formatPrice(n: number) {
   }).format(n);
 }
 
-function cashAmounts(order: SaleOrder) {
+// Lo que paga el cliente: a crédito, con el interés en cada línea y en el
+// recargo. Misma fórmula que el préstamo y la factura, así las filas suman.
+function orderAmounts(order: SaleOrder) {
   return saleAmounts({
     lines: order.items,
     surcharge: { type: order.surchargeType, amount: order.surchargeAmount },
+    interestRate: order.saleType === "CREDIT" ? order.interestRate : null,
   });
 }
 
 function orderSubtotal(order: SaleOrder) {
-  return cashAmounts(order).subtotal.toNumber();
+  return orderAmounts(order).subtotal.toNumber();
 }
 
 function orderSurchargeAmount(order: SaleOrder): number {
-  return cashAmounts(order).surcharge.toNumber();
+  return orderAmounts(order).surcharge.toNumber();
 }
 
 function itemUnitPrice(order: SaleOrder, item: SaleOrderItem): number {
   if (order.saleType === "CREDIT" && item.financedUnitPrice != null)
-    return item.financedUnitPrice;
-  return item.unitPrice;
+    return Number(item.financedUnitPrice);
+  return Number(item.unitPrice);
 }
 
 function orderTotal(order: SaleOrder) {
-  if (order.saleType === "CREDIT") {
-    if (order.loan?.totalAmount) return Number(order.loan.totalAmount);
-    if (order.interestRate) {
-      return saleAmounts({
-        lines: order.items,
-        surcharge: { type: order.surchargeType, amount: order.surchargeAmount },
-        interestRate: order.interestRate,
-      }).total.toNumber();
-    }
+  if (order.saleType === "CREDIT" && order.loan?.totalAmount) {
+    return Number(order.loan.totalAmount);
   }
-  return cashAmounts(order).total.toNumber();
+  return orderAmounts(order).total.toNumber();
 }
 
 // ── Status badge ───────────────────────────────────────────────────────────────
@@ -1283,7 +1279,7 @@ function OrderDetailPanel({
             ))}
           </div>
 
-          {order.surchargeAmount && order.surchargeType && (
+          {orderSurchargeAmount(order) > 0 && (
             <div className="mt-2 space-y-1">
               <div className="flex justify-between text-xs text-muted-foreground">
                 <span>Subtotal</span>
