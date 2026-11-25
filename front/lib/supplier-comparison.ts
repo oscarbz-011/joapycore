@@ -1,3 +1,4 @@
+import { sumMoney } from '@/lib/money';
 import type { CatalogOffer, OfferSupplier } from './api/procurement';
 import { priceValidity } from './catalog-validity';
 import type { SupplierAvailability } from './commercial-terms';
@@ -150,7 +151,7 @@ function supplierQuote(
     else missingProductIds.push(need.productId);
   }
 
-  const subtotal = lines.reduce((sum, line) => sum + line.subtotal, 0);
+  const subtotal = sumMoney(lines.map((line) => line.subtotal)).toNumber();
   const totalUnits = lines.reduce((sum, line) => sum + line.unitsReceived, 0);
   const byAmount = supplier.volumeDiscounts.reduce(
     (percent, tier) => (subtotal >= tier.minAmount ? tier.percent : percent),

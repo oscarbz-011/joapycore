@@ -1,3 +1,4 @@
+import { sumMoney } from '@/lib/money';
 import type { Installment, Loan } from './api/finance';
 import { outstandingOf } from './finance-distribute';
 import {
@@ -62,7 +63,7 @@ export function selectByAmountAcross(
 export function customerSummary(loans: Loan[], now: Date = new Date()): LoanSummary {
   const summaries = loans.map((loan) => loanSummary(loan.installments, now));
   const sum = (of: (s: LoanSummary) => number) =>
-    summaries.reduce((total, s) => total + of(s), 0);
+    sumMoney(summaries.map(of)).toNumber();
   const nextDue =
     summaries
       .map((s) => s.nextDue)
@@ -112,7 +113,7 @@ export function loanProgress(
     paidCount: loan.installments.filter((inst) => inst.status === 'PAID').length,
     total: loan.installments.length,
     selectedCount: chosen.length,
-    selectedAmount: chosen.reduce((sum, inst) => sum + selection[inst.id], 0),
+    selectedAmount: sumMoney(chosen.map((inst) => selection[inst.id])).toNumber(),
   };
 }
 

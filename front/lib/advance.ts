@@ -1,3 +1,5 @@
+import Decimal from 'decimal.js';
+import { money, roundGuaranies, type MoneyValue } from '@/lib/money';
 // Anticipo a proveedores: lo que se paga de una orden de compra antes de
 // recibir la mercadería. Los saldos los calcula el servidor; acá va lo que
 // necesita la pantalla para pedir los datos y explicar el estado.
@@ -18,20 +20,21 @@ export interface OrderAdvance {
 
 export type AdvanceMovementKind = 'ADVANCE' | 'ADVANCE_REFUND';
 
-const round2 = (n: number) => Math.round(n * 100) / 100;
+const round2 = (n: MoneyValue) =>
+  money(n).toDecimalPlaces(2, Decimal.ROUND_HALF_UP).toNumber();
 const gs = (n: number) =>
   'Gs. ' + new Intl.NumberFormat('es-PY').format(Math.round(n));
 
 /** El monto que representa un porcentaje del total de la orden. */
 export function advanceFromPercent(total: number, percent: number): number {
   if (!(total > 0) || !(percent > 0)) return 0;
-  return Math.round((total * percent) / 100);
+  return roundGuaranies(money(total).mul(percent).div(100)).toNumber();
 }
 
 /** Qué porcentaje del total es un monto; 0 si todavía no hay total. */
 export function percentOfTotal(total: number, amount: number): number {
   if (!(total > 0) || !(amount > 0)) return 0;
-  return round2((amount / total) * 100);
+  return round2(money(amount).div(total).mul(100));
 }
 
 /** "30%", "Pago total" o "No pide" para el anticipo habitual del proveedor. */
@@ -49,7 +52,7 @@ export function requiredAdvanceError(
   if (!Number.isFinite(amount) || amount < 0) {
     return 'El anticipo no puede ser negativo';
   }
-  if (amount > orderTotal + 0.01) {
+  if (money(amount).gt(orderTotal)) {
     return `El anticipo no puede superar el total de la orden (${gs(orderTotal)})`;
   }
   return null;
@@ -57,7 +60,8 @@ export function requiredAdvanceError(
 
 /** Cuánto más se le puede adelantar al proveedor por esta orden. */
 export function advanceRoom(advance: OrderAdvance, orderTotal: number): number {
-  return Math.max(0, round2(orderTotal - (advance.paid - advance.refunded)));
+  const room = money(orderTotal).minus(money(advance.paid).minus(advance.refunded));
+  return room.isNegative() ? 0 : round2(room);
 }
 
 /** Monto que se propone al abrir el formulario de un movimiento. */
@@ -66,9 +70,11 @@ export function suggestedMovementAmount(
   advance: OrderAdvance,
   orderTotal: number,
 ): number {
-  if (kind === 'ADVANCE_REFUND') return Math.round(advance.available);
+  if (kind === 'ADVANCE_REFUND') return roundGuaranies(advance.available).toNumber();
   const room = advanceRoom(advance, orderTotal);
-  return Math.round(advance.pending > 0 ? Math.min(advance.pending, room) : room);
+  return roundGuaranies(
+    advance.pending > 0 ? Decimal.min(advance.pending, room) : room,
+  ).toNumber();
 }
 
 /** Problema con un pago o una devolución de anticipo, o null si está bien. */
@@ -83,11 +89,11 @@ export function advanceMovementError(
   }
   if (kind === 'ADVANCE') {
     const room = advanceRoom(advance, orderTotal);
-    return amount > room + 0.01
+    return money(amount).gt(room)
       ? `El anticipo no puede superar el total de la orden: quedan ${gs(room)} por adelantar`
       : null;
   }
-  return amount > advance.available + 0.01
+  return money(amount).gt(advance.available)
     ? `La devolución supera el saldo a favor con el proveedor (${gs(advance.available)})`
     : null;
 }
@@ -96,11 +102,12 @@ export type AdvanceState = 'none' | 'pending' | 'partial' | 'covered';
 
 /** En qué quedó el anticipo que pide la orden. */
 export function advanceState(advance: OrderAdvance): AdvanceState {
-  if (advance.required <= 0 && advance.paid - advance.refunded <= 0) {
+  const net = money(advance.paid).minus(advance.refunded);
+  if (money(advance.required).lte(0) && net.lte(0)) {
     return 'none';
   }
-  if (advance.pending <= 0) return 'covered';
-  return advance.paid - advance.refunded > 0 ? 'partial' : 'pending';
+  if (money(advance.pending).lte(0)) return 'covered';
+  return net.gt(0) ? 'partial' : 'pending';
 }
 
 export const ADVANCE_STATE_LABEL: Record<AdvanceState, string> = {

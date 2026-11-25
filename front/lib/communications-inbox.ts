@@ -1,3 +1,4 @@
+import { money, sumMoney } from '@/lib/money';
 import type { AccountsReceivable } from './api/payments';
 import type {
   Conversation,
@@ -152,7 +153,7 @@ export function contactBalance(receivables: AccountsReceivable[], customerId: st
   const overdue = open.filter((ar) => arUrgency(ar).level === 'overdue');
   return {
     open: open.length,
-    balance: open.reduce((total, ar) => total + (Number(ar.amount) - Number(ar.paidAmount)), 0),
+    balance: sumMoney(open.map((ar) => money(ar.amount).minus(ar.paidAmount))).toNumber(),
     overdue: overdue.length,
     receivableId: (overdue[0] ?? open[0])?.id ?? null,
   };

@@ -1,3 +1,4 @@
+import { money, sumMoney } from '@/lib/money';
 import type { Installment } from './api/finance';
 import { chargesTotalOf, distributeAmount, outstandingOf } from './finance-distribute';
 import { daysOverdue } from './overdue';
@@ -31,8 +32,11 @@ export function loanSummary(installments: Installment[], now: Date = new Date())
   const open = installments.filter(isPayable).sort((a, b) => a.number - b.number);
   const overdue = open.filter((inst) => isOverdue(inst, now));
   const sum = (list: Installment[], of: (inst: Installment) => number) =>
-    list.reduce((total, inst) => total + of(inst), 0);
-  const principalOf = (inst: Installment) => Math.max(inst.amount - inst.paidAmount, 0);
+    sumMoney(list.map(of)).toNumber();
+  const principalOf = (inst: Installment) => {
+    const left = money(inst.amount).minus(inst.paidAmount);
+    return left.isNegative() ? 0 : left.toNumber();
+  };
   const charges = sum(installments, chargesTotalOf);
   const principal = sum(installments, principalOf);
   return {
@@ -80,5 +84,5 @@ export function toggle(selection: Selection, inst: Installment): Selection {
 }
 
 export function selectionTotal(selection: Selection): number {
-  return Object.values(selection).reduce((total, amount) => total + amount, 0);
+  return sumMoney(Object.values(selection)).toNumber();
 }
