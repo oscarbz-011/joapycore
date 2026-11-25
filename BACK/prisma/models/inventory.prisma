@@ -118,10 +118,10 @@ model Product {
   // pero no se ofrece a la venta hasta tener stock. Vacío = nada pendiente.
   salesChannelsOnReceipt OrderChannel[] @default([]) @map("sales_channels_on_receipt")
   unit                   String         @default("unidad")
-  weightKg               Float?         @map("weight_kg")
-  heightCm               Float?         @map("height_cm")
-  widthCm                Float?         @map("width_cm")
-  depthCm                Float?         @map("depth_cm")
+  weightKg               Decimal?       @map("weight_kg") @db.Decimal(12, 3)
+  heightCm               Decimal?       @map("height_cm") @db.Decimal(10, 1)
+  widthCm                Decimal?       @map("width_cm") @db.Decimal(10, 1)
+  depthCm                Decimal?       @map("depth_cm") @db.Decimal(10, 1)
   // Nullable a propósito: un producto en DRAFT puede no tener precio todavía
   // (catálogo cargado antes de negociar con el proveedor). null = "pendiente",
   // que NO es lo mismo que 0 — un 0 explícito es un precio real de cero.

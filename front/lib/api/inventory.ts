@@ -62,10 +62,10 @@ export interface Product {
   isSerialized: boolean;
   usesLots: boolean;
   unit: string;
-  weightKg: number | null;
-  heightCm: number | null;
-  widthCm: number | null;
-  depthCm: number | null;
+  weightKg: string | null;
+  heightCm: string | null;
+  widthCm: string | null;
+  depthCm: string | null;
   // null = precio pendiente (ficha en DRAFT), distinto de 0 (precio real).
   costPrice: number | null;
   salePrice: number | null;
