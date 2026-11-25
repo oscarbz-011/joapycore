@@ -30,8 +30,24 @@ export class PayrollService {
     });
   }
 
-  listRecords(tenantId: string) {
-    return this.payrollRepository.findRecords(tenantId);
+  async listRecords(tenantId: string) {
+    const records = await this.payrollRepository.findRecords(tenantId);
+    const sums = await this.payrollRepository.sumItemsByRecord(
+      tenantId,
+      records.map((r) => r.id),
+    );
+    const byRecord = new Map(sums.map((s) => [s.payrollRecordId, s._sum]));
+    return records.map((record) => {
+      const sum = byRecord.get(record.id);
+      return {
+        ...record,
+        totalGross: money(sum?.grossSalary),
+        totalNet: money(sum?.netSalary),
+        totalIpsEmployee: money(sum?.ipsEmployee),
+        totalIpsEmployer: money(sum?.ipsEmployer),
+        totalAguinaldo: money(sum?.aguinaldo),
+      };
+    });
   }
 
   async getRecord(tenantId: string, id: string) {

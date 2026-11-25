@@ -43,6 +43,7 @@ describe('PayrollService', () => {
     getConfig: jest.Mock;
     upsertConfig: jest.Mock;
     findRecords: jest.Mock;
+    sumItemsByRecord: jest.Mock;
     findRecord: jest.Mock;
     createRecord: jest.Mock;
     updateRecord: jest.Mock;
@@ -56,6 +57,7 @@ describe('PayrollService', () => {
       getConfig: jest.fn().mockResolvedValue(null),
       upsertConfig: jest.fn(),
       findRecords: jest.fn().mockResolvedValue([]),
+      sumItemsByRecord: jest.fn().mockResolvedValue([]),
       findRecord: jest.fn(),
       createRecord: jest.fn().mockResolvedValue({ id: 'rec-1' }),
       updateRecord: jest.fn(),
@@ -70,6 +72,45 @@ describe('PayrollService', () => {
       payrollRepository as any,
       employeesRepository as any,
     );
+  });
+
+  // ── listRecords ────────────────────────────────────────────────────────────
+
+  describe('listRecords', () => {
+    it('adds the totals of each record and zero for a record without items', async () => {
+      payrollRepository.findRecords.mockResolvedValue([
+        makeRecord({ id: 'rec-1' }),
+        makeRecord({ id: 'rec-2' }),
+      ]);
+      payrollRepository.sumItemsByRecord.mockResolvedValue([
+        {
+          payrollRecordId: 'rec-1',
+          _sum: {
+            grossSalary: new Prisma.Decimal(2_600_000),
+            netSalary: new Prisma.Decimal(2_384_000),
+            ipsEmployee: new Prisma.Decimal(216_000),
+            ipsEmployer: new Prisma.Decimal(396_000),
+            aguinaldo: new Prisma.Decimal(200_000),
+          },
+        },
+      ]);
+
+      const [first, second] = await service.listRecords('tenant-1');
+
+      expect(payrollRepository.sumItemsByRecord).toHaveBeenCalledWith(
+        'tenant-1',
+        ['rec-1', 'rec-2'],
+      );
+      expect(first).toMatchObject({
+        id: 'rec-1',
+        totalGross: new Prisma.Decimal(2_600_000),
+        totalNet: new Prisma.Decimal(2_384_000),
+        totalIpsEmployee: new Prisma.Decimal(216_000),
+        totalIpsEmployer: new Prisma.Decimal(396_000),
+        totalAguinaldo: new Prisma.Decimal(200_000),
+      });
+      expect(second.totalNet).toEqual(new Prisma.Decimal(0));
+    });
   });
 
   // ── runPayroll ─────────────────────────────────────────────────────────────

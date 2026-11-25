@@ -139,11 +139,11 @@ export interface PayrollRecord {
   id: string;
   period: string;
   status: PayrollStatus;
-  totalGross: number;
-  totalNet: number;
-  totalIpsEmployee: number;
-  totalIpsEmployer: number;
-  totalAguinaldo: number;
+  totalGross: string;
+  totalNet: string;
+  totalIpsEmployee: string;
+  totalIpsEmployer: string;
+  totalAguinaldo: string;
   createdAt: string;
   items?: PayrollRecordItem[];
 }
