@@ -1,4 +1,5 @@
 import { UnprocessableEntityException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import {
   normalizePriceTiers,
   normalizeQuantityDiscounts,
@@ -45,6 +46,16 @@ describe('normalizeVolumeDiscounts', () => {
 });
 
 describe('normalizePriceTiers', () => {
+  it('compares against the stored Decimal list price to the cent', () => {
+    const listPrice = new Prisma.Decimal('100.5');
+    expect(() =>
+      normalizePriceTiers([{ minQuantity: 10, price: 100.51 }], listPrice),
+    ).toThrow(UnprocessableEntityException);
+    expect(
+      normalizePriceTiers([{ minQuantity: 10, price: 100.5 }], listPrice),
+    ).toEqual([{ minQuantity: 10, price: 100.5 }]);
+  });
+
   it('orders the tiers by quantity', () => {
     expect(
       normalizePriceTiers([

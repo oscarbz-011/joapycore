@@ -1,4 +1,5 @@
 import { UnprocessableEntityException } from '@nestjs/common';
+import { money, type MoneyValue } from '../../common/money/money';
 
 /** Descuento sobre el total de la orden, desde cierto monto. */
 export interface VolumeDiscount {
@@ -21,17 +22,17 @@ export function normalizeVolumeDiscounts(
 ): VolumeDiscount[] {
   const sorted = [...(discounts ?? [])]
     .map(({ minAmount, percent }) => ({ minAmount, percent }))
-    .sort((a, b) => a.minAmount - b.minAmount);
+    .sort((a, b) => money(a.minAmount).cmp(b.minAmount));
 
   sorted.forEach((tier, index) => {
     const previous = sorted[index - 1];
     if (!previous) return;
-    if (tier.minAmount === previous.minAmount) {
+    if (money(tier.minAmount).eq(previous.minAmount)) {
       throw new UnprocessableEntityException(
         'Hay dos descuentos por volumen que empiezan en el mismo monto',
       );
     }
-    if (tier.percent < previous.percent) {
+    if (money(tier.percent).lt(previous.percent)) {
       throw new UnprocessableEntityException(
         'Un descuento por volumen no puede ser menor que el del tramo anterior',
       );
@@ -42,7 +43,7 @@ export function normalizeVolumeDiscounts(
 
 export function normalizePriceTiers(
   tiers: PriceTier[] | undefined | null,
-  listPrice?: number | null,
+  listPrice?: MoneyValue | null,
 ): PriceTier[] {
   const sorted = [...(tiers ?? [])]
     .map(({ minQuantity, price }) => ({ minQuantity, price }))
@@ -56,7 +57,7 @@ export function normalizePriceTiers(
       );
     }
     const ceiling = previous?.price ?? listPrice;
-    if (ceiling != null && tier.price > ceiling) {
+    if (ceiling != null && money(tier.price).gt(ceiling)) {
       throw new UnprocessableEntityException(
         'El precio por cantidad no puede ser mayor que el del tramo anterior',
       );
@@ -86,7 +87,7 @@ export function normalizeQuantityDiscounts(
         'Hay dos descuentos por cantidad que empiezan en la misma cantidad',
       );
     }
-    if (tier.percent < previous.percent) {
+    if (money(tier.percent).lt(previous.percent)) {
       throw new UnprocessableEntityException(
         'Un descuento por cantidad no puede ser menor que el del tramo anterior',
       );

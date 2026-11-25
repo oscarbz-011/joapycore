@@ -69,9 +69,6 @@ model SupplierCatalogItem {
   // a mano, con la fecha en que se actualizó para saber qué tan viejo es.
   availability          SupplierAvailability?
   availabilityUpdatedAt DateTime?             @map("availability_updated_at")
-  // Precio por cantidad: [{ minQuantity, price }], en la unidad del
-  // proveedor, ordenado por minQuantity (ver normalizePriceTiers).
-  priceTiers            Json                  @default("[]") @map("price_tiers")
   // Nullable a propósito: el ítem vive suelto hasta que alguien lo vincula a
   // un producto interno (o hasta que la orden de compra lo fuerza).
   productId             String?               @map("product_id")
@@ -81,6 +78,8 @@ model SupplierCatalogItem {
   tenant   Tenant   @relation(fields: [tenantId], references: [id])
   supplier Supplier @relation(fields: [supplierId], references: [id])
   product  Product? @relation(fields: [productId], references: [id])
+
+  priceTiers SupplierCatalogPriceTier[]
 
   @@unique([supplierId, supplierSku])
   @@index([tenantId, supplierId])
@@ -110,13 +109,6 @@ model Supplier {
   shippingCost      Decimal?  @map("shipping_cost") @db.Decimal(23, 8)
   leadTimeDays      Int?      @map("lead_time_days")
   minOrderAmount    Decimal?  @map("min_order_amount") @db.Decimal(23, 8)
-  // Descuento sobre el total de la orden: [{ minAmount, percent }], ordenado
-  // por minAmount (ver normalizeVolumeDiscounts).
-  volumeDiscounts   Json      @default("[]") @map("volume_discounts")
-  // Descuento según la cantidad de unidades de la orden:
-  // [{ minQuantity, percent }], ordenado por minQuantity. Es otra forma de
-  // descuento por volumen; hay proveedores que usan una, otra o las dos.
-  quantityDiscounts Json      @default("[]") @map("quantity_discounts")
   isActive          Boolean   @default(true) @map("is_active")
   deletedAt         DateTime? @map("deleted_at")
   createdAt         DateTime  @default(now()) @map("created_at")
@@ -124,6 +116,10 @@ model Supplier {
 
   tenant           Tenant                @relation(fields: [tenantId], references: [id])
   purchaseOrders   PurchaseOrder[]
+  // Descuentos sobre el total de la orden, por monto o por cantidad de
+  // unidades; hay proveedores que usan uno, otro o los dos.
+  volumeDiscounts   SupplierVolumeDiscount[]
+  quantityDiscounts SupplierQuantityDiscount[]
   productSuppliers ProductSupplier[]
   catalogItems     SupplierCatalogItem[]
   accountsPayable  AccountsPayable[]
@@ -403,4 +399,47 @@ model SupplierPayment {
   @@index([accountsPayableId])
   @@index([purchaseOrderId])
   @@map("supplier_payments")
+}
+
+// Precio por unidad desde cierta cantidad, en la unidad del proveedor.
+model SupplierCatalogPriceTier {
+  tenantId      String  @map("tenant_id")
+  id            String  @id @default(uuid())
+  catalogItemId String  @map("catalog_item_id")
+  minQuantity   Int     @map("min_quantity")
+  price         Decimal @db.Decimal(23, 8)
+
+  catalogItem SupplierCatalogItem @relation(fields: [catalogItemId], references: [id], onDelete: Cascade)
+
+  @@unique([catalogItemId, minQuantity])
+  @@index([tenantId])
+  @@map("supplier_catalog_price_tiers")
+}
+
+model SupplierVolumeDiscount {
+  tenantId   String  @map("tenant_id")
+  id         String  @id @default(uuid())
+  supplierId String  @map("supplier_id")
+  minAmount  Decimal @map("min_amount") @db.Decimal(23, 8)
+  percent    Decimal @db.Decimal(11, 8)
+
+  supplier Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+
+  @@unique([supplierId, minAmount])
+  @@index([tenantId])
+  @@map("supplier_volume_discounts")
+}
+
+model SupplierQuantityDiscount {
+  tenantId    String  @map("tenant_id")
+  id          String  @id @default(uuid())
+  supplierId  String  @map("supplier_id")
+  minQuantity Int     @map("min_quantity")
+  percent     Decimal @db.Decimal(11, 8)
+
+  supplier Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+
+  @@unique([supplierId, minQuantity])
+  @@index([tenantId])
+  @@map("supplier_quantity_discounts")
 }

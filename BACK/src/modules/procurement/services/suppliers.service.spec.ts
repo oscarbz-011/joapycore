@@ -83,8 +83,7 @@ describe('SuppliersService', () => {
 
       await service.create('tenant-1', dto);
 
-      expect(suppliersRepository.create).toHaveBeenCalledWith('tenant-1', {
-        ...dto,
+      expect(suppliersRepository.create).toHaveBeenCalledWith('tenant-1', dto, {
         volumeDiscounts: [],
         quantityDiscounts: [],
       });
@@ -111,11 +110,14 @@ describe('SuppliersService', () => {
           shippingCost: 80_000,
           leadTimeDays: 7,
           minOrderAmount: 500_000,
+        }),
+        {
           volumeDiscounts: [
             { minAmount: 1_000_000, percent: 2 },
             { minAmount: 5_000_000, percent: 5 },
           ],
-        }),
+          quantityDiscounts: [],
+        },
       );
     });
   });
@@ -148,6 +150,7 @@ describe('SuppliersService', () => {
         'tenant-1',
         'sup-1',
         expect.objectContaining({ name: 'Nuevo nombre' }),
+        {},
       );
       expect(result?.name).toBe('Nuevo nombre');
     });
@@ -165,6 +168,7 @@ describe('SuppliersService', () => {
       expect(suppliersRepository.update).toHaveBeenCalledWith(
         'tenant-1',
         'sup-1',
+        {},
         {
           quantityDiscounts: [
             { minQuantity: 5, percent: 5 },
@@ -183,6 +187,7 @@ describe('SuppliersService', () => {
         'tenant-1',
         'sup-1',
         { leadTimeDays: 3 },
+        {},
       );
     });
 
@@ -194,6 +199,7 @@ describe('SuppliersService', () => {
       expect(suppliersRepository.update).toHaveBeenCalledWith(
         'tenant-1',
         'sup-1',
+        {},
         { volumeDiscounts: [] },
       );
     });

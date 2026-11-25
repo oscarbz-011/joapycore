@@ -12,6 +12,9 @@ export const procurementManifest = defineModule({
   owns: [
     'Supplier',
     'SupplierCatalogItem',
+    'SupplierCatalogPriceTier',
+    'SupplierVolumeDiscount',
+    'SupplierQuantityDiscount',
     'PurchaseOrder',
     'PurchaseOrderItem',
     'PurchaseOrderStatusChange',
