@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import { Test, TestingModule } from '@nestjs/testing';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { FinanceSourcesRepository } from '../repositories/finance-sources.repository';
@@ -122,7 +123,7 @@ describe('InstallmentsSchedulerService', () => {
     it('removes an open charge when its component is disabled', async () => {
       const now = new Date('2026-08-18T12:00:00Z');
       jest.useFakeTimers().setSystemTime(now);
-      let openCharge = 0;
+      let openCharge: unknown = 0;
       let componentActive = true;
       installmentsRepo.clearInactiveInterestCharges.mockImplementation(() => {
         if (!componentActive) openCharge = 0;
@@ -166,17 +167,17 @@ describe('InstallmentsSchedulerService', () => {
         ]);
 
       await service.refreshLoanCharges(TENANT, 'loan-1');
-      expect(openCharge).toBe(10_000);
+      expect(Number(openCharge)).toBe(10_000);
 
       componentActive = false;
       await service.refreshLoanCharges(TENANT, 'loan-1');
-      expect(openCharge).toBe(0);
+      expect(Number(openCharge)).toBe(0);
     });
 
     it('clears an open charge when the grace period is extended past the overdue day', async () => {
       const now = new Date('2026-08-18T12:00:00Z');
       jest.useFakeTimers().setSystemTime(now);
-      let openCharge = 0;
+      let openCharge: unknown = 0;
       installmentsRepo.upsertInterestCharge.mockImplementation(
         (_tenantId, _installmentId, _componentId, amount) => {
           openCharge = amount;
@@ -214,10 +215,10 @@ describe('InstallmentsSchedulerService', () => {
         ]);
 
       await service.refreshLoanCharges(TENANT, 'loan-1');
-      expect(openCharge).toBe(10_000);
+      expect(Number(openCharge)).toBe(10_000);
 
       await service.refreshLoanCharges(TENANT, 'loan-1');
-      expect(openCharge).toBe(0);
+      expect(Number(openCharge)).toBe(0);
     });
 
     it('refreshes one loan on demand before it is displayed or collected', async () => {
@@ -260,7 +261,7 @@ describe('InstallmentsSchedulerService', () => {
         TENANT,
         'inst-1',
         'daily-mora',
-        3000,
+        new Prisma.Decimal(3000),
         1,
       );
     });
@@ -298,7 +299,7 @@ describe('InstallmentsSchedulerService', () => {
         TENANT,
         'inst-1',
         'comp-1',
-        0,
+        new Prisma.Decimal(0),
         0,
       );
     });
@@ -338,7 +339,7 @@ describe('InstallmentsSchedulerService', () => {
         TENANT,
         'inst-1',
         'comp-1',
-        5000,
+        new Prisma.Decimal(5000),
         1,
       );
     });
@@ -404,14 +405,14 @@ describe('InstallmentsSchedulerService', () => {
         TENANT,
         'inst-1',
         'admin-fee',
-        50_000,
+        new Prisma.Decimal(50000),
         4,
       );
       expect(installmentsRepo.upsertInterestCharge).toHaveBeenCalledWith(
         TENANT,
         'inst-1',
         'mora',
-        400_000, // cuarto período iniciado * 10% = 40% de 1.000.000
+        new Prisma.Decimal(400000), // cuarto período iniciado * 10% = 40% de 1.000.000
         4,
       );
     });

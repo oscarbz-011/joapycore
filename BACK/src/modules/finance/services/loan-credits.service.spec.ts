@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import { LoanCreditsService } from './loan-credits.service';
 
 describe('LoanCreditsService', () => {
@@ -47,13 +48,16 @@ describe('LoanCreditsService', () => {
     expect(installments.update).toHaveBeenNthCalledWith(
       1,
       'i-3',
-      expect.objectContaining({ amount: 0, status: 'PAID' }),
+      expect.objectContaining({
+        amount: new Prisma.Decimal(0),
+        status: 'PAID',
+      }),
       tx,
     );
     expect(installments.update).toHaveBeenNthCalledWith(
       2,
       'i-2',
-      { amount: 200 },
+      { amount: new Prisma.Decimal(200) },
       tx,
     );
     expect(installments.update).not.toHaveBeenCalledWith(
@@ -63,7 +67,7 @@ describe('LoanCreditsService', () => {
     );
     expect(loans.update).toHaveBeenCalledWith(
       'loan-1',
-      { totalAmount: 500 },
+      { totalAmount: new Prisma.Decimal(500) },
       tx,
     );
   });
@@ -74,7 +78,7 @@ describe('LoanCreditsService', () => {
     expect(applied).toBe(800);
     expect(loans.update).toHaveBeenCalledWith(
       'loan-1',
-      { totalAmount: 100, status: 'PAID' },
+      { totalAmount: new Prisma.Decimal(100), status: 'PAID' },
       tx,
     );
   });

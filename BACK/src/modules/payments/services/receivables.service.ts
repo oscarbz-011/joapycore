@@ -5,8 +5,7 @@ import type {
   Receivables,
 } from '../../../common/contracts/receivables.contract';
 import { AccountsReceivableRepository } from '../repositories/accounts-receivable.repository';
-
-const round2 = (n: number) => Math.round(n * 100) / 100;
+import { money } from '../../../common/money/money';
 
 @Injectable()
 export class ReceivablesService implements Receivables {
@@ -23,9 +22,14 @@ export class ReceivablesService implements Receivables {
       tx,
     );
     if (!ar) return null;
-    const amount = Number(ar.amount);
-    const paid = Number(ar.paidAmount);
-    return { amount, paid, outstanding: round2(Math.max(amount - paid, 0)) };
+    const amount = money(ar.amount);
+    const paid = money(ar.paidAmount);
+    const outstanding = amount.minus(paid);
+    return {
+      amount: amount.toNumber(),
+      paid: paid.toNumber(),
+      outstanding: outstanding.isNegative() ? 0 : outstanding.toNumber(),
+    };
   }
 
   async applyCredit(
@@ -34,23 +38,23 @@ export class ReceivablesService implements Receivables {
     invoiceId: string,
     amount: number,
   ): Promise<void> {
-    if (amount <= 0) return;
+    if (money(amount).lte(0)) return;
     const ar = await this.arRepository.findOpenByInvoice(
       tenantId,
       invoiceId,
       tx,
     );
     if (!ar) return;
-    const paid = Number(ar.paidAmount);
-    const newAmount = round2(Number(ar.amount) - amount);
-    if (newAmount < paid - 0.01) {
+    const paid = money(ar.paidAmount);
+    const newAmount = money(ar.amount).minus(money(amount));
+    if (newAmount.lt(paid)) {
       throw new UnprocessableEntityException(
         'La nota de crédito descuenta más de lo que queda por cobrar',
       );
     }
     let status: 'PENDING' | 'PARTIAL' | 'PAID' = 'PENDING';
-    if (paid >= newAmount - 0.01) status = 'PAID';
-    else if (paid > 0) status = 'PARTIAL';
+    if (paid.gte(newAmount)) status = 'PAID';
+    else if (paid.gt(0)) status = 'PARTIAL';
     await this.arRepository.updateAmountAndStatus(ar.id, newAmount, status, tx);
   }
 }

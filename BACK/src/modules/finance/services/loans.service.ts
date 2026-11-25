@@ -11,6 +11,8 @@ import {
   roundGuaranies,
   splitInstallments,
   sumMoney,
+  type Money,
+  type MoneyValue,
 } from '../../../common/money/money';
 import { saleAmounts } from '../../../common/money/sale-amounts';
 import { FinanceSourcesRepository } from '../repositories/finance-sources.repository';
@@ -26,7 +28,7 @@ import type { AuditLogEvent } from '../../../audit/audit-log.event';
 interface ReceiptItemInput {
   installmentId: string;
   installmentNumber: number;
-  amountApplied: number;
+  amountApplied: Money;
   kind?: PaymentReceiptItemKind;
   componentName?: string;
 }
@@ -34,7 +36,7 @@ interface ReceiptItemInput {
 interface OpenCharge {
   id: string;
   installmentId: string;
-  amount: number;
+  amount: Money;
   componentName: string;
 }
 
@@ -217,7 +219,7 @@ export class LoansService {
       customerId: string;
       branchId: string | null;
       items: ReceiptItemInput[];
-      totalAmount: number;
+      totalAmount: MoneyValue;
       paymentMethod: PaymentMethod;
       paymentReference?: string | null;
       collectedById?: string | null;
@@ -254,7 +256,7 @@ export class LoansService {
         puntoExpedicion,
         sequential,
         receiptNumber,
-        totalAmount: params.totalAmount,
+        totalAmount: money(params.totalAmount),
         paymentMethod: params.paymentMethod,
         paymentReference: params.paymentReference ?? null,
         collectedById: params.collectedById ?? null,
@@ -290,7 +292,7 @@ export class LoansService {
       list.push({
         id: row.id,
         installmentId: row.installmentId,
-        amount: toNum(row.amount),
+        amount: money(row.amount),
         componentName: row.component.name,
       });
       map.set(row.installmentId, list);
@@ -312,31 +314,34 @@ export class LoansService {
     tx: Prisma.TransactionClient,
     inst: { id: string; number: number; amount: unknown; paidAmount: unknown },
     charges: OpenCharge[],
-    amountAvailable: number,
+    amountAvailable: MoneyValue,
     paymentMethod: PaymentMethod,
     paymentDate: Date,
     notes?: string,
     paymentReference?: string,
   ): Promise<{
     items: ReceiptItemInput[];
-    applied: number;
+    applied: Money;
     fullyPaid: boolean;
     updatedInstallment?: Awaited<
       ReturnType<Prisma.TransactionClient['installment']['update']>
     >;
   }> {
-    const principalAmount = toNum(inst.amount);
-    const currentPaid = toNum(inst.paidAmount);
-    const principalOutstanding = principalAmount - currentPaid;
-    const chargesOutstanding = charges.reduce((s, c) => s + c.amount, 0);
-    const totalOutstanding = principalOutstanding + chargesOutstanding;
+    const principalAmount = money(inst.amount as MoneyValue);
+    const currentPaid = money(inst.paidAmount as MoneyValue);
+    const principalOutstanding = principalAmount.minus(currentPaid);
+    const chargesOutstanding = sumMoney(charges.map((c) => c.amount));
+    const totalOutstanding = principalOutstanding.plus(chargesOutstanding);
 
-    const toApply = Math.max(0, Math.min(amountAvailable, totalOutstanding));
-    if (toApply <= 0) {
+    const toApply = Prisma.Decimal.max(
+      0,
+      Prisma.Decimal.min(money(amountAvailable), totalOutstanding),
+    );
+    if (toApply.lte(0)) {
       return {
         items: [],
-        applied: 0,
-        fullyPaid: principalOutstanding <= 0 && chargesOutstanding <= 0,
+        applied: money(0),
+        fullyPaid: principalOutstanding.lte(0) && chargesOutstanding.lte(0),
       };
     }
 
@@ -344,12 +349,12 @@ export class LoansService {
     const items: ReceiptItemInput[] = [];
 
     for (const charge of charges) {
-      if (remaining <= 0) break;
-      const pay = Math.min(remaining, charge.amount);
-      if (pay <= 0) continue;
+      if (remaining.lte(0)) break;
+      const pay = Prisma.Decimal.min(remaining, charge.amount);
+      if (pay.lte(0)) continue;
       await this.installmentsRepository.updateChargeAmount(
         charge.id,
-        charge.amount - pay,
+        charge.amount.minus(pay),
         tx,
       );
       items.push({
@@ -359,16 +364,19 @@ export class LoansService {
         kind: PaymentReceiptItemKind.INTEREST_COMPONENT,
         componentName: charge.componentName,
       });
-      remaining -= pay;
-      charge.amount -= pay;
+      remaining = remaining.minus(pay);
+      charge.amount = charge.amount.minus(pay);
     }
 
-    const principalPayment = Math.min(remaining, principalOutstanding);
-    const newPaid = currentPaid + principalPayment;
-    remaining -= principalPayment;
+    const principalPayment = Prisma.Decimal.max(
+      0,
+      Prisma.Decimal.min(remaining, principalOutstanding),
+    );
+    const newPaid = currentPaid.plus(principalPayment);
+    remaining = remaining.minus(principalPayment);
 
-    const chargesRemaining = charges.reduce((s, c) => s + c.amount, 0);
-    const fullyPaid = newPaid >= principalAmount && chargesRemaining <= 0;
+    const chargesRemaining = sumMoney(charges.map((c) => c.amount));
+    const fullyPaid = newPaid.gte(principalAmount) && chargesRemaining.lte(0);
 
     const updatedInstallment = await this.installmentsRepository.update(
       inst.id,
@@ -383,7 +391,7 @@ export class LoansService {
         // abonar nada del capital, la cuota en sí sigue como estaba.
         status: fullyPaid
           ? 'PAID'
-          : principalPayment > 0
+          : principalPayment.gt(0)
             ? 'PARTIAL'
             : undefined,
         notes,
@@ -391,7 +399,7 @@ export class LoansService {
       tx,
     );
 
-    if (principalPayment > 0) {
+    if (principalPayment.gt(0)) {
       items.push({
         installmentId: inst.id,
         installmentNumber: inst.number,
@@ -531,17 +539,16 @@ export class LoansService {
 
     const charges =
       (await this.getOpenCharges([installmentId])).get(installmentId) ?? [];
-    const principalOutstanding =
-      toNum(installment.amount) - toNum(installment.paidAmount);
-    const chargesOutstanding = charges.reduce((s, c) => s + c.amount, 0);
-    // ceiling caps overpayment against fractional Decimal values (e.g.
-    // 1221875/6 = 203645.83), same criterio que antes, ahora incluyendo
-    // recargos vigentes en el saldo total.
-    const ceiling = Math.ceil(principalOutstanding + chargesOutstanding);
+    // Los créditos anteriores a los montos exactos pueden tener centavos: el
+    // tope se redondea hacia arriba para que se pueda saldar la cuota.
+    const ceiling = money(installment.amount)
+      .minus(money(installment.paidAmount))
+      .plus(sumMoney(charges.map((c) => c.amount)))
+      .ceil();
 
-    if (dto.amount > ceiling) {
+    if (money(dto.amount).gt(ceiling)) {
       throw new UnprocessableEntityException(
-        `El monto abonado (${dto.amount}) supera el saldo de la cuota (${ceiling})`,
+        `El monto abonado (${dto.amount}) supera el saldo de la cuota (${ceiling.toString()})`,
       );
     }
 
@@ -643,18 +650,20 @@ export class LoansService {
     const chargesByInstallment = await this.getOpenCharges(
       pending.map((i) => i.id),
     );
-    const totalOutstanding = pending.reduce((s, i) => {
-      const charges = chargesByInstallment.get(i.id) ?? [];
-      return (
-        s +
-        toNum(i.amount) -
-        toNum(i.paidAmount) +
-        charges.reduce((cs, c) => cs + c.amount, 0)
-      );
-    }, 0);
-    if (dto.amount > totalOutstanding) {
+    const totalOutstanding = sumMoney(
+      pending.map((i) =>
+        money(i.amount)
+          .minus(money(i.paidAmount))
+          .plus(
+            sumMoney(
+              (chargesByInstallment.get(i.id) ?? []).map((c) => c.amount),
+            ),
+          ),
+      ),
+    );
+    if (money(dto.amount).gt(totalOutstanding)) {
       throw new UnprocessableEntityException(
-        `El monto (${dto.amount}) supera el saldo pendiente total (${totalOutstanding})`,
+        `El monto (${dto.amount}) supera el saldo pendiente total (${totalOutstanding.toString()})`,
       );
     }
 
@@ -663,10 +672,10 @@ export class LoansService {
       : new Date();
 
     const receipt = await this.prisma.$transaction(async (tx) => {
-      let remaining = dto.amount;
+      let remaining = money(dto.amount);
       const items: ReceiptItemInput[] = [];
       for (const inst of pending) {
-        if (remaining <= 0) break;
+        if (remaining.lte(0)) break;
         const charges = chargesByInstallment.get(inst.id) ?? [];
         const result = await this.applyPaymentToInstallment(
           tx,
@@ -678,7 +687,7 @@ export class LoansService {
           dto.notes,
         );
         items.push(...result.items);
-        remaining -= result.applied;
+        remaining = remaining.minus(result.applied);
       }
 
       return this.createPaymentReceipt(tx, tenantId, {
@@ -744,13 +753,13 @@ export class LoansService {
         );
       }
       const charges = chargesByInstallment.get(item.installmentId) ?? [];
-      const outstanding =
-        Math.ceil(toNum(inst.amount)) -
-        toNum(inst.paidAmount) +
-        charges.reduce((s, c) => s + c.amount, 0);
-      if (item.amount > outstanding) {
+      const outstanding = money(inst.amount)
+        .ceil()
+        .minus(money(inst.paidAmount))
+        .plus(sumMoney(charges.map((c) => c.amount)));
+      if (money(item.amount).gt(outstanding)) {
         throw new UnprocessableEntityException(
-          `El monto para la cuota #${inst.number} (${item.amount}) supera su saldo (${outstanding})`,
+          `El monto para la cuota #${inst.number} (${item.amount}) supera su saldo (${outstanding.toString()})`,
         );
       }
     }
@@ -781,7 +790,7 @@ export class LoansService {
         customerId: loan.customerId,
         branchId: loan.saleOrder.branchId,
         items,
-        totalAmount: dto.items.reduce((s, i) => s + i.amount, 0),
+        totalAmount: sumMoney(dto.items.map((i) => i.amount)),
         paymentMethod: dto.paymentMethod,
         paymentReference: dto.paymentReference,
         collectedById: userId,
@@ -839,13 +848,13 @@ export class LoansService {
         );
       }
       const charges = chargesByInstallment.get(item.installmentId) ?? [];
-      const outstanding =
-        Math.ceil(toNum(inst.amount)) -
-        toNum(inst.paidAmount) +
-        charges.reduce((sum, c) => sum + c.amount, 0);
-      if (item.amount > outstanding) {
+      const outstanding = money(inst.amount)
+        .ceil()
+        .minus(money(inst.paidAmount))
+        .plus(sumMoney(charges.map((c) => c.amount)));
+      if (money(item.amount).gt(outstanding)) {
         throw new UnprocessableEntityException(
-          `El monto para la cuota #${inst.number} (${item.amount}) supera su saldo (${outstanding})`,
+          `El monto para la cuota #${inst.number} (${item.amount}) supera su saldo (${outstanding.toString()})`,
         );
       }
     }
@@ -865,7 +874,7 @@ export class LoansService {
     const receipts = await this.prisma.$transaction(async (tx) => {
       const byLoan = new Map<
         string,
-        { items: ReceiptItemInput[]; total: number }
+        { items: ReceiptItemInput[]; total: Money }
       >();
       for (const item of dto.items) {
         const inst = pendingById.get(item.installmentId)!;
@@ -878,9 +887,12 @@ export class LoansService {
           paymentDate,
           dto.notes,
         );
-        const group = byLoan.get(inst.loan.id) ?? { items: [], total: 0 };
+        const group = byLoan.get(inst.loan.id) ?? {
+          items: [],
+          total: money(0),
+        };
         group.items.push(...result.items);
-        group.total += item.amount;
+        group.total = group.total.plus(money(item.amount));
         byLoan.set(inst.loan.id, group);
       }
 
@@ -914,7 +926,7 @@ export class LoansService {
           loanId: loanIds.length === 1 ? loanIds[0] : null,
           branchId: branchOf(loanIds[0]),
           items: loanIds.flatMap((loanId) => byLoan.get(loanId)!.items),
-          totalAmount: dto.items.reduce((sum, i) => sum + i.amount, 0),
+          totalAmount: sumMoney(dto.items.map((i) => i.amount)),
         }),
       ];
     });
@@ -965,18 +977,16 @@ export class LoansService {
     const chargesByInstallment = await this.getOpenCharges(
       pending.map((i) => i.id),
     );
-    const principalOutstanding = pending.reduce(
-      (s, i) => s + toNum(i.amount) - toNum(i.paidAmount),
-      0,
+    const principalOutstanding = sumMoney(
+      pending.map((i) => money(i.amount).minus(money(i.paidAmount))),
     );
-    const chargesOutstandingTotal = [...chargesByInstallment.values()].reduce(
-      (s, list) => s + list.reduce((cs, c) => cs + c.amount, 0),
-      0,
+    const chargesOutstandingTotal = sumMoney(
+      [...chargesByInstallment.values()].flat().map((c) => c.amount),
     );
-    const totalOutstanding = principalOutstanding + chargesOutstandingTotal;
-    if (dto.amount > totalOutstanding) {
+    const totalOutstanding = principalOutstanding.plus(chargesOutstandingTotal);
+    if (money(dto.amount).gt(totalOutstanding)) {
       throw new UnprocessableEntityException(
-        `El adelanto (${dto.amount}) supera el saldo pendiente total (${totalOutstanding})`,
+        `El adelanto (${dto.amount}) supera el saldo pendiente total (${totalOutstanding.toString()})`,
       );
     }
 
@@ -992,10 +1002,10 @@ export class LoansService {
       // Apply from last installment backwards — cancels end cuotas first
       const reversed = [...pending].reverse();
       receipt = await this.prisma.$transaction(async (tx) => {
-        let remaining = dto.amount;
+        let remaining = money(dto.amount);
         const items: ReceiptItemInput[] = [];
         for (const inst of reversed) {
-          if (remaining <= 0) break;
+          if (remaining.lte(0)) break;
           const charges = chargesByInstallment.get(inst.id) ?? [];
           const result = await this.applyPaymentToInstallment(
             tx,
@@ -1007,7 +1017,7 @@ export class LoansService {
             dto.notes,
           );
           items.push(...result.items);
-          remaining -= result.applied;
+          remaining = remaining.minus(result.applied);
         }
 
         return this.createPaymentReceipt(tx, tenantId, {
@@ -1033,7 +1043,7 @@ export class LoansService {
           'Existe una cuota parcialmente pagada. Finalice su pago antes de realizar un adelanto con reducción de monto.',
         );
       }
-      if (chargesOutstandingTotal > 0) {
+      if (chargesOutstandingTotal.gt(0)) {
         throw new UnprocessableEntityException(
           'Hay recargos de mora/interés pendientes. Cóbrelos antes de realizar un adelanto con reducción de monto.',
         );

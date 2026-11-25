@@ -45,32 +45,43 @@ describe('InterestCalcService', () => {
   });
 
   describe('computeComponentCharge', () => {
+    // Los recargos se cobran en guaraníes enteros: 15.812 × 2,5 % = 395,3.
+    it('rounds the charge to whole guaraníes', () => {
+      const charge = service.computeComponentCharge(
+        { frequency: 'ONE_TIME', percentage: '2.5', cumulative: false },
+        15812,
+        1,
+        0,
+      );
+      expect(charge.toString()).toBe('395');
+    });
+
     const base = { percentage: 10, cumulative: false };
 
     it('ONE_TIME charges a flat % once triggered, regardless of how many days pass', () => {
       const component = { ...base, frequency: 'ONE_TIME' as const };
-      expect(service.computeComponentCharge(component, 1_000_000, 0, 0)).toBe(
-        0,
-      );
-      expect(service.computeComponentCharge(component, 1_000_000, 1, 0)).toBe(
-        100_000,
-      );
-      expect(service.computeComponentCharge(component, 1_000_000, 45, 1)).toBe(
-        100_000,
-      );
+      expect(
+        service.computeComponentCharge(component, 1_000_000, 0, 0).toNumber(),
+      ).toBe(0);
+      expect(
+        service.computeComponentCharge(component, 1_000_000, 1, 0).toNumber(),
+      ).toBe(100_000);
+      expect(
+        service.computeComponentCharge(component, 1_000_000, 45, 1).toNumber(),
+      ).toBe(100_000);
     });
 
     it('DAILY accrues proportionally to days overdue', () => {
       const component = { ...base, frequency: 'DAILY' as const };
-      expect(service.computeComponentCharge(component, 1_000_000, 0, 0)).toBe(
-        0,
-      );
-      expect(service.computeComponentCharge(component, 1_000_000, 5, 0)).toBe(
-        500_000,
-      );
-      expect(service.computeComponentCharge(component, 1_000_000, 10, 0)).toBe(
-        1_000_000,
-      );
+      expect(
+        service.computeComponentCharge(component, 1_000_000, 0, 0).toNumber(),
+      ).toBe(0);
+      expect(
+        service.computeComponentCharge(component, 1_000_000, 5, 0).toNumber(),
+      ).toBe(500_000);
+      expect(
+        service.computeComponentCharge(component, 1_000_000, 10, 0).toNumber(),
+      ).toBe(1_000_000);
     });
 
     it('MONTHLY non-cumulative charges the base % once, flat', () => {
@@ -79,18 +90,18 @@ describe('InterestCalcService', () => {
         frequency: 'MONTHLY' as const,
         cumulative: false,
       };
-      expect(service.computeComponentCharge(component, 1_000_000, 0, 0)).toBe(
-        0,
-      );
-      expect(service.computeComponentCharge(component, 1_000_000, 1, 1)).toBe(
-        100_000,
-      );
-      expect(service.computeComponentCharge(component, 1_000_000, 40, 1)).toBe(
-        100_000,
-      );
-      expect(service.computeComponentCharge(component, 1_000_000, 95, 3)).toBe(
-        100_000,
-      );
+      expect(
+        service.computeComponentCharge(component, 1_000_000, 0, 0).toNumber(),
+      ).toBe(0);
+      expect(
+        service.computeComponentCharge(component, 1_000_000, 1, 1).toNumber(),
+      ).toBe(100_000);
+      expect(
+        service.computeComponentCharge(component, 1_000_000, 40, 1).toNumber(),
+      ).toBe(100_000);
+      expect(
+        service.computeComponentCharge(component, 1_000_000, 95, 3).toNumber(),
+      ).toBe(100_000);
     });
 
     // Ejemplo exacto dado por el usuario: mes 1=10%, mes 2=10%+10%=20%,
@@ -101,15 +112,15 @@ describe('InterestCalcService', () => {
         frequency: 'MONTHLY' as const,
         cumulative: true,
       };
-      expect(service.computeComponentCharge(component, 1_000_000, 40, 1)).toBe(
-        100_000,
-      );
-      expect(service.computeComponentCharge(component, 1_000_000, 65, 2)).toBe(
-        200_000,
-      );
-      expect(service.computeComponentCharge(component, 1_000_000, 95, 3)).toBe(
-        300_000,
-      );
+      expect(
+        service.computeComponentCharge(component, 1_000_000, 40, 1).toNumber(),
+      ).toBe(100_000);
+      expect(
+        service.computeComponentCharge(component, 1_000_000, 65, 2).toNumber(),
+      ).toBe(200_000);
+      expect(
+        service.computeComponentCharge(component, 1_000_000, 95, 3).toNumber(),
+      ).toBe(300_000);
     });
   });
 });

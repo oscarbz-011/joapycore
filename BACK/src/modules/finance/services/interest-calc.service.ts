@@ -1,5 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import { InterestComponentFrequency } from '@prisma/client';
+import {
+  money,
+  roundGuaranies,
+  type Money,
+  type MoneyValue,
+} from '../../../common/money/money';
 
 const MS_PER_DAY = 1000 * 60 * 60 * 24;
 const DAYS_PER_PERIOD = 30;
@@ -26,35 +32,39 @@ export class InterestCalcService {
     return days > 0 ? Math.ceil(days / DAYS_PER_PERIOD) : 0;
   }
 
-  // Cargo vigente de un componente sobre una cuota, en guaraníes — nunca
-  // negativo, nunca depende de si ya se cobró algo (eso lo maneja quien
+  // Cargo vigente de un componente sobre una cuota, en guaraníes enteros —
+  // nunca negativo, nunca depende de si ya se cobró algo (eso lo maneja quien
   // aplica el pago, no el cálculo).
   computeComponentCharge(
     component: {
       frequency: InterestComponentFrequency;
-      percentage: number;
+      percentage: MoneyValue;
       cumulative: boolean;
     },
-    installmentAmount: number,
+    installmentAmount: MoneyValue,
     daysOverdue: number,
     periodsElapsed: number,
-  ): number {
-    const pct = component.percentage / 100;
+  ): Money {
+    const base = money(installmentAmount)
+      .mul(money(component.percentage))
+      .div(100);
     switch (component.frequency) {
       case 'ONE_TIME':
-        return daysOverdue >= 1 ? installmentAmount * pct : 0;
+        return daysOverdue >= 1 ? roundGuaranies(base) : money(0);
       case 'DAILY':
-        return daysOverdue >= 1 ? installmentAmount * pct * daysOverdue : 0;
+        return daysOverdue >= 1
+          ? roundGuaranies(base.mul(daysOverdue))
+          : money(0);
       case 'MONTHLY':
-        if (periodsElapsed < 1) return 0;
+        if (periodsElapsed < 1) return money(0);
         // Acumulativo: mes 1=10%, mes 2=20%, mes 3=30% (lineal, no interés
         // compuesto) — cada período vencido vuelve a sumar el % base. No
         // acumulativo: se cobra el % base una sola vez y no vuelve a crecer.
-        return component.cumulative
-          ? installmentAmount * pct * periodsElapsed
-          : installmentAmount * pct;
+        return roundGuaranies(
+          component.cumulative ? base.mul(periodsElapsed) : base,
+        );
       default:
-        return 0;
+        return money(0);
     }
   }
 }

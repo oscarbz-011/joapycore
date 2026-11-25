@@ -122,7 +122,7 @@ export class AccountsReceivableRepository {
 
   updateAmountAndStatus(
     id: string,
-    amount: number,
+    amount: Prisma.Decimal,
     status: 'PENDING' | 'PARTIAL' | 'PAID',
     client: PrismaClientOrTx,
   ) {

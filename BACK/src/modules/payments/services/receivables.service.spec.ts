@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import { ReceivablesService } from './receivables.service';
 
 describe('ReceivablesService', () => {
@@ -47,7 +48,7 @@ describe('ReceivablesService', () => {
       await service.applyCredit(tx, 't-1', 'inv-1', credit);
       expect(repo.updateAmountAndStatus).toHaveBeenCalledWith(
         'ar-1',
-        newAmount,
+        new Prisma.Decimal(newAmount),
         status,
         tx,
       );
