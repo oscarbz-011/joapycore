@@ -388,7 +388,7 @@ model CreditConfig {
   isEnabled                Boolean  @default(false) @map("is_enabled")
   // % máximo del sueldo del cliente admitido para cuota mensual de crédito —
   // null = el chequeo de capacidad de pago por sueldo no corre.
-  maxIncomePercentage      Decimal? @map("max_income_percentage") @db.Decimal(5, 2)
+  maxIncomePercentage      Decimal? @map("max_income_percentage") @db.Decimal(11, 8)
   // Día del mes (1-28, evita problemas de meses cortos) en que vencen todas
   // las cuotas de todos los créditos del tenant — no depende de la fecha de
   // compra de cada cliente.
@@ -433,7 +433,7 @@ model CreditPlan {
   id             String   @id @default(uuid())
   creditConfigId String   @map("credit_config_id")
   installments   Int
-  interestRate   Decimal  @map("interest_rate") @db.Decimal(5, 2)
+  interestRate   Decimal  @map("interest_rate") @db.Decimal(11, 8)
   isActive       Boolean  @default(true) @map("is_active")
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
@@ -464,7 +464,7 @@ model InterestComponent {
   // Decimal(7,4): permite tasas menores a 1% (ej. mora diaria de 0,001%)
   // sin redondearlas a 0 — antes era Decimal(5,2), que solo admitía 2
   // decimales.
-  percentage     Decimal                    @db.Decimal(7, 4)
+  percentage     Decimal                    @db.Decimal(11, 8)
   // Solo aplica a MONTHLY: si true, el cargo crece con cada período vencido
   // (mes 1=10%, mes 2=20%, mes 3=30% — acumulación lineal, no interés
   // compuesto). Si false, se cobra el % base una sola vez apenas se cruza
@@ -489,7 +489,7 @@ model PricingConfig {
   id            String       @id @default(uuid())
   tenantId      String       @unique @map("tenant_id")
   markupMethod  MarkupMethod @default(PERCENTAGE) @map("markup_method")
-  defaultMarkup Decimal      @map("default_markup") @db.Decimal(10, 2)
+  defaultMarkup Decimal      @map("default_markup") @db.Decimal(23, 8)
   updatedAt     DateTime     @updatedAt @map("updated_at")
 
   tenant Tenant @relation(fields: [tenantId], references: [id])

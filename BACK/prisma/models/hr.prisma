@@ -188,8 +188,8 @@ model PayrollConfig {
   id              String   @id @default(uuid())
   tenantId        String   @unique @map("tenant_id")
   minimumWage     Int      @map("minimum_wage")
-  ipsEmployeeRate Decimal  @default(0.0900) @map("ips_employee_rate") @db.Decimal(5, 4)
-  ipsEmployerRate Decimal  @default(0.1650) @map("ips_employer_rate") @db.Decimal(5, 4)
+  ipsEmployeeRate Decimal  @default(0.0900) @map("ips_employee_rate") @db.Decimal(11, 8)
+  ipsEmployerRate Decimal  @default(0.1650) @map("ips_employer_rate") @db.Decimal(11, 8)
   updatedAt       DateTime @updatedAt @map("updated_at")
 
   tenant Tenant @relation(fields: [tenantId], references: [id])

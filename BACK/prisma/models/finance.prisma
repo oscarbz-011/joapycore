@@ -21,7 +21,7 @@ model InstallmentInterestCharge {
   id             String   @id @default(uuid())
   installmentId  String   @map("installment_id")
   componentId    String   @map("component_id")
-  amount         Decimal  @default(0) @db.Decimal(12, 2)
+  amount         Decimal  @default(0) @db.Decimal(23, 8)
   periodsElapsed Int      @default(0) @map("periods_elapsed")
   updatedAt      DateTime @updatedAt @map("updated_at")
 
@@ -38,9 +38,9 @@ model Loan {
   tenantId          String     @map("tenant_id")
   saleOrderId       String     @unique @map("sale_order_id")
   customerId        String     @map("customer_id")
-  principal         Decimal    @db.Decimal(12, 2)
-  interestRate      Decimal    @map("interest_rate") @db.Decimal(5, 2)
-  totalAmount       Decimal    @map("total_amount") @db.Decimal(12, 2)
+  principal         Decimal    @db.Decimal(23, 8)
+  interestRate      Decimal    @map("interest_rate") @db.Decimal(11, 8)
+  totalAmount       Decimal    @map("total_amount") @db.Decimal(23, 8)
   totalInstallments Int        @map("total_installments")
   status            LoanStatus @default(ACTIVE)
   createdAt         DateTime   @default(now()) @map("created_at")
@@ -66,8 +66,8 @@ model Installment {
   loanId           String            @map("loan_id")
   number           Int
   dueDate          DateTime          @map("due_date")
-  amount           Decimal           @db.Decimal(12, 2)
-  paidAmount       Decimal           @default(0) @map("paid_amount") @db.Decimal(12, 2)
+  amount           Decimal           @db.Decimal(23, 8)
+  paidAmount       Decimal           @default(0) @map("paid_amount") @db.Decimal(23, 8)
   paidAt           DateTime?         @map("paid_at")
   paymentMethod    PaymentMethod?    @map("payment_method")
   paymentReference String?           @map("payment_reference")
@@ -105,7 +105,7 @@ model PaymentReceipt {
   puntoExpedicion  String        @map("punto_expedicion")
   sequential       Int           @map("sequential")
   receiptNumber    String        @map("receipt_number") // "001-002-0000001" formateado
-  totalAmount      Decimal       @map("total_amount") @db.Decimal(12, 2)
+  totalAmount      Decimal       @map("total_amount") @db.Decimal(23, 8)
   paymentMethod    PaymentMethod @map("payment_method")
   paymentReference String?       @map("payment_reference")
   collectedById    String?       @map("collected_by_id")
@@ -140,7 +140,7 @@ model PaymentReceiptItem {
   receiptId         String                 @map("receipt_id")
   installmentId     String                 @map("installment_id")
   installmentNumber Int                    @map("installment_number")
-  amountApplied     Decimal                @map("amount_applied") @db.Decimal(12, 2)
+  amountApplied     Decimal                @map("amount_applied") @db.Decimal(23, 8)
   kind              PaymentReceiptItemKind @default(PRINCIPAL)
   // Snapshot del nombre del InterestComponent al momento de cobrarlo — solo
   // se completa para kind=INTEREST_COMPONENT. Sobrevive si el componente se
