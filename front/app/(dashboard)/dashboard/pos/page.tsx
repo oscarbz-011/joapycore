@@ -1,4 +1,5 @@
 'use client';
+import { money as exact, sumMoney } from '@/lib/money';
 
 import { resolveWarehouseId, warehouseChoices } from '@/lib/sale-warehouse';
 import { useSaleStock } from '@/lib/use-sale-stock';
@@ -319,8 +320,8 @@ function SaleScreen({ session }: { session: ActivePosSession }) {
   const documentNumber = talonarioNumber || suggestedNumber;
   const numberProblem = series && askNumber ? talonarioNumberProblem(series, documentNumber) : null;
 
-  const total = cart.reduce((sum, l) => sum + l.quantity * l.unitPrice, 0);
-  const paidTotal = payments.reduce((sum, p) => sum + (p.amount || 0), 0);
+  const total = sumMoney(cart.map((l) => exact(l.unitPrice).mul(l.quantity))).toNumber();
+  const paidTotal = sumMoney(payments.map((p) => p.amount || 0)).toNumber();
 
   function addProduct(product: ProductWithStock) {
     setCart((c) => {
@@ -675,7 +676,7 @@ function SaleScreen({ session }: { session: ActivePosSession }) {
                       {new Date(s.orderDate).toLocaleTimeString('es-PY', { hour: '2-digit', minute: '2-digit' })}
                     </span>
                     <span className="font-medium text-foreground">
-                      {money(s.items.reduce((sum, i) => sum + i.quantity * i.unitPrice, 0))}
+                      {money(sumMoney(s.items.map((i) => exact(i.unitPrice).mul(i.quantity))).toNumber())}
                     </span>
                   </div>
                 ))}

@@ -1,4 +1,5 @@
 "use client";
+import { sumMoney } from "@/lib/money";
 
 import { paymentMethodLabel } from "@/lib/payment-methods";
 
@@ -397,7 +398,7 @@ export default function PaymentsPage() {
         if (!due) return pendingRange === "month";
         return due >= start && due < end;
       })
-      .reduce((sum, ar) => sum + effectiveAmounts(ar).pending, 0);
+      .map((ar) => effectiveAmounts(ar).pending).reduce((sum, a) => sum.plus(a), sumMoney([])).toNumber();
   })();
 
   return (

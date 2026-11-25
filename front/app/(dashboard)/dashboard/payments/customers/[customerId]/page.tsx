@@ -1,4 +1,5 @@
 "use client";
+import { sumMoney } from "@/lib/money";
 
 import { useState } from "react";
 import Link from "next/link";
@@ -173,8 +174,8 @@ function CreditSection({
   const nextDueLoan = summary.nextDue
     ? loans.find((loan) => loan.installments.some((inst) => inst.id === summary.nextDue?.id))
     : undefined;
-  const paid = loans.reduce((sum, loan) => sum + loanSummary(loan.installments).paid, 0);
-  const financed = loans.reduce((sum, loan) => sum + Number(loan.totalAmount), 0);
+  const paid = sumMoney(loans.map((loan) => loanSummary(loan.installments).paid)).toNumber();
+  const financed = sumMoney(loans.map((loan) => loan.totalAmount)).toNumber();
   // Con un solo producto no hace falta plegarlo.
   const isLoanOpen = (loanId: string) => loans.length === 1 || openLoans.has(loanId);
   const allOpen = loans.every((loan) => isLoanOpen(loan.id));
@@ -316,7 +317,7 @@ function CreditSection({
                   <Detail
                     key={group[0].loan.id}
                     label={loanTitle(group[0].loan)}
-                    value={formatPrice(group.reduce((sum, item) => sum + item.amount, 0))}
+                    value={formatPrice(sumMoney(group.map((item) => item.amount)).toNumber())}
                   />
                 ))}
               </dl>

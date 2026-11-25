@@ -1,4 +1,5 @@
 'use client';
+import { sumMoney } from '@/lib/money';
 
 import type { ReactNode } from 'react';
 import Link from 'next/link';
@@ -166,8 +167,8 @@ export default function CreditNoteDetailPage() {
 
   const total = Number(note.total);
   const applied = Number(note.appliedToBalance);
-  const credited = note.customerCredits.reduce((sum, c) => sum + Number(c.amount), 0);
-  const refunded = note.refunds.reduce((sum, r) => sum + Number(r.amount), 0);
+  const credited = sumMoney(note.customerCredits.map((c) => c.amount)).toNumber();
+  const refunded = sumMoney(note.refunds.map((r) => r.amount)).toNumber();
   const onSheet = note.modality === 'PREPRINTED';
 
   return (

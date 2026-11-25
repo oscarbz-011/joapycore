@@ -1,4 +1,5 @@
 'use client';
+import { money, sumMoney } from '@/lib/money';
 
 import { usePermission } from '@/lib/permissions';
 
@@ -26,7 +27,7 @@ function fmtPrice(n: number) {
 }
 
 function comboListPrice(combo: SaleCombo): number {
-  const listTotal = combo.items.reduce((sum, it) => sum + it.product.salePrice * it.quantity, 0);
+  const listTotal = sumMoney(combo.items.map((it) => money(it.product.salePrice).mul(it.quantity))).toNumber();
   if (combo.priceMode === 'FIXED') return combo.fixedPrice ?? 0;
   return listTotal * (1 - (combo.discountPercentage ?? 0) / 100);
 }

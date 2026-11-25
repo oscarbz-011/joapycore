@@ -1,4 +1,5 @@
 'use client';
+import { money, sumMoney } from '@/lib/money';
 
 import { useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
@@ -36,7 +37,7 @@ function formatDateTime(iso: string) {
 }
 
 const saleTotal = (sale: PosSaleOrder) =>
-  sale.items.reduce((sum, i) => sum + i.quantity * i.unitPrice, 0);
+  sumMoney(sale.items.map((i) => money(i.unitPrice).mul(i.quantity))).toNumber();
 
 const POS_SALE_SORT = {
   date: (sale: PosSaleOrder) => new Date(sale.orderDate),
@@ -77,7 +78,7 @@ export default function PosHistoryPage() {
   const pagination = usePagination(sorted);
 
   const total = sales.reduce(
-    (sum, s) => sum + s.items.reduce((iSum, i) => iSum + i.quantity * i.unitPrice, 0),
+    (sum, s) => money(sum).plus(sumMoney(s.items.map((i) => money(i.unitPrice).mul(i.quantity)))).toNumber(),
     0,
   );
 

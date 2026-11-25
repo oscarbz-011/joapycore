@@ -1,4 +1,5 @@
 "use client";
+import { money, roundGuaranies, sumMoney } from "@/lib/money";
 
 import { apiErrorMessage } from "@/lib/api/api-error";
 
@@ -98,7 +99,7 @@ export function effectiveAmounts(ar: AccountsReceivable) {
   const loan = ar.invoice.saleOrder.loan;
   const paid =
     isCredit && loan
-      ? loan.installments.reduce((s, i) => s + Number(i.paidAmount), 0)
+      ? sumMoney(loan.installments.map((i) => i.paidAmount)).toNumber()
       : Number(ar.paidAmount);
   const total = isCredit && loan ? Number(loan.totalAmount) : Number(ar.amount);
   return { isCredit, paid, total, pending: total - paid };
@@ -503,9 +504,9 @@ export function RegisterPaymentModal({
   onOpenChange: (open: boolean) => void;
   onSaved: () => void;
 }) {
-  const remaining = Number(ar.amount) - Number(ar.paidAmount);
+  const remaining = money(ar.amount).minus(ar.paidAmount).toNumber();
 
-  const [amount, setAmount] = useState<number>(Math.round(remaining));
+  const [amount, setAmount] = useState<number>(roundGuaranies(remaining).toNumber());
   const [method, setMethod] = useState<PaymentMethod>("CASH");
   const [date, setDate] = useState(todayISODate());
   const [reference, setReference] = useState("");
@@ -665,7 +666,7 @@ export function PayInstallmentsModal({
   onSaved: () => void;
 }) {
   const queryClient = useQueryClient();
-  const totalAmount = items.reduce((s, i) => s + i.amount, 0);
+  const totalAmount = sumMoney(items.map((i) => i.amount)).toNumber();
 
   const [method, setMethod] = useState<PaymentMethod>("CASH");
   const [date, setDate] = useState(todayISODate());

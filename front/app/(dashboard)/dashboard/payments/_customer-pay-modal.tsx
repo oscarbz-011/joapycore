@@ -1,4 +1,5 @@
 "use client";
+import { sumMoney } from "@/lib/money";
 
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
@@ -35,7 +36,7 @@ export function PayCustomerInstallmentsModal({
   onSaved: () => void;
 }) {
   const items = groups.flat();
-  const total = items.reduce((sum, item) => sum + item.amount, 0);
+  const total = sumMoney(items.map((item) => item.amount)).toNumber();
   const severalProducts = groups.length > 1;
 
   const [method, setMethod] = useState<PaymentMethod>("CASH");

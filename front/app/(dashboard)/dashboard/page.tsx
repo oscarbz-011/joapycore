@@ -1,4 +1,5 @@
 'use client';
+import { money, sumMoney } from '@/lib/money';
 
 import { orderPartyName } from '@/lib/quote-party';
 import { useMemo, useState } from 'react';
@@ -59,7 +60,7 @@ function fmtGs(n: number) {
 const ACTIVE_STATUSES: SaleOrder['status'][] = ['CONFIRMED', 'CREDIT_APPROVED', 'INVOICED'];
 const OPEN_STATUSES:   SaleOrder['status'][] = ['PENDING', 'PENDING_CREDIT_APPROVAL', 'CREDIT_APPROVED', 'CONFIRMED'];
 
-function orderTotal(o: SaleOrder) { return o.items.reduce((s, i) => s + i.unitPrice * i.quantity, 0); }
+function orderTotal(o: SaleOrder) { return sumMoney(o.items.map((i) => money(i.unitPrice).mul(i.quantity))).toNumber(); }
 function inMonth(dateStr: string, year: number, month: number) {
   const d = new Date(dateStr);
   return d.getFullYear() === year && d.getMonth() === month;
@@ -401,8 +402,8 @@ export default function DashboardPage() {
     const ordersHoy     = orders.filter((o) => localISODate(o.orderDate) === todayStr).length;
     const thisMonthAct  = orders.filter((o) => ACTIVE_STATUSES.includes(o.status) && inMonth(o.orderDate, thisY, thisM));
     const lastMonthAct  = orders.filter((o) => ACTIVE_STATUSES.includes(o.status) && inMonth(o.orderDate, lastY, lastM));
-    const ventas        = thisMonthAct.reduce((s, o) => s + orderTotal(o), 0);
-    const ventasPrev    = lastMonthAct.reduce((s, o) => s + orderTotal(o), 0);
+    const ventas        = sumMoney(thisMonthAct.map(orderTotal)).toNumber();
+    const ventasPrev    = sumMoney(lastMonthAct.map(orderTotal)).toNumber();
     const ventasDelta   = ventasPrev > 0 ? ((ventas - ventasPrev) / ventasPrev) * 100 : null;
     const abiertas      = orders.filter((o) => OPEN_STATUSES.includes(o.status)).length;
     const ticketPromedio = thisMonthAct.length > 0 ? ventas / thisMonthAct.length : 0;
@@ -410,14 +411,14 @@ export default function DashboardPage() {
     const ticketDelta   = ticketPrev > 0 ? ((ticketPromedio - ticketPrev) / ticketPrev) * 100 : null;
     const criticos      = products.filter((p) => p.stock <= 3);
     const pendAR        = arList.filter((ar) => ar.status === 'PENDING' || ar.status === 'PARTIAL');
-    const porCobrar     = pendAR.reduce((s, ar) => s + (Number(ar.amount) - Number(ar.paidAmount)), 0);
+    const porCobrar     = sumMoney(pendAR.map((ar) => money(ar.amount).minus(ar.paidAmount))).toNumber();
     const overdueAR     = pendAR.filter((ar) => ar.dueDate && new Date(ar.dueDate) < now);
-    const vencido       = overdueAR.reduce((s, ar) => s + (Number(ar.amount) - Number(ar.paidAmount)), 0);
-    const cobrado       = arList.reduce((s, ar) => s + Number(ar.paidAmount), 0);
+    const vencido       = sumMoney(overdueAR.map((ar) => money(ar.amount).minus(ar.paidAmount))).toNumber();
+    const cobrado       = sumMoney(arList.map((ar) => ar.paidAmount)).toNumber();
     const pendiente     = porCobrar - vencido;
     const cobradoMes    = arList.flatMap((ar) => ar.paymentRecords)
       .filter((p) => inMonth(p.paymentDate, thisY, thisM))
-      .reduce((s, p) => s + Number(p.amount), 0);
+      .map((p) => p.amount).reduce((s, a) => s.plus(money(a)), money(0)).toNumber();
 
     return { ordersHoy, ventas, ventasDelta, abiertas, ticketPromedio, ticketDelta, criticos, porCobrar, vencido, pendiente, cobrado, cobradoMes };
   }, [orders, products, arList, now]);
@@ -426,7 +427,7 @@ export default function DashboardPage() {
     const d = new Date(now.getFullYear(), now.getMonth() - 11 + i, 1);
     const y = d.getFullYear(), m = d.getMonth();
     const total = orders.filter((o) => ACTIVE_STATUSES.includes(o.status) && inMonth(o.orderDate, y, m))
-      .reduce((s, o) => s + orderTotal(o), 0);
+      .map(orderTotal).reduce((s, a) => s.plus(a), money(0)).toNumber();
     return { label: MES_CORTO[m], total, isCurrent: i === 11 };
   }), [orders, now]);
 

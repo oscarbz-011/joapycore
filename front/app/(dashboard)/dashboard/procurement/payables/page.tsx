@@ -1,4 +1,5 @@
 'use client';
+import { money } from '@/lib/money';
 
 import { RequirePermission } from '@/components/require-permission';
 
@@ -433,7 +434,7 @@ export default function PayablesPage() {
 
   const totalPending = apList
     .filter((ap) => ap.status === 'PENDING' || ap.status === 'PARTIAL')
-    .reduce((sum, ap) => sum + (Number(ap.amount) - Number(ap.paidAmount)), 0);
+    .map((ap) => money(ap.amount).minus(ap.paidAmount)).reduce((sum, a) => sum.plus(a), money(0)).toNumber();
 
   return (
     <div>
