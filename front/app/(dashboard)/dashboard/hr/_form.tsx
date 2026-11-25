@@ -15,6 +15,7 @@ import {
 } from '../../../../lib/api/hr';
 import { branchesApi } from '../../../../lib/api/branches';
 import { NumericInput } from '../../../../components/numeric-input';
+import { money } from '@/lib/money';
 import { Button } from '@/components/ui/button';
 import { DatePicker } from '@/components/ui/date-picker';
 import { Input } from '@/components/ui/input';
@@ -67,7 +68,7 @@ function fromEmployee(e: Employee): CreateEmployeePayload {
     areaId: e.area?.id ?? undefined,
     positionId: e.position?.id ?? undefined,
     branchId: e.branch?.id ?? undefined,
-    baseSalary: e.baseSalary,
+    baseSalary: money(e.baseSalary).toNumber(),
     paymentMethod: e.paymentMethod,
     bankName: e.bankName ?? '',
     bankAccount: e.bankAccount ?? '',

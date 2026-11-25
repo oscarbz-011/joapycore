@@ -115,8 +115,8 @@ model Employee {
   // contractType (que distingue interno/externo, no "hace repartos").
   isCourier       Boolean      @default(false) @map("is_courier")
 
-  // Payroll (PYG — integer, no decimals)
-  baseSalary    Int           @map("base_salary")
+  // Payroll
+  baseSalary    Decimal       @map("base_salary") @db.Decimal(23, 8)
   paymentMethod PaymentMethod @default(BANK_TRANSFER) @map("payment_method")
   bankName      String?       @map("bank_name")
   bankAccount   String?       @map("bank_account")
@@ -187,7 +187,7 @@ model LeaveBalance {
 model PayrollConfig {
   id              String   @id @default(uuid())
   tenantId        String   @unique @map("tenant_id")
-  minimumWage     Int      @map("minimum_wage")
+  minimumWage     Decimal  @map("minimum_wage") @db.Decimal(23, 8)
   ipsEmployeeRate Decimal  @default(0.0900) @map("ips_employee_rate") @db.Decimal(11, 8)
   ipsEmployerRate Decimal  @default(0.1650) @map("ips_employer_rate") @db.Decimal(11, 8)
   updatedAt       DateTime @updatedAt @map("updated_at")
@@ -220,16 +220,15 @@ model PayrollRecordItem {
   payrollRecordId String @map("payroll_record_id")
   employeeId      String @map("employee_id")
 
-  // All amounts in PYG (integer)
-  baseSalary  Int     @map("base_salary")
-  bonuses     Int     @default(0)
-  deductions  Int     @default(0)
-  ipsEmployee Int     @map("ips_employee")
-  ipsEmployer Int     @map("ips_employer")
-  irp         Int     @default(0)
-  aguinaldo   Int     @default(0)
-  grossSalary Int     @map("gross_salary")
-  netSalary   Int     @map("net_salary")
+  baseSalary  Decimal @map("base_salary") @db.Decimal(23, 8)
+  bonuses     Decimal @default(0) @db.Decimal(23, 8)
+  deductions  Decimal @default(0) @db.Decimal(23, 8)
+  ipsEmployee Decimal @map("ips_employee") @db.Decimal(23, 8)
+  ipsEmployer Decimal @map("ips_employer") @db.Decimal(23, 8)
+  irp         Decimal @default(0) @db.Decimal(23, 8)
+  aguinaldo   Decimal @default(0) @db.Decimal(23, 8)
+  grossSalary Decimal @map("gross_salary") @db.Decimal(23, 8)
+  netSalary   Decimal @map("net_salary") @db.Decimal(23, 8)
   notes       String?
 
   payrollRecord PayrollRecord @relation(fields: [payrollRecordId], references: [id])

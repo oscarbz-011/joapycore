@@ -66,7 +66,7 @@ export interface Employee {
   hireDate: string;
   contractType: ContractType;
   isCourier: boolean;
-  baseSalary: number;
+  baseSalary: string;
   paymentMethod: PaymentMethod;
   bankName?: string | null;
   bankAccount?: string | null;
@@ -124,6 +124,12 @@ export interface Position {
 export interface PayrollConfig {
   id?: string;
   tenantId?: string;
+  minimumWage: string;
+  ipsEmployeeRate: string;
+  ipsEmployerRate: string;
+}
+
+export interface PayrollConfigPayload {
   minimumWage: number;
   ipsEmployeeRate: number;
   ipsEmployerRate: number;
@@ -144,11 +150,11 @@ export interface PayrollRecord {
 
 export interface PayrollRecordItem {
   id: string;
-  grossSalary: number;
-  aguinaldo: number;
-  ipsEmployee: number;
-  ipsEmployer: number;
-  netSalary: number;
+  grossSalary: string;
+  aguinaldo: string;
+  ipsEmployee: string;
+  ipsEmployer: string;
+  netSalary: string;
   employee: {
     id: string;
     firstName: string;
@@ -205,7 +211,7 @@ export const hrApi = {
   getPayrollConfig: (): Promise<PayrollConfig | null> =>
     apiClient.get('/hr/payroll/config').then((r) => r.data),
 
-  updatePayrollConfig: (dto: Partial<PayrollConfig>): Promise<PayrollConfig> =>
+  updatePayrollConfig: (dto: Partial<PayrollConfigPayload>): Promise<PayrollConfig> =>
     apiClient.put('/hr/payroll/config', dto).then((r) => r.data),
 
   // Payroll records

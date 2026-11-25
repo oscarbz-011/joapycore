@@ -70,18 +70,14 @@ export class PayrollService {
     const isDecember = period.endsWith('-12');
 
     for (const emp of activeEmployees) {
-      const baseSalary = emp.baseSalary;
+      const baseSalary = money(emp.baseSalary);
       const aguinaldo = isDecember
-        ? roundGuaranies(money(baseSalary).div(12)).toNumber()
-        : 0;
-      const grossSalary = baseSalary + aguinaldo;
-      const ipsEmployee = roundGuaranies(
-        money(baseSalary).mul(ipsEmployeeRate),
-      ).toNumber();
-      const ipsEmployer = roundGuaranies(
-        money(baseSalary).mul(ipsEmployerRate),
-      ).toNumber();
-      const netSalary = grossSalary - ipsEmployee;
+        ? roundGuaranies(baseSalary.div(12))
+        : money(0);
+      const grossSalary = baseSalary.plus(aguinaldo);
+      const ipsEmployee = roundGuaranies(baseSalary.mul(ipsEmployeeRate));
+      const ipsEmployer = roundGuaranies(baseSalary.mul(ipsEmployerRate));
+      const netSalary = grossSalary.minus(ipsEmployee);
 
       await this.payrollRepository.createItem({
         tenantId,

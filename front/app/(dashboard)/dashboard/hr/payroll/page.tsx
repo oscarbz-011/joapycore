@@ -11,6 +11,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Play, CheckCircle, ChevronDown, ChevronRight, Settings } from 'lucide-react';
 import { hrApi, type PayrollRecord, type PayrollRecordItem } from '../../../../../lib/api/hr';
 import { NumericInput } from '../../../../../components/numeric-input';
+import { money, type MoneyValue } from '@/lib/money';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -35,8 +36,8 @@ function StatusBadge({ status }: { status: string }) {
   return <Badge variant="outline" className="bg-muted/30 text-muted-foreground border-border">{STATUS_LABELS[status] ?? status}</Badge>;
 }
 
-function formatPYG(n: number) {
-  return new Intl.NumberFormat('es-PY', { style: 'currency', currency: 'PYG', maximumFractionDigits: 0 }).format(n);
+function formatPYG(n: MoneyValue) {
+  return new Intl.NumberFormat('es-PY', { style: 'currency', currency: 'PYG', maximumFractionDigits: 0 }).format(money(n).toNumber());
 }
 
 // ── Config panel ───────────────────────────────────────────────────────────────
@@ -60,9 +61,9 @@ function ConfigPanel() {
   function handleOpen() {
     if (!open && config) {
       setForm({
-        minimumWage:    config.minimumWage,
-        ipsEmployeeRate: config.ipsEmployeeRate,
-        ipsEmployerRate: config.ipsEmployerRate,
+        minimumWage: money(config.minimumWage).toNumber(),
+        ipsEmployeeRate: money(config.ipsEmployeeRate).toNumber(),
+        ipsEmployerRate: money(config.ipsEmployerRate).toNumber(),
       });
     }
     setOpen((v) => !v);

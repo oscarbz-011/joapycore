@@ -8,6 +8,7 @@ import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { Plus, Pencil } from 'lucide-react';
 import { hrApi, type Employee } from '../../../../lib/api/hr';
+import { money, type MoneyValue } from '@/lib/money';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -55,8 +56,8 @@ export default function HrEmployeesPage() {
   });
   const pagination = usePagination(employees);
 
-  function formatSalary(n: number) {
-    return new Intl.NumberFormat('es-PY', { style: 'currency', currency: 'PYG', maximumFractionDigits: 0 }).format(n);
+  function formatSalary(n: MoneyValue) {
+    return new Intl.NumberFormat('es-PY', { style: 'currency', currency: 'PYG', maximumFractionDigits: 0 }).format(money(n).toNumber());
   }
 
   return (

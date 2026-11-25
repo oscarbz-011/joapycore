@@ -2,6 +2,7 @@ import {
   NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PayrollService } from './payroll.service';
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
@@ -99,12 +100,12 @@ describe('PayrollService', () => {
       expect(payrollRepository.createItem).toHaveBeenCalledWith(
         expect.objectContaining({
           employeeId: 'emp-1',
-          baseSalary: 2_500_000,
-          grossSalary: 2_500_000,
-          aguinaldo: 0,
-          ipsEmployee: 225_000,
-          ipsEmployer: 412_500,
-          netSalary: 2_275_000,
+          baseSalary: new Prisma.Decimal(2_500_000),
+          grossSalary: new Prisma.Decimal(2_500_000),
+          aguinaldo: new Prisma.Decimal(0),
+          ipsEmployee: new Prisma.Decimal(225_000),
+          ipsEmployer: new Prisma.Decimal(412_500),
+          netSalary: new Prisma.Decimal(2_275_000),
         }),
       );
     });
@@ -124,10 +125,30 @@ describe('PayrollService', () => {
       // net = 2_600_000 - 216_000 = 2_384_000
       expect(payrollRepository.createItem).toHaveBeenCalledWith(
         expect.objectContaining({
-          aguinaldo: 200_000,
-          grossSalary: 2_600_000,
-          ipsEmployee: 216_000,
-          netSalary: 2_384_000,
+          aguinaldo: new Prisma.Decimal(200_000),
+          grossSalary: new Prisma.Decimal(2_600_000),
+          ipsEmployee: new Prisma.Decimal(216_000),
+          netSalary: new Prisma.Decimal(2_384_000),
+        }),
+      );
+    });
+
+    it('rounds aguinaldo and IPS to whole guaraníes from a Decimal salary', async () => {
+      const emp = makeEmployee({ baseSalary: new Prisma.Decimal('2500001') });
+      employeesRepository.findAll.mockResolvedValue([emp]);
+      payrollRepository.findRecord.mockResolvedValue(
+        makeRecord({ period: '2025-12' }),
+      );
+
+      await service.runPayroll('tenant-1', '2025-12');
+
+      // 2_500_001 / 12 = 208_333.42 → 208_333; × 0.09 = 225_000.09 → 225_000
+      expect(payrollRepository.createItem).toHaveBeenCalledWith(
+        expect.objectContaining({
+          aguinaldo: new Prisma.Decimal(208_333),
+          grossSalary: new Prisma.Decimal(2_708_334),
+          ipsEmployee: new Prisma.Decimal(225_000),
+          netSalary: new Prisma.Decimal(2_483_334),
         }),
       );
     });
@@ -146,7 +167,10 @@ describe('PayrollService', () => {
 
       // ipsEmployee = 1_000_000 * 0.10 = 100_000
       expect(payrollRepository.createItem).toHaveBeenCalledWith(
-        expect.objectContaining({ ipsEmployee: 100_000, ipsEmployer: 200_000 }),
+        expect.objectContaining({
+          ipsEmployee: new Prisma.Decimal(100_000),
+          ipsEmployer: new Prisma.Decimal(200_000),
+        }),
       );
     });
 
