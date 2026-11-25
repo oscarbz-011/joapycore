@@ -1,4 +1,10 @@
 import {
+  isSettledInGuaranies,
+  money,
+  sumMoney,
+  type Money,
+} from '../../../common/money/money';
+import {
   Injectable,
   NotFoundException,
   UnprocessableEntityException,
@@ -99,31 +105,28 @@ export class PaymentsService {
       this.paymentSources.findReceiptsInRange(tenantId, start, end),
     ]);
 
-    const toNum = (v: unknown): number =>
-      typeof v === 'object' && v !== null && 'toNumber' in v
-        ? (v as { toNumber(): number }).toNumber()
-        : Number(v ?? 0);
-
-    const aggCash: Record<string, number> = {};
-    let cashTotal = 0;
-    for (const r of cashRecords) {
-      const a = toNum(r.amount);
-      cashTotal += a;
-      aggCash[r.paymentMethod] = (aggCash[r.paymentMethod] ?? 0) + a;
-    }
-
-    const aggCredit: Record<string, number> = {};
-    let creditTotal = 0;
-    for (const r of creditReceipts) {
-      const a = toNum(r.totalAmount);
-      creditTotal += a;
-      aggCredit[r.paymentMethod] = (aggCredit[r.paymentMethod] ?? 0) + a;
-    }
-
-    const byMethod: Record<string, number> = { ...aggCash };
-    for (const [m, v] of Object.entries(aggCredit)) {
-      byMethod[m] = (byMethod[m] ?? 0) + v;
-    }
+    const byMethodOf = (rows: { method: string; amount: Money }[]) => {
+      const out: Record<string, number> = {};
+      for (const method of new Set(rows.map((r) => r.method))) {
+        out[method] = sumMoney(
+          rows.filter((r) => r.method === method).map((r) => r.amount),
+        ).toNumber();
+      }
+      return out;
+    };
+    const cashRows = cashRecords.map((r) => ({
+      method: r.paymentMethod,
+      amount: money(r.amount),
+    }));
+    const creditRows = creditReceipts.map((r) => ({
+      method: r.paymentMethod,
+      amount: money(r.totalAmount),
+    }));
+    const aggCash = byMethodOf(cashRows);
+    const aggCredit = byMethodOf(creditRows);
+    const cashTotal = sumMoney(cashRows.map((r) => r.amount)).toNumber();
+    const creditTotal = sumMoney(creditRows.map((r) => r.amount)).toNumber();
+    const byMethod = byMethodOf([...cashRows, ...creditRows]);
 
     return {
       range,
@@ -159,10 +162,10 @@ export class PaymentsService {
       );
     }
 
-    const remaining = Number(ar.amount) - Number(ar.paidAmount);
-    if (dto.amount > remaining + 0.01) {
+    const remaining = money(ar.amount).minus(money(ar.paidAmount));
+    if (money(dto.amount).gt(remaining)) {
       throw new UnprocessableEntityException(
-        `El monto (${dto.amount}) supera el saldo pendiente (${remaining.toFixed(2)})`,
+        `El monto (${dto.amount}) supera el saldo pendiente (${remaining.toString()})`,
       );
     }
 
@@ -192,10 +195,9 @@ export class PaymentsService {
         tx,
       );
       invoiceId = updated.invoiceId;
-      newStatus =
-        Number(updated.paidAmount) >= Number(updated.amount) - 0.01
-          ? 'PAID'
-          : 'PARTIAL';
+      newStatus = isSettledInGuaranies(updated.paidAmount, updated.amount)
+        ? 'PAID'
+        : 'PARTIAL';
 
       await this.arRepository.updateStatus(arId, newStatus, tx);
     });

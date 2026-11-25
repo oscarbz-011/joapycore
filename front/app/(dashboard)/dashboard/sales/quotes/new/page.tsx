@@ -1,4 +1,5 @@
 'use client';
+import { money, sumMoney } from '@/lib/money';
 
 import { resolveWarehouseId, warehouseChoices } from '@/lib/sale-warehouse';
 import { useSaleStock } from '@/lib/use-sale-stock';
@@ -190,7 +191,7 @@ export default function NewQuotePage() {
     router.push('/dashboard/sales/customers/new?returnTo=/dashboard/sales/quotes/new');
   }
 
-  const total = lines.reduce((sum, l) => sum + l.quantity * l.unitPrice, 0);
+  const total = sumMoney(lines.map((l) => money(l.unitPrice).mul(l.quantity))).toNumber();
 
   // Un presupuesto no mueve stock, pero el backend exige el depósito en todo
   // ítem con producto: se manda el sugerido.

@@ -1,3 +1,4 @@
+import { money, roundGuaranies, type Money } from '../../../common/money/money';
 import { Injectable, Logger } from '@nestjs/common';
 import { OnDomainEvent } from '../../../common/events/on-domain-event.decorator';
 import { BillingSourcesRepository } from '../repositories/billing-sources.repository';
@@ -8,16 +9,16 @@ type PaymentReceiptCreatedEvent = DomainEvents['payment.receipt.created'];
 
 const IVA_RATE = 10;
 
-function ivaBreakdown(total: number): {
-  ivaAmount: number;
-  unitPriceWithoutIva: number;
+function ivaBreakdown(total: Money): {
+  ivaAmount: Money;
+  unitPriceWithoutIva: Money;
 } {
   // IVA incluido en el monto cobrado (criterio general de retail en
   // Paraguay) — mismo desglose que se mostraría en una factura de venta
   // normal si esa lógica estuviera implementada (hoy no lo está en ningún
   // lado del código: InvoiceItem.ivaRate siempre es null en la práctica).
-  const ivaAmount = Math.round(total - total / (1 + IVA_RATE / 100));
-  return { ivaAmount, unitPriceWithoutIva: total - ivaAmount };
+  const ivaAmount = roundGuaranies(total.mul(IVA_RATE).div(100 + IVA_RATE));
+  return { ivaAmount, unitPriceWithoutIva: total.minus(ivaAmount) };
 }
 
 // Cuando un cobro de cuota incluye cargos de interés/mora, además del recibo
@@ -63,18 +64,18 @@ export class InterestInvoiceOnReceiptListener {
     // Crédito N° Y". Un recibo puede cubrir cuotas de varias ventas.
     const byInstallment = new Map<
       string,
-      { number: number; total: number; invoiceRef: string }
+      { number: number; total: Money; invoiceRef: string }
     >();
     for (const item of interestItems) {
       const saleInvoice = item.installment.loan.saleOrder.invoice;
       const prev = byInstallment.get(item.installmentId) ?? {
         number: item.installmentNumber,
-        total: 0,
+        total: money(0),
         invoiceRef: saleInvoice
           ? ` de la Factura a Crédito N° ${saleInvoice.invoicePrefix ?? ''}${saleInvoice.invoiceNumber ?? ''}`
           : '',
       };
-      prev.total += Number(item.amountApplied);
+      prev.total = prev.total.plus(money(item.amountApplied));
       byInstallment.set(item.installmentId, prev);
     }
 

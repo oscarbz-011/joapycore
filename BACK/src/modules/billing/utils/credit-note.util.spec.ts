@@ -169,6 +169,47 @@ describe('buildCreditLines', () => {
   });
 });
 
+describe('credit notes on an invoice from before the exact amounts', () => {
+  // Factura a crédito vieja: 3 unidades de 333.333 prorrateadas sobre un
+  // total con centavos. Cada precio redondeado a guaraníes se pasa por poco.
+  const legacy: InvoiceItemForCredit[] = [
+    {
+      id: 'ii-1',
+      description: 'Silla',
+      quantity: 3,
+      unitPrice: 333_333,
+      total: 999_999,
+      ivaRate: 10,
+      saleOrderItemId: 'soi-1',
+    },
+  ];
+
+  it('credits every item in full without exceeding what is left', () => {
+    const available = creditableItems('1000000.80', legacy, new Map());
+    // 333.333 × 1,0000018 = 333.333,6 → 333.334; × 3 = 1.000.002
+    const { total, lines } = buildCreditLines(
+      {
+        kind: 'ITEMS',
+        reason: 'Devolución',
+        items: [{ invoiceItemId: 'ii-1', quantity: 3 }],
+      },
+      available,
+      1000000.8,
+    );
+    expect(total).toBe(1000000.8);
+    expect(lines[0].total).toBe(1000000.8);
+  });
+
+  it('credits the exact remainder by amount', () => {
+    const { total } = buildCreditLines(
+      { kind: 'AMOUNT', reason: 'Ajuste', amount: 1000.5 },
+      [],
+      1000.5,
+    );
+    expect(total).toBe(1000.5);
+  });
+});
+
 describe('splitAgainstBalance', () => {
   it.each([
     [500_000, 2_000_000, 500_000, 0],

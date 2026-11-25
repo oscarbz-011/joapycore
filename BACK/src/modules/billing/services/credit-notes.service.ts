@@ -1,3 +1,4 @@
+import { money as exact } from '../../../common/money/money';
 import {
   ConflictException,
   Inject,
@@ -55,7 +56,6 @@ type InvoiceForCredit = NonNullable<
   Awaited<ReturnType<InvoicesRepository['findForCredit']>>
 >;
 
-const round2 = (n: number) => Math.round(n * 100) / 100;
 const money = (n: number) =>
   n.toLocaleString('es-PY', { maximumFractionDigits: 0 });
 
@@ -141,7 +141,9 @@ export class CreditNotesService {
     assertCreditable(invoice);
 
     const total = Number(invoice.total);
-    const remaining = round2(total - Number(invoice.creditedTotal));
+    const remaining = exact(invoice.total)
+      .minus(exact(invoice.creditedTotal))
+      .toNumber();
     const { items, returnable, balance } = await this.prisma.$transaction(
       async (tx) => {
         const credited = await this.creditNotes.creditedQuantities(
@@ -227,7 +229,9 @@ export class CreditNotesService {
         assertCreditable(invoice);
 
         const total = Number(invoice.total);
-        const remaining = round2(total - Number(invoice.creditedTotal));
+        const remaining = exact(invoice.total)
+          .minus(exact(invoice.creditedTotal))
+          .toNumber();
         const credited = await this.creditNotes.creditedQuantities(
           tenantId,
           invoiceId,

@@ -3,8 +3,17 @@
 // Si la factura no coincide con lo recibido, alguien tiene que aprobar la
 // diferencia antes de que cambie la deuda.
 
-const round2 = (n: number) => Math.round(n * 100) / 100;
-const CENT = 0.01;
+import { Prisma } from '@prisma/client';
+import {
+  money,
+  roundCents,
+  sumMoney,
+  type Money,
+} from '../../common/money/money';
+
+// Las cuentas van con Decimal; hacia afuera viajan números, redondeados a
+// centavos como antes.
+const cents = (value: Money) => roundCents(value).toNumber();
 
 /** Una línea de una recepción, tal como quedó registrada al recibir. */
 export interface ReceivedLine {
@@ -59,7 +68,7 @@ export function compareInvoice(input: {
     input.invoiced.map((line) => [line.receiptItemId, line]),
   );
   const differences: InvoiceDifference[] = [];
-  const byPayable = new Map<string, { estimated: number; subtotal: number }>();
+  const byPayable = new Map<string, { estimated: Money; subtotal: Money }>();
 
   for (const line of input.received) {
     const invoiced = invoicedById.get(line.receiptItemId) ?? {
@@ -75,7 +84,7 @@ export function compareInvoice(input: {
         invoiced: invoiced.quantity,
       });
     }
-    if (Math.abs(invoiced.unitCost - line.unitCost) > CENT / 2) {
+    if (!roundCents(invoiced.unitCost).equals(roundCents(line.unitCost))) {
       differences.push({
         kind: 'price',
         receiptItemId: line.receiptItemId,
@@ -83,52 +92,65 @@ export function compareInvoice(input: {
         invoiced: invoiced.unitCost,
       });
     }
-    const sums = byPayable.get(line.payableId) ?? { estimated: 0, subtotal: 0 };
-    sums.estimated += line.quantity * line.unitCost;
-    sums.subtotal += invoiced.quantity * invoiced.unitCost;
+    const sums = byPayable.get(line.payableId) ?? {
+      estimated: money(0),
+      subtotal: money(0),
+    };
+    sums.estimated = sums.estimated.plus(
+      money(line.unitCost).mul(line.quantity),
+    );
+    sums.subtotal = sums.subtotal.plus(
+      money(invoiced.unitCost).mul(invoiced.quantity),
+    );
     byPayable.set(line.payableId, sums);
   }
 
   // El envío y el descuento nunca están en la estimación: siempre son una
   // diferencia que alguien tiene que mirar.
   if (input.shipping > 0) {
-    differences.push({ kind: 'shipping', amount: round2(input.shipping) });
+    differences.push({
+      kind: 'shipping',
+      amount: cents(money(input.shipping)),
+    });
   }
   if (input.discount > 0) {
-    differences.push({ kind: 'discount', amount: round2(input.discount) });
+    differences.push({
+      kind: 'discount',
+      amount: cents(money(input.discount)),
+    });
   }
 
   const groups = [...byPayable.entries()];
-  const subtotal = round2(groups.reduce((sum, [, g]) => sum + g.subtotal, 0));
-  const estimated = round2(groups.reduce((sum, [, g]) => sum + g.estimated, 0));
-  const extra = round2(input.shipping - input.discount);
-  const total = round2(subtotal + extra);
+  const subtotal = roundCents(sumMoney(groups.map(([, g]) => g.subtotal)));
+  const estimated = roundCents(sumMoney(groups.map(([, g]) => g.estimated)));
+  const extra = roundCents(money(input.shipping).minus(money(input.discount)));
+  const total = subtotal.plus(extra);
 
   // El envío y el descuento se reparten entre las cuentas en proporción a lo
   // facturado en cada una; el redondeo se lo lleva la última.
   const weights = groups.map(([, g]) =>
-    subtotal > 0 ? g.subtotal : estimated > 0 ? g.estimated : 1,
+    subtotal.gt(0) ? g.subtotal : estimated.gt(0) ? g.estimated : money(1),
   );
-  const weightTotal = weights.reduce((sum, w) => sum + w, 0);
-  let shared = 0;
+  const weightTotal = sumMoney(weights);
+  let shared = money(0);
   const payables = groups.map(([payableId, g], index) => {
     const isLast = index === groups.length - 1;
     const share = isLast
-      ? round2(extra - shared)
-      : round2((extra * weights[index]) / weightTotal);
-    shared = round2(shared + share);
+      ? extra.minus(shared)
+      : roundCents(extra.mul(weights[index]).div(weightTotal));
+    shared = shared.plus(share);
     return {
       payableId,
-      estimated: round2(g.estimated),
-      amount: round2(g.subtotal + share),
+      estimated: cents(g.estimated),
+      amount: cents(g.subtotal.plus(share)),
     };
   });
 
   return {
-    subtotal,
-    total,
-    estimated,
-    difference: round2(total - estimated),
+    subtotal: subtotal.toNumber(),
+    total: total.toNumber(),
+    estimated: estimated.toNumber(),
+    difference: total.minus(estimated).toNumber(),
     differences,
     payables,
   };
@@ -159,22 +181,28 @@ export function payableAfterInvoice(input: {
   paidAmount: number;
   advanceApplied: number;
 }): PayableAfterInvoice {
-  const amount = round2(input.amount);
-  const excess = Math.max(0, round2(input.paidAmount - amount));
-  const releasedAdvance = round2(Math.min(excess, input.advanceApplied));
-  const overpaid = round2(excess - releasedAdvance);
-  const paidAmount = round2(input.paidAmount - releasedAdvance);
+  const amount = roundCents(input.amount);
+  const paid = roundCents(input.paidAmount);
+  const over = paid.minus(amount);
+  const excess = over.isNegative() ? money(0) : over;
+  const releasedAdvance = Prisma.Decimal.min(
+    excess,
+    roundCents(input.advanceApplied),
+  );
+  const overpaid = excess.minus(releasedAdvance);
+  const paidAmount = paid.minus(releasedAdvance);
   return {
-    paidAmount,
-    advanceApplied: round2(input.advanceApplied - releasedAdvance),
-    status:
-      paidAmount >= amount - CENT
-        ? 'PAID'
-        : paidAmount > 0
-          ? 'PARTIAL'
-          : 'PENDING',
-    releasedAdvance,
-    overpaid: overpaid > CENT ? overpaid : 0,
+    paidAmount: paidAmount.toNumber(),
+    advanceApplied: roundCents(input.advanceApplied)
+      .minus(releasedAdvance)
+      .toNumber(),
+    status: paidAmount.gte(amount)
+      ? 'PAID'
+      : paidAmount.gt(0)
+        ? 'PARTIAL'
+        : 'PENDING',
+    releasedAdvance: releasedAdvance.toNumber(),
+    overpaid: overpaid.toNumber(),
   };
 }
 

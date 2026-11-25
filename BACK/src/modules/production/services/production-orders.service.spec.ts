@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import {
   NotFoundException,
   UnprocessableEntityException,
@@ -31,7 +32,7 @@ function makeOrder(overrides = {}) {
       {
         id: 'item-1',
         componentId: 'tablero-1',
-        plannedQuantity: 6,
+        plannedQuantity: new Prisma.Decimal(6),
         usedQuantity: 0,
         component: { id: 'tablero-1', name: 'Tablero MDF', unit: 'unidad' },
       },
@@ -109,7 +110,7 @@ describe('ProductionOrdersService', () => {
             tenantId: 'tenant-1',
             productionOrderId: 'po-1',
             componentId: 'tablero-1',
-            plannedQuantity: 6,
+            plannedQuantity: new Prisma.Decimal(6),
           },
         ],
         {},

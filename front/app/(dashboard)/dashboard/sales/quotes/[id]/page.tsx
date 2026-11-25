@@ -1,4 +1,5 @@
 'use client';
+import { money, sumMoney } from '@/lib/money';
 
 import { apiErrorMessage } from '@/lib/api/api-error';
 
@@ -110,7 +111,7 @@ export default function QuoteDetailPage() {
     );
   }
 
-  const total = quote.items.reduce((sum, i) => sum + i.unitPrice * i.quantity, 0);
+  const total = sumMoney(quote.items.map((i) => money(i.unitPrice).mul(i.quantity))).toNumber();
   const isQuoted = quote.status === 'QUOTED';
   const isProspect = isProspectOrder(quote);
   const partyDocument = orderPartyDocument(quote);

@@ -266,16 +266,16 @@ export class InvoicesRepository implements InvoicePdf {
     data: {
       paymentReceiptId: string;
       numbering: SeriesNumbering | null;
-      total: number;
+      total: Prisma.Decimal;
       issuedAt: Date;
       items: {
         description: string;
         quantity: number;
-        unitPrice: number;
-        total: number;
+        unitPrice: Prisma.Decimal;
+        total: Prisma.Decimal;
         ivaRate: number;
-        ivaAmount: number;
-        unitPriceWithoutIva: number;
+        ivaAmount: Prisma.Decimal;
+        unitPriceWithoutIva: Prisma.Decimal;
       }[];
     },
     client: PrismaClientOrTx = this.prisma,

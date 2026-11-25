@@ -1,4 +1,5 @@
 'use client';
+import { money, sumMoney } from '@/lib/money';
 
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
@@ -18,7 +19,7 @@ function formatPrice(n: number) {
 
 
 function quoteTotal(items: { unitPrice: number; quantity: number }[]) {
-  return items.reduce((sum, i) => sum + i.unitPrice * i.quantity, 0);
+  return sumMoney(items.map((i) => money(i.unitPrice).mul(i.quantity))).toNumber();
 }
 
 const STATUS_LABEL: Partial<Record<SaleOrderStatus, string>> = {

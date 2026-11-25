@@ -1,4 +1,5 @@
 'use client';
+import { money, sumMoney } from '@/lib/money';
 
 // Piezas de las órdenes de compra que comparten la lista y la pantalla de
 // detalle: formato, insignias de estado y el formulario de recepción.
@@ -34,7 +35,7 @@ export function formatPrice(n: number) {
 }
 
 export function orderTotal(order: PurchaseOrder) {
-  return order.items.reduce((sum, i) => sum + Number(i.quantity) * Number(i.unitCost), 0);
+  return sumMoney(order.items.map((i) => money(i.unitCost).mul(i.quantity))).toNumber();
 }
 
 // Mismo diseño de resaltado que Pagos/Financiamiento/Reportes: rojo si la

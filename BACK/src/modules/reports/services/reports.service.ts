@@ -1,3 +1,9 @@
+import {
+  money,
+  roundGuaranies,
+  sumMoney,
+  type MoneyValue,
+} from '../../../common/money/money';
 import { Inject, Injectable } from '@nestjs/common';
 import {
   RECEIVABLES_REPORT_SOURCE,
@@ -24,21 +30,21 @@ export class ReportsService {
       to: dateTo ? new Date(dateTo) : undefined,
     });
 
-    const totalRevenue = orders.reduce(
-      (acc, o) =>
-        acc + o.items.reduce((s, i) => s + Number(i.unitPrice) * i.quantity, 0),
-      0,
-    );
+    const itemsTotal = (items: { unitPrice: unknown; quantity: number }[]) =>
+      sumMoney(
+        items.map((i) => money(i.unitPrice as MoneyValue).mul(i.quantity)),
+      );
+    const revenue = sumMoney(orders.map((o) => itemsTotal(o.items)));
+    const totalRevenue = revenue.toNumber();
 
     // Group by month
     const byMonth = new Map<string, { revenue: number; orders: number }>();
     for (const order of orders) {
       const key = order.orderDate.toISOString().slice(0, 7);
       const entry = byMonth.get(key) ?? { revenue: 0, orders: 0 };
-      entry.revenue += order.items.reduce(
-        (s, i) => s + Number(i.unitPrice) * i.quantity,
-        0,
-      );
+      entry.revenue = money(entry.revenue)
+        .plus(itemsTotal(order.items))
+        .toNumber();
       entry.orders += 1;
       byMonth.set(key, entry);
     }
@@ -57,7 +63,9 @@ export class ReportsService {
           revenue: 0,
         };
         e.quantity += item.quantity;
-        e.revenue += Number(item.unitPrice) * item.quantity;
+        e.revenue = money(e.revenue)
+          .plus(money(item.unitPrice).mul(item.quantity))
+          .toNumber();
         productMap.set(item.productId, e);
       }
     }
@@ -69,7 +77,9 @@ export class ReportsService {
       summary: {
         totalRevenue,
         ordersCount: orders.length,
-        avgOrderValue: orders.length ? totalRevenue / orders.length : 0,
+        avgOrderValue: orders.length
+          ? roundGuaranies(revenue.div(orders.length)).toNumber()
+          : 0,
         invoicedCount: orders.filter((o) => o.status === 'INVOICED').length,
         confirmedCount: orders.filter((o) => o.status === 'CONFIRMED').length,
       },
@@ -100,12 +110,12 @@ export class ReportsService {
         // mismo que un precio real de cero — por eso va el status al lado.
         costPrice: Number(p.costPrice ?? 0),
         salePrice: Number(p.salePrice ?? 0),
-        stockValue: stock * Number(p.costPrice ?? 0),
+        stockValue: money(p.costPrice).mul(stock).toNumber(),
         status: p.status,
       };
     });
 
-    const totalStockValue = items.reduce((s, i) => s + i.stockValue, 0);
+    const totalStockValue = sumMoney(items.map((i) => i.stockValue)).toNumber();
     const lowStock = items.filter(
       (i) => !i.isSerialized && i.stock > 0 && i.stock <= 5,
     ).length;
@@ -176,7 +186,7 @@ export class ReportsService {
           customer: `${saleOrder.customer.firstName} ${saleOrder.customer.lastName}`,
           amount: Number(ar.amount),
           paidAmount: Number(ar.paidAmount),
-          pending: Number(ar.amount) - Number(ar.paidAmount),
+          pending: money(ar.amount).minus(money(ar.paidAmount)).toNumber(),
           status: ar.status,
           saleType: saleOrder.saleType,
           dueDate,
@@ -185,11 +195,11 @@ export class ReportsService {
         };
       });
 
-    const totalPending = items.reduce((s, i) => s + i.pending, 0);
-    const totalOverdue = items
-      .filter((i) => i.isOverdue)
-      .reduce((s, i) => s + i.pending, 0);
-    const totalCollected = items.reduce((s, i) => s + i.paidAmount, 0);
+    const totalPending = sumMoney(items.map((i) => i.pending)).toNumber();
+    const totalOverdue = sumMoney(
+      items.filter((i) => i.isOverdue).map((i) => i.pending),
+    ).toNumber();
+    const totalCollected = sumMoney(items.map((i) => i.paidAmount)).toNumber();
 
     return {
       summary: {

@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import { EventBus } from '../../../common/events/event-bus';
 import { PaymentsOnInstallmentListener } from './payments-on-installment.listener';
 import { AccountsReceivableRepository } from '../repositories/accounts-receivable.repository';
@@ -123,12 +124,26 @@ describe('PaymentsOnInstallmentListener', () => {
       );
     });
 
-    it('marks AR as PAID when paidAmount is within the 0.01 float tolerance of total', async () => {
-      // Decimal arithmetic can produce differences smaller than 1 cent; tolerance is 0.01
+    // En guaraníes no hay montos menores a 1 Gs: falta 1 Gs y queda abierta.
+    it('keeps the AR open while a whole guaraní is still owed', async () => {
       prisma.accountsReceivable.findFirst.mockResolvedValue({
         id: AR_ID,
-        amount: TOTAL_CREDIT,
-        paidAmount: TOTAL_CREDIT - 0.005,
+        amount: new Prisma.Decimal(TOTAL_CREDIT),
+        paidAmount: new Prisma.Decimal(TOTAL_CREDIT).minus(1),
+      });
+
+      await listener.handle(baseEvent);
+
+      expect(arRepository.updateStatus).toHaveBeenCalledWith(AR_ID, 'PARTIAL');
+    });
+
+    // Un crédito viejo con cuotas de 33.333,33 deja 0,01 que no se puede
+    // cobrar: la cuenta se cierra igual que el préstamo.
+    it('closes the AR when only the cents of an old credit remain', async () => {
+      prisma.accountsReceivable.findFirst.mockResolvedValue({
+        id: AR_ID,
+        amount: new Prisma.Decimal(100000),
+        paidAmount: new Prisma.Decimal('99999.99'),
       });
 
       await listener.handle(baseEvent);
@@ -136,12 +151,11 @@ describe('PaymentsOnInstallmentListener', () => {
       expect(arRepository.updateStatus).toHaveBeenCalledWith(AR_ID, 'PAID');
     });
 
-    it('coerces Prisma Decimal objects to numbers before comparing', async () => {
-      // Prisma returns Decimal objects in some drivers; the listener must call .toNumber()
+    it('compares the Prisma Decimal values exactly', async () => {
       prisma.accountsReceivable.findFirst.mockResolvedValue({
         id: AR_ID,
-        amount: { toNumber: () => TOTAL_CREDIT },
-        paidAmount: { toNumber: () => TOTAL_CREDIT },
+        amount: new Prisma.Decimal(TOTAL_CREDIT),
+        paidAmount: new Prisma.Decimal(TOTAL_CREDIT),
       });
 
       await listener.handle(baseEvent);

@@ -1,3 +1,4 @@
+import { money, sumMoney } from '@/lib/money';
 import type {
   CreatePurchaseOrderItem,
   SupplierCatalogItem,
@@ -66,7 +67,9 @@ export function lineFromCatalogItem(
 }
 
 export function orderLinesTotal(lines: readonly OrderLine[]): number {
-  return lines.reduce((sum, line) => sum + line.quantity * line.unitCost, 0);
+  return sumMoney(
+    lines.map((line) => money(line.unitCost).mul(line.quantity)),
+  ).toNumber();
 }
 
 // Las líneas del catálogo son del proveedor elegido: al cambiarlo dejan de

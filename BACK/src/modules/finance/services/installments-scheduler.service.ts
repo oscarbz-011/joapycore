@@ -1,3 +1,4 @@
+import type { MoneyValue } from '../../../common/money/money';
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { FinanceSourcesRepository } from '../repositories/finance-sources.repository';
@@ -6,13 +7,6 @@ import { LoansRepository } from '../repositories/loans.repository';
 import { InterestCalcService } from './interest-calc.service';
 import { BUSINESS_TIMEZONE } from '../../../common/utils/business-date.util';
 import { TenantContext } from '../../../prisma/tenant-context';
-
-function toNum(value: unknown): number {
-  if (typeof value === 'object' && value !== null && 'toNumber' in value) {
-    return (value as { toNumber(): number }).toNumber();
-  }
-  return Number(value);
-}
 
 @Injectable()
 export class InstallmentsSchedulerService {
@@ -100,7 +94,6 @@ export class InstallmentsSchedulerService {
       const config = configByTenant.get(inst.tenantId);
       if (!config || config.interestComponents.length === 0) continue;
 
-      const amount = toNum(inst.amount);
       const days = this.interestCalc.daysOverdue(
         inst.dueDate,
         config.moraGraceDays,
@@ -116,10 +109,10 @@ export class InstallmentsSchedulerService {
         const charge = this.interestCalc.computeComponentCharge(
           {
             frequency: component.frequency,
-            percentage: toNum(component.percentage),
+            percentage: component.percentage,
             cumulative: component.cumulative,
           },
-          amount,
+          inst.amount as MoneyValue,
           days,
           periods,
         );

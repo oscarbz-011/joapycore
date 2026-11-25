@@ -25,12 +25,24 @@ const mockLoan = {
   customerId: 'customer-1',
   principal: 1000,
   interestRate: 10,
-  totalAmount: 1100,
+  totalAmount: new Prisma.Decimal(1100),
   totalInstallments: 2,
   status: 'ACTIVE',
   installments: [
-    { id: INST_ID, number: 1, amount: 550, paidAmount: 0, status: 'PENDING' },
-    { id: 'inst-2', number: 2, amount: 550, paidAmount: 0, status: 'PENDING' },
+    {
+      id: INST_ID,
+      number: 1,
+      amount: 550,
+      paidAmount: new Prisma.Decimal(0),
+      status: 'PENDING',
+    },
+    {
+      id: 'inst-2',
+      number: 2,
+      amount: 550,
+      paidAmount: new Prisma.Decimal(0),
+      status: 'PENDING',
+    },
   ],
 };
 
@@ -562,7 +574,7 @@ describe('LoansService', () => {
       loanId: LOAN_ID,
       number: 1,
       amount: 550,
-      paidAmount: 0,
+      paidAmount: new Prisma.Decimal(0),
       status: 'PENDING',
       loan: {
         id: LOAN_ID,
@@ -614,7 +626,7 @@ describe('LoansService', () => {
       installmentsRepo.findById.mockResolvedValue(mockInstallment as never);
       installmentUpdateMock.mockResolvedValue({
         ...mockInstallment,
-        paidAmount: 200,
+        paidAmount: new Prisma.Decimal(200),
         status: 'PARTIAL',
       });
       const result = await service.payInstallment(TENANT, INST_ID, baseDto);
@@ -622,7 +634,7 @@ describe('LoansService', () => {
         expect.objectContaining({
           where: { id: INST_ID },
           data: expect.objectContaining({
-            paidAmount: 200,
+            paidAmount: new Prisma.Decimal(200),
             status: 'PARTIAL',
             paidAt: undefined,
           }),
@@ -639,7 +651,7 @@ describe('LoansService', () => {
       ] as never);
       installmentUpdateMock.mockResolvedValue({
         ...mockInstallment,
-        paidAmount: 550,
+        paidAmount: new Prisma.Decimal(550),
         status: 'PAID',
       });
       await service.payInstallment(TENANT, INST_ID, {
@@ -650,7 +662,7 @@ describe('LoansService', () => {
         expect.objectContaining({
           where: { id: INST_ID },
           data: expect.objectContaining({
-            paidAmount: 550,
+            paidAmount: new Prisma.Decimal(550),
             status: 'PAID',
             paidAt: expect.any(Date),
           }),
@@ -662,7 +674,7 @@ describe('LoansService', () => {
       installmentsRepo.findById.mockResolvedValue(mockInstallment as never);
       installmentUpdateMock.mockResolvedValue({
         ...mockInstallment,
-        paidAmount: 200,
+        paidAmount: new Prisma.Decimal(200),
         status: 'PARTIAL',
       });
       await service.payInstallment(TENANT, INST_ID, baseDto);
@@ -682,7 +694,7 @@ describe('LoansService', () => {
       installmentsRepo.findById.mockResolvedValue(mockInstallment as never);
       installmentUpdateMock.mockResolvedValue({
         ...mockInstallment,
-        paidAmount: 200,
+        paidAmount: new Prisma.Decimal(200),
         status: 'PARTIAL',
       });
       await service.payInstallment(TENANT, INST_ID, {
@@ -707,7 +719,7 @@ describe('LoansService', () => {
       installmentsRepo.findById.mockResolvedValue(mockInstallment as never);
       installmentUpdateMock.mockResolvedValue({
         ...mockInstallment,
-        paidAmount: 200,
+        paidAmount: new Prisma.Decimal(200),
         status: 'PARTIAL',
       });
 
@@ -723,7 +735,7 @@ describe('LoansService', () => {
             puntoExpedicion: '001',
             sequential: 1,
             receiptNumber: '001-001-0000001',
-            totalAmount: baseDto.amount,
+            totalAmount: new Prisma.Decimal(baseDto.amount),
           }),
         }),
       );
@@ -741,7 +753,7 @@ describe('LoansService', () => {
       ] as never);
       installmentUpdateMock.mockResolvedValue({
         ...mockInstallment,
-        paidAmount: 150,
+        paidAmount: new Prisma.Decimal(150),
         status: 'PARTIAL',
       });
 
@@ -753,12 +765,14 @@ describe('LoansService', () => {
 
       expect(installmentsRepo.updateChargeAmount).toHaveBeenCalledWith(
         'charge-1',
-        0,
+        new Prisma.Decimal(0),
         expect.anything(),
       );
       expect(installmentUpdateMock).toHaveBeenCalledWith(
         expect.objectContaining({
-          data: expect.objectContaining({ paidAmount: 150 }),
+          data: expect.objectContaining({
+            paidAmount: new Prisma.Decimal(150),
+          }),
         }),
       );
       expect(paymentReceiptCreateMock).toHaveBeenCalledWith(
@@ -770,7 +784,7 @@ describe('LoansService', () => {
                   tenantId: 'tenant-1',
                   installmentId: INST_ID,
                   installmentNumber: 1,
-                  amountApplied: 50,
+                  amountApplied: new Prisma.Decimal(50),
                   kind: 'INTEREST_COMPONENT',
                   componentName: 'Gastos administrativos',
                 },
@@ -778,7 +792,7 @@ describe('LoansService', () => {
                   tenantId: 'tenant-1',
                   installmentId: INST_ID,
                   installmentNumber: 1,
-                  amountApplied: 150,
+                  amountApplied: new Prisma.Decimal(150),
                   kind: 'PRINCIPAL',
                   componentName: null,
                 },
@@ -823,14 +837,14 @@ describe('LoansService', () => {
           id: 'inst-1',
           number: 1,
           amount: 300,
-          paidAmount: 0,
+          paidAmount: new Prisma.Decimal(0),
           status: 'PENDING',
         },
         {
           id: 'inst-2',
           number: 2,
           amount: 300,
-          paidAmount: 0,
+          paidAmount: new Prisma.Decimal(0),
           status: 'PENDING',
         },
       ] as never);
@@ -849,14 +863,14 @@ describe('LoansService', () => {
       expect(paymentReceiptCreateMock).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({
-            totalAmount: 400,
+            totalAmount: new Prisma.Decimal(400),
             items: {
               create: [
                 {
                   tenantId: 'tenant-1',
                   installmentId: 'inst-1',
                   installmentNumber: 1,
-                  amountApplied: 300,
+                  amountApplied: new Prisma.Decimal(300),
                   kind: 'PRINCIPAL',
                   componentName: null,
                 },
@@ -864,7 +878,7 @@ describe('LoansService', () => {
                   tenantId: 'tenant-1',
                   installmentId: 'inst-2',
                   installmentNumber: 2,
-                  amountApplied: 100,
+                  amountApplied: new Prisma.Decimal(100),
                   kind: 'PRINCIPAL',
                   componentName: null,
                 },
@@ -896,7 +910,7 @@ describe('LoansService', () => {
           id: 'inst-1',
           number: 1,
           amount: 300,
-          paidAmount: 0,
+          paidAmount: new Prisma.Decimal(0),
           status: 'PENDING',
         },
       ] as never);
@@ -935,21 +949,21 @@ describe('LoansService', () => {
           id: 'inst-1',
           number: 1,
           amount: 300,
-          paidAmount: 0,
+          paidAmount: new Prisma.Decimal(0),
           status: 'PENDING',
         },
         {
           id: 'inst-2',
           number: 2,
           amount: 300,
-          paidAmount: 0,
+          paidAmount: new Prisma.Decimal(0),
           status: 'PENDING',
         },
         {
           id: 'inst-3',
           number: 3,
           amount: 300,
-          paidAmount: 0,
+          paidAmount: new Prisma.Decimal(0),
           status: 'PENDING',
         },
       ] as never);
@@ -972,14 +986,14 @@ describe('LoansService', () => {
       expect(paymentReceiptCreateMock).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({
-            totalAmount: 450,
+            totalAmount: new Prisma.Decimal(450),
             items: {
               create: [
                 {
                   tenantId: 'tenant-1',
                   installmentId: 'inst-1',
                   installmentNumber: 1,
-                  amountApplied: 300,
+                  amountApplied: new Prisma.Decimal(300),
                   kind: 'PRINCIPAL',
                   componentName: null,
                 },
@@ -987,7 +1001,7 @@ describe('LoansService', () => {
                   tenantId: 'tenant-1',
                   installmentId: 'inst-2',
                   installmentNumber: 2,
-                  amountApplied: 150,
+                  amountApplied: new Prisma.Decimal(150),
                   kind: 'PRINCIPAL',
                   componentName: null,
                 },
@@ -1006,7 +1020,7 @@ describe('LoansService', () => {
           id: 'inst-1',
           number: 1,
           amount: 300,
-          paidAmount: 0,
+          paidAmount: new Prisma.Decimal(0),
           status: 'PENDING',
         },
       ] as never);
@@ -1027,7 +1041,7 @@ describe('LoansService', () => {
           id: 'inst-1',
           number: 1,
           amount: 300,
-          paidAmount: 200,
+          paidAmount: new Prisma.Decimal(200),
           status: 'PARTIAL',
         },
       ] as never);
@@ -1065,7 +1079,7 @@ describe('LoansService', () => {
       id,
       number,
       amount: 300,
-      paidAmount: 0,
+      paidAmount: new Prisma.Decimal(0),
       status: 'OVERDUE',
       loan: {
         id: loanId,
@@ -1104,7 +1118,7 @@ describe('LoansService', () => {
       expect(data).toMatchObject({
         loanId: null,
         customerId: 'customer-1',
-        totalAmount: 400,
+        totalAmount: new Prisma.Decimal(400),
       });
       expect(
         data.items.create.map(
@@ -1125,8 +1139,8 @@ describe('LoansService', () => {
           arg.data.totalAmount,
         ]),
       ).toEqual([
-        ['loan-a', 300],
-        ['loan-b', 100],
+        ['loan-a', new Prisma.Decimal(300)],
+        ['loan-b', new Prisma.Decimal(100)],
       ]);
       expect(result.receipts).toHaveLength(2);
     });

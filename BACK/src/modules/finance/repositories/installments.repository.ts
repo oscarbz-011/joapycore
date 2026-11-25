@@ -188,7 +188,7 @@ export class InstallmentsRepository {
     tenantId: string,
     installmentId: string,
     componentId: string,
-    amount: number,
+    amount: Prisma.Decimal,
     periodsElapsed: number,
   ) {
     return this.prisma.installmentInterestCharge.upsert({
@@ -222,7 +222,7 @@ export class InstallmentsRepository {
 
   updateChargeAmount(
     id: string,
-    amount: number,
+    amount: Prisma.Decimal,
     client: PrismaClientOrTx = this.prisma,
   ) {
     return client.installmentInterestCharge.update({

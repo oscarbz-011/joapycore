@@ -1,3 +1,4 @@
+import { money, type Money } from '../../../common/money/money';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { OnDomainEvent } from '../../../common/events/on-domain-event.decorator';
 import {
@@ -125,18 +126,21 @@ export class InterestInvoiceOnIssueListener {
       ? `${customer.documentType ?? 'CI'}: ${customer.documentNumber}`
       : '—';
 
-    const columnTotals: Record<IvaColumn, number> = {
-      exenta: 0,
-      '5': 0,
-      '10': 0,
+    const columnTotals: Record<IvaColumn, Money> = {
+      exenta: money(0),
+      '5': money(0),
+      '10': money(0),
     };
-    const ivaTotals: Record<'5' | '10', number> = { '5': 0, '10': 0 };
+    const ivaTotals: Record<'5' | '10', Money> = {
+      '5': money(0),
+      '10': money(0),
+    };
     const rows = invoice.items.map((item) => {
-      const total = Number(item.total);
+      const total = money(item.total);
       const col = ivaColumn(item.ivaRate);
-      columnTotals[col] += total;
+      columnTotals[col] = columnTotals[col].plus(total);
       if (col === '5' || col === '10')
-        ivaTotals[col] += Number(item.ivaAmount ?? 0);
+        ivaTotals[col] = ivaTotals[col].plus(money(item.ivaAmount));
       return [
         item.description,
         String(item.quantity),
@@ -168,9 +172,9 @@ export class InterestInvoiceOnIssueListener {
       'factura.subtotal10': formatMoney(columnTotals['10']),
       'factura.iva5': formatMoney(ivaTotals['5']),
       'factura.iva10': formatMoney(ivaTotals['10']),
-      'factura.totalIva': formatMoney(ivaTotals['5'] + ivaTotals['10']),
+      'factura.totalIva': formatMoney(ivaTotals['5'].plus(ivaTotals['10'])),
       'factura.total': formatMoney(invoiceTotal),
-      'factura.totalEnLetras': numberToWordsEs(invoiceTotal),
+      'factura.totalEnLetras': numberToWordsEs(money(invoiceTotal).toNumber()),
     };
 
     const tableVariables: Record<string, PdfTableVariable> = {

@@ -538,9 +538,7 @@ function ProductModal({
                       </span>
                       <span className="font-mono tabular-nums text-amber-600">
                         +{fmtGs(computeAdditionalAmount(
-                          pricingConfig.markupMethod === 'PERCENTAGE'
-                            ? form.costPrice * (1 + pricingConfig.defaultMarkup / 100)
-                            : form.costPrice + pricingConfig.defaultMarkup,
+                          computeSuggestedPrice(form.costPrice, pricingConfig, 0, null),
                           additionalMarkup, additionalMarkupType,
                         ))}
                       </span>

@@ -5,14 +5,20 @@
 // fórmula tenga una sola definición.
 
 import type { MarkupType } from './api/inventory';
+import { money } from './money';
 import type { PricingConfig } from './api/settings';
 
+// Los Decimal llegan de la API como texto: con `+` se concatenaban.
 export function computeGlobalMarkupAmount(cost: number, cfg: PricingConfig): number {
-  return cfg.markupMethod === 'PERCENTAGE' ? cost * (cfg.defaultMarkup / 100) : cfg.defaultMarkup;
+  return (
+    cfg.markupMethod === 'PERCENTAGE'
+      ? money(cost).mul(cfg.defaultMarkup).div(100)
+      : money(cfg.defaultMarkup)
+  ).toNumber();
 }
 
 export function computeAdditionalAmount(basePrice: number, markup: number, type: MarkupType): number {
-  return type === 'PERCENTAGE' ? basePrice * (markup / 100) : markup;
+  return (type === 'PERCENTAGE' ? money(basePrice).mul(markup).div(100) : money(markup)).toNumber();
 }
 
 // El recargo adicional del producto se aplica SOBRE el precio ya marcado con
@@ -21,8 +27,10 @@ export function computeSuggestedPrice(
   cost: number, cfg: PricingConfig | null | undefined,
   additionalMarkup: number, additionalMarkupType: MarkupType | null,
 ): number {
-  if (!cfg || cost <= 0) return 0;
-  const base = cfg.markupMethod === 'PERCENTAGE' ? cost * (1 + cfg.defaultMarkup / 100) : cost + cfg.defaultMarkup;
-  if (!additionalMarkup || !additionalMarkupType) return base;
-  return additionalMarkupType === 'PERCENTAGE' ? base * (1 + additionalMarkup / 100) : base + additionalMarkup;
+  if (!cfg || money(cost).lte(0)) return 0;
+  const base = money(cost).plus(computeGlobalMarkupAmount(cost, cfg));
+  if (!additionalMarkup || !additionalMarkupType) return base.toNumber();
+  return base
+    .plus(computeAdditionalAmount(base.toNumber(), additionalMarkup, additionalMarkupType))
+    .toNumber();
 }

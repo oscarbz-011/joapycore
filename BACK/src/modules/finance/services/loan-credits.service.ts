@@ -1,10 +1,9 @@
 import { Injectable } from '@nestjs/common';
-import type { Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import type { LoanCredits } from '../../../common/contracts/loan-credits.contract';
 import { InstallmentsRepository } from '../repositories/installments.repository';
 import { LoansRepository } from '../repositories/loans.repository';
-
-const round2 = (n: number) => Math.round(n * 100) / 100;
+import { money } from '../../../common/money/money';
 
 @Injectable()
 export class LoanCreditsService implements LoanCredits {
@@ -19,7 +18,7 @@ export class LoanCreditsService implements LoanCredits {
     saleOrderId: string,
     amount: number,
   ): Promise<number> {
-    if (amount <= 0) return 0;
+    if (money(amount).lte(0)) return 0;
     const loan = await this.loansRepository.findBareBySaleOrder(
       tenantId,
       saleOrderId,
@@ -33,16 +32,16 @@ export class LoanCreditsService implements LoanCredits {
       tx,
     );
     const now = new Date();
-    let remaining = round2(amount);
+    let remaining = money(amount);
     let stillOpen = open.length;
     for (const inst of open) {
-      if (remaining <= 0) break;
-      const instAmount = Number(inst.amount);
-      const paid = Number(inst.paidAmount);
-      const cut = Math.min(remaining, round2(instAmount - paid));
-      if (cut <= 0) continue;
-      const newAmount = round2(instAmount - cut);
-      const settled = newAmount <= paid + 0.01;
+      if (remaining.lte(0)) break;
+      const instAmount = money(inst.amount);
+      const paid = money(inst.paidAmount);
+      const cut = Prisma.Decimal.min(remaining, instAmount.minus(paid));
+      if (cut.lte(0)) continue;
+      const newAmount = instAmount.minus(cut);
+      const settled = newAmount.lte(paid);
       if (settled) stillOpen -= 1;
       await this.installmentsRepository.update(
         inst.id,
@@ -52,19 +51,19 @@ export class LoanCreditsService implements LoanCredits {
         },
         tx,
       );
-      remaining = round2(remaining - cut);
+      remaining = remaining.minus(cut);
     }
 
-    const applied = round2(amount - remaining);
+    const applied = money(amount).minus(remaining);
     await this.loansRepository.update(
       loan.id,
       {
-        totalAmount: round2(Number(loan.totalAmount) - applied),
+        totalAmount: money(loan.totalAmount).minus(applied),
         ...(stillOpen === 0 && { status: 'PAID' }),
       },
       tx,
     );
-    return applied;
+    return applied.toNumber();
   }
 
   async cancel(
@@ -78,7 +77,12 @@ export class LoanCreditsService implements LoanCredits {
       tx,
     );
     if (!loan || loan.status === 'CANCELLED') return;
-    await this.applyCredit(tx, tenantId, saleOrderId, Number(loan.totalAmount));
+    await this.applyCredit(
+      tx,
+      tenantId,
+      saleOrderId,
+      money(loan.totalAmount).toNumber(),
+    );
     await this.loansRepository.update(loan.id, { status: 'CANCELLED' }, tx);
   }
 

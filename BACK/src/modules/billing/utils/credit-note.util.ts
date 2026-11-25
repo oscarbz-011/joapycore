@@ -1,13 +1,20 @@
 import { UnprocessableEntityException } from '@nestjs/common';
 import type { CreditNoteKind } from '@prisma/client';
+import {
+  money,
+  roundGuaranies,
+  sumMoney,
+  type MoneyValue,
+} from '../../../common/money/money';
 
-type Numeric = number | { toNumber(): number };
-const toNum = (value: Numeric): number =>
-  typeof value === 'object' ? value.toNumber() : value;
-const round2 = (n: number) => Math.round(n * 100) / 100;
+// Las cuentas se hacen con Decimal; hacia afuera viajan números, exactos
+// porque los montos son guaraníes enteros.
+type Numeric = MoneyValue;
 
-export const ivaIncluded = (total: number, rate: number) =>
-  Math.round((total * rate) / (100 + rate));
+export const ivaIncluded = (total: MoneyValue, rate: MoneyValue) =>
+  roundGuaranies(
+    money(total).mul(money(rate)).div(money(rate).plus(100)),
+  ).toNumber();
 
 export interface InvoiceItemForCredit {
   id: string;
@@ -35,12 +42,12 @@ export interface CreditableItem {
  * vale el total financiado, así que cada ítem se prorratea sobre ese total.
  */
 export function creditableItems(
-  invoiceTotal: number,
+  invoiceTotal: MoneyValue,
   items: InvoiceItemForCredit[],
   creditedQuantities: Map<string, number>,
 ): CreditableItem[] {
-  const subtotal = items.reduce((sum, item) => sum + toNum(item.total), 0);
-  const ratio = subtotal > 0 ? invoiceTotal / subtotal : 1;
+  const subtotal = sumMoney(items.map((item) => item.total));
+  const ratio = subtotal.gt(0) ? money(invoiceTotal).div(subtotal) : money(1);
   return items.map((item) => ({
     invoiceItemId: item.id,
     description: item.description,
@@ -49,8 +56,8 @@ export function creditableItems(
       item.quantity - (creditedQuantities.get(item.id) ?? 0),
       0,
     ),
-    unitPrice: round2(toNum(item.unitPrice) * ratio),
-    ivaRate: item.ivaRate == null ? 0 : toNum(item.ivaRate),
+    unitPrice: roundGuaranies(money(item.unitPrice).mul(ratio)).toNumber(),
+    ivaRate: item.ivaRate == null ? 0 : money(item.ivaRate).toNumber(),
     saleOrderItemId: item.saleOrderItemId,
   }));
 }
@@ -98,11 +105,14 @@ export function buildCreditLines(
   available: CreditableItem[],
   remaining: number,
 ): { lines: CreditLine[]; total: number } {
-  if (remaining <= 0) {
+  const left = money(remaining);
+  if (left.lte(0)) {
     throw new UnprocessableEntityException(
       'La factura ya está acreditada por completo',
     );
   }
+  const times = (price: number, quantity: number) =>
+    money(price).mul(quantity).toNumber();
 
   let lines: CreditLine[];
   if (request.kind === 'TOTAL') {
@@ -112,13 +122,13 @@ export function buildCreditLines(
       );
     }
     lines = available.map((item) =>
-      line(item, item.quantity, round2(item.unitPrice * item.quantity)),
+      line(item, item.quantity, times(item.unitPrice, item.quantity)),
     );
     // El redondeo del prorrateo no puede dejar un resto sin acreditar.
-    const drift = round2(remaining - lines.reduce((s, l) => s + l.total, 0));
-    if (lines.length > 0 && drift !== 0) {
+    const drift = left.minus(sumMoney(lines.map((l) => l.total)));
+    if (lines.length > 0 && !drift.isZero()) {
       const last = lines[lines.length - 1];
-      last.total = round2(last.total + drift);
+      last.total = money(last.total).plus(drift).toNumber();
       last.ivaAmount = ivaIncluded(last.total, last.ivaRate);
     }
   } else if (request.kind === 'ITEMS') {
@@ -147,10 +157,10 @@ export function buildCreditLines(
           `De "${item.description}" se pueden acreditar hasta ${item.creditableQuantity} unidades`,
         );
       }
-      return line(item, req.quantity, round2(item.unitPrice * req.quantity));
+      return line(item, req.quantity, times(item.unitPrice, req.quantity));
     });
   } else {
-    const amount = round2(request.amount ?? 0);
+    const amount = roundGuaranies(request.amount ?? 0).toNumber();
     if (amount <= 0) {
       throw new UnprocessableEntityException(
         'Cargá el importe de la nota de crédito',
@@ -175,17 +185,40 @@ export function buildCreditLines(
     ];
   }
 
-  const total = round2(lines.reduce((sum, l) => sum + l.total, 0));
-  if (total > round2(remaining) + 0.01) {
+  // En facturas anteriores a los montos exactos, redondear cada precio a
+  // guaraníes puede pasarse de lo que queda por unos pocos guaraníes: se
+  // descuenta de la última línea, como el reparto de TOTAL.
+  // Cada unidad puede pasarse a lo sumo medio guaraní, y un importe hasta 1.
+  const over = sumMoney(lines.map((l) => l.total)).minus(left);
+  const maxDrift = sumMoney(lines.map((l) => l.quantity)).plus(1);
+  if (lines.length > 0 && over.gt(0) && over.lt(maxDrift)) {
+    const last = lines[lines.length - 1];
+    last.total = money(last.total).minus(over).toNumber();
+    last.unitPrice = money(last.total).div(last.quantity).toNumber();
+    last.ivaAmount = ivaIncluded(last.total, last.ivaRate);
+  }
+  const total = sumMoney(lines.map((l) => l.total));
+  if (total.gt(left)) {
     throw new UnprocessableEntityException(
-      `La nota de crédito (${total}) supera lo que queda por acreditar de la factura (${round2(remaining)})`,
+      `La nota de crédito (${total.toString()}) supera lo que queda por acreditar de la factura (${left.toString()})`,
     );
   }
-  return { lines, total };
+  return { lines, total: total.toNumber() };
 }
 
 /** Primero se descuenta lo que el cliente debe; el resto es excedente. */
-export function splitAgainstBalance(total: number, outstanding: number) {
-  const applied = round2(Math.min(total, Math.max(outstanding, 0)));
-  return { applied, excess: round2(total - applied) };
+export function splitAgainstBalance(
+  total: MoneyValue,
+  outstanding: MoneyValue,
+) {
+  const owed = money(outstanding);
+  const applied = money(total).lt(owed.isNegative() ? 0 : owed)
+    ? money(total)
+    : owed.isNegative()
+      ? money(0)
+      : owed;
+  return {
+    applied: applied.toNumber(),
+    excess: money(total).minus(applied).toNumber(),
+  };
 }

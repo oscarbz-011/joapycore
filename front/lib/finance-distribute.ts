@@ -1,3 +1,4 @@
+import { money, sumMoney } from '@/lib/money';
 import type { Installment } from './api/finance';
 
 export interface DistributedItem {
@@ -11,11 +12,11 @@ export interface DistributedItem {
 // mora, etc.) — se suman al saldo pendiente porque el backend los cobra antes
 // que el capital. Ver Installment.interestCharges en lib/api/finance.ts.
 export function chargesTotalOf(inst: Installment): number {
-  return (inst.interestCharges ?? []).reduce((s, c) => s + Number(c.amount), 0);
+  return sumMoney((inst.interestCharges ?? []).map((c) => c.amount)).toNumber();
 }
 
 export function outstandingOf(inst: Installment): number {
-  return inst.amount - inst.paidAmount + chargesTotalOf(inst);
+  return money(inst.amount).minus(inst.paidAmount).plus(chargesTotalOf(inst)).toNumber();
 }
 
 // Mismo algoritmo greedy que LoansService.payByAmount() en el backend

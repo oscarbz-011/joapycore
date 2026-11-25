@@ -1,3 +1,5 @@
+import Decimal from 'decimal.js';
+import { money } from '@/lib/money';
 import type { CreateProductPayload } from './api/inventory';
 import type { SupplierCatalogItem } from './api/procurement';
 import type { PricingConfig } from './api/settings';
@@ -24,7 +26,10 @@ export function catalogUnitCost(item: SupplierCatalogItem): number {
     item.conversionFactor && item.conversionFactor > 0
       ? item.conversionFactor
       : 1;
-  return Math.round((item.price / factor) * 100) / 100;
+  return money(item.price)
+    .div(factor)
+    .toDecimalPlaces(2, Decimal.ROUND_HALF_UP)
+    .toNumber();
 }
 
 export function catalogProductFormFrom(
