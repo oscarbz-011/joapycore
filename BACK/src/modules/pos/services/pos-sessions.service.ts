@@ -1,3 +1,4 @@
+import { money } from '../../../common/money/money';
 import {
   Inject,
   Injectable,
@@ -16,13 +17,6 @@ import { OpenPosSessionDto } from '../dto/open-pos-session.dto';
 import { PosSessionsRepository } from '../repositories/pos-sessions.repository';
 import { PosSourcesRepository } from '../repositories/pos-sources.repository';
 import { PosTerminalsService } from './pos-terminals.service';
-
-function toNum(value: unknown): number {
-  if (typeof value === 'object' && value !== null && 'toNumber' in value) {
-    return (value as { toNumber(): number }).toNumber();
-  }
-  return Number(value ?? 0);
-}
 
 @Injectable()
 export class PosSessionsService {
@@ -112,10 +106,13 @@ export class PosSessionsService {
     }
 
     const cashSum = await this.sources.sumCashPayments(tenantId, id);
-    const expectedCash =
-      toNum(session.openingCash) + toNum(cashSum._sum.amount);
-    const difference = Math.round((dto.closingCash - expectedCash) * 100) / 100;
-    const status = difference === 0 ? 'CLOSED' : 'DISCREPANCY';
+    const expected = money(session.openingCash).plus(
+      money(cashSum._sum.amount),
+    );
+    const gap = money(dto.closingCash).minus(expected);
+    const status = gap.isZero() ? 'CLOSED' : 'DISCREPANCY';
+    const expectedCash = expected.toNumber();
+    const difference = gap.toNumber();
 
     const closed = await this.posSessionsRepository.close(id, {
       closingCash: dto.closingCash,

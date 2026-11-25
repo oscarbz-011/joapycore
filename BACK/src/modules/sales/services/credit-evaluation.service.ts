@@ -1,3 +1,4 @@
+import { money, roundGuaranies, sumMoney } from '../../../common/money/money';
 import { Injectable } from '@nestjs/common';
 import { CreditSourcesRepository } from '../repositories/credit-sources.repository';
 import {
@@ -7,13 +8,6 @@ import {
   scoreFromAverageDelay,
   type CreditScore,
 } from './credit-score';
-
-function toNum(value: unknown): number {
-  if (typeof value === 'object' && value !== null && 'toNumber' in value) {
-    return (value as { toNumber(): number }).toNumber();
-  }
-  return Number(value);
-}
 
 export type LoanHistoryStatus = 'ACTIVE' | 'PAID';
 
@@ -123,20 +117,23 @@ export class CreditEvaluationService {
 
     const summaries = loans.map((loan): LoanSummary => {
       const installments = loan.installments.map((inst): InstallmentDetail => {
-        const amount = toNum(inst.amount);
-        const paidAmount = toNum(inst.paidAmount);
+        const amount = money(inst.amount);
+        const paidAmount = money(inst.paidAmount);
+        const balance = amount.minus(paidAmount);
         return {
           number: inst.number,
           dueDate: inst.dueDate,
-          amount,
-          paidAmount,
-          balance: Math.max(amount - paidAmount, 0),
+          amount: amount.toNumber(),
+          paidAmount: paidAmount.toNumber(),
+          balance: balance.isNegative() ? 0 : balance.toNumber(),
           paidAt: inst.paidAt,
           status: inst.status,
           delayDays: installmentDelayDays(inst, today),
         };
       });
-      const paidAmount = installments.reduce((sum, i) => sum + i.paidAmount, 0);
+      const paid = sumMoney(installments.map((i) => i.paidAmount));
+      const paidAmount = paid.toNumber();
+      const outstanding = money(loan.totalAmount).minus(paid);
       const delays = evaluatedDelays(installments);
       // installments viene ordenado por number asc — la primera y la última
       // marcan el rango real de vencimientos, distinto de la fecha de compra
@@ -151,12 +148,16 @@ export class CreditEvaluationService {
         productNames: loan.saleOrder.items.map(
           (i) => i.product?.name ?? i.description ?? '—',
         ),
-        totalAmount: toNum(loan.totalAmount),
+        totalAmount: money(loan.totalAmount).toNumber(),
         paidAmount,
-        outstandingBalance: Math.max(toNum(loan.totalAmount) - paidAmount, 0),
+        outstandingBalance: outstanding.isNegative()
+          ? 0
+          : outstanding.toNumber(),
         monthlyInstallment: first
           ? first.amount
-          : toNum(loan.totalAmount) / loan.totalInstallments,
+          : roundGuaranies(
+              money(loan.totalAmount).div(loan.totalInstallments),
+            ).toNumber(),
         installmentsPaid: installments.filter((i) => i.status === 'PAID')
           .length,
         totalInstallments: loan.totalInstallments,
@@ -203,7 +204,7 @@ export class CreditEvaluationService {
       activeLoans: summaries.filter((loan) => loan.status === 'ACTIVE'),
       finishedLoans: summaries.filter((loan) => loan.status === 'PAID'),
       overdueCount: overdue.length,
-      overdueAmount: overdue.reduce((sum, i) => sum + i.balance, 0),
+      overdueAmount: sumMoney(overdue.map((i) => i.balance)).toNumber(),
     };
   }
 
@@ -225,11 +226,13 @@ export class CreditEvaluationService {
     ]);
 
     const customerIncome =
-      customer?.monthlyIncome != null ? toNum(customer.monthlyIncome) : null;
-    const guarantorIncome = guarantorIncomes.reduce((sum, i) => sum + i, 0);
+      customer?.monthlyIncome != null
+        ? money(customer.monthlyIncome).toNumber()
+        : null;
+    const guarantorIncome = sumMoney(guarantorIncomes).toNumber();
     const maxIncomePercentage =
       creditConfig?.maxIncomePercentage != null
-        ? toNum(creditConfig.maxIncomePercentage)
+        ? money(creditConfig.maxIncomePercentage).toNumber()
         : null;
 
     // Sin ningún sueldo declarado (ni cliente ni garantes) o sin % configurado
@@ -255,15 +258,21 @@ export class CreditEvaluationService {
       tenantId,
       customerId,
     );
-    const currentCommitment = activeLoans.reduce(
-      (sum, loan) => sum + toNum(loan.totalAmount) / loan.totalInstallments,
-      0,
+    const commitment = roundGuaranies(
+      sumMoney(
+        activeLoans.map((loan) =>
+          money(loan.totalAmount).div(loan.totalInstallments),
+        ),
+      ),
     );
-
-    const monthlyIncome = (customerIncome ?? 0) + guarantorIncome;
-    const maxAllowed = monthlyIncome * (maxIncomePercentage / 100);
-    const available = maxAllowed - currentCommitment;
-    const exceeds = proposedMonthlyPayment > available;
+    const income = money(customerIncome ?? 0).plus(guarantorIncome);
+    const allowed = roundGuaranies(income.mul(maxIncomePercentage).div(100));
+    const room = allowed.minus(commitment);
+    const exceeds = money(proposedMonthlyPayment).gt(room);
+    const currentCommitment = commitment.toNumber();
+    const monthlyIncome = income.toNumber();
+    const maxAllowed = allowed.toNumber();
+    const available = room.toNumber();
 
     return {
       applicable: true,

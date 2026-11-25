@@ -1,3 +1,4 @@
+import { money, sumMoney } from '../../../common/money/money';
 import { Injectable } from '@nestjs/common';
 import { SaleTargetsRepository } from '../repositories/sale-targets.repository';
 
@@ -43,10 +44,9 @@ export class SaleTargetsService {
       const effectiveSeller = order.seller ?? order.createdBy;
       if (!effectiveSellerId || !effectiveSeller) continue;
 
-      const orderTotal = order.items.reduce(
-        (sum, item) => sum + item.quantity * Number(item.unitPrice),
-        0,
-      );
+      const orderTotal = sumMoney(
+        order.items.map((item) => money(item.unitPrice).mul(item.quantity)),
+      ).toNumber();
       const isCash = order.saleType === 'CASH';
 
       const entry = sellerActuals.get(effectiveSellerId);
@@ -76,10 +76,9 @@ export class SaleTargetsService {
     }
 
     const companyTargetRow = targets.find((t) => t.userId === null);
-    const companyActual = [...sellerActuals.values()].reduce(
-      (s, v) => s + v.actual,
-      0,
-    );
+    const companyActual = sumMoney(
+      [...sellerActuals.values()].map((v) => v.actual),
+    ).toNumber();
 
     const sellerTargetMap = new Map(
       targets.filter((t) => t.userId !== null).map((t) => [t.userId!, t]),

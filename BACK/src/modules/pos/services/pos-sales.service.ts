@@ -1,3 +1,4 @@
+import { money, sumMoney } from '../../../common/money/money';
 import {
   Inject,
   Injectable,
@@ -194,7 +195,8 @@ export class PosSalesService {
       paymentMethod: p.paymentMethod,
       amount: toNum(p.amount),
     }));
-    const paid = payments.reduce((sum, p) => sum + p.amount, 0);
+    const paid = sumMoney(payments.map((p) => p.amount));
+    const change = paid.minus(money(fiscal.totals.total));
     const { terminal, cashier } = sale.posSession;
     return {
       ...fiscal,
@@ -204,7 +206,7 @@ export class PosSalesService {
       printFormat: terminal.printFormat,
       paperConservation: terminal.thermalPaperConservation,
       payments,
-      change: Math.max(0, paid - fiscal.totals.total),
+      change: change.isNegative() ? 0 : change.toNumber(),
     };
   }
 

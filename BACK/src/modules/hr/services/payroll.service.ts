@@ -1,3 +1,4 @@
+import { money, roundGuaranies } from '../../../common/money/money';
 import {
   Injectable,
   NotFoundException,
@@ -48,10 +49,10 @@ export class PayrollService {
     }
 
     const config = await this.payrollRepository.getConfig(tenantId);
-    const ipsEmployeeRate = Number(
+    const ipsEmployeeRate = money(
       config?.ipsEmployeeRate ?? DEFAULT_IPS_EMPLOYEE,
     );
-    const ipsEmployerRate = Number(
+    const ipsEmployerRate = money(
       config?.ipsEmployerRate ?? DEFAULT_IPS_EMPLOYER,
     );
 
@@ -70,10 +71,16 @@ export class PayrollService {
 
     for (const emp of activeEmployees) {
       const baseSalary = emp.baseSalary;
-      const aguinaldo = isDecember ? Math.round(baseSalary / 12) : 0;
+      const aguinaldo = isDecember
+        ? roundGuaranies(money(baseSalary).div(12)).toNumber()
+        : 0;
       const grossSalary = baseSalary + aguinaldo;
-      const ipsEmployee = Math.round(baseSalary * ipsEmployeeRate);
-      const ipsEmployer = Math.round(baseSalary * ipsEmployerRate);
+      const ipsEmployee = roundGuaranies(
+        money(baseSalary).mul(ipsEmployeeRate),
+      ).toNumber();
+      const ipsEmployer = roundGuaranies(
+        money(baseSalary).mul(ipsEmployerRate),
+      ).toNumber();
       const netSalary = grossSalary - ipsEmployee;
 
       await this.payrollRepository.createItem({

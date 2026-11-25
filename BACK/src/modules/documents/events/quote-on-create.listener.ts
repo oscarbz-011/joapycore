@@ -1,3 +1,4 @@
+import { money } from '../../../common/money/money';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { OnDomainEvent } from '../../../common/events/on-domain-event.decorator';
 import {
@@ -86,7 +87,7 @@ export class QuoteOnCreateListener {
 
     const total = Number(order.total ?? 0);
     const rows = order.items.map((item) => {
-      const lineTotal = Number(item.unitPrice) * item.quantity;
+      const lineTotal = money(item.unitPrice).mul(item.quantity);
       const description = item.product?.name ?? item.description ?? 'Ítem';
       const descriptionWithSpecs = item.specNotes
         ? `${description}\n${item.specNotes}`
