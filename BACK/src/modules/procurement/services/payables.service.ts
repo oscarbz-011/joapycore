@@ -1,3 +1,4 @@
+import { money } from '../../../common/money/money';
 import {
   Injectable,
   NotFoundException,
@@ -48,8 +49,8 @@ export class PayablesService {
       );
     }
 
-    const remaining = Number(ap.amount) - Number(ap.paidAmount);
-    if (dto.amount > remaining + 0.01) {
+    const remaining = money(ap.amount).minus(money(ap.paidAmount));
+    if (money(dto.amount).gt(remaining)) {
       throw new UnprocessableEntityException(
         `El monto (${dto.amount}) supera el saldo pendiente (${remaining.toFixed(2)})`,
       );
@@ -83,10 +84,9 @@ export class PayablesService {
         tx,
       );
       purchaseReceiptId = updated.purchaseReceiptId;
-      newStatus =
-        Number(updated.paidAmount) >= Number(updated.amount) - 0.01
-          ? 'PAID'
-          : 'PARTIAL';
+      newStatus = money(updated.paidAmount).gte(money(updated.amount))
+        ? 'PAID'
+        : 'PARTIAL';
 
       await this.apRepository.updateStatus(apId, newStatus, tx);
     });

@@ -4,19 +4,27 @@
 // adelantada que se descuenta de las cuentas por pagar de esa orden a medida
 // que llega la mercadería.
 
-const round2 = (n: number) => Math.round(n * 100) / 100;
+import { Prisma } from '@prisma/client';
+import {
+  money,
+  roundCents,
+  sumMoney,
+  type MoneyValue,
+} from '../../common/money/money';
 
 /**
  * Cuánto anticipo pide una orden. Manda el monto fijado en la orden; si no
  * hay, el porcentaje habitual del proveedor sobre el total.
  */
 export function requiredAdvance(
-  orderTotal: number,
-  rule: { amount?: number | null; percent?: number | null },
+  orderTotal: MoneyValue,
+  rule: { amount?: MoneyValue | null; percent?: MoneyValue | null },
 ): number {
-  if (rule.amount != null) return round2(rule.amount);
-  if (!rule.percent) return 0;
-  return round2((orderTotal * rule.percent) / 100);
+  if (rule.amount != null) return roundCents(rule.amount).toNumber();
+  if (!rule.percent || money(rule.percent).isZero()) return 0;
+  return roundCents(
+    money(orderTotal).mul(money(rule.percent)).div(100),
+  ).toNumber();
 }
 
 export interface AdvanceBalance {
@@ -40,34 +48,41 @@ export function advanceBalance(input: {
   applied: unknown;
 }): AdvanceBalance {
   const sum = (kind: string) =>
-    round2(
-      input.payments
-        .filter((payment) => payment.kind === kind)
-        .reduce((total, payment) => total + Number(payment.amount), 0),
+    roundCents(
+      sumMoney(
+        input.payments
+          .filter((payment) => payment.kind === kind)
+          .map((payment) => payment.amount as MoneyValue),
+      ),
     );
-  const required = round2(Number(input.required));
+  const required = roundCents(input.required as MoneyValue);
   const paid = sum('ADVANCE');
   const refunded = sum('ADVANCE_REFUND');
-  const applied = round2(Number(input.applied));
+  const applied = roundCents(input.applied as MoneyValue);
+  const pending = required.minus(paid.minus(refunded));
   return {
-    required,
-    paid,
-    refunded,
-    applied,
-    available: round2(paid - refunded - applied),
-    pending: Math.max(0, round2(required - (paid - refunded))),
+    required: required.toNumber(),
+    paid: paid.toNumber(),
+    refunded: refunded.toNumber(),
+    applied: applied.toNumber(),
+    available: paid.minus(refunded).minus(applied).toNumber(),
+    pending: pending.isNegative() ? 0 : pending.toNumber(),
   };
 }
 
 /** Cuánto del saldo a favor se descuenta de una cuenta por pagar nueva. */
-export function advanceToApply(available: number, payableAmount: number) {
-  return round2(Math.max(0, Math.min(available, payableAmount)));
+export function advanceToApply(
+  available: MoneyValue,
+  payableAmount: MoneyValue,
+) {
+  const amount = Prisma.Decimal.min(money(available), money(payableAmount));
+  return amount.isNegative() ? 0 : roundCents(amount).toNumber();
 }
 
 export function payableStatusAfterAdvance(
-  applied: number,
-  payableAmount: number,
+  applied: MoneyValue,
+  payableAmount: MoneyValue,
 ): 'PENDING' | 'PARTIAL' | 'PAID' {
-  if (applied <= 0) return 'PENDING';
-  return applied >= payableAmount - 0.01 ? 'PAID' : 'PARTIAL';
+  if (money(applied).lte(0)) return 'PENDING';
+  return money(applied).gte(money(payableAmount)) ? 'PAID' : 'PARTIAL';
 }

@@ -133,6 +133,30 @@ describe('compareInvoice', () => {
 });
 
 describe('payableAfterInvoice', () => {
+  // Sin tolerancia de float: un centavo de menos deja la cuenta abierta.
+  it('keeps the payable open while a cent is still owed', () => {
+    expect(
+      payableAfterInvoice({
+        amount: 100.1,
+        paidAmount: 100.09,
+        advanceApplied: 0,
+      }).status,
+    ).toBe('PARTIAL');
+  });
+
+  it('adds costs with cents exactly', () => {
+    const result = compareInvoice({
+      received: [
+        { receiptItemId: 'r1', payableId: 'p1', quantity: 3, unitCost: 0.1 },
+      ],
+      invoiced: [{ receiptItemId: 'r1', quantity: 3, unitCost: 0.1 }],
+      shipping: 0,
+      discount: 0,
+    });
+    expect(result.total).toBe(0.3);
+    expect(result.difference).toBe(0);
+  });
+
   it('keeps what was paid when the invoice is higher', () => {
     expect(
       payableAfterInvoice({

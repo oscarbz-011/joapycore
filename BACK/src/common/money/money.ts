@@ -16,6 +16,11 @@ export function roundGuaranies(value: MoneyValue): Money {
   return money(value).toDecimalPlaces(0, Decimal.ROUND_HALF_UP);
 }
 
+/** Costos de proveedor: pueden tener centavos por unidad. */
+export function roundCents(value: MoneyValue): Money {
+  return money(value).toDecimalPlaces(2, Decimal.ROUND_HALF_UP);
+}
+
 export function sumMoney(values: readonly MoneyValue[]): Money {
   return values.reduce<Money>((sum, value) => sum.plus(money(value)), ZERO);
 }

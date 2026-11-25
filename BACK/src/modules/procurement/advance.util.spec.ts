@@ -96,6 +96,11 @@ describe('advanceBalance', () => {
 });
 
 describe('applying the advance to a payable', () => {
+  it('keeps the payable partial while a cent is still owed', () => {
+    expect(payableStatusAfterAdvance(999.99, 1000)).toBe('PARTIAL');
+    expect(payableStatusAfterAdvance(1000, 1000)).toBe('PAID');
+  });
+
   it('covers the payable up to what is available', () => {
     expect(advanceToApply(300_000, 1_000_000)).toBe(300_000);
     expect(advanceToApply(300_000, 200_000)).toBe(200_000);

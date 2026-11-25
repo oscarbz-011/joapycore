@@ -1,3 +1,4 @@
+import { money, sumMoney } from '../../../common/money/money';
 import {
   Injectable,
   NotFoundException,
@@ -141,10 +142,9 @@ export class PurchaseOrderAdvancesService {
       this.orders.advanceMovements(tenantId, orderId, client),
       this.orders.advanceApplied(tenantId, orderId, client),
     ]);
-    const orderTotal = order.items.reduce(
-      (sum, item) => sum + item.quantity * Number(item.unitCost),
-      0,
-    );
+    const orderTotal = sumMoney(
+      order.items.map((item) => money(item.unitCost).mul(item.quantity)),
+    ).toNumber();
     return {
       order,
       balance: {

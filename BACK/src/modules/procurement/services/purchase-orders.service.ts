@@ -1,3 +1,4 @@
+import { money, sumMoney } from '../../../common/money/money';
 import {
   ConflictException,
   Injectable,
@@ -161,18 +162,14 @@ export class PurchaseOrdersService {
       tenantId,
       dto.supplierId,
     );
-    const orderTotal = dto.items.reduce(
-      (sum, item) => sum + item.quantity * item.unitCost,
-      0,
+    const orderTotal = sumMoney(
+      dto.items.map((item) => money(item.unitCost).mul(item.quantity)),
     );
     const advanceAmount = requiredAdvance(orderTotal, {
       amount: dto.advanceAmount,
-      percent:
-        supplier?.advancePercent == null
-          ? null
-          : Number(supplier.advancePercent),
+      percent: supplier?.advancePercent ?? null,
     });
-    if (advanceAmount > orderTotal + 0.01) {
+    if (money(advanceAmount).gt(orderTotal)) {
       throw new UnprocessableEntityException(
         'El anticipo no puede superar el total de la orden',
       );

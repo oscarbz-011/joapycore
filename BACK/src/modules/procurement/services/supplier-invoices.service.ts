@@ -1,3 +1,4 @@
+import { roundCents } from '../../../common/money/money';
 import {
   ConflictException,
   Injectable,
@@ -132,7 +133,7 @@ export class SupplierInvoicesService {
     }
     // Control: el total que se leyó de la factura tiene que salir de sus
     // líneas. Si no cierra, hay un dato mal cargado (o falta el flete).
-    if (Math.abs(dto.total - comparison.total) > 0.01) {
+    if (!roundCents(dto.total).equals(roundCents(comparison.total))) {
       throw new UnprocessableEntityException(
         `El total de la factura (${gs(dto.total)}) no coincide con sus líneas, flete y descuento (${gs(comparison.total)}). Revisá las cantidades y los precios.`,
       );
