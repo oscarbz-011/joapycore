@@ -124,18 +124,31 @@ describe('PaymentsOnInstallmentListener', () => {
       );
     });
 
-    // Con Decimal no hay error de float que compensar: falta medio guaraní
-    // y la cuenta sigue abierta.
-    it('keeps the AR open while any amount is still owed', async () => {
+    // En guaraníes no hay montos menores a 1 Gs: falta 1 Gs y queda abierta.
+    it('keeps the AR open while a whole guaraní is still owed', async () => {
       prisma.accountsReceivable.findFirst.mockResolvedValue({
         id: AR_ID,
         amount: new Prisma.Decimal(TOTAL_CREDIT),
-        paidAmount: new Prisma.Decimal(TOTAL_CREDIT).minus('0.5'),
+        paidAmount: new Prisma.Decimal(TOTAL_CREDIT).minus(1),
       });
 
       await listener.handle(baseEvent);
 
       expect(arRepository.updateStatus).toHaveBeenCalledWith(AR_ID, 'PARTIAL');
+    });
+
+    // Un crédito viejo con cuotas de 33.333,33 deja 0,01 que no se puede
+    // cobrar: la cuenta se cierra igual que el préstamo.
+    it('closes the AR when only the cents of an old credit remain', async () => {
+      prisma.accountsReceivable.findFirst.mockResolvedValue({
+        id: AR_ID,
+        amount: new Prisma.Decimal(100000),
+        paidAmount: new Prisma.Decimal('99999.99'),
+      });
+
+      await listener.handle(baseEvent);
+
+      expect(arRepository.updateStatus).toHaveBeenCalledWith(AR_ID, 'PAID');
     });
 
     it('compares the Prisma Decimal values exactly', async () => {

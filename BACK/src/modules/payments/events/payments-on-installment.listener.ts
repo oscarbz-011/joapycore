@@ -1,4 +1,4 @@
-import { money } from '../../../common/money/money';
+import { isSettledInGuaranies } from '../../../common/money/money';
 import { Injectable, Logger } from '@nestjs/common';
 import { EventBus } from '../../../common/events/event-bus';
 import { OnDomainEvent } from '../../../common/events/on-domain-event.decorator';
@@ -45,7 +45,7 @@ export class PaymentsOnInstallmentListener {
       );
       if (!updated) return;
 
-      if (money(updated.paidAmount).gte(money(updated.amount))) {
+      if (isSettledInGuaranies(updated.paidAmount, updated.amount)) {
         await this.arRepository.updateStatus(ar.id, 'PAID');
         this.eventEmitter.emit('payment.ar.completed', {
           tenantId: event.tenantId,

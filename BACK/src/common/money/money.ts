@@ -21,6 +21,17 @@ export function roundCents(value: MoneyValue): Money {
   return money(value).toDecimalPlaces(2, Decimal.ROUND_HALF_UP);
 }
 
+/**
+ * En guaraníes no hay montos menores a 1 Gs: el saldo de centavos que dejan
+ * los créditos anteriores a los montos exactos no se puede cobrar.
+ */
+export function isSettledInGuaranies(
+  paid: MoneyValue,
+  amount: MoneyValue,
+): boolean {
+  return money(amount).minus(money(paid)).lt(1);
+}
+
 export function sumMoney(values: readonly MoneyValue[]): Money {
   return values.reduce<Money>((sum, value) => sum.plus(money(value)), ZERO);
 }

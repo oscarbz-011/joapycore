@@ -5,7 +5,7 @@ import type {
   Receivables,
 } from '../../../common/contracts/receivables.contract';
 import { AccountsReceivableRepository } from '../repositories/accounts-receivable.repository';
-import { money } from '../../../common/money/money';
+import { isSettledInGuaranies, money } from '../../../common/money/money';
 
 @Injectable()
 export class ReceivablesService implements Receivables {
@@ -53,7 +53,7 @@ export class ReceivablesService implements Receivables {
       );
     }
     let status: 'PENDING' | 'PARTIAL' | 'PAID' = 'PENDING';
-    if (paid.gte(newAmount)) status = 'PAID';
+    if (isSettledInGuaranies(paid, newAmount)) status = 'PAID';
     else if (paid.gt(0)) status = 'PARTIAL';
     await this.arRepository.updateAmountAndStatus(ar.id, newAmount, status, tx);
   }

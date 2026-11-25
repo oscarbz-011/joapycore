@@ -185,6 +185,18 @@ export function buildCreditLines(
     ];
   }
 
+  // En facturas anteriores a los montos exactos, redondear cada precio a
+  // guaraníes puede pasarse de lo que queda por unos pocos guaraníes: se
+  // descuenta de la última línea, como el reparto de TOTAL.
+  // Cada unidad puede pasarse a lo sumo medio guaraní, y un importe hasta 1.
+  const over = sumMoney(lines.map((l) => l.total)).minus(left);
+  const maxDrift = sumMoney(lines.map((l) => l.quantity)).plus(1);
+  if (lines.length > 0 && over.gt(0) && over.lt(maxDrift)) {
+    const last = lines[lines.length - 1];
+    last.total = money(last.total).minus(over).toNumber();
+    last.unitPrice = money(last.total).div(last.quantity).toNumber();
+    last.ivaAmount = ivaIncluded(last.total, last.ivaRate);
+  }
   const total = sumMoney(lines.map((l) => l.total));
   if (total.gt(left)) {
     throw new UnprocessableEntityException(

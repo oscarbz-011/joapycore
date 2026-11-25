@@ -1,4 +1,9 @@
-import { money, sumMoney, type Money } from '../../../common/money/money';
+import {
+  isSettledInGuaranies,
+  money,
+  sumMoney,
+  type Money,
+} from '../../../common/money/money';
 import {
   Injectable,
   NotFoundException,
@@ -190,7 +195,7 @@ export class PaymentsService {
         tx,
       );
       invoiceId = updated.invoiceId;
-      newStatus = money(updated.paidAmount).gte(money(updated.amount))
+      newStatus = isSettledInGuaranies(updated.paidAmount, updated.amount)
         ? 'PAID'
         : 'PARTIAL';
 
