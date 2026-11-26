@@ -4,12 +4,12 @@ import { PrismaService } from '../../../prisma/prisma.service';
 import { PrismaClientOrTx } from '../../../prisma/types';
 
 const ORDER_INCLUDE = {
-  product: { select: { id: true, name: true, unit: true } },
+  product: { select: { id: true, name: true, unitCode: true } },
   warehouse: { select: { id: true, name: true } },
   items: {
     include: {
       component: {
-        select: { id: true, name: true, unit: true, costPrice: true },
+        select: { id: true, name: true, unitCode: true, costPrice: true },
       },
     },
   },
@@ -94,7 +94,9 @@ export class ProductionOrdersRepository {
   findRecipe(tenantId: string, productId: string) {
     return this.prisma.productComponent.findMany({
       where: { tenantId, productId },
-      include: { component: { select: { id: true, name: true, unit: true } } },
+      include: {
+        component: { select: { id: true, name: true, unitCode: true } },
+      },
     });
   }
 }

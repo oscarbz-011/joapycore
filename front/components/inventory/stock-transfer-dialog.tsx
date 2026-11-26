@@ -1,5 +1,6 @@
 'use client';
 
+import { unitSymbol } from '@/lib/units-of-measure';
 import { useState } from 'react';
 import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -338,7 +339,7 @@ export function StockTransferDialog({ onClose }: StockTransferDialogProps) {
                     className={NUM_CLS}
                   />
                   <p className="text-xs text-muted-foreground">
-                    Hasta {Math.abs(available)} {product?.unit ?? ''}
+                    Hasta {Math.abs(available)} {product ? unitSymbol(product.unitCode) : ''}
                   </p>
                 </div>
               )}

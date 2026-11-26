@@ -194,7 +194,7 @@ export interface SaleOrderItem {
     model: string | null;
     isSerialized: boolean;
     usesLots: boolean;
-    unit: string;
+    unitCode: number;
   } | null;
   warehouseId?: string | null;
   productUnits: { id: string; serialNumber: string }[];

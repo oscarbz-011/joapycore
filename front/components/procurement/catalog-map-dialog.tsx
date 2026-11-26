@@ -1,5 +1,7 @@
 'use client';
 
+import { UnitSelect } from '@/components/inventory/unit-select';
+import { unitSymbol } from '@/lib/units-of-measure';
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link2, PackagePlus, Search } from 'lucide-react';
@@ -133,7 +135,7 @@ function ExistingProduct({
                 >
                   <p className="truncate text-sm font-medium text-foreground">{p.name}</p>
                   <p className="truncate text-xs text-muted-foreground">
-                    {[p.model, p.brand?.name, p.unit].filter(Boolean).join(' · ')}
+                    {[p.model, p.brand?.name, unitSymbol(p.unitCode)].filter(Boolean).join(' · ')}
                   </p>
                 </button>
               </li>
@@ -310,11 +312,10 @@ function NewProduct({
 
         <div className="space-y-1.5">
           <Label htmlFor="catalog-product-unit">Unidad de medida</Label>
-          <Input
+          <UnitSelect
             id="catalog-product-unit"
-            value={form.unit}
-            onChange={(e) => set('unit', e.target.value)}
-            placeholder="unidad"
+            value={form.unitCode}
+            onChange={(code) => set('unitCode', code)}
           />
         </div>
         <div className="flex items-end pb-2">

@@ -1,9 +1,11 @@
+import { UNIT_CODES } from '../../../common/units/units-of-measure';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   ArrayUnique,
   IsArray,
   IsBoolean,
   IsEnum,
+  IsIn,
   IsInt,
   IsNumber,
   IsOptional,
@@ -64,10 +66,15 @@ export class CreateProductDto {
   @Min(0)
   stockMin?: number;
 
-  @ApiPropertyOptional({ default: 'unidad' })
+  @ApiPropertyOptional({
+    default: 77,
+    description: 'Código de la tabla de unidades de medida de SIFEN',
+  })
   @IsOptional()
-  @IsString()
-  unit?: string;
+  @IsIn(UNIT_CODES, {
+    message: 'La unidad de medida no está en la tabla de SIFEN',
+  })
+  unitCode?: number;
 
   // Si se omite, se deriva del rubro del tenant (una mueblería crea productos
   // fabricados por defecto, el resto de reventa) — ver

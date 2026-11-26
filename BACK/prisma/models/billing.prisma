@@ -528,7 +528,7 @@ model RemissionNoteItem {
   productId        String?  @map("product_id")
   invoiceItemId    String?  @map("invoice_item_id")
   description      String
-  unit             String
+  unitCode         Int      @map("unit_code")
   quantity         Int
   serialNumbers    String[] @default([]) @map("serial_numbers")
   // Lo que llegó al destino; null mientras el traslado está en tránsito.

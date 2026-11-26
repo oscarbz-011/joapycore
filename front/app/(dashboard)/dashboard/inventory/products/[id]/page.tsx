@@ -1,5 +1,6 @@
 'use client';
 
+import { unitOfMeasure, unitSymbol } from '@/lib/units-of-measure';
 import { usePermission } from '@/lib/permissions';
 
 import { apiErrorMessage } from '@/lib/api/api-error';
@@ -226,7 +227,6 @@ export default function ProductDetailPage() {
     !product.costPrice || product.costPrice <= 0 ? 'precio de costo' : null,
     !product.salePrice || product.salePrice <= 0 ? 'precio de venta' : null,
     !product.category ? 'categoría' : null,
-    !product.unit ? 'unidad de medida' : null,
   ].filter((x): x is string => x !== null);
 
   const tabs: { key: Tab; label: string }[] = [
@@ -368,7 +368,7 @@ export default function ProductDetailPage() {
         {[
           {
             label: 'Stock',
-            value: product.isSerialized ? `${product.stock} u.` : `${product.stock} ${product.unit}`,
+            value: product.isSerialized ? `${product.stock} u.` : `${product.stock} ${unitSymbol(product.unitCode)}`,
             cls: STOCK_LEVEL_CLS[stockLevel(product.stock, product.stockMin)],
           },
           { label: 'Precio costo', value: product.costPrice == null ? 'Pendiente' : fmtGs(product.costPrice), cls: product.costPrice == null ? 'text-warn' : 'text-foreground' },
@@ -539,7 +539,7 @@ export default function ProductDetailPage() {
                 { label: 'Descripción', value: product.description ?? '—' },
                 { label: 'Categoría',   value: product.category?.name ?? '—' },
                 { label: 'Marca',       value: product.brand?.name ?? '—' },
-                { label: 'Unidad',      value: product.unit },
+                { label: 'Unidad',      value: unitOfMeasure(product.unitCode).name },
                 { label: 'Tipo',        value: product.isSerialized ? 'Serializado (por N/S)' : 'Por cantidad' },
               ].map(({ label, value }) => (
                 <div key={label} className="flex items-baseline justify-between px-5 py-3">
@@ -632,7 +632,7 @@ export default function ProductDetailPage() {
 
       {/* ── Receta tab ───────────────────────────────────────────────────────── */}
       {activeTab === 'recipe' && (
-        <RecipeTab productId={id} unit={product.unit} />
+        <RecipeTab productId={id} unitCode={product.unitCode} />
       )}
 
       {/* ── Proveedores tab ──────────────────────────────────────────────────── */}

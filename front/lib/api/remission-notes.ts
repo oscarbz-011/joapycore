@@ -57,7 +57,7 @@ export interface RemissionNoteItem {
   productId: string | null;
   invoiceItemId: string | null;
   description: string;
-  unit: string;
+  unitCode: number;
   quantity: number;
   serialNumbers: string[];
   receivedQuantity: number | null;
@@ -121,7 +121,7 @@ export interface TransferOptions {
 export interface TransferStockRow {
   productId: string;
   description: string;
-  unit: string;
+  unitCode: number;
   isSerialized: boolean;
   quantity: number;
   serialNumbers: string[];
@@ -131,7 +131,7 @@ export interface RemitableItem {
   invoiceItemId: string;
   productId: string;
   description: string;
-  unit: string;
+  unitCode: number;
   quantity: number;
   remitted: number;
   remitable: number;

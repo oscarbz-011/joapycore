@@ -1,5 +1,6 @@
 'use client';
 
+import { unitSymbol } from '@/lib/units-of-measure';
 import { apiErrorMessage } from '@/lib/api/api-error';
 
 import { useState } from 'react';
@@ -30,7 +31,7 @@ function fmtQty(n: number) {
  * Receta de un producto fabricado: de qué está hecho y cuánto lleva de cada
  * cosa. Solo se muestra para productos MANUFACTURED — ver ProductKind.
  */
-export function RecipeTab({ productId, unit }: { productId: string; unit: string }) {
+export function RecipeTab({ productId, unitCode }: { productId: string; unitCode: number }) {
   const canManage = usePermission('production:recipes:manage');
   const queryClient = useQueryClient();
   const [componentId, setComponentId] = useState('');
@@ -141,7 +142,7 @@ export function RecipeTab({ productId, unit }: { productId: string; unit: string
       ) : (
         <>
           <p className="text-xs text-muted-foreground">
-            Cantidades por <strong>1 {unit}</strong> producida.
+            Cantidades por <strong>1 {unitSymbol(unitCode)}</strong> producida.
           </p>
           <div className="space-y-2">
             {recipe.map((r) => {
@@ -165,7 +166,7 @@ export function RecipeTab({ productId, unit }: { productId: string; unit: string
                           }}
                           className={cn(NUM_CLS, 'h-8 w-24')}
                         />
-                        <span className="text-xs text-muted-foreground">{r.component.unit}</span>
+                        <span className="text-xs text-muted-foreground">{unitSymbol(r.component.unitCode)}</span>
                         <Button
                           type="button"
                           variant="ghost"
@@ -198,7 +199,7 @@ export function RecipeTab({ productId, unit }: { productId: string; unit: string
                           onClick={() => startEdit(r.id, current)}
                           className="-ml-2.5 font-normal text-muted-foreground"
                         >
-                          {fmtQty(current)} {r.component.unit}
+                          {fmtQty(current)} {unitSymbol(r.component.unitCode)}
                           <Pencil size={10} className="opacity-0 transition-opacity group-hover:opacity-60" />
                         </Button>
                         {r.component.costPrice != null && (

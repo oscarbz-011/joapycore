@@ -74,7 +74,7 @@ export interface SaleItemForRemission {
   product: {
     name: string;
     model: string | null;
-    unit: string;
+    unitCode: number;
     isSerialized: boolean;
     brand: { name: string } | null;
   } | null;
@@ -84,7 +84,7 @@ export interface RemitableItem {
   invoiceItemId: string;
   productId: string;
   description: string;
-  unit: string;
+  unitCode: number;
   quantity: number;
   remitted: number;
   remitable: number;
@@ -115,7 +115,7 @@ export function remitableItems(
         invoiceItemId: item.invoiceItemId,
         productId: sale.productId,
         description: goodsDescription(sale.product),
-        unit: sale.product.unit,
+        unitCode: sale.product.unitCode,
         quantity: item.quantity,
         remitted: already,
         remitable: Math.max(item.quantity - already, 0),
@@ -133,7 +133,7 @@ export interface RemissionLine {
   productId: string;
   invoiceItemId: string | null;
   description: string;
-  unit: string;
+  unitCode: number;
   quantity: number;
   serialNumbers: string[];
 }
@@ -199,7 +199,7 @@ export function buildSaleLines(
       productId: item.productId,
       invoiceItemId: item.invoiceItemId,
       description: item.description,
-      unit: item.unit,
+      unitCode: item.unitCode,
       quantity: req.quantity,
       serialNumbers: serials.map((s) => s.trim()),
     };
@@ -210,7 +210,7 @@ export interface ProductForTransfer {
   id: string;
   name: string;
   model: string | null;
-  unit: string;
+  unitCode: number;
   isSerialized: boolean;
   brand: { name: string } | null;
 }
@@ -248,7 +248,7 @@ export function buildTransferLines(
       productId: product.id,
       invoiceItemId: null,
       description,
-      unit: product.unit,
+      unitCode: product.unitCode,
       quantity: req.quantity,
       serialNumbers: serials.map((s) => s.trim()),
     };

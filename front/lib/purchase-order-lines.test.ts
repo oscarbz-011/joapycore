@@ -31,7 +31,7 @@ function catalogItem(
     availabilityUpdatedAt: null,
     priceTiers: [],
     productId: 'prod-1',
-    product: { id: 'prod-1', name: 'Abridor de vino', unit: 'unidad' },
+    product: { id: 'prod-1', name: 'Abridor de vino', unitCode: 77 },
     ...overrides,
   };
 }

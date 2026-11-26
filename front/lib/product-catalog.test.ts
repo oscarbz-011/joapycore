@@ -14,7 +14,7 @@ function product(id: string, status: ProductStatus): Product {
     description: null,
     isSerialized: false,
     usesLots: false,
-    unit: 'UN',
+    unitCode: 77,
     weightKg: null,
     heightCm: null,
     widthCm: null,

@@ -13,7 +13,7 @@ export interface ProductComponent {
   component: {
     id: string;
     name: string;
-    unit: string;
+    unitCode: number;
     kind: string;
     costPrice: number | null;
   };
@@ -37,7 +37,7 @@ export interface ProductionOrderItem {
   componentId: string;
   plannedQuantity: number;
   usedQuantity: number;
-  component: { id: string; name: string; unit: string; costPrice: number | null };
+  component: { id: string; name: string; unitCode: number; costPrice: number | null };
 }
 
 export interface ProductionOrder {
@@ -51,7 +51,7 @@ export interface ProductionOrder {
   completedAt: string | null;
   notes: string | null;
   createdAt: string;
-  product: { id: string; name: string; unit: string };
+  product: { id: string; name: string; unitCode: number };
   warehouse: { id: string; name: string } | null;
   items: ProductionOrderItem[];
 }

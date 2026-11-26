@@ -1,5 +1,7 @@
 'use client';
 
+import { DEFAULT_UNIT_CODE } from '@/lib/units-of-measure';
+import { UnitSelect } from '@/components/inventory/unit-select';
 import { RequirePermission } from '@/components/require-permission';
 import { SortableHeader } from '@/components/sortable-header';
 import { useTableSort } from '@/lib/use-table-sort';
@@ -177,7 +179,7 @@ type ProductForm = Omit<CreateProductPayload, 'costPrice' | 'salePrice'> & {
 
 const EMPTY_FORM: ProductForm = {
   categoryId: '', brandId: '', name: '', model: '', description: '',
-  isSerialized: false, usesLots: false, unit: 'unidad', costPrice: 0, salePrice: 0,
+  isSerialized: false, usesLots: false, unitCode: DEFAULT_UNIT_CODE, costPrice: 0, salePrice: 0,
 };
 
 function ProductModal({
@@ -195,7 +197,7 @@ function ProductModal({
       ? { categoryId: initial.category?.id ?? '', brandId: initial.brand?.id ?? '', name: initial.name,
           model: initial.model ?? '', description: initial.description ?? '', isSerialized: initial.isSerialized,
           usesLots: initial.usesLots,
-          unit: initial.unit, costPrice: initial.costPrice ?? 0, salePrice: initial.salePrice ?? 0 }
+          unitCode: initial.unitCode, costPrice: initial.costPrice ?? 0, salePrice: initial.salePrice ?? 0 }
       : EMPTY_FORM,
   );
   const [error, setError] = useState('');
@@ -361,6 +363,10 @@ function ProductModal({
                       ))}
                     </SelectContent>
                   </Select>
+                </div>
+                <div>
+                  <Label htmlFor="product-unit" className="mb-1 text-[12px]">Unidad de medida</Label>
+                  <UnitSelect id="product-unit" value={form.unitCode ?? DEFAULT_UNIT_CODE} onChange={(code) => set('unitCode', code)} />
                 </div>
               </div>
             </div>

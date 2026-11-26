@@ -4,13 +4,14 @@ import type { CreateProductPayload } from './api/inventory';
 import type { SupplierCatalogItem } from './api/procurement';
 import type { PricingConfig } from './api/settings';
 import { computeSuggestedPrice } from './pricing';
+import { DEFAULT_UNIT_CODE } from './units-of-measure';
 
 /** Datos que se piden para crear un producto desde un ítem del catálogo. */
 export interface CatalogProductForm {
   name: string;
   categoryId: string;
   brandId: string;
-  unit: string;
+  unitCode: number;
   costPrice: number;
   salePrice: number;
   isSerialized: boolean;
@@ -39,7 +40,7 @@ export function catalogProductFormFrom(
     name: item.description,
     categoryId: '',
     brandId: '',
-    unit: 'unidad',
+    unitCode: DEFAULT_UNIT_CODE,
     costPrice: catalogUnitCost(item),
     salePrice: 0,
     isSerialized: false,
@@ -81,7 +82,7 @@ export function toCatalogProductPayload(
     name: form.name.trim(),
     categoryId: form.categoryId,
     ...(form.brandId && { brandId: form.brandId }),
-    unit: form.unit.trim() || 'unidad',
+    unitCode: form.unitCode,
     costPrice: form.costPrice,
     salePrice: form.salePrice,
     isSerialized: form.isSerialized,

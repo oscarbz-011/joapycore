@@ -61,7 +61,7 @@ const note = (overrides: Record<string, unknown> = {}) =>
     items: [
       {
         quantity: 2,
-        unit: 'unidad',
+        unitCode: 77,
         description: 'Televisor LG',
         serialNumbers: ['SN-1', 'SN-2'],
       },
@@ -144,7 +144,7 @@ describe('remission note PDF', () => {
     expect((html as string).match(/class="page"/g)).toHaveLength(4);
     expect(html).toContain('COPIA: TRANSPORTISTA');
     expect(tables['nota.items'].rows).toEqual([
-      ['2', 'unidad', 'Televisor LG', 'SN-1, SN-2'],
+      ['2', 'UNI', 'Televisor LG', 'SN-1, SN-2'],
     ]);
     expect(files.upload).toHaveBeenCalledWith(
       'tenant-1',

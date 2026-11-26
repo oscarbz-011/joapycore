@@ -160,7 +160,7 @@ describe('RemissionNotesService', () => {
           id: 'p-rice',
           name: 'Arroz',
           model: null,
-          unit: 'kg',
+          unitCode: 83,
           isSerialized: false,
           brand: null,
         },
@@ -168,7 +168,7 @@ describe('RemissionNotesService', () => {
           id: 'p-tv',
           name: 'Televisor',
           model: null,
-          unit: 'unidad',
+          unitCode: 77,
           isSerialized: true,
           brand: { name: 'LG' },
         },
@@ -188,7 +188,7 @@ describe('RemissionNotesService', () => {
           product: {
             name: 'Televisor',
             model: null,
-            unit: 'unidad',
+            unitCode: 77,
             isSerialized: true,
             brand: null,
           },
@@ -271,7 +271,7 @@ describe('RemissionNotesService', () => {
       expect(notes.createWithItems.mock.calls[0][1]).toEqual([
         expect.objectContaining({
           productId: 'p-rice',
-          unit: 'kg',
+          unitCode: 83,
           quantity: 3,
         }),
         expect.objectContaining({
@@ -712,7 +712,7 @@ describe('RemissionNotesService', () => {
       {
         productId: 'p-rice',
         description: 'Arroz',
-        unit: 'kg',
+        unitCode: 83,
         isSerialized: false,
         quantity: 8,
         serialNumbers: [],
@@ -720,7 +720,7 @@ describe('RemissionNotesService', () => {
       {
         productId: 'p-tv',
         description: 'Televisor LG',
-        unit: 'unidad',
+        unitCode: 77,
         isSerialized: true,
         quantity: 2,
         serialNumbers: ['SN-1', 'SN-2'],

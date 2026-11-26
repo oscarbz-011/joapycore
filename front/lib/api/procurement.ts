@@ -43,7 +43,7 @@ export interface SupplierCatalogItem {
   availabilityUpdatedAt: string | null;
   priceTiers: PriceTier[];
   productId: string | null;
-  product: { id: string; name: string; unit: string } | null;
+  product: { id: string; name: string; unitCode: number } | null;
 }
 
 /** El proveedor de una oferta, con lo que se compara además del precio. */
@@ -165,7 +165,7 @@ export interface PurchaseOrderItem {
     model: string | null;
     isSerialized: boolean;
     usesLots: boolean;
-    unit: string;
+    unitCode: number;
   };
 }
 

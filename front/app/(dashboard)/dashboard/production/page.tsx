@@ -1,5 +1,6 @@
 'use client';
 
+import { unitSymbol } from '@/lib/units-of-measure';
 import { apiErrorMessage } from '@/lib/api/api-error';
 
 import { useState } from 'react';
@@ -250,7 +251,7 @@ function CompleteOrderModal({
           className="max-h-[70vh] space-y-4 overflow-y-auto px-6 py-5"
         >
           <p className="text-[13px] text-muted-foreground">
-            Se van a dar de alta {fmtQty(order.quantity)} {order.product.unit} de{' '}
+            Se van a dar de alta {fmtQty(order.quantity)} {unitSymbol(order.product.unitCode)} de{' '}
             <strong className="text-foreground">{order.product.name}</strong>. Ajustá cuánta materia
             prima se usó de verdad; si no tocás nada se descuenta lo planificado.
           </p>
@@ -261,7 +262,7 @@ function CompleteOrderModal({
                 <div className="min-w-0">
                   <p className="truncate text-[13px] text-foreground">{item.component.name}</p>
                   <p className="text-[11.5px] text-muted-foreground">
-                    Planificado: {fmtQty(item.plannedQuantity)} {item.component.unit}
+                    Planificado: {fmtQty(item.plannedQuantity)} {unitSymbol(item.component.unitCode)}
                   </p>
                 </div>
                 <div className="flex w-36 shrink-0 items-center gap-2">
@@ -271,7 +272,7 @@ function CompleteOrderModal({
                     decimals={3}
                     className={NUM_CLS}
                   />
-                  <span className="shrink-0 text-[12px] text-muted-foreground">{item.component.unit}</span>
+                  <span className="shrink-0 text-[12px] text-muted-foreground">{unitSymbol(item.component.unitCode)}</span>
                 </div>
               </div>
             ))}
@@ -338,7 +339,7 @@ function OrderCard({ order, canManage }: { order: ProductionOrder; canManage: bo
             <StatusBadge status={order.status} />
           </div>
           <p className="mt-0.5 text-[12.5px] text-muted-foreground">
-            {fmtQty(order.quantity)} {order.product.unit} · creada el {formatDatePY(order.createdAt, 'local')}
+            {fmtQty(order.quantity)} {unitSymbol(order.product.unitCode)} · creada el {formatDatePY(order.createdAt, 'local')}
             {order.completedAt && <> · completada el {formatDatePY(order.completedAt, 'local')}</>}
           </p>
         </div>
@@ -373,8 +374,8 @@ function OrderCard({ order, canManage }: { order: ProductionOrder; canManage: bo
             <span className="text-muted-foreground">{item.component.name}</span>
             <span className="font-mono tabular-nums text-foreground">
               {order.status === 'COMPLETED'
-                ? `${fmtQty(item.usedQuantity)} ${item.component.unit}`
-                : `${fmtQty(item.plannedQuantity)} ${item.component.unit}`}
+                ? `${fmtQty(item.usedQuantity)} ${unitSymbol(item.component.unitCode)}`
+                : `${fmtQty(item.plannedQuantity)} ${unitSymbol(item.component.unitCode)}`}
             </span>
           </div>
         ))}

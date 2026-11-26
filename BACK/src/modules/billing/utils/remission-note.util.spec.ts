@@ -63,7 +63,7 @@ const SALE_ITEMS = [
     product: {
       name: 'Televisor',
       model: null,
-      unit: 'unidad',
+      unitCode: 77,
       isSerialized: true,
       brand: { name: 'LG' },
     },
@@ -74,7 +74,7 @@ const SALE_ITEMS = [
     product: {
       name: 'Arroz',
       model: null,
-      unit: 'kg',
+      unitCode: 83,
       isSerialized: false,
       brand: null,
     },
@@ -107,7 +107,7 @@ describe('remitableItems', () => {
       }),
       expect.objectContaining({
         invoiceItemId: 'ii-rice',
-        unit: 'kg',
+        unitCode: 83,
         remitted: 4,
         remitable: 6,
       }),
@@ -156,7 +156,7 @@ describe('buildSaleLines', () => {
         productId: 'p-tv',
         invoiceItemId: 'ii-tv',
         description: 'Televisor LG',
-        unit: 'unidad',
+        unitCode: 77,
         quantity: 1,
         serialNumbers: ['SN-2'],
       },
@@ -213,7 +213,7 @@ describe('buildTransferLines', () => {
       id: 'p-tv',
       name: 'Televisor',
       model: 'X1',
-      unit: 'unidad',
+      unitCode: 77,
       isSerialized: true,
       brand: null,
     },
@@ -221,7 +221,7 @@ describe('buildTransferLines', () => {
       id: 'p-rice',
       name: 'Arroz',
       model: null,
-      unit: 'kg',
+      unitCode: 83,
       isSerialized: false,
       brand: null,
     },
@@ -244,7 +244,7 @@ describe('buildTransferLines', () => {
       }),
       expect.objectContaining({
         productId: 'p-rice',
-        unit: 'kg',
+        unitCode: 83,
         invoiceItemId: null,
       }),
     ]);

@@ -61,7 +61,7 @@ export interface Product {
   description: string | null;
   isSerialized: boolean;
   usesLots: boolean;
-  unit: string;
+  unitCode: number;
   weightKg: string | null;
   heightCm: string | null;
   widthCm: string | null;
@@ -116,7 +116,7 @@ export interface CreateProductPayload {
   description?: string;
   isSerialized: boolean;
   usesLots?: boolean;
-  unit?: string;
+  unitCode?: number;
   // Opcionales: sin precio el producto se crea en DRAFT (ver ProductStatus).
   costPrice?: number;
   salePrice?: number;

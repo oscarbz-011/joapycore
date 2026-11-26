@@ -143,7 +143,7 @@ export class BillingSourcesRepository {
         id: true,
         name: true,
         model: true,
-        unit: true,
+        unitCode: true,
         isSerialized: true,
         brand: { select: { name: true } },
       },
@@ -165,7 +165,7 @@ export class BillingSourcesRepository {
           select: {
             name: true,
             model: true,
-            unit: true,
+            unitCode: true,
             isSerialized: true,
             brand: { select: { name: true } },
           },

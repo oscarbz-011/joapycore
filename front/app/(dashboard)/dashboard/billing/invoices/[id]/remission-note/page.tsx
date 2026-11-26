@@ -1,5 +1,6 @@
 'use client';
 
+import { unitSymbol } from '@/lib/units-of-measure';
 import { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -235,7 +236,7 @@ export default function SaleRemissionPage() {
                               </fieldset>
                             )}
                           </td>
-                          <td className="px-4 py-3 text-muted-foreground">{item.unit}</td>
+                          <td className="px-4 py-3 text-muted-foreground">{unitSymbol(item.unitCode)}</td>
                           <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">{item.quantity}</td>
                           <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">{item.remitted}</td>
                           <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">{item.remitable}</td>

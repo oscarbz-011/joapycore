@@ -117,7 +117,8 @@ model Product {
   // producto creado desde el catálogo de un proveedor ya se puede comprar,
   // pero no se ofrece a la venta hasta tener stock. Vacío = nada pendiente.
   salesChannelsOnReceipt OrderChannel[] @default([]) @map("sales_channels_on_receipt")
-  unit                   String         @default("unidad")
+  // Código de la tabla de unidades de medida de SIFEN (77 = unidad).
+  unitCode               Int            @default(77) @map("unit_code")
   weightKg               Decimal?       @map("weight_kg") @db.Decimal(12, 3)
   heightCm               Decimal?       @map("height_cm") @db.Decimal(10, 1)
   widthCm                Decimal?       @map("width_cm") @db.Decimal(10, 1)

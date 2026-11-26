@@ -210,7 +210,7 @@ export class RemissionNotesService {
           {
             productId: product.id,
             description: goodsDescription(product),
-            unit: product.unit,
+            unitCode: product.unitCode,
             isSerialized: product.isSerialized,
             quantity: product.isSerialized
               ? stock.serialNumbers.length
@@ -737,7 +737,7 @@ export class RemissionNotesService {
         productId: line.productId,
         invoiceItemId: line.invoiceItemId,
         description: line.description,
-        unit: line.unit,
+        unitCode: line.unitCode,
         quantity: line.quantity,
         serialNumbers: line.serialNumbers,
       })),

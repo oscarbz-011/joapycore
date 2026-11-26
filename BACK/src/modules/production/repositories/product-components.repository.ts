@@ -6,7 +6,7 @@ const COMPONENT_INCLUDE = {
     select: {
       id: true,
       name: true,
-      unit: true,
+      unitCode: true,
       kind: true,
       costPrice: true,
     },
