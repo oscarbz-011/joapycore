@@ -46,7 +46,9 @@ describe('Product presentations (PostgreSQL)', () => {
 
   afterAll(async () => {
     await prisma.productPresentation.deleteMany({ where: { tenantId } });
-    await prisma.product.deleteMany({ where: { tenantId } });
+    await prisma.product.deleteMany({
+      where: { tenantId: { in: [tenantId, otherTenantId] } },
+    });
     await prisma.tenant.deleteMany({
       where: { id: { in: [tenantId, otherTenantId] } },
     });
@@ -78,6 +80,19 @@ describe('Product presentations (PostgreSQL)', () => {
         salePrice: 450000,
       }),
     ).rejects.toThrow(ConflictException);
+  });
+
+  it('lists the units the company uses, in products and presentations, without other companies', async () => {
+    await prisma.product.create({
+      data: { tenantId: otherTenantId, name: 'Arena', unitCode: 110 },
+    });
+
+    await expect(products.findUnitCodesInUse(tenantId)).resolves.toEqual([
+      77, 109,
+    ]);
+    await expect(products.findUnitCodesInUse(otherTenantId)).resolves.toEqual([
+      110,
+    ]);
   });
 
   it('does not show the presentations to another company', async () => {

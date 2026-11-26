@@ -105,19 +105,29 @@ export function unitSymbol(code: number): string {
 }
 
 /**
- * Para el selector: primero las que usa el rubro, después el resto. Sin rubro
- * (o mientras carga) van todas en el orden de la tabla.
+ * Las que el selector muestra sin buscar: las del rubro, las que la empresa
+ * ya usa y la del producto que se edita. El resto se busca.
  */
-export function unitOptionGroups(industry: Industry | null | undefined): {
-  suggested: readonly UnitOfMeasure[];
-  others: readonly UnitOfMeasure[];
-} {
-  const codes = industry ? INDUSTRY_UNIT_CODES[industry] : [];
-  const suggested = codes.map(unitOfMeasure);
-  return {
-    suggested,
-    others: UNITS_OF_MEASURE.filter((u) => !codes.includes(u.code)),
-  };
+export function habitualUnits(
+  industry: Industry | null | undefined,
+  inUse: readonly number[],
+  current?: number | null,
+): UnitOfMeasure[] {
+  const codes = [
+    ...(industry ? INDUSTRY_UNIT_CODES[industry] : [DEFAULT_UNIT_CODE]),
+    ...inUse,
+    ...(current == null ? [] : [current]),
+  ];
+  return [...new Set(codes)].filter((code) => BY_CODE.has(code)).map(unitOfMeasure);
+}
+
+const plain = (text: string) =>
+  text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+
+/** Búsqueda por nombre o símbolo, sin importar mayúsculas ni acentos. */
+export function matchesUnit(unit: UnitOfMeasure, query: string): boolean {
+  const q = plain(query.trim());
+  return !q || plain(`${unit.name} ${unit.symbol}`).includes(q);
 }
 
 /** Las que cada rubro usa más: el selector las muestra primero. */

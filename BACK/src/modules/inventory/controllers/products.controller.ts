@@ -58,6 +58,17 @@ export class ProductsController {
     return this.productsService.findAllWithStock(tenantId, filters);
   }
 
+  // Antes de ':id' para que Nest no lo tome como un id de producto.
+  @Get('units-in-use')
+  @Permissions('inventory:products:read')
+  @ApiOperation({
+    summary:
+      'Unidades de medida que la empresa ya usa (el selector las muestra primero)',
+  })
+  unitsInUse(@CurrentTenant() tenantId: string) {
+    return this.productsService.unitsInUse(tenantId);
+  }
+
   @Get(':id')
   @Permissions('inventory:products:read')
   @ApiOperation({ summary: 'Obtener producto con stock' })

@@ -105,6 +105,10 @@ export class ProductsService {
     return this.productsRepository.findAllWithStock(tenantId, filters);
   }
 
+  unitsInUse(tenantId: string) {
+    return this.productsRepository.findUnitCodesInUse(tenantId);
+  }
+
   async findOne(tenantId: string, id: string) {
     const product = await this.productsRepository.findById(tenantId, id);
     if (!product) throw new NotFoundException('Product not found');

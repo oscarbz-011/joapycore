@@ -442,6 +442,10 @@ export const inventoryApi = {
   removeProductSupplier: (id: string, supplierId: string): Promise<void> =>
     apiClient.delete(`/inventory/products/${id}/suppliers/${supplierId}`).then(() => undefined),
 
+  /** Unidades que la empresa ya usa: el selector de unidad las muestra primero. */
+  getUnitsInUse: (): Promise<number[]> =>
+    apiClient.get('/inventory/products/units-in-use').then((r) => r.data),
+
   // Presentaciones
   getPresentations: (productId: string): Promise<ProductPresentation[]> =>
     apiClient

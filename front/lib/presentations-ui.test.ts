@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { PresentationsTab } from '@/app/(dashboard)/dashboard/inventory/products/[id]/presentations-tab';
 import { PresentationsSetting } from '@/components/sales/presentations-setting';
 import { SaleUnitPicker } from '@/components/sales/sale-unit-picker';
+import { UnitSelect } from '@/components/inventory/unit-select';
 import type { ProductPresentation } from './api/inventory';
 
 const state = vi.hoisted(() => ({
@@ -157,5 +158,15 @@ describe('PresentationsSetting', () => {
     );
     expect(html).toContain('Desactivado por la empresa');
     expect(html).toContain('Volver a lo que trae el rubro');
+  });
+});
+
+describe('UnitSelect', () => {
+  it('asks which units the company already uses and shows the current one', () => {
+    const html = renderToStaticMarkup(
+      createElement(UnitSelect, { value: 869, onChange: () => undefined }),
+    );
+    expect(html).toContain('Hectáreas (ha)');
+    expect(state.queried.map((q) => q.key[0])).toContain('units-in-use');
   });
 });
