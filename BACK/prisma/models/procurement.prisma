@@ -56,7 +56,7 @@ model SupplierCatalogItem {
   // mismo en la lista de cualquier proveedor, así que empareja ítems entre
   // catálogos mejor que la descripción. Opcional: muchas listas no lo traen.
   barcode               String?
-  price                 Decimal?              @db.Decimal(12, 2)
+  price                 Decimal?              @db.Decimal(23, 8)
   // Unidad en la que vende el proveedor y cuántas unidades internas equivale
   // (ej. vende "caja x12" y el factor 12 lo lleva a unidades).
   supplierUnit          String?               @map("supplier_unit")
@@ -69,9 +69,6 @@ model SupplierCatalogItem {
   // a mano, con la fecha en que se actualizó para saber qué tan viejo es.
   availability          SupplierAvailability?
   availabilityUpdatedAt DateTime?             @map("availability_updated_at")
-  // Precio por cantidad: [{ minQuantity, price }], en la unidad del
-  // proveedor, ordenado por minQuantity (ver normalizePriceTiers).
-  priceTiers            Json                  @default("[]") @map("price_tiers")
   // Nullable a propósito: el ítem vive suelto hasta que alguien lo vincula a
   // un producto interno (o hasta que la orden de compra lo fuerza).
   productId             String?               @map("product_id")
@@ -81,6 +78,8 @@ model SupplierCatalogItem {
   tenant   Tenant   @relation(fields: [tenantId], references: [id])
   supplier Supplier @relation(fields: [supplierId], references: [id])
   product  Product? @relation(fields: [productId], references: [id])
+
+  priceTiers SupplierCatalogPriceTier[]
 
   @@unique([supplierId, supplierSku])
   @@index([tenantId, supplierId])
@@ -104,19 +103,12 @@ model Supplier {
   paymentTermDays   Int?      @default(0) @map("payment_term_days")
   // Anticipo que el proveedor suele pedir para despachar, en % del total
   // de la orden. null/0 = no pide. Es el valor por defecto de cada orden.
-  advancePercent    Decimal?  @map("advance_percent") @db.Decimal(5, 2)
+  advancePercent    Decimal?  @map("advance_percent") @db.Decimal(11, 8)
   // Condiciones comerciales, para comparar proveedores más allá del precio.
   // Todas opcionales: null = "no se sabe", no "cero".
-  shippingCost      Decimal?  @map("shipping_cost") @db.Decimal(12, 2)
+  shippingCost      Decimal?  @map("shipping_cost") @db.Decimal(23, 8)
   leadTimeDays      Int?      @map("lead_time_days")
-  minOrderAmount    Decimal?  @map("min_order_amount") @db.Decimal(12, 2)
-  // Descuento sobre el total de la orden: [{ minAmount, percent }], ordenado
-  // por minAmount (ver normalizeVolumeDiscounts).
-  volumeDiscounts   Json      @default("[]") @map("volume_discounts")
-  // Descuento según la cantidad de unidades de la orden:
-  // [{ minQuantity, percent }], ordenado por minQuantity. Es otra forma de
-  // descuento por volumen; hay proveedores que usan una, otra o las dos.
-  quantityDiscounts Json      @default("[]") @map("quantity_discounts")
+  minOrderAmount    Decimal?  @map("min_order_amount") @db.Decimal(23, 8)
   isActive          Boolean   @default(true) @map("is_active")
   deletedAt         DateTime? @map("deleted_at")
   createdAt         DateTime  @default(now()) @map("created_at")
@@ -124,6 +116,10 @@ model Supplier {
 
   tenant           Tenant                @relation(fields: [tenantId], references: [id])
   purchaseOrders   PurchaseOrder[]
+  // Descuentos sobre el total de la orden, por monto o por cantidad de
+  // unidades; hay proveedores que usan uno, otro o los dos.
+  volumeDiscounts   SupplierVolumeDiscount[]
+  quantityDiscounts SupplierQuantityDiscount[]
   productSuppliers ProductSupplier[]
   catalogItems     SupplierCatalogItem[]
   accountsPayable  AccountsPayable[]
@@ -144,7 +140,7 @@ model PurchaseOrder {
   pdfFileId       String?             @map("pdf_file_id")
   // Anticipo que pide esta orden antes de despachar (0 = ninguno). Nace del
   // porcentaje del proveedor y se puede ajustar por orden.
-  advanceAmount   Decimal             @default(0) @map("advance_amount") @db.Decimal(12, 2)
+  advanceAmount   Decimal             @default(0) @map("advance_amount") @db.Decimal(23, 8)
   // Condición de pago pactada en esta orden, en días (0 = contado). Se copia
   // del proveedor al crearla: si después el proveedor cambia su plazo, las
   // órdenes ya hechas conservan el suyo.
@@ -155,8 +151,8 @@ model PurchaseOrder {
   status          PurchaseOrderStatus @default(PENDING)
   orderDate       DateTime            @map("order_date")
   expectedDate    DateTime?           @map("expected_date")
-  exchangeRate    Decimal?            @map("exchange_rate") @db.Decimal(10, 4)
-  customsDuty     Decimal?            @map("customs_duty") @db.Decimal(5, 2)
+  exchangeRate    Decimal?            @map("exchange_rate") @db.Decimal(9, 4)
+  customsDuty     Decimal?            @map("customs_duty") @db.Decimal(11, 8)
   customsRef      String?             @map("customs_ref")
   notes           String?
   createdAt       DateTime            @default(now()) @map("created_at")
@@ -205,7 +201,7 @@ model PurchaseOrderItem {
   productId           String  @map("product_id")
   quantity            Int
   receivedQty         Int     @default(0) @map("received_qty")
-  unitCost            Decimal @map("unit_cost") @db.Decimal(12, 2)
+  unitCost            Decimal @map("unit_cost") @db.Decimal(23, 8)
   // Copia del ítem del catálogo del proveedor con que se pidió: la orden
   // tiene que seguir diciendo lo mismo aunque el catálogo cambie o el ítem se
   // borre. Sin relación a propósito; null = producto agregado suelto.
@@ -257,7 +253,7 @@ model PurchaseReceiptItem {
   purchaseOrderItemId String    @map("purchase_order_item_id")
   productId           String    @map("product_id")
   quantity            Int
-  unitCost            Decimal   @map("unit_cost") @db.Decimal(12, 2)
+  unitCost            Decimal   @map("unit_cost") @db.Decimal(23, 8)
   batchNumber         String?   @map("batch_number")
   expiresAt           DateTime? @map("expires_at")
   // N/S ingresados en esta línea (solo productos serializados) — el listener
@@ -285,16 +281,16 @@ model AccountsPayable {
   tenantId          String    @map("tenant_id")
   purchaseReceiptId String    @unique @map("purchase_receipt_id")
   supplierId        String    @map("supplier_id")
-  amount            Decimal   @db.Decimal(12, 2)
-  paidAmount        Decimal   @default(0) @map("paid_amount") @db.Decimal(12, 2)
+  amount            Decimal   @db.Decimal(23, 8)
+  paidAmount        Decimal   @default(0) @map("paid_amount") @db.Decimal(23, 8)
   // Parte de paidAmount que vino de un anticipo de la orden, no de un pago
   // hecho sobre esta cuenta.
-  advanceApplied    Decimal   @default(0) @map("advance_applied") @db.Decimal(12, 2)
+  advanceApplied    Decimal   @default(0) @map("advance_applied") @db.Decimal(23, 8)
   // Factura del proveedor que cubre esta cuenta. Sin factura, `amount` es
   // una estimación (cantidad recibida × costo de la orden).
   supplierInvoiceId String?   @map("supplier_invoice_id")
   // Lo estimado al recibir, una vez que la factura fijó `amount`.
-  estimatedAmount   Decimal?  @map("estimated_amount") @db.Decimal(12, 2)
+  estimatedAmount   Decimal?  @map("estimated_amount") @db.Decimal(23, 8)
   status            APStatus  @default(PENDING)
   dueDate           DateTime? @map("due_date")
   createdAt         DateTime  @default(now()) @map("created_at")
@@ -324,12 +320,12 @@ model SupplierInvoice {
   timbrado       String?
   // Día de calendario (medianoche UTC). El plazo de pago corre desde acá.
   invoiceDate    DateTime              @map("invoice_date")
-  subtotal       Decimal               @db.Decimal(12, 2)
-  shippingAmount Decimal               @default(0) @map("shipping_amount") @db.Decimal(12, 2)
-  discountAmount Decimal               @default(0) @map("discount_amount") @db.Decimal(12, 2)
-  total          Decimal               @db.Decimal(12, 2)
+  subtotal       Decimal               @db.Decimal(23, 8)
+  shippingAmount Decimal               @default(0) @map("shipping_amount") @db.Decimal(23, 8)
+  discountAmount Decimal               @default(0) @map("discount_amount") @db.Decimal(23, 8)
+  total          Decimal               @db.Decimal(23, 8)
   // Lo que se había estimado al recibir, al momento de cargar la factura.
-  estimatedTotal Decimal               @map("estimated_total") @db.Decimal(12, 2)
+  estimatedTotal Decimal               @map("estimated_total") @db.Decimal(23, 8)
   status         SupplierInvoiceStatus
   notes          String?
   // Factura escaneada o en PDF, tal como la mandó el proveedor.
@@ -363,10 +359,10 @@ model SupplierInvoiceItem {
   accountsPayableId     String  @map("accounts_payable_id")
   // Lo que dice la factura.
   quantity              Int
-  unitCost              Decimal @map("unit_cost") @db.Decimal(12, 2)
+  unitCost              Decimal @map("unit_cost") @db.Decimal(23, 8)
   // Lo que se había recibido, tal como estaba al cargar la factura.
   receivedQuantity      Int     @map("received_quantity")
-  receivedUnitCost      Decimal @map("received_unit_cost") @db.Decimal(12, 2)
+  receivedUnitCost      Decimal @map("received_unit_cost") @db.Decimal(23, 8)
 
   supplierInvoice     SupplierInvoice     @relation(fields: [supplierInvoiceId], references: [id], onDelete: Cascade)
   purchaseReceiptItem PurchaseReceiptItem @relation(fields: [purchaseReceiptItemId], references: [id])
@@ -386,7 +382,7 @@ model SupplierPayment {
   accountsPayableId String?             @map("accounts_payable_id")
   purchaseOrderId   String?             @map("purchase_order_id")
   kind              SupplierPaymentKind @default(PAYMENT)
-  amount            Decimal             @db.Decimal(12, 2)
+  amount            Decimal             @db.Decimal(23, 8)
   paymentMethod     PaymentMethod       @map("payment_method")
   paymentDate       DateTime            @map("payment_date")
   reference         String?
@@ -403,4 +399,47 @@ model SupplierPayment {
   @@index([accountsPayableId])
   @@index([purchaseOrderId])
   @@map("supplier_payments")
+}
+
+// Precio por unidad desde cierta cantidad, en la unidad del proveedor.
+model SupplierCatalogPriceTier {
+  tenantId      String  @map("tenant_id")
+  id            String  @id @default(uuid())
+  catalogItemId String  @map("catalog_item_id")
+  minQuantity   Int     @map("min_quantity")
+  price         Decimal @db.Decimal(23, 8)
+
+  catalogItem SupplierCatalogItem @relation(fields: [catalogItemId], references: [id], onDelete: Cascade)
+
+  @@unique([catalogItemId, minQuantity])
+  @@index([tenantId])
+  @@map("supplier_catalog_price_tiers")
+}
+
+model SupplierVolumeDiscount {
+  tenantId   String  @map("tenant_id")
+  id         String  @id @default(uuid())
+  supplierId String  @map("supplier_id")
+  minAmount  Decimal @map("min_amount") @db.Decimal(23, 8)
+  percent    Decimal @db.Decimal(11, 8)
+
+  supplier Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+
+  @@unique([supplierId, minAmount])
+  @@index([tenantId])
+  @@map("supplier_volume_discounts")
+}
+
+model SupplierQuantityDiscount {
+  tenantId    String  @map("tenant_id")
+  id          String  @id @default(uuid())
+  supplierId  String  @map("supplier_id")
+  minQuantity Int     @map("min_quantity")
+  percent     Decimal @db.Decimal(11, 8)
+
+  supplier Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+
+  @@unique([supplierId, minQuantity])
+  @@index([tenantId])
+  @@map("supplier_quantity_discounts")
 }

@@ -32,6 +32,20 @@ export class PayrollRepository {
     });
   }
 
+  sumItemsByRecord(tenantId: string, payrollRecordIds: string[]) {
+    return this.prisma.payrollRecordItem.groupBy({
+      by: ['payrollRecordId'],
+      where: { tenantId, payrollRecordId: { in: payrollRecordIds } },
+      _sum: {
+        grossSalary: true,
+        netSalary: true,
+        ipsEmployee: true,
+        ipsEmployer: true,
+        aguinaldo: true,
+      },
+    });
+  }
+
   findRecord(tenantId: string, id: string) {
     return this.prisma.payrollRecord.findFirst({
       where: { id, tenantId },

@@ -30,8 +30,24 @@ export class PayrollService {
     });
   }
 
-  listRecords(tenantId: string) {
-    return this.payrollRepository.findRecords(tenantId);
+  async listRecords(tenantId: string) {
+    const records = await this.payrollRepository.findRecords(tenantId);
+    const sums = await this.payrollRepository.sumItemsByRecord(
+      tenantId,
+      records.map((r) => r.id),
+    );
+    const byRecord = new Map(sums.map((s) => [s.payrollRecordId, s._sum]));
+    return records.map((record) => {
+      const sum = byRecord.get(record.id);
+      return {
+        ...record,
+        totalGross: money(sum?.grossSalary),
+        totalNet: money(sum?.netSalary),
+        totalIpsEmployee: money(sum?.ipsEmployee),
+        totalIpsEmployer: money(sum?.ipsEmployer),
+        totalAguinaldo: money(sum?.aguinaldo),
+      };
+    });
   }
 
   async getRecord(tenantId: string, id: string) {
@@ -70,18 +86,14 @@ export class PayrollService {
     const isDecember = period.endsWith('-12');
 
     for (const emp of activeEmployees) {
-      const baseSalary = emp.baseSalary;
+      const baseSalary = money(emp.baseSalary);
       const aguinaldo = isDecember
-        ? roundGuaranies(money(baseSalary).div(12)).toNumber()
-        : 0;
-      const grossSalary = baseSalary + aguinaldo;
-      const ipsEmployee = roundGuaranies(
-        money(baseSalary).mul(ipsEmployeeRate),
-      ).toNumber();
-      const ipsEmployer = roundGuaranies(
-        money(baseSalary).mul(ipsEmployerRate),
-      ).toNumber();
-      const netSalary = grossSalary - ipsEmployee;
+        ? roundGuaranies(baseSalary.div(12))
+        : money(0);
+      const grossSalary = baseSalary.plus(aguinaldo);
+      const ipsEmployee = roundGuaranies(baseSalary.mul(ipsEmployeeRate));
+      const ipsEmployer = roundGuaranies(baseSalary.mul(ipsEmployerRate));
+      const netSalary = grossSalary.minus(ipsEmployee);
 
       await this.payrollRepository.createItem({
         tenantId,

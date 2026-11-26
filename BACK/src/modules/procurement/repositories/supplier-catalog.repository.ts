@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { PrismaClientOrTx } from '../../../prisma/types';
 import { startOfBusinessDay } from '../../../common/utils/business-date.util';
+import type { PriceTier } from '../commercial-terms.util';
 
 export interface CatalogFilters {
   search?: string;
@@ -17,6 +18,10 @@ const UNLINKED_SCAN_LIMIT = 500;
 
 const ITEM_INCLUDE = {
   product: { select: { id: true, name: true, unit: true } },
+  priceTiers: {
+    select: { minQuantity: true, price: true },
+    orderBy: { minQuantity: 'asc' },
+  },
 } as const;
 
 @Injectable()
@@ -79,8 +84,14 @@ export class SupplierCatalogRepository {
             shippingCost: true,
             leadTimeDays: true,
             minOrderAmount: true,
-            volumeDiscounts: true,
-            quantityDiscounts: true,
+            volumeDiscounts: {
+              select: { minAmount: true, percent: true },
+              orderBy: { minAmount: 'asc' },
+            },
+            quantityDiscounts: {
+              select: { minQuantity: true, percent: true },
+              orderBy: { minQuantity: 'asc' },
+            },
           },
         },
       },
@@ -164,14 +175,30 @@ export class SupplierCatalogRepository {
     });
   }
 
+  // Los tramos que llegan reemplazan a los guardados, junto con el ítem.
   update(
     tenantId: string,
     id: string,
-    data: Prisma.SupplierCatalogItemUncheckedUpdateInput,
+    data: Prisma.SupplierCatalogItemUncheckedUpdateManyInput,
+    priceTiers?: PriceTier[],
   ) {
-    return this.prisma.supplierCatalogItem.updateMany({
-      where: { tenantId, id },
-      data,
+    return this.prisma.$transaction(async (tx) => {
+      const { count } = await tx.supplierCatalogItem.updateMany({
+        where: { tenantId, id },
+        data,
+      });
+      if (count === 0 || !priceTiers) return count;
+      await tx.supplierCatalogPriceTier.deleteMany({
+        where: { tenantId, catalogItemId: id },
+      });
+      await tx.supplierCatalogPriceTier.createMany({
+        data: priceTiers.map((tier) => ({
+          ...tier,
+          tenantId,
+          catalogItemId: id,
+        })),
+      });
+      return count;
     });
   }
 

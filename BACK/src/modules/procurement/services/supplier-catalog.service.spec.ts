@@ -179,10 +179,12 @@ describe('SupplierCatalogService', () => {
         validTo: '2026-12-31',
       });
 
-      expect(repository.update).toHaveBeenCalledWith('tenant-1', 'item-1', {
-        validFrom: null,
-        validTo: new Date('2026-12-31T00:00:00.000Z'),
-      });
+      expect(repository.update).toHaveBeenCalledWith(
+        'tenant-1',
+        'item-1',
+        { validFrom: null, validTo: new Date('2026-12-31T00:00:00.000Z') },
+        undefined,
+      );
     });
 
     it('checks an edited end date against the start date already stored', async () => {
@@ -202,9 +204,12 @@ describe('SupplierCatalogService', () => {
     it('leaves the validity alone when an edit does not mention it', async () => {
       await service.update('tenant-1', 'item-1', { price: 500 });
 
-      expect(repository.update).toHaveBeenCalledWith('tenant-1', 'item-1', {
-        price: 500,
-      });
+      expect(repository.update).toHaveBeenCalledWith(
+        'tenant-1',
+        'item-1',
+        { price: 500 },
+        undefined,
+      );
     });
   });
 
@@ -217,19 +222,26 @@ describe('SupplierCatalogService', () => {
     it('stamps when the availability was reported', async () => {
       await service.update('tenant-1', 'item-1', { availability: 'ON_ORDER' });
 
-      expect(repository.update).toHaveBeenCalledWith('tenant-1', 'item-1', {
-        availability: 'ON_ORDER',
-        availabilityUpdatedAt: new Date('2026-10-06T15:00:00.000Z'),
-      });
+      expect(repository.update).toHaveBeenCalledWith(
+        'tenant-1',
+        'item-1',
+        {
+          availability: 'ON_ORDER',
+          availabilityUpdatedAt: new Date('2026-10-06T15:00:00.000Z'),
+        },
+        undefined,
+      );
     });
 
     it('clears the availability and its date together', async () => {
       await service.update('tenant-1', 'item-1', { availability: null });
 
-      expect(repository.update).toHaveBeenCalledWith('tenant-1', 'item-1', {
-        availability: null,
-        availabilityUpdatedAt: null,
-      });
+      expect(repository.update).toHaveBeenCalledWith(
+        'tenant-1',
+        'item-1',
+        { availability: null, availabilityUpdatedAt: null },
+        undefined,
+      );
     });
 
     it('stores the quantity prices in order', async () => {
@@ -241,13 +253,15 @@ describe('SupplierCatalogService', () => {
         ],
       });
 
-      expect(repository.update).toHaveBeenCalledWith('tenant-1', 'item-1', {
-        minOrderQuantity: 6,
-        priceTiers: [
+      expect(repository.update).toHaveBeenCalledWith(
+        'tenant-1',
+        'item-1',
+        { minOrderQuantity: 6 },
+        [
           { minQuantity: 10, price: 48_000 },
           { minQuantity: 50, price: 40_000 },
         ],
-      });
+      );
     });
 
     it('rejects a quantity price above the list price of the item', async () => {

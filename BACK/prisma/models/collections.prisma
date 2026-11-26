@@ -32,8 +32,8 @@ model CollectionRoute {
   routeDate      DateTime              @map("route_date") @db.Date
   collectorId    String?               @map("collector_id")
   status         CollectionRouteStatus @default(OPEN)
-  totalPlanned   Decimal               @default(0) @map("total_planned") @db.Decimal(12, 2)
-  totalCollected Decimal               @default(0) @map("total_collected") @db.Decimal(12, 2)
+  totalPlanned   Decimal               @default(0) @map("total_planned") @db.Decimal(23, 8)
+  totalCollected Decimal               @default(0) @map("total_collected") @db.Decimal(23, 8)
   notes          String?
   closedAt       DateTime?             @map("closed_at")
   closedById     String?               @map("closed_by_id")
@@ -60,8 +60,8 @@ model CollectionVisit {
   loanId          String?        @map("loan_id")
   installmentId   String?        @map("installment_id")
   arId            String?        @map("ar_id")
-  plannedAmount   Decimal        @map("planned_amount") @db.Decimal(12, 2)
-  collectedAmount Decimal        @default(0) @map("collected_amount") @db.Decimal(12, 2)
+  plannedAmount   Decimal        @map("planned_amount") @db.Decimal(23, 8)
+  collectedAmount Decimal        @default(0) @map("collected_amount") @db.Decimal(23, 8)
   result          VisitResult?
   promiseDate     DateTime?      @map("promise_date")
   paymentMethod   PaymentMethod? @map("payment_method")
@@ -90,9 +90,9 @@ model PaymentAgreement {
   tenantId           String          @map("tenant_id")
   customerId         String          @map("customer_id")
   loanId             String?         @map("loan_id")
-  originalDebt       Decimal         @map("original_debt") @db.Decimal(12, 2)
+  originalDebt       Decimal         @map("original_debt") @db.Decimal(23, 8)
   agreedInstallments Int             @map("agreed_installments")
-  agreedAmount       Decimal         @map("agreed_amount") @db.Decimal(12, 2)
+  agreedAmount       Decimal         @map("agreed_amount") @db.Decimal(23, 8)
   startDate          DateTime        @map("start_date") @db.Date
   status             AgreementStatus @default(ACTIVE)
   notes              String?
