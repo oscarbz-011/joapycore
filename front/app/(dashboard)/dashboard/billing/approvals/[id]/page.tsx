@@ -1,4 +1,5 @@
 'use client';
+import { saleItemName } from '@/lib/dimensions';
 
 import { formatQty } from '@/lib/quantity';
 import { apiErrorMessage } from '@/lib/api/api-error';
@@ -238,7 +239,7 @@ export default function ApprovalDetailPage() {
               {order.items.map((item) => (
                 <div key={item.id} className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="text-sm text-foreground">{item.product?.name ?? item.description ?? 'Ítem'}</p>
+                    <p className="text-sm text-foreground">{saleItemName(item)}</p>
                     {item.product?.model && <p className="text-xs text-muted-foreground">{item.product.model}</p>}
                   </div>
                   <div className="text-right shrink-0">

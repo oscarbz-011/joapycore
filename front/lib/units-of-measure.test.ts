@@ -2,8 +2,9 @@ import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_UNIT_CODE,
   UNITS_OF_MEASURE,
+  habitualUnits,
+  matchesUnit,
   unitOfMeasure,
-  unitOptionGroups,
   unitSymbol,
 } from './units-of-measure';
 
@@ -20,16 +21,27 @@ describe('units of measure', () => {
     expect(unitOfMeasure(109).decimals).toBe(3);
   });
 
-  it('puts the units of the industry first and every other one after', () => {
-    const { suggested, others } = unitOptionGroups('MUEBLERIA');
-    expect(suggested.map((u) => u.code)).toEqual([77, 109, 87, 660, 110, 124, 132]);
-    expect(others.some((u) => u.code === 109)).toBe(false);
-    expect(suggested.length + others.length).toBe(64);
+  it('shows the units of the industry, then the ones the company already uses', () => {
+    const codes = habitualUnits('MUEBLERIA', [77, 89]).map((u) => u.code);
+    expect(codes).toEqual([77, 109, 87, 660, 110, 124, 132, 89]);
   });
 
-  it('lists the whole table when the industry is unknown', () => {
-    const { suggested, others } = unitOptionGroups(null);
-    expect(suggested).toEqual([]);
-    expect(others).toHaveLength(64);
+  it('keeps the unit of the product being edited even if it is unusual', () => {
+    expect(habitualUnits('ELECTRODOMESTICOS', [], 869).map((u) => u.code)).toEqual([
+      77, 132, 117, 869,
+    ]);
+  });
+
+  it('offers only the unit when the industry is unknown', () => {
+    expect(habitualUnits(null, []).map((u) => u.code)).toEqual([77]);
+  });
+
+  it('finds a unit by name or symbol, ignoring case and accents', () => {
+    const liter = unitOfMeasure(89);
+    expect(matchesUnit(liter, 'litro')).toBe(true);
+    expect(matchesUnit(liter, 'lt')).toBe(true);
+    expect(matchesUnit(unitOfMeasure(110), 'cubicos')).toBe(true);
+    expect(matchesUnit(liter, 'kilo')).toBe(false);
+    expect(UNITS_OF_MEASURE.filter((u) => matchesUnit(u, ''))).toHaveLength(64);
   });
 });

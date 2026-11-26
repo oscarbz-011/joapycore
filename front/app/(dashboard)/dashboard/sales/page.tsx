@@ -1,4 +1,5 @@
 "use client";
+import { saleItemName } from '@/lib/dimensions';
 
 import { formatQty, qty } from "@/lib/quantity";
 import { apiErrorMessage } from "@/lib/api/api-error";
@@ -19,6 +20,8 @@ import {
   NUM_CLS,
   type LineItem,
   LineItemRow,
+  lineStockQuantity,
+  saleUnitPayload,
   CreditOptions,
   installmentsText,
 } from "../../../../components/sales/order-line-items";
@@ -267,6 +270,7 @@ function CreateOrderModal({
     queryFn: settingsApi.getSalesConfig,
   });
   const combosEnabled = salesConfig?.combosEnabled ?? false;
+  const presentationsEnabled = salesConfig?.presentationsEnabled ?? false;
   const { data: combos = [] } = useQuery({
     queryKey: ["sale-combos"],
     queryFn: () => combosApi.list(true),
@@ -448,7 +452,10 @@ function CreateOrderModal({
           interestRate: selectedCreditPlan.interestRate,
         }).total.toNumber()
       : total;
-  const stockIssues = findStockIssues(items, products);
+  const stockIssues = findStockIssues(
+    items.map((it) => ({ productId: it.productId, quantity: lineStockQuantity(it) })),
+    products,
+  );
 
   const stock = useSaleStock();
 
@@ -465,11 +472,12 @@ function CreateOrderModal({
             productId: it.productId,
             quantity: Number(it.quantity),
             unitPrice: Number(it.unitPrice),
+            ...saleUnitPayload(it),
             warehouseId:
               resolveWarehouseId(
                 it.warehouseId,
                 warehouseChoices(stock, it.productId),
-                Number(it.quantity),
+                lineStockQuantity(it),
               ) || undefined,
             serialNumbers: it.product?.isSerialized
               ? it.serialInput
@@ -773,6 +781,7 @@ function CreateOrderModal({
                           item={items[idx]}
                           products={products}
                           stock={stock}
+                          presentationsEnabled={presentationsEnabled}
                           onChange={(updated) =>
                             setItems((prev) =>
                               prev.map((it, i) => (i === idx ? updated : it)),
@@ -791,6 +800,7 @@ function CreateOrderModal({
                         item={items[idx]}
                         products={products}
                         stock={stock}
+                        presentationsEnabled={presentationsEnabled}
                         onChange={(updated) =>
                           setItems((prev) =>
                             prev.map((it, i) => (i === idx ? updated : it)),
@@ -1250,7 +1260,7 @@ function OrderDetailPanel({
               >
                 <div className="flex-1 min-w-0">
                   <p className="text-sm text-foreground truncate">
-                    {item.product?.name ?? item.description ?? "Ítem"}
+                    {saleItemName(item)}
                   </p>
                   {item.product?.model && (
                     <p className="text-xs text-muted-foreground">

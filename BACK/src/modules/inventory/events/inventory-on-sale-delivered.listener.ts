@@ -1,3 +1,4 @@
+import { baseQuantity } from '../../../common/units/quantity';
 import { Injectable, Logger } from '@nestjs/common';
 import { OnDomainEvent } from '../../../common/events/on-domain-event.decorator';
 import { OutboxService } from '../../../outbox/outbox.service';
@@ -66,7 +67,7 @@ export class InventoryOnSaleDeliveredListener {
         const firstBatchId = await this.stockEntryService.consumeFifo(
           tenantId,
           item.productId,
-          item.quantity,
+          baseQuantity(item),
           item.id,
           tx,
         );

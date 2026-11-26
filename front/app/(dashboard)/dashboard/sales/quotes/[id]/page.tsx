@@ -1,4 +1,5 @@
 'use client';
+import { saleItemName } from '@/lib/dimensions';
 import { formatQty } from '@/lib/quantity';
 import { money, sumMoney } from '@/lib/money';
 
@@ -162,7 +163,7 @@ export default function QuoteDetailPage() {
             {quote.items.map((item) => (
               <div key={item.id} className="flex items-start justify-between gap-3">
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm text-foreground">{item.product?.name ?? item.description ?? 'Ítem'}</p>
+                  <p className="text-sm text-foreground">{saleItemName(item)}</p>
                   {item.specNotes && <p className="text-xs text-muted-foreground whitespace-pre-line mt-0.5">{item.specNotes}</p>}
                   <p className="text-xs text-muted-foreground/60 mt-0.5">{formatQty(item.quantity)} × {formatPrice(item.unitPrice)}</p>
                 </div>

@@ -1,5 +1,6 @@
 import {
   assertQuantityForUnit,
+  baseQuantity,
   qty,
   type Quantity,
 } from '../../../common/units/quantity';
@@ -250,7 +251,13 @@ export class StockLedgerService implements StockLedger {
           'Uno de los ítems devueltos no mueve stock',
         );
       }
-      if (item.product) assertQuantityForUnit(line.quantity, item.product);
+      // Vuelve en la unidad en que se vendió (dos planchas, no 10,065 m²).
+      if (item.product) {
+        assertQuantityForUnit(line.quantity, {
+          ...item.product,
+          unitCode: item.unitCode ?? item.product.unitCode,
+        });
+      }
       if (item.product?.isSerialized) {
         if (!qty(line.quantity).eq(line.serialNumbers.length)) {
           throw new UnprocessableEntityException(
@@ -277,7 +284,10 @@ export class StockLedgerService implements StockLedger {
           warehouseId: item.warehouseId,
           type: 'IN',
           reason: 'CUSTOMER_RETURN',
-          quantity: qty(line.quantity),
+          quantity: baseQuantity({
+            quantity: line.quantity,
+            unitFactor: item.unitFactor,
+          }),
           referenceId,
         },
         tx,

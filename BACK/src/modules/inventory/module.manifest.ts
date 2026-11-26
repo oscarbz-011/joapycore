@@ -14,6 +14,7 @@ export const inventoryManifest = defineModule({
     'Brand',
     'Product',
     'ProductSupplier',
+    'ProductPresentation',
     'ProductUnit',
     'ProductBatch',
     'StockMovement',

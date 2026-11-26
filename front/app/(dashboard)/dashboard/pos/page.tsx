@@ -1,6 +1,9 @@
 'use client';
 import { money as exact, sumMoney } from '@/lib/money';
-import { formatQty, quantityDecimals } from '@/lib/quantity';
+import { formatQty, qty, quantityDecimals } from '@/lib/quantity';
+import { SaleUnitPicker, type SaleUnitValue } from '@/components/sales/sale-unit-picker';
+import { lineStockQuantity, saleUnitPayload } from '@/components/sales/order-line-items';
+import { settingsApi } from '@/lib/api/settings';
 import { unitSymbol } from '@/lib/units-of-measure';
 import { NumericInput } from '@/components/numeric-input';
 
@@ -283,6 +286,21 @@ interface CartLine {
   serialNumbers: string[];
   stock: number;
   unitCode: number;
+  salePrice: number | null;
+  saleUnit?: SaleUnitValue;
+  unitFactor?: number | null;
+}
+
+/** Una presentación o un corte se venden enteros; lo demás según su unidad. */
+function lineDecimals(line: CartLine): number {
+  return line.saleUnit ? 0 : quantityDecimals(line);
+}
+
+/** Lo que alcanza el stock, contado en la unidad en que se vende la línea. */
+function maxQuantity(line: CartLine): number {
+  const factor = line.unitFactor ?? 1;
+  if (!factor || factor === 1) return line.stock;
+  return qty(line.stock).div(factor).toDecimalPlaces(0, 1).toNumber();
 }
 
 interface PaymentLine {
@@ -298,6 +316,11 @@ function SaleScreen({ session }: { session: ActivePosSession }) {
     queryFn: () =>
       inventoryApi.listProductsWithStock(salesChannelProductFilters('POS')),
   });
+  const { data: salesConfig } = useQuery({
+    queryKey: ['sales-config'],
+    queryFn: settingsApi.getSalesConfig,
+  });
+  const presentationsEnabled = salesConfig?.presentationsEnabled ?? false;
   const { data: sessionSales = [] } = useQuery({
     queryKey: ['pos-session-sales', session.id],
     queryFn: () => posApi.listSessionSales(session.id),
@@ -329,7 +352,9 @@ function SaleScreen({ session }: { session: ActivePosSession }) {
 
   function addProduct(product: ProductWithStock) {
     setCart((c) => {
-      const existing = !product.isSerialized ? c.find((l) => l.productId === product.id) : undefined;
+      const existing = !product.isSerialized
+        ? c.find((l) => l.productId === product.id && !l.saleUnit)
+        : undefined;
       if (existing) {
         return c.map((l) => (l === existing ? { ...l, quantity: l.quantity + 1 } : l));
       }
@@ -345,6 +370,8 @@ function SaleScreen({ session }: { session: ActivePosSession }) {
           serialNumbers: [],
           stock: product.stock,
           unitCode: product.unitCode,
+          salePrice: product.salePrice,
+          unitFactor: 1,
         },
       ];
     });
@@ -365,8 +392,9 @@ function SaleScreen({ session }: { session: ActivePosSession }) {
         productId: l.productId,
         quantity: l.quantity,
         unitPrice: l.unitPrice,
+        ...saleUnitPayload(l),
         warehouseId:
-          resolveWarehouseId(undefined, warehouseChoices(stock, l.productId), l.quantity) || undefined,
+          resolveWarehouseId(undefined, warehouseChoices(stock, l.productId), lineStockQuantity(l)) || undefined,
         ...(l.isSerialized ? { serialNumbers: l.serialNumbers } : {}),
       }));
       const paymentsPayload: CreatePosSalePayment[] = payments
@@ -484,6 +512,28 @@ function SaleScreen({ session }: { session: ActivePosSession }) {
                   <div key={line.key} className="flex items-center gap-3 px-4 py-3">
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-medium text-foreground">{line.name}</p>
+                      <SaleUnitPicker
+                        compact
+                        enabled={presentationsEnabled}
+                        product={{
+                          id: line.productId,
+                          unitCode: line.unitCode,
+                          salePrice: line.salePrice,
+                          isSerialized: line.isSerialized,
+                        }}
+                        value={line.saleUnit ?? {}}
+                        onChange={(saleUnit, change) =>
+                          updateLine(line.key, {
+                            saleUnit,
+                            unitFactor: change.factor,
+                            unitPrice: change.unitPrice ?? line.unitPrice,
+                            quantity:
+                              saleUnit.presentationId || saleUnit.cut
+                                ? Math.max(1, Math.round(line.quantity))
+                                : line.quantity,
+                          })
+                        }
+                      />
                       {line.isSerialized && (
                         <input
                           className="mt-1 w-full rounded border border-border bg-background px-2 py-1 text-xs"
@@ -500,11 +550,11 @@ function SaleScreen({ session }: { session: ActivePosSession }) {
                         />
                       )}
                     </div>
-                    {quantityDecimals(line) > 0 ? (
+                    {lineDecimals(line) > 0 ? (
                       <NumericInput
                         value={line.quantity}
-                        onChange={(v) => updateLine(line.key, { quantity: Math.min(line.stock, Math.max(0, v)) })}
-                        decimals={quantityDecimals(line)}
+                        onChange={(v) => updateLine(line.key, { quantity: Math.min(maxQuantity(line), Math.max(0, v)) })}
+                        decimals={lineDecimals(line)}
                         aria-label={`Cantidad de ${line.name} en ${unitSymbol(line.unitCode)}`}
                         className="w-20 shrink-0 rounded-lg border border-border bg-background px-2 py-1 text-right text-sm"
                       />
@@ -521,7 +571,7 @@ function SaleScreen({ session }: { session: ActivePosSession }) {
                       <button
                         type="button"
                         onClick={() =>
-                          updateLine(line.key, { quantity: Math.min(line.stock, line.quantity + 1) })
+                          updateLine(line.key, { quantity: Math.min(maxQuantity(line), line.quantity + 1) })
                         }
                         className="rounded p-1 text-muted-foreground hover:bg-muted/20"
                       >

@@ -13,11 +13,14 @@ export function sumQty(values: readonly (QuantityValue | Decimal)[]): Decimal {
   return values.reduce<Decimal>((sum, value) => sum.plus(qty(value)), new Decimal(0));
 }
 
-const FORMAT = new Intl.NumberFormat('es-PY', { maximumFractionDigits: 3 });
-
 /** "2,375" — sin ceros de más y con la coma de Paraguay. */
-export function formatQty(value: QuantityValue | Decimal | null | undefined): string {
-  return FORMAT.format(qty(value).toNumber());
+export function formatQty(
+  value: QuantityValue | Decimal | null | undefined,
+  maxDecimals = 3,
+): string {
+  return new Intl.NumberFormat('es-PY', { maximumFractionDigits: maxDecimals }).format(
+    qty(value).toNumber(),
+  );
 }
 
 /** Decimales que admite el input de cantidad de un producto (0 o 3). */

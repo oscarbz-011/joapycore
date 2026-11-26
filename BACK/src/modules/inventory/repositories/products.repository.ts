@@ -80,6 +80,32 @@ export class ProductsRepository {
     });
   }
 
+  /** Unidades que la empresa ya usa, en sus productos o en sus presentaciones. */
+  async findUnitCodesInUse(tenantId: string): Promise<number[]> {
+    const [products, presentations] = await Promise.all([
+      this.prisma.product.findMany({
+        where: { tenantId, deletedAt: null },
+        distinct: ['unitCode'],
+        select: { unitCode: true },
+      }),
+      this.prisma.productPresentation.findMany({
+        where: { tenantId },
+        distinct: ['unitCode'],
+        select: { unitCode: true },
+      }),
+    ]);
+    return [
+      ...new Set([...products, ...presentations].map((row) => row.unitCode)),
+    ].sort((a, b) => a - b);
+  }
+
+  findPresentationsByIds(tenantId: string, ids: string[]) {
+    if (ids.length === 0) return Promise.resolve([]);
+    return this.prisma.productPresentation.findMany({
+      where: { tenantId, id: { in: ids } },
+    });
+  }
+
   findForTransfer(
     tenantId: string,
     ids: string[],

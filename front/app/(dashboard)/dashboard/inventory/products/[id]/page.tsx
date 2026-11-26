@@ -28,6 +28,7 @@ import { stockLevel } from '../../../../../../lib/inventory-stock';
 import { computeSuggestedPrice } from '../../../../../../lib/pricing';
 import { useActiveModules } from '../../../../../../lib/use-active-modules';
 import { RecipeTab } from './recipe-tab';
+import { PresentationsTab } from './presentations-tab';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -69,7 +70,7 @@ const REASON_LABELS: Record<MovementReason, string> = {
 
 const SALES_CHANNELS = Object.keys(SALES_CHANNEL_LABEL) as OrderChannel[];
 
-type Tab = 'info' | 'movements' | 'recipe' | 'suppliers' | 'units';
+type Tab = 'info' | 'movements' | 'recipe' | 'presentations' | 'suppliers' | 'units';
 
 // ── Main page ──────────────────────────────────────────────────────────────────
 
@@ -82,6 +83,11 @@ export default function ProductDetailPage() {
   // Acciones visibles solo con el permiso que exige el backend para cada una.
   const canUpdate = usePermission('inventory:products:update');
   const canDelete = usePermission('inventory:products:delete');
+  const { data: salesConfig } = useQuery({
+    queryKey: ['sales-config'],
+    queryFn: settingsApi.getSalesConfig,
+  });
+  const presentationsEnabled = salesConfig?.presentationsEnabled ?? false;
   const [showEdit, setShowEdit] = useState(false);
   const [selectedSupplierId, setSelectedSupplierId] = useState('');
   const [supplierCostPrice, setSupplierCostPrice] = useState<number>(0);
@@ -238,6 +244,10 @@ export default function ProductDetailPage() {
     // quedaría rota.
     ...(product.kind === 'MANUFACTURED' && hasModule('production')
       ? [{ key: 'recipe' as Tab, label: 'Receta' }]
+      : []),
+    // Un producto con número de serie se vende siempre por unidad.
+    ...(presentationsEnabled && !product.isSerialized
+      ? [{ key: 'presentations' as Tab, label: 'Presentaciones' }]
       : []),
     { key: 'suppliers', label: 'Proveedores' },
     ...(product.isSerialized ? [{ key: 'units' as Tab, label: 'Unidades' }] : []),
@@ -634,6 +644,14 @@ export default function ProductDetailPage() {
       {/* ── Receta tab ───────────────────────────────────────────────────────── */}
       {activeTab === 'recipe' && (
         <RecipeTab productId={id} unitCode={product.unitCode} />
+      )}
+
+      {activeTab === 'presentations' && (
+        <PresentationsTab
+          productId={id}
+          unitCode={product.unitCode}
+          basePrice={product.salePrice == null ? null : Number(product.salePrice)}
+        />
       )}
 
       {/* ── Proveedores tab ──────────────────────────────────────────────────── */}

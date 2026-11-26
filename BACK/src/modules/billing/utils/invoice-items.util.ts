@@ -1,3 +1,4 @@
+import { withSoldAs, type SoldAs } from '../../../common/units/dimensions';
 import type { QuantityValue } from '../../../common/units/quantity';
 import {
   money,
@@ -27,13 +28,13 @@ export function effectiveUnitPrice(item: {
 // de entrega o zona es un servicio y también.
 const DEFAULT_IVA_RATE = 10;
 
-export interface SaleItemForInvoice {
+export interface SaleItemForInvoice extends SoldAs {
   id?: string;
   quantity: QuantityValue;
   unitPrice: MoneyValue;
   financedUnitPrice?: MoneyValue | null;
   description?: string | null;
-  product?: { name: string; ivaTaxRate: MoneyValue } | null;
+  product?: { name: string; ivaTaxRate: MoneyValue; unitCode: number } | null;
 }
 
 function withIva(
@@ -63,7 +64,9 @@ function withIva(
 export function toInvoiceItem(item: SaleItemForInvoice) {
   return {
     ...withIva(
-      item.product?.name ?? item.description ?? 'Ítem',
+      item.product
+        ? withSoldAs(item.product.name, item, item.product.unitCode)
+        : (item.description ?? 'Ítem'),
       item.quantity,
       effectiveUnitPrice(item),
       item.product?.ivaTaxRate ?? DEFAULT_IVA_RATE,

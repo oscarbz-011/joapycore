@@ -62,3 +62,14 @@ export function assertDecimalsForUnit(
   }
   return quantity;
 }
+
+/**
+ * Lo que mueve del stock una línea vendida en otra unidad (presentación o
+ * corte): cantidad × factor, en la unidad del producto.
+ */
+export function baseQuantity(item: {
+  quantity: QuantityValue;
+  unitFactor?: QuantityValue | null;
+}): Quantity {
+  return qty(item.quantity).mul(qty(item.unitFactor ?? 1));
+}

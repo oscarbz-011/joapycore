@@ -1,3 +1,4 @@
+import { withSoldAs } from '../../../common/units/dimensions';
 import { money } from '../../../common/money/money';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { OnDomainEvent } from '../../../common/events/on-domain-event.decorator';
@@ -88,7 +89,9 @@ export class QuoteOnCreateListener {
     const total = Number(order.total ?? 0);
     const rows = order.items.map((item) => {
       const lineTotal = money(item.unitPrice).mul(item.quantity);
-      const description = item.product?.name ?? item.description ?? 'Ítem';
+      const description = item.product
+        ? withSoldAs(item.product.name, item, item.product.unitCode)
+        : (item.description ?? 'Ítem');
       const descriptionWithSpecs = item.specNotes
         ? `${description}\n${item.specNotes}`
         : description;

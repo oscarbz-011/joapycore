@@ -1,4 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { Type } from 'class-transformer';
 import {
   IsArray,
   IsNumber,
@@ -6,7 +7,29 @@ import {
   IsPositive,
   IsString,
   IsUUID,
+  ValidateNested,
 } from 'class-validator';
+
+/** Medidas de un corte, en la unidad lineal del producto (m² → metros). */
+export class SaleLineCutDto {
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 3 })
+  @IsPositive()
+  length?: number;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 3 })
+  @IsPositive()
+  width?: number;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 3 })
+  @IsPositive()
+  height?: number;
+}
 
 // Línea de venta compartida por los canales que crean pedidos (Ventas y POS).
 // Vive en common para que POS no dependa de los DTOs del módulo de Ventas.
@@ -35,6 +58,24 @@ export class SaleOrderItemDto {
   @IsNumber()
   @IsPositive()
   unitPrice: number;
+
+  @ApiPropertyOptional({
+    description:
+      'Presentación en la que se vende (cantidad y precio quedan en esa presentación)',
+  })
+  @IsOptional()
+  @IsUUID()
+  presentationId?: string;
+
+  @ApiPropertyOptional({
+    type: SaleLineCutDto,
+    description:
+      'Corte a medida: la cantidad son piezas y cada una mueve del stock lo que miden',
+  })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => SaleLineCutDto)
+  cut?: SaleLineCutDto;
 
   @ApiPropertyOptional({
     description: 'Depósito desde el que se despacha este ítem',

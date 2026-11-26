@@ -52,7 +52,7 @@ describe('Entrega → descuento de stock (PostgreSQL)', () => {
     sales = new SaleOrdersService(
       prisma,
       new SaleOrdersRepository(prisma),
-      { findManyByIds: jest.fn() },
+      { findManyByIds: jest.fn(), findPresentationsByIds: jest.fn() },
       {} as never,
       {} as never,
       new EventBus(events),

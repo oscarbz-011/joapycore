@@ -1,4 +1,4 @@
-import type { Product } from '@prisma/client';
+import type { Product, ProductPresentation } from '@prisma/client';
 
 /**
  * Lectura de productos para módulos que no son Inventario (Ventas los
@@ -9,4 +9,8 @@ export const PRODUCT_CATALOG = Symbol('PRODUCT_CATALOG');
 
 export interface ProductCatalog {
   findManyByIds(tenantId: string, ids: string[]): Promise<Product[]>;
+  findPresentationsByIds(
+    tenantId: string,
+    ids: string[],
+  ): Promise<ProductPresentation[]>;
 }

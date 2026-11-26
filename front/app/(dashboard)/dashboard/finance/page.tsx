@@ -1,4 +1,5 @@
 'use client';
+import { saleItemName } from '@/lib/dimensions';
 
 import { apiErrorMessage } from '@/lib/api/api-error';
 
@@ -260,7 +261,7 @@ function InstallmentRow({ inst }: { inst: Installment }) {
 function LoanRow({ loan }: { loan: Loan }) {
   const [open, setOpen] = useState(false);
   const productSummary = loan.saleOrder.items
-    .map((i) => i.product?.name ?? i.description ?? 'Ítem')
+    .map((i) => saleItemName(i))
     .join(', ');
   const overdueCount = loan.installments.filter((i) => i.status === 'OVERDUE').length;
   const pendingCount = loan.installments.filter((i) => i.status === 'PENDING').length;

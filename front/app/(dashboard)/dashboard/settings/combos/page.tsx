@@ -1,4 +1,5 @@
 'use client';
+import { PresentationsSetting } from '@/components/sales/presentations-setting';
 import { qty, quantityDecimals } from '@/lib/quantity';
 import { money, sumMoney } from '@/lib/money';
 
@@ -292,6 +293,8 @@ export default function CombosSettingsPage() {
         </div>
       ) : (
         <div className="space-y-4">
+          {config && <PresentationsSetting config={config} />}
+
           {/* Toggle */}
           <div className="flex items-center justify-between rounded-2xl border border-border bg-card px-6 py-4">
             <div>

@@ -1,3 +1,4 @@
+import { withSoldAs, type SoldAs } from '../../../common/units/dimensions';
 import type { QuantityValue } from '../../../common/units/quantity';
 import { Injectable, Logger } from '@nestjs/common';
 import { roundGuaranies, type MoneyValue } from '../../../common/money/money';
@@ -114,13 +115,13 @@ function buildPairedInstallmentsTable(
 // Las mismas filas que la factura: precio con interés en guaraníes enteros y
 // el recargo de entrega como una línea más, así suman el total del crédito.
 function contractItemRows(saleOrder: {
-  items: {
+  items: ({
     quantity: QuantityValue;
     unitPrice: MoneyValue;
     financedUnitPrice: MoneyValue | null;
     description: string | null;
-    product: { name: string } | null;
-  }[];
+    product: { name: string; unitCode: number } | null;
+  } & SoldAs)[];
   surchargeType: string | null;
   surchargeAmount: MoneyValue | null;
   interestRate: MoneyValue | null;
@@ -128,7 +129,9 @@ function contractItemRows(saleOrder: {
   const rows = saleOrder.items.map((item) => {
     const unitPrice = roundGuaranies(item.financedUnitPrice ?? item.unitPrice);
     return [
-      item.product?.name ?? item.description ?? '—',
+      item.product
+        ? withSoldAs(item.product.name, item, item.product.unitCode)
+        : (item.description ?? '—'),
       String(item.quantity),
       formatMoney(unitPrice),
       formatMoney(unitPrice.mul(item.quantity)),

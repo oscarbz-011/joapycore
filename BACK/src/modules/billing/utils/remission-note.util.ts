@@ -1,3 +1,4 @@
+import { withSoldAs, type SoldAs } from '../../../common/units/dimensions';
 import { unitSymbol } from '../../../common/units/units-of-measure';
 import {
   assertQuantityForUnit,
@@ -75,9 +76,10 @@ export interface RemitableSource {
   saleOrderItemId: string | null;
 }
 
-export interface SaleItemForRemission {
+export interface SaleItemForRemission extends SoldAs {
   id: string;
   productId: string | null;
+  unitCode?: number | null;
   product: {
     name: string;
     model: string | null;
@@ -121,8 +123,12 @@ export function remitableItems(
       {
         invoiceItemId: item.invoiceItemId,
         productId: sale.productId,
-        description: goodsDescription(sale.product),
-        unitCode: sale.product.unitCode,
+        description: withSoldAs(
+          goodsDescription(sale.product),
+          sale,
+          sale.product.unitCode,
+        ),
+        unitCode: sale.unitCode ?? sale.product.unitCode,
         quantity: item.quantity,
         remitted: already,
         remitable: remainingQty(item.quantity, already),

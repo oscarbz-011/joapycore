@@ -134,6 +134,15 @@ describe('StockLedgerService', () => {
             quantity: 1,
             product: null,
           },
+          {
+            id: 'soi-board',
+            productId: 'p-board',
+            warehouseId: 'wh-1',
+            quantity: 3,
+            unitCode: 77,
+            unitFactor: '5.0325',
+            product: { name: 'MDF 18 mm', unitCode: 109, isSerialized: false },
+          },
         ]),
       };
       ledger = new StockLedgerService(
@@ -184,6 +193,21 @@ describe('StockLedgerService', () => {
         },
         tx,
       );
+    });
+
+    it('puts back what a returned presentation holds, counted in whole sheets', async () => {
+      await ledger.restockReturn(tx, 'tenant-1', 'cn-1', [
+        { saleItemId: 'soi-board', quantity: 2, serialNumbers: [] },
+      ]);
+      expect(movements.create).toHaveBeenCalledWith(
+        expect.objectContaining({ productId: 'p-board', quantity: '10.065' }),
+        tx,
+      );
+      await expect(
+        ledger.restockReturn(tx, 'tenant-1', 'cn-1', [
+          { saleItemId: 'soi-board', quantity: 1.5, serialNumbers: [] },
+        ]),
+      ).rejects.toThrow('se cuenta por unidad entera');
     });
 
     it('returns only the chosen serial numbers', async () => {

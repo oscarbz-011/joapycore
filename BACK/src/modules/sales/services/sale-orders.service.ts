@@ -1,8 +1,9 @@
 import {
-  assertQuantityForUnit,
+  baseQuantity,
   qty,
   type QuantityValue,
 } from '../../../common/units/quantity';
+import { resolveSaleUnit } from '../sale-unit.util';
 import {
   ConflictException,
   ForbiddenException,
@@ -820,13 +821,28 @@ export class SaleOrdersService implements SalesGateway {
     interestRate: number | null = null,
   ): Promise<CreatedItemInfo[]> {
     const created: CreatedItemInfo[] = [];
+    const presentations = new Map(
+      (
+        await this.productCatalog.findPresentationsByIds(tenantId, [
+          ...new Set(
+            items
+              .map((i) => i.presentationId)
+              .filter((id): id is string => !!id),
+          ),
+        ])
+      ).map((p) => [p.id, p]),
+    );
 
     for (const item of items) {
       const product = item.productId ? productMap.get(item.productId) : null;
       if (item.productId && !product) {
         throw new NotFoundException(`Product ${item.productId} not found`);
       }
-      if (product) assertQuantityForUnit(item.quantity, product);
+      const { baseQuantity: stockQuantity, ...unit } = resolveSaleUnit(
+        item,
+        product ?? null,
+        presentations,
+      );
 
       if (product?.isSerialized) {
         const serials = item.serialNumbers ?? [];
@@ -851,6 +867,7 @@ export class SaleOrdersService implements SalesGateway {
           description: item.description ?? null,
           quantity: item.quantity,
           unitPrice: item.unitPrice,
+          ...unit,
           warehouseId: item.warehouseId ?? null,
           // Precio con interés ya aplicado — solo en ventas a crédito. Se
           // resuelve acá (no lo manda el cliente) para que facturación y el
@@ -880,7 +897,7 @@ export class SaleOrdersService implements SalesGateway {
       created.push({
         saleItemId: saleItem.id,
         productId: item.productId ?? null,
-        quantity: item.quantity,
+        quantity: stockQuantity,
         warehouseId: item.warehouseId ?? null,
         isSerialized: !!product?.isSerialized,
       });
@@ -1322,7 +1339,7 @@ export class SaleOrdersService implements SalesGateway {
       .map((i) => ({
         saleItemId: i.id,
         productId: i.productId,
-        quantity: i.quantity,
+        quantity: baseQuantity(i),
         warehouseId: i.warehouseId ?? null,
         isSerialized: !!i.product?.isSerialized,
       }));
@@ -1361,7 +1378,7 @@ export class SaleOrdersService implements SalesGateway {
         {
           saleItemId: item.id,
           productId: item.productId,
-          quantity: item.quantity,
+          quantity: baseQuantity(item),
           warehouseId: item.warehouseId ?? null,
           isSerialized: !!item.product?.isSerialized,
         },

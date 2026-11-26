@@ -1,15 +1,37 @@
 import { Injectable } from '@nestjs/common';
-import { SalesConfigRepository } from '../repositories/sales-config.repository';
+import { presentationsEnabledFor } from '../../common/units/dimensions';
+import {
+  SalesConfigRepository,
+  type SalesConfigChanges,
+} from '../repositories/sales-config.repository';
+import { TenantsRepository } from '../repositories/tenants.repository';
 
 @Injectable()
 export class SalesConfigService {
-  constructor(private readonly repo: SalesConfigRepository) {}
+  constructor(
+    private readonly repo: SalesConfigRepository,
+    private readonly tenants: TenantsRepository,
+  ) {}
 
-  get(tenantId: string) {
-    return this.repo.findByTenant(tenantId);
+  /**
+   * `presentationsEnabled` ya resuelto; `presentationsChosen` es lo que eligió
+   * la empresa (null = sigue a su rubro).
+   */
+  async get(tenantId: string) {
+    const [config, tenant] = await Promise.all([
+      this.repo.findByTenant(tenantId),
+      this.tenants.findById(tenantId),
+    ]);
+    const chosen = config?.presentationsEnabled ?? null;
+    return {
+      combosEnabled: config?.combosEnabled ?? false,
+      presentationsEnabled: presentationsEnabledFor(chosen, tenant?.industry),
+      presentationsChosen: chosen,
+    };
   }
 
-  setCombosEnabled(tenantId: string, combosEnabled: boolean) {
-    return this.repo.upsertConfig(tenantId, combosEnabled);
+  async update(tenantId: string, changes: SalesConfigChanges) {
+    await this.repo.upsertConfig(tenantId, changes);
+    return this.get(tenantId);
   }
 }

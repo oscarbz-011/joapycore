@@ -31,7 +31,13 @@ export class BillingSourcesRepository {
             unitPrice: true,
             financedUnitPrice: true,
             description: true,
-            product: { select: { name: true, ivaTaxRate: true } },
+            presentationName: true,
+            cutLength: true,
+            cutWidth: true,
+            cutHeight: true,
+            product: {
+              select: { name: true, ivaTaxRate: true, unitCode: true },
+            },
           },
         },
       },
@@ -161,6 +167,11 @@ export class BillingSourcesRepository {
       select: {
         id: true,
         productId: true,
+        unitCode: true,
+        presentationName: true,
+        cutLength: true,
+        cutWidth: true,
+        cutHeight: true,
         product: {
           select: {
             name: true,
