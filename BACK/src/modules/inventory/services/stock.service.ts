@@ -1,3 +1,4 @@
+import { qty } from '../../../common/units/quantity';
 import { Injectable } from '@nestjs/common';
 import { AlertsService } from '../../alerts/services/alerts.service';
 import { FilterStockDto } from '../dto/filter-stock.dto';
@@ -32,7 +33,7 @@ export class StockService {
     return {
       ...result,
       items: result.items.map((row) => {
-        const own = row.product.stockMin > 0;
+        const own = row.product.stockMin.gt(0);
         const reorderPointSource: ReorderPointSource | null = own
           ? 'PRODUCT'
           : alertThreshold
@@ -42,7 +43,7 @@ export class StockService {
           ...row,
           product: {
             ...row.product,
-            reorderPoint: own ? row.product.stockMin : (alertThreshold ?? 0),
+            reorderPoint: own ? row.product.stockMin : qty(alertThreshold),
             reorderPointSource,
           },
         };

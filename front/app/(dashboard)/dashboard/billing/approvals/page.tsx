@@ -1,5 +1,6 @@
 'use client';
 
+import { formatQty } from '@/lib/quantity';
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { CheckCircle, Clock, CreditCard } from 'lucide-react';
@@ -77,7 +78,7 @@ function OrderCard({ order }: { order: SaleOrder }) {
           <div key={item.id} className="flex justify-between text-sm">
             <span className="text-muted-foreground truncate flex-1">{item.product?.name ?? item.description ?? 'Ítem'}</span>
             <span className="text-muted-foreground ml-4 shrink-0 tabular-nums">
-              {item.quantity} × {formatPrice(itemPrice(item))}
+              {formatQty(item.quantity)} × {formatPrice(itemPrice(item))}
             </span>
           </div>
         ))}

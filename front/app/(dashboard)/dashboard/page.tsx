@@ -1,4 +1,5 @@
 'use client';
+import { formatQty, qty as qtyOf } from '@/lib/quantity';
 import { money, sumMoney } from '@/lib/money';
 
 import { orderPartyName } from '@/lib/quote-party';
@@ -437,9 +438,13 @@ export default function DashboardPage() {
       o.items.forEach((item) => {
         if (!item.productId || !item.product) return; // ítem libre, sin catálogo
         const prev = map.get(item.productId);
-        const amt  = item.unitPrice * item.quantity;
-        if (prev) { prev.total += amt; prev.qty += item.quantity; }
-        else map.set(item.productId, { name: item.product.name, total: amt, qty: item.quantity });
+        const amt  = money(item.unitPrice).mul(item.quantity).toNumber();
+        if (prev) {
+          prev.total = money(prev.total).plus(amt).toNumber();
+          prev.qty = qtyOf(prev.qty).plus(qtyOf(item.quantity)).toNumber();
+        } else {
+          map.set(item.productId, { name: item.product.name, total: amt, qty: qtyOf(item.quantity).toNumber() });
+        }
       })
     );
     return Array.from(map.values()).sort((a, b) => b.total - a.total).slice(0, 5);
@@ -618,7 +623,7 @@ export default function DashboardPage() {
                                 {p.model && <p className="truncate font-mono text-[11px] text-muted-foreground">{p.model}</p>}
                               </div>
                               <Badge variant={p.stock === 0 ? 'destructive' : 'outline'}>
-                                {p.stock === 0 ? 'Agotado' : `${p.stock} u.`}
+                                {p.stock === 0 ? 'Agotado' : `${formatQty(p.stock)} u.`}
                               </Badge>
                             </div>
                           ))}

@@ -1,3 +1,5 @@
+import { qty, remainingQty } from '../../../common/units/quantity';
+import type { QuantityValue } from '../../../common/units/quantity';
 import { UnprocessableEntityException } from '@nestjs/common';
 import type { CreditNoteKind } from '@prisma/client';
 import {
@@ -19,7 +21,7 @@ export const ivaIncluded = (total: MoneyValue, rate: MoneyValue) =>
 export interface InvoiceItemForCredit {
   id: string;
   description: string;
-  quantity: number;
+  quantity: QuantityValue;
   unitPrice: Numeric;
   total: Numeric;
   ivaRate: Numeric | null;
@@ -29,8 +31,8 @@ export interface InvoiceItemForCredit {
 export interface CreditableItem {
   invoiceItemId: string;
   description: string;
-  quantity: number;
-  creditableQuantity: number;
+  quantity: QuantityValue;
+  creditableQuantity: QuantityValue;
   /** Precio por unidad que se acredita (en crédito, sobre el total financiado). */
   unitPrice: number;
   ivaRate: number;
@@ -44,7 +46,7 @@ export interface CreditableItem {
 export function creditableItems(
   invoiceTotal: MoneyValue,
   items: InvoiceItemForCredit[],
-  creditedQuantities: Map<string, number>,
+  creditedQuantities: ReadonlyMap<string, QuantityValue>,
 ): CreditableItem[] {
   const subtotal = sumMoney(items.map((item) => item.total));
   const ratio = subtotal.gt(0) ? money(invoiceTotal).div(subtotal) : money(1);
@@ -52,9 +54,9 @@ export function creditableItems(
     invoiceItemId: item.id,
     description: item.description,
     quantity: item.quantity,
-    creditableQuantity: Math.max(
-      item.quantity - (creditedQuantities.get(item.id) ?? 0),
-      0,
+    creditableQuantity: remainingQty(
+      item.quantity,
+      qty(creditedQuantities.get(item.id)),
     ),
     unitPrice: roundGuaranies(money(item.unitPrice).mul(ratio)).toNumber(),
     ivaRate: item.ivaRate == null ? 0 : money(item.ivaRate).toNumber(),
@@ -65,7 +67,7 @@ export function creditableItems(
 export interface CreditLine {
   invoiceItemId: string | null;
   description: string;
-  quantity: number;
+  quantity: QuantityValue;
   unitPrice: number;
   total: number;
   ivaRate: number;
@@ -75,14 +77,14 @@ export interface CreditLine {
 export interface CreditRequest {
   kind: CreditNoteKind;
   reason: string;
-  items?: { invoiceItemId: string; quantity: number }[];
+  items?: { invoiceItemId: string; quantity: QuantityValue }[];
   amount?: number;
   ivaRate?: number;
 }
 
 function line(
   item: CreditableItem,
-  quantity: number,
+  quantity: QuantityValue,
   total: number,
 ): CreditLine {
   return {
@@ -111,12 +113,12 @@ export function buildCreditLines(
       'La factura ya está acreditada por completo',
     );
   }
-  const times = (price: number, quantity: number) =>
+  const times = (price: number, quantity: QuantityValue) =>
     money(price).mul(quantity).toNumber();
 
   let lines: CreditLine[];
   if (request.kind === 'TOTAL') {
-    if (available.some((i) => i.creditableQuantity !== i.quantity)) {
+    if (available.some((i) => !qty(i.creditableQuantity).eq(i.quantity))) {
       throw new UnprocessableEntityException(
         'La factura ya tiene notas de crédito: acreditá lo que queda por ítems o por importe',
       );
@@ -152,9 +154,12 @@ export function buildCreditLines(
         );
       }
       seen.add(req.invoiceItemId);
-      if (req.quantity < 1 || req.quantity > item.creditableQuantity) {
+      if (
+        qty(req.quantity).lte(0) ||
+        qty(req.quantity).gt(item.creditableQuantity)
+      ) {
         throw new UnprocessableEntityException(
-          `De "${item.description}" se pueden acreditar hasta ${item.creditableQuantity} unidades`,
+          `De "${item.description}" se pueden acreditar hasta ${qty(item.creditableQuantity).toString()}`,
         );
       }
       return line(item, req.quantity, times(item.unitPrice, req.quantity));

@@ -705,8 +705,16 @@ describe('RemissionNotesService', () => {
 
   it('lists what can leave the origin, counting serialized goods by their free units', async () => {
     (stockLedger as any).availableIn = jest.fn().mockResolvedValue([
-      { productId: 'p-tv', quantity: 3, serialNumbers: ['SN-1', 'SN-2'] },
-      { productId: 'p-rice', quantity: 8, serialNumbers: [] },
+      {
+        productId: 'p-tv',
+        quantity: new Prisma.Decimal(3),
+        serialNumbers: ['SN-1', 'SN-2'],
+      },
+      {
+        productId: 'p-rice',
+        quantity: new Prisma.Decimal(8),
+        serialNumbers: [],
+      },
     ]);
     await expect(service.transferStock('tenant-1', 'wh-a')).resolves.toEqual([
       {
@@ -714,7 +722,7 @@ describe('RemissionNotesService', () => {
         description: 'Arroz',
         unitCode: 83,
         isSerialized: false,
-        quantity: 8,
+        quantity: new Prisma.Decimal(8),
         serialNumbers: [],
       },
       {
@@ -722,7 +730,7 @@ describe('RemissionNotesService', () => {
         description: 'Televisor LG',
         unitCode: 77,
         isSerialized: true,
-        quantity: 2,
+        quantity: new Prisma.Decimal(2),
         serialNumbers: ['SN-1', 'SN-2'],
       },
     ]);

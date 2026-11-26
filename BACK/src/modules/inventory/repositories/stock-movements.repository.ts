@@ -1,3 +1,4 @@
+import { qty, type Quantity } from '../../../common/units/quantity';
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
@@ -32,13 +33,13 @@ export class StockMovementsRepository {
     tenantId: string,
     warehouseId: string,
     client: PrismaClientOrTx = this.prisma,
-  ): Promise<Map<string, number>> {
+  ): Promise<Map<string, Quantity>> {
     const rows = await client.stockMovement.groupBy({
       by: ['productId'],
       where: { tenantId, warehouseId },
       _sum: { quantity: true },
     });
-    return new Map(rows.map((r) => [r.productId, r._sum.quantity ?? 0]));
+    return new Map(rows.map((r) => [r.productId, qty(r._sum.quantity)]));
   }
 
   /** ¿Existe algún movimiento que cumpla el filtro? (chequeos de idempotencia) */
@@ -84,13 +85,13 @@ export class StockMovementsRepository {
     tenantId: string,
     productIds: string[],
     client: PrismaClientOrTx = this.prisma,
-  ): Promise<Map<string, number>> {
+  ): Promise<Map<string, Quantity>> {
     const sums = await client.stockMovement.groupBy({
       by: ['productId'],
       where: { tenantId, productId: { in: productIds } },
       _sum: { quantity: true },
     });
-    return new Map(sums.map((s) => [s.productId, s._sum.quantity ?? 0]));
+    return new Map(sums.map((s) => [s.productId, qty(s._sum.quantity)]));
   }
 
   /** Saldo de movimientos sin depósito asignado (puede ser negativo). */
@@ -98,19 +99,19 @@ export class StockMovementsRepository {
     tenantId: string,
     productId: string,
     client: PrismaClientOrTx = this.prisma,
-  ): Promise<number> {
+  ): Promise<Quantity> {
     const result = await client.stockMovement.aggregate({
       where: { tenantId, productId, warehouseId: null },
       _sum: { quantity: true },
     });
-    return result._sum.quantity ?? 0;
+    return qty(result._sum.quantity);
   }
 
   async sumByProductsAndWarehouse(
     tenantId: string,
     demands: StockDemand[],
     client: PrismaClientOrTx = this.prisma,
-  ): Promise<Map<string, number>> {
+  ): Promise<Map<string, Quantity>> {
     if (demands.length === 0) return new Map();
     const pairs = [
       ...new Map(
@@ -133,7 +134,7 @@ export class StockMovementsRepository {
         .filter((sum) => sum.warehouseId)
         .map((sum) => [
           stockDemandKey(sum.productId, sum.warehouseId!),
-          sum._sum.quantity ?? 0,
+          qty(sum._sum.quantity),
         ]),
     );
   }
@@ -143,7 +144,7 @@ export class StockMovementsRepository {
     tenantId: string,
     referenceIds: string[],
     client: PrismaClientOrTx = this.prisma,
-  ): Promise<Map<string, number>> {
+  ): Promise<Map<string, Quantity>> {
     const sums = await client.stockMovement.groupBy({
       by: ['referenceId'],
       where: { tenantId, type: 'RESERVED', referenceId: { in: referenceIds } },
@@ -152,7 +153,7 @@ export class StockMovementsRepository {
     return new Map(
       sums
         .filter((s) => s.referenceId)
-        .map((s) => [s.referenceId!, s._sum.quantity ?? 0]),
+        .map((s) => [s.referenceId!, qty(s._sum.quantity)]),
     );
   }
 }

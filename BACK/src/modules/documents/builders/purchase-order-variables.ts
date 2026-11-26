@@ -1,3 +1,4 @@
+import type { QuantityValue } from '../../../common/units/quantity';
 import { unitSymbol } from '../../../common/units/units-of-measure';
 import { money, sumMoney, type MoneyValue } from '../../../common/money/money';
 import { numberToWordsEs } from '../../../common/utils/number-to-words.util';
@@ -30,7 +31,7 @@ export interface PurchaseOrderForPdf {
     email: string | null;
   };
   items: {
-    quantity: number;
+    quantity: QuantityValue;
     unitCost: unknown;
     supplierSku: string | null;
     supplierDescription: string | null;

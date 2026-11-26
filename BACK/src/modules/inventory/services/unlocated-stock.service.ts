@@ -1,3 +1,4 @@
+import { qty, type Quantity } from '../../../common/units/quantity';
 import {
   Injectable,
   NotFoundException,
@@ -68,7 +69,7 @@ export class UnlocatedStockService {
       tenantId,
       productId: product.id,
       type: 'TRANSFER',
-      quantity: Math.abs(movements[1].quantity),
+      quantity: qty(movements[1].quantity).abs(),
     });
     return movements;
   }
@@ -79,7 +80,7 @@ export class UnlocatedStockService {
     tenantId: string,
     product: { id: string; name: string },
     dto: AssignUnlocatedStockDto,
-  ): Promise<number> {
+  ): Promise<Quantity> {
     const moved = await this.productUnitsRepository.locateUnassignedUnits(
       tenantId,
       product.id,
@@ -97,7 +98,7 @@ export class UnlocatedStockService {
         `${product.name} no tiene stock sin depósito asignado`,
       );
     }
-    return moved;
+    return qty(moved);
   }
 
   /**
@@ -110,24 +111,24 @@ export class UnlocatedStockService {
     tenantId: string,
     product: { id: string; name: string },
     dto: AssignUnlocatedStockDto,
-  ): Promise<number> {
+  ): Promise<Quantity> {
     const balance = await this.stockMovementsRepository.sumUnlocated(
       tenantId,
       product.id,
       tx,
     );
-    if (balance === 0) {
+    if (balance.isZero()) {
       throw new UnprocessableEntityException(
         `${product.name} no tiene stock sin depósito asignado`,
       );
     }
-    const quantity = dto.quantity ?? Math.abs(balance);
-    if (quantity > Math.abs(balance)) {
+    const quantity = dto.quantity == null ? balance.abs() : qty(dto.quantity);
+    if (quantity.gt(balance.abs())) {
       throw new UnprocessableEntityException(
-        `La cantidad supera el saldo sin depósito asignado (${balance})`,
+        `La cantidad supera el saldo sin depósito asignado (${balance.toString()})`,
       );
     }
-    if (balance > 0) return quantity;
+    if (balance.gt(0)) return quantity;
 
     const demand = {
       productId: product.id,
@@ -142,7 +143,7 @@ export class UnlocatedStockService {
         tx,
       );
     assertDemandsCovered(aggregateDemands([demand]), available);
-    return -quantity;
+    return quantity.neg();
   }
 
   private async writePair(
@@ -150,7 +151,7 @@ export class UnlocatedStockService {
     tenantId: string,
     productId: string,
     dto: AssignUnlocatedStockDto,
-    delta: number,
+    delta: Quantity,
   ) {
     const referenceId = randomUUID();
     const base = {
@@ -161,9 +162,9 @@ export class UnlocatedStockService {
       notes: dto.notes?.trim() || DEFAULT_NOTES,
     };
     const legs = [
-      { warehouseId: null, quantity: -delta },
+      { warehouseId: null, quantity: delta.neg() },
       { warehouseId: dto.warehouseId, quantity: delta },
-    ].sort((a, b) => a.quantity - b.quantity);
+    ].sort((a, b) => a.quantity.cmp(b.quantity));
 
     const out = await this.stockMovementsRepository.create(
       { ...base, ...legs[0], type: StockMovementType.OUT },

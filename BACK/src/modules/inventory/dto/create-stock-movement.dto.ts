@@ -5,11 +5,11 @@ import {
   IsArray,
   IsEnum,
   IsIn,
-  IsInt,
+  IsNumber,
   IsOptional,
+  IsPositive,
   IsString,
   IsUUID,
-  Min,
 } from 'class-validator';
 
 export class CreateStockMovementDto {
@@ -22,8 +22,8 @@ export class CreateStockMovementDto {
     description:
       'Cantidad (siempre positiva; la dirección la determina el motivo)',
   })
-  @IsInt()
-  @Min(1)
+  @IsNumber({ maxDecimalPlaces: 3 })
+  @IsPositive()
   quantity: number;
 
   @ApiPropertyOptional({

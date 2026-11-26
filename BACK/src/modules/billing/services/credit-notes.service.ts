@@ -1,3 +1,4 @@
+import { qty } from '../../../common/units/quantity';
 import { money as exact } from '../../../common/money/money';
 import {
   ConflictException,
@@ -749,9 +750,9 @@ export class CreditNotesService {
         );
       }
       seen.add(req.invoiceItemId);
-      if (req.quantity > line.quantity) {
+      if (qty(req.quantity).gt(line.quantity)) {
         throw new UnprocessableEntityException(
-          `De "${item.description}" vuelven al stock hasta ${line.quantity} unidades`,
+          `De "${item.description}" vuelven al stock hasta ${qty(line.quantity).toString()}`,
         );
       }
       if (!item.saleOrderItemId) {

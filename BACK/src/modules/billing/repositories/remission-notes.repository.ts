@@ -1,3 +1,5 @@
+import { qty, type Quantity } from '../../../common/units/quantity';
+import type { QuantityValue } from '../../../common/units/quantity';
 import { Injectable } from '@nestjs/common';
 import {
   Prisma,
@@ -177,7 +179,7 @@ export class RemissionNotesRepository {
     tenantId: string,
     invoiceId: string,
     client: PrismaClientOrTx = this.prisma,
-  ): Promise<Map<string, number>> {
+  ): Promise<Map<string, Quantity>> {
     const rows = await client.remissionNoteItem.groupBy({
       by: ['invoiceItemId'],
       where: {
@@ -193,7 +195,7 @@ export class RemissionNotesRepository {
     return new Map(
       rows
         .filter((r) => r.invoiceItemId)
-        .map((r) => [r.invoiceItemId as string, r._sum.quantity ?? 0]),
+        .map((r) => [r.invoiceItemId as string, qty(r._sum.quantity)]),
     );
   }
 
@@ -301,7 +303,7 @@ export class RemissionNotesRepository {
   setItemReceived(
     tenantId: string,
     itemId: string,
-    received: { quantity: number; serialNumbers: string[] },
+    received: { quantity: QuantityValue; serialNumbers: string[] },
     client: PrismaClientOrTx,
   ) {
     return client.remissionNoteItem.updateMany({

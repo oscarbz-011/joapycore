@@ -1,3 +1,4 @@
+import type { QuantityValue } from '@/lib/quantity';
 import { apiClient } from './client';
 import type { ListQuery, Paginated } from '../pagination';
 
@@ -166,7 +167,7 @@ export interface StockMovement {
   warehouse: { id: string; name: string } | null;
   type: 'IN' | 'OUT' | 'ADJUSTMENT' | 'TRANSFER';
   reason: MovementReason | null;
-  quantity: number;
+  quantity: QuantityValue;
   referenceId: string | null;
   notes: string | null;
   createdAt: string;
@@ -204,7 +205,7 @@ export interface StockWarehouseQuantity {
   warehouseId: string;
   warehouseName: string;
   isActive: boolean;
-  quantity: number;
+  quantity: QuantityValue;
 }
 
 export interface StockRow {
@@ -214,14 +215,14 @@ export interface StockRow {
   > & {
     // Mínimo propio del producto o, si no tiene, el umbral de la alerta
     // "Stock bajo" activa. 0 = sin punto de reposición.
-    reorderPoint: number;
+    reorderPoint: QuantityValue;
     reorderPointSource: 'PRODUCT' | 'ALERT' | null;
     category: { id: string; name: string } | null;
     brand: { id: string; name: string } | null;
   };
-  totalStock: number;
+  totalStock: QuantityValue;
   stockByWarehouse: StockWarehouseQuantity[];
-  unassignedStock: number;
+  unassignedStock: QuantityValue;
 }
 
 export interface StockResult {
@@ -253,8 +254,8 @@ export interface ProductBatch {
   batchNumber: string;
   entryDate: string;
   unitCost: number;
-  quantity: number;
-  remainingQty: number;
+  quantity: QuantityValue;
+  remainingQty: QuantityValue;
   expiresAt: string | null;
   product?: { id: string; name: string; model: string | null };
 }
@@ -299,7 +300,14 @@ export interface UpdateProductSupplierPayload {
   isPreferred?: boolean;
 }
 
-const DECIMAL_FIELDS = ['costPrice', 'salePrice', 'additionalMarkup'] as const;
+const DECIMAL_FIELDS = [
+  'costPrice',
+  'salePrice',
+  'additionalMarkup',
+  'stock',
+  'stockMin',
+  'stockInitial',
+] as const;
 type DecimalField = (typeof DECIMAL_FIELDS)[number];
 
 /**
@@ -343,7 +351,13 @@ export const inventoryApi = {
     apiClient.post('/inventory/movements', dto).then((r) => r.data),
 
   getStock: (filters?: StockFilters): Promise<StockResult> =>
-    apiClient.get('/inventory/stock', { params: filters }).then((r) => r.data),
+    apiClient.get('/inventory/stock', { params: filters }).then((r) => ({
+      ...r.data,
+      items: r.data.items.map((row: StockRow) => ({
+        ...row,
+        product: normalizeProduct(row.product),
+      })),
+    })),
 
   assignUnlocatedStock: (dto: AssignUnlocatedStockPayload): Promise<StockMovement[]> =>
     apiClient.post('/inventory/stock/unlocated/assign', dto).then((r) => r.data),

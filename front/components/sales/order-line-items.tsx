@@ -1,5 +1,6 @@
 "use client";
 
+import { formatQty, quantityDecimals } from "@/lib/quantity";
 import { AlertTriangle, Trash2 } from "lucide-react";
 import { NumericInput } from "../numeric-input";
 import { SearchSelect } from "../../app/(dashboard)/dashboard/components/search-select";
@@ -110,7 +111,7 @@ export function LineItemRow({
             getKey={(p) => p.id}
             getLabel={(p) => `${p.name}${p.model ? ` (${p.model})` : ""}`}
             getDescription={(p) =>
-              `${p.category?.name ?? "Sin categoría"} · Stock disponible: ${p.stock}`
+              `${p.category?.name ?? "Sin categoría"} · Stock disponible: ${formatQty(p.stock)}`
             }
             filterFn={(p, q) =>
               `${p.name} ${p.model ?? ""} ${p.category?.name ?? ""}`
@@ -124,9 +125,8 @@ export function LineItemRow({
         <div className="w-20">
           <NumericInput
             value={item.quantity}
-            onChange={(v) =>
-              onChange({ ...item, quantity: Math.max(1, Math.round(v)) })
-            }
+            onChange={(v) => onChange({ ...item, quantity: Math.max(0, v) })}
+            decimals={quantityDecimals(item.product)}
             placeholder="Cant."
             className={NUM_CLS}
             required
@@ -167,14 +167,14 @@ export function LineItemRow({
             <SelectTrigger size="sm" className="w-64">
               <span className="min-w-0 flex-1 truncate text-left text-xs">
                 {warehouse
-                  ? `${warehouse.name} · ${warehouse.quantity} disp.`
+                  ? `${warehouse.name} · ${formatQty(warehouse.quantity)} disp.`
                   : "— Seleccionar depósito —"}
               </span>
             </SelectTrigger>
             <SelectContent>
               {choices.map((choice) => (
                 <SelectItem key={choice.id} value={choice.id}>
-                  {choice.name} · {choice.quantity} disp.
+                  {choice.name} · {formatQty(choice.quantity)} disp.
                 </SelectItem>
               ))}
             </SelectContent>
@@ -191,7 +191,7 @@ export function LineItemRow({
         <div className="flex items-center gap-1.5 text-xs font-medium text-destructive">
           <AlertTriangle size={13} />
           Stock insuficiente{warehouse ? ` en ${warehouse.name}` : ""}:
-          disponible {available}, solicitado {item.quantity}.
+          disponible {available}, solicitado {formatQty(item.quantity)}.
           {unassigned > 0 &&
             ` Hay ${unassigned} sin depósito asignado: asignalo desde Inventario → Movimientos.`}
         </div>
@@ -199,7 +199,7 @@ export function LineItemRow({
       {item.product?.isSerialized && (
         <div>
           <Label className="mb-1 text-xs">
-            Números de serie (uno por línea, {item.quantity} requerido
+            Números de serie (uno por línea, {formatQty(item.quantity)} requerido
             {item.quantity !== 1 ? "s" : ""})
           </Label>
           <Textarea

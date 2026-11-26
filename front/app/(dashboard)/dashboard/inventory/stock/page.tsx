@@ -1,5 +1,6 @@
 'use client';
 
+import { formatQty, qty } from '@/lib/quantity';
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -307,8 +308,8 @@ export default function StockPage() {
                       <p className="font-mono text-xs text-muted-foreground">
                         {[
                           row.product.model,
-                          row.product.reorderPoint > 0
-                            ? `mín. ${row.product.reorderPoint}${
+                          qty(row.product.reorderPoint).gt(0)
+                            ? `mín. ${formatQty(row.product.reorderPoint)}${
                                 row.product.reorderPointSource === 'ALERT'
                                   ? ' (alerta general)'
                                   : ''

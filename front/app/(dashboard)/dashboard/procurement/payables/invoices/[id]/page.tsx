@@ -1,5 +1,7 @@
 'use client';
 
+import { money } from '@/lib/money';
+import { formatQty, qty } from '@/lib/quantity';
 import { useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
@@ -258,10 +260,11 @@ export default function SupplierInvoicePage() {
                 </thead>
                 <tbody className="divide-y divide-border">
                   {invoice.items.map((item) => {
-                    const lineDifference =
-                      item.quantity * item.unitCost -
-                      item.receivedQuantity * item.receivedUnitCost;
-                    const quantityDiffers = item.quantity !== item.receivedQuantity;
+                    const lineDifference = money(item.unitCost)
+                      .mul(item.quantity)
+                      .minus(money(item.receivedUnitCost).mul(item.receivedQuantity))
+                      .toNumber();
+                    const quantityDiffers = !qty(item.quantity).eq(qty(item.receivedQuantity));
                     const priceDiffers = Math.abs(item.unitCost - item.receivedUnitCost) > 0.005;
                     return (
                       <tr
@@ -274,9 +277,9 @@ export default function SupplierInvoicePage() {
                         <td className="px-4 py-3 font-medium text-foreground">
                           {item.purchaseReceiptItem.product.name}
                         </td>
-                        <td className={cn(NUM, 'text-muted-foreground')}>{item.receivedQuantity}</td>
+                        <td className={cn(NUM, 'text-muted-foreground')}>{formatQty(item.receivedQuantity)}</td>
                         <td className={cn(NUM, quantityDiffers && 'font-bold text-warn')}>
-                          {item.quantity}
+                          {formatQty(item.quantity)}
                         </td>
                         <td className={cn(NUM, 'text-muted-foreground')}>
                           {gs(item.receivedUnitCost)}
@@ -285,7 +288,7 @@ export default function SupplierInvoicePage() {
                           {gs(item.unitCost)}
                         </td>
                         <td className={cn(NUM, 'font-medium text-foreground')}>
-                          {gs(item.quantity * item.unitCost)}
+                          {gs(money(item.unitCost).mul(item.quantity).toNumber())}
                         </td>
                         <td className={cn(NUM, lineDifference !== 0 && 'text-warn')}>
                           {Math.abs(lineDifference) < 0.01

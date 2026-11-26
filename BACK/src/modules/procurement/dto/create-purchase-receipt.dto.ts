@@ -3,11 +3,11 @@ import { Type } from 'class-transformer';
 import {
   IsArray,
   IsDateString,
-  IsInt,
+  IsNumber,
   IsOptional,
+  IsPositive,
   IsString,
   IsUUID,
-  Min,
   ValidateNested,
 } from 'class-validator';
 
@@ -17,8 +17,8 @@ export class ReceiptItemDto {
   purchaseOrderItemId: string;
 
   @ApiProperty({ minimum: 1 })
-  @IsInt()
-  @Min(1)
+  @IsNumber({ maxDecimalPlaces: 3 })
+  @IsPositive()
   quantity: number;
 
   @ApiPropertyOptional({ description: 'Solo si el producto usa lotes' })

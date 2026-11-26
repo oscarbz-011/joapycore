@@ -1,5 +1,6 @@
 'use client';
 
+import { money, sumMoney } from '@/lib/money';
 import { useQuery } from '@tanstack/react-query';
 import { billingApi } from './api/billing';
 import { salesApi } from './api/sales';
@@ -170,7 +171,7 @@ export function usePendingNotifications(permissions: string[], activeModules: st
       id: `po-${po.id}`,
       type: 'purchase-order' as const,
       title: 'Entrega de compra vencida',
-      description: `${po.supplier.name} · ${formatPrice(po.items.reduce((s, i) => s + i.quantity * i.unitCost, 0))}`,
+      description: `${po.supplier.name} · ${formatPrice(sumMoney(po.items.map((i) => money(i.unitCost).mul(i.quantity))).toNumber())}`,
       href: `/dashboard/procurement/orders/${po.id}`,
     })),
     ...pendingDeliveries.map((d) => ({

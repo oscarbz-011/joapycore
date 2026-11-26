@@ -6,9 +6,11 @@ import {
   ArrayMinSize,
   IsArray,
   IsEnum,
-  IsInt,
   IsISO8601,
+  IsInt,
+  IsNumber,
   IsOptional,
+  IsPositive,
   IsString,
   IsUUID,
   Max,
@@ -156,8 +158,8 @@ export class TransferLineDto {
   productId!: string;
 
   @ApiProperty({ example: 2 })
-  @IsInt()
-  @Min(1)
+  @IsNumber({ maxDecimalPlaces: 3 })
+  @IsPositive()
   quantity!: number;
 
   @ApiPropertyOptional({ type: [String] })
@@ -193,8 +195,8 @@ export class SaleRemissionLineDto {
   invoiceItemId!: string;
 
   @ApiProperty({ example: 1 })
-  @IsInt()
-  @Min(1)
+  @IsNumber({ maxDecimalPlaces: 3 })
+  @IsPositive()
   quantity!: number;
 
   @ApiPropertyOptional({ type: [String] })
@@ -242,7 +244,7 @@ export class ReceivedItemDto {
   itemId!: string;
 
   @ApiProperty({ example: 2, description: 'Unidades que llegaron' })
-  @IsInt()
+  @IsNumber({ maxDecimalPlaces: 3 })
   @Min(0)
   receivedQuantity!: number;
 

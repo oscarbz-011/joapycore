@@ -1,3 +1,4 @@
+import type { QuantityValue } from '@/lib/quantity';
 import { apiClient } from './client';
 import type { ListQuery, Paginated } from '../pagination';
 import type { ProspectPayload } from '../quote-party';
@@ -181,7 +182,7 @@ export interface SaleOrderItem {
   // Descripción libre — solo presente cuando productId es null (línea sin
   // catálogo, ej. ítem a medida en un presupuesto).
   description: string | null;
-  quantity: number;
+  quantity: QuantityValue;
   unitPrice: number;
   // Precio con interés de crédito ya aplicado — solo presente en ítems de
   // ventas a crédito, resuelto server-side al crear el pedido.
@@ -272,7 +273,7 @@ export interface CreateSaleOrderItem {
 export interface SaleComboItem {
   id: string;
   productId: string;
-  quantity: number;
+  quantity: QuantityValue;
   product: { id: string; name: string; salePrice: number; isSerialized: boolean };
 }
 

@@ -1,3 +1,4 @@
+import type { QuantityValue } from '@/lib/quantity';
 import { apiClient } from "./client";
 
 export type LoanStatus = "ACTIVE" | "PAID" | "CANCELLED";
@@ -30,7 +31,7 @@ export interface Installment {
 
 export interface LoanOrderItem {
   id: string;
-  quantity: number;
+  quantity: QuantityValue;
   description: string | null;
   product: { id: string; name: string; model: string | null } | null;
 }

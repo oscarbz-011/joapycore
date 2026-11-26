@@ -1,3 +1,4 @@
+import { qty, sumQty } from '../../../common/units/quantity';
 import {
   BadRequestException,
   ConflictException,
@@ -88,10 +89,10 @@ function toStop(row: RouteStopRow) {
     routeId: row.routeId,
     deliveredAt: row.deliveredAt,
     saleOrderId: row.saleOrder.id,
-    units: items.reduce((sum, item) => sum + Number(item.quantity), 0),
+    units: sumQty(items.map((item) => item.quantity)),
     items: items.map((item) => ({
       name: item.product?.name ?? 'Producto',
-      quantity: Number(item.quantity),
+      quantity: qty(item.quantity),
     })),
     customer: {
       id: customer.id,

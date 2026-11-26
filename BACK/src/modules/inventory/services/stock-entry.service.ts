@@ -1,11 +1,17 @@
 import {
+  assertQuantityForUnit,
+  qty,
+  type Quantity,
+  type QuantityValue,
+} from '../../../common/units/quantity';
+import {
   BadRequestException,
   Injectable,
   Logger,
   NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
-import { MovementReason, StockInitialSourceType } from '@prisma/client';
+import { MovementReason, Prisma, StockInitialSourceType } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { PrismaClientOrTx } from '../../../prisma/types';
 import { ProductsRepository } from '../repositories/products.repository';
@@ -16,7 +22,7 @@ import { WarehousesRepository } from '../../warehouses/repositories/warehouses.r
 
 export interface RegisterStockEntryParams {
   productId: string;
-  quantity: number;
+  quantity: QuantityValue;
   reason: MovementReason;
   warehouseId?: string;
   branchId?: string;
@@ -58,6 +64,7 @@ export class StockEntryService {
       params.productId,
     );
     if (!product) throw new NotFoundException('Product not found');
+    assertQuantityForUnit(params.quantity, product);
 
     if (!params.warehouseId) {
       throw new UnprocessableEntityException(
@@ -76,9 +83,9 @@ export class StockEntryService {
 
     if (product.isSerialized) {
       const serials = params.serialNumbers ?? [];
-      if (serials.length !== params.quantity) {
+      if (!qty(params.quantity).eq(serials.length)) {
         throw new UnprocessableEntityException(
-          `Se requieren ${params.quantity} números de serie para ${product.name}`,
+          `Se requieren ${qty(params.quantity).toString()} números de serie para ${product.name}`,
         );
       }
       await this.productUnitsRepository.createMany(
@@ -108,7 +115,7 @@ export class StockEntryService {
         {
           batchNumber: params.batchNumber,
           unitCost: params.unitCost,
-          quantity: params.quantity,
+          quantity: qty(params.quantity),
           expiresAt: params.expiresAt,
         },
         client,
@@ -122,7 +129,7 @@ export class StockEntryService {
         productId: params.productId,
         type: 'IN',
         reason: params.reason,
-        quantity: params.quantity,
+        quantity: qty(params.quantity),
         warehouseId: params.warehouseId,
         branchId: params.branchId,
         referenceId: params.referenceId,
@@ -151,7 +158,7 @@ export class StockEntryService {
   async consumeFifo(
     tenantId: string,
     productId: string,
-    quantity: number,
+    quantity: QuantityValue,
     referenceId: string,
     client: PrismaClientOrTx = this.prisma,
   ): Promise<string | undefined> {
@@ -161,19 +168,19 @@ export class StockEntryService {
       client,
     );
 
-    let remaining = quantity;
-    const allocations: { batchId: string; take: number }[] = [];
+    let remaining = qty(quantity);
+    const allocations: { batchId: string; take: Quantity }[] = [];
     for (const batch of batches) {
-      if (remaining <= 0) break;
-      const take = Math.min(remaining, batch.remainingQty);
-      if (take <= 0) continue;
+      if (remaining.lte(0)) break;
+      const take = Prisma.Decimal.min(remaining, batch.remainingQty);
+      if (take.lte(0)) continue;
       allocations.push({ batchId: batch.id, take });
-      remaining -= take;
+      remaining = remaining.minus(take);
     }
 
-    if (remaining > 0) {
+    if (remaining.gt(0)) {
       this.logger.warn(
-        `FIFO: no quedó lote suficiente para el producto ${productId} (tenant ${tenantId}) — faltaron ${remaining} unidades de trazabilidad por lote`,
+        `FIFO: no quedó lote suficiente para el producto ${productId} (tenant ${tenantId}) — faltaron ${remaining.toString()} unidades de trazabilidad por lote`,
       );
     }
 
@@ -201,14 +208,14 @@ export class StockEntryService {
           productId,
           type: 'OUT',
           reason: MovementReason.SALE_OUT,
-          quantity: -take,
+          quantity: take.neg(),
           batchId,
           referenceId,
         },
         client,
       );
     }
-    if (remaining > 0) {
+    if (remaining.gt(0)) {
       // Remanente sin trazabilidad por lote — se registra igual para que la
       // suma total de stock siga siendo exacta.
       await this.stockMovements.create(
@@ -217,7 +224,7 @@ export class StockEntryService {
           productId,
           type: 'OUT',
           reason: MovementReason.SALE_OUT,
-          quantity: -remaining,
+          quantity: remaining.neg(),
           referenceId,
         },
         client,

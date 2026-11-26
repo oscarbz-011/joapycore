@@ -1,5 +1,7 @@
 'use client';
 
+import { money } from '@/lib/money';
+import { formatQty } from '@/lib/quantity';
 import { usePermission } from '@/lib/permissions';
 
 import { apiErrorMessage } from '@/lib/api/api-error';
@@ -498,10 +500,10 @@ function DeliveryCard({ note }: { note: DeliveryNote }) {
                   return (
                     <tr key={item.id} className="border-b border-border/50">
                       <td className="py-1.5 text-foreground">{item.product.name}</td>
-                      <td className="py-1.5 text-right text-muted-foreground">{item.quantity}</td>
+                      <td className="py-1.5 text-right text-muted-foreground">{formatQty(item.quantity)}</td>
                       <td className="py-1.5 text-right text-muted-foreground">{formatPrice(price)}</td>
                       <td className="py-1.5 text-right text-foreground font-medium">
-                        {formatPrice(item.quantity * price)}
+                        {formatPrice(money(price).mul(item.quantity).toNumber())}
                       </td>
                     </tr>
                   );

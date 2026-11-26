@@ -1,3 +1,5 @@
+import { qty } from '../../common/units/quantity';
+import type { QuantityValue } from '../../common/units/quantity';
 // Factura del proveedor: la cuenta por pagar nace estimada al recibir
 // (cantidad recibida × costo de la orden) y la factura la vuelve definitiva.
 // Si la factura no coincide con lo recibido, alguien tiene que aprobar la
@@ -19,14 +21,14 @@ const cents = (value: Money) => roundCents(value).toNumber();
 export interface ReceivedLine {
   receiptItemId: string;
   payableId: string;
-  quantity: number;
+  quantity: QuantityValue;
   unitCost: number;
 }
 
 /** Lo que la factura dice de esa línea. */
 export interface InvoicedLine {
   receiptItemId: string;
-  quantity: number;
+  quantity: QuantityValue;
   unitCost: number;
 }
 
@@ -34,8 +36,8 @@ export type InvoiceDifference =
   | {
       kind: 'quantity' | 'price';
       receiptItemId: string;
-      received: number;
-      invoiced: number;
+      received: QuantityValue;
+      invoiced: QuantityValue;
     }
   | { kind: 'shipping' | 'discount'; amount: number };
 
@@ -76,7 +78,7 @@ export function compareInvoice(input: {
       quantity: 0,
       unitCost: line.unitCost,
     };
-    if (invoiced.quantity !== line.quantity) {
+    if (!qty(invoiced.quantity).eq(line.quantity)) {
       differences.push({
         kind: 'quantity',
         receiptItemId: line.receiptItemId,

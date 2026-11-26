@@ -1,5 +1,6 @@
 'use client';
 
+import { formatQty } from '@/lib/quantity';
 import { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -169,7 +170,7 @@ export default function MyDeliveryDetailPage() {
             {note.saleOrder.items.map((item) => (
               <p key={item.id} className="text-sm text-foreground flex items-center gap-1.5">
                 <Package size={13} className="text-muted-foreground/60" />
-                {item.quantity}× {item.product.name}
+                {formatQty(item.quantity)}× {item.product.name}
               </p>
             ))}
           </Card>

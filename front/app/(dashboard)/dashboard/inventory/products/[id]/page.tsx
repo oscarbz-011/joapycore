@@ -1,5 +1,6 @@
 'use client';
 
+import { formatQty, qty } from '@/lib/quantity';
 import { unitOfMeasure, unitSymbol } from '@/lib/units-of-measure';
 import { usePermission } from '@/lib/permissions';
 
@@ -368,7 +369,7 @@ export default function ProductDetailPage() {
         {[
           {
             label: 'Stock',
-            value: product.isSerialized ? `${product.stock} u.` : `${product.stock} ${unitSymbol(product.unitCode)}`,
+            value: product.isSerialized ? `${formatQty(product.stock)} u.` : `${formatQty(product.stock)} ${unitSymbol(product.unitCode)}`,
             cls: STOCK_LEVEL_CLS[stockLevel(product.stock, product.stockMin)],
           },
           { label: 'Precio costo', value: product.costPrice == null ? 'Pendiente' : fmtGs(product.costPrice), cls: product.costPrice == null ? 'text-warn' : 'text-foreground' },
@@ -615,8 +616,8 @@ export default function ProductDetailPage() {
                             {mv.reason ? REASON_LABELS[mv.reason] : mv.type}
                           </span>
                         </td>
-                        <td className={cn('px-4 py-3 text-right font-mono font-bold tabular-nums', mv.quantity > 0 ? 'text-emerald-600' : 'text-destructive')}>
-                          {mv.quantity > 0 ? `+${mv.quantity}` : String(mv.quantity)}
+                        <td className={cn('px-4 py-3 text-right font-mono font-bold tabular-nums', qty(mv.quantity).gt(0) ? 'text-emerald-600' : 'text-destructive')}>
+                          {qty(mv.quantity).gt(0) ? `+${formatQty(mv.quantity)}` : formatQty(mv.quantity)}
                         </td>
                         <td className="px-4 py-3 text-xs text-muted-foreground">{mv.warehouse?.name ?? '—'}</td>
                         <td className="px-4 py-3 text-xs text-muted-foreground max-w-[180px] truncate">{mv.notes ?? '—'}</td>

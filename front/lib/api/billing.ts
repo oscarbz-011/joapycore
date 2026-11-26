@@ -1,3 +1,4 @@
+import type { QuantityValue } from '@/lib/quantity';
 import { apiClient } from "./client";
 import type { PaymentMethod } from "../payment-methods";
 
@@ -91,7 +92,7 @@ export interface FiscalReceipt {
   relatedDocument: string | null;
   lines: {
     description: string;
-    quantity: number;
+    quantity: QuantityValue;
     unitPrice: number;
     total: number;
     ivaRate: number;
@@ -145,7 +146,7 @@ export interface VoidLooseSheetPayload {
 export interface InvoiceItem {
   id: string;
   description: string;
-  quantity: number;
+  quantity: QuantityValue;
   unitPrice: number;
   total: number;
   ivaRate: number | null;
@@ -299,12 +300,12 @@ export interface CreditNoteItemRow {
   id: string;
   invoiceItemId: string | null;
   description: string;
-  quantity: number;
+  quantity: QuantityValue;
   unitPrice: number | string;
   total: number | string;
   ivaRate: number | string | null;
   ivaAmount: number | string | null;
-  restockQuantity: number;
+  restockQuantity: QuantityValue;
   serialNumbers: string[];
 }
 
@@ -344,8 +345,8 @@ export interface CreditNoteDetail extends CreditNote {
 export interface CreditableInvoiceItem {
   invoiceItemId: string;
   description: string;
-  quantity: number;
-  creditableQuantity: number;
+  quantity: QuantityValue;
+  creditableQuantity: QuantityValue;
   /** Precio por unidad que se acredita (en crédito, sobre el total financiado). */
   unitPrice: number;
   ivaRate: number;

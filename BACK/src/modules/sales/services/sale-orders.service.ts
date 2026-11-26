@@ -1,4 +1,9 @@
 import {
+  assertQuantityForUnit,
+  qty,
+  type QuantityValue,
+} from '../../../common/units/quantity';
+import {
   ConflictException,
   ForbiddenException,
   Inject,
@@ -68,7 +73,7 @@ const PRODUCT_STATUS_LABEL: Record<ProductStatus, string> = {
 };
 
 interface CreditOrderAmounts {
-  items: Array<{ unitPrice: unknown; quantity: number }>;
+  items: Array<{ unitPrice: unknown; quantity: QuantityValue }>;
   surchargeAmount: unknown;
   surchargeType: string | null;
   interestRate: unknown;
@@ -753,7 +758,7 @@ export class SaleOrdersService implements SalesGateway {
   }
 
   private computeTotals(dto: {
-    items: Array<{ quantity: number; unitPrice: number }>;
+    items: Array<{ quantity: QuantityValue; unitPrice: number }>;
     surchargeType?: MarkupType | null;
     surchargeAmount?: number | null;
   }) {
@@ -821,10 +826,11 @@ export class SaleOrdersService implements SalesGateway {
       if (item.productId && !product) {
         throw new NotFoundException(`Product ${item.productId} not found`);
       }
+      if (product) assertQuantityForUnit(item.quantity, product);
 
       if (product?.isSerialized) {
         const serials = item.serialNumbers ?? [];
-        if (serials.length !== item.quantity) {
+        if (!qty(item.quantity).eq(serials.length)) {
           throw new UnprocessableEntityException(
             `Product "${product.name}" is serialized — provide exactly ${item.quantity} serial number(s)`,
           );

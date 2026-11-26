@@ -1,5 +1,6 @@
 'use client';
 
+import { formatQty } from '@/lib/quantity';
 import { apiErrorMessage } from '@/lib/api/api-error';
 
 import { useEffect, useState } from 'react';
@@ -7,7 +8,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, CheckCircle, XCircle, Wrench, Clock, CreditCard, ShieldAlert } from 'lucide-react';
 import { salesApi } from '../../../../../../lib/api/sales';
-import { installmentPlan } from '@/lib/money';
+import { installmentPlan, money } from '@/lib/money';
 import { installmentsText } from '@/components/sales/order-line-items';
 import {
   formatPrice,
@@ -241,8 +242,8 @@ export default function ApprovalDetailPage() {
                     {item.product?.model && <p className="text-xs text-muted-foreground">{item.product.model}</p>}
                   </div>
                   <div className="text-right shrink-0">
-                    <p className="text-sm text-muted-foreground">{item.quantity} × {formatPrice(itemPrice(item))}</p>
-                    <p className="text-sm font-medium text-foreground">{formatPrice(item.quantity * itemPrice(item))}</p>
+                    <p className="text-sm text-muted-foreground">{formatQty(item.quantity)} × {formatPrice(itemPrice(item))}</p>
+                    <p className="text-sm font-medium text-foreground">{formatPrice(money(itemPrice(item)).mul(item.quantity).toNumber())}</p>
                   </div>
                 </div>
               ))}

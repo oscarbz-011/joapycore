@@ -1,5 +1,8 @@
 'use client';
 import { money as exact, sumMoney } from '@/lib/money';
+import { formatQty, quantityDecimals } from '@/lib/quantity';
+import { unitSymbol } from '@/lib/units-of-measure';
+import { NumericInput } from '@/components/numeric-input';
 
 import { resolveWarehouseId, warehouseChoices } from '@/lib/sale-warehouse';
 import { useSaleStock } from '@/lib/use-sale-stock';
@@ -279,6 +282,7 @@ interface CartLine {
   isSerialized: boolean;
   serialNumbers: string[];
   stock: number;
+  unitCode: number;
 }
 
 interface PaymentLine {
@@ -340,6 +344,7 @@ function SaleScreen({ session }: { session: ActivePosSession }) {
           isSerialized: product.isSerialized,
           serialNumbers: [],
           stock: product.stock,
+          unitCode: product.unitCode,
         },
       ];
     });
@@ -457,7 +462,7 @@ function SaleScreen({ session }: { session: ActivePosSession }) {
               onChange={(_, product) => product && addProduct(product)}
               getKey={(p) => p.id}
               getLabel={(p) => p.name}
-              getDescription={(p) => `${money(p.salePrice ?? 0)} · Stock: ${p.stock}`}
+              getDescription={(p) => `${money(p.salePrice ?? 0)} · Stock: ${formatQty(p.stock)}`}
               filterFn={(p, q) =>
                 p.name.toLowerCase().includes(q.toLowerCase()) ||
                 (p.model ?? '').toLowerCase().includes(q.toLowerCase())
@@ -482,7 +487,7 @@ function SaleScreen({ session }: { session: ActivePosSession }) {
                       {line.isSerialized && (
                         <input
                           className="mt-1 w-full rounded border border-border bg-background px-2 py-1 text-xs"
-                          placeholder={`N/S separados por coma (${line.quantity} requerido${line.quantity > 1 ? 's' : ''})`}
+                          placeholder={`N/S separados por coma (${formatQty(line.quantity)} requerido${line.quantity > 1 ? 's' : ''})`}
                           value={line.serialNumbers.join(', ')}
                           onChange={(e) =>
                             updateLine(line.key, {
@@ -495,6 +500,15 @@ function SaleScreen({ session }: { session: ActivePosSession }) {
                         />
                       )}
                     </div>
+                    {quantityDecimals(line) > 0 ? (
+                      <NumericInput
+                        value={line.quantity}
+                        onChange={(v) => updateLine(line.key, { quantity: Math.min(line.stock, Math.max(0, v)) })}
+                        decimals={quantityDecimals(line)}
+                        aria-label={`Cantidad de ${line.name} en ${unitSymbol(line.unitCode)}`}
+                        className="w-20 shrink-0 rounded-lg border border-border bg-background px-2 py-1 text-right text-sm"
+                      />
+                    ) : (
                     <div className="flex shrink-0 items-center gap-1.5">
                       <button
                         type="button"
@@ -503,7 +517,7 @@ function SaleScreen({ session }: { session: ActivePosSession }) {
                       >
                         <Minus size={13} />
                       </button>
-                      <span className="w-6 text-center text-sm">{line.quantity}</span>
+                      <span className="w-6 text-center text-sm">{formatQty(line.quantity)}</span>
                       <button
                         type="button"
                         onClick={() =>
@@ -514,8 +528,9 @@ function SaleScreen({ session }: { session: ActivePosSession }) {
                         <Plus size={13} />
                       </button>
                     </div>
+                    )}
                     <p className="w-24 shrink-0 text-right text-sm font-medium text-foreground">
-                      {money(line.quantity * line.unitPrice)}
+                      {money(exact(line.unitPrice).mul(line.quantity).toNumber())}
                     </p>
                     <button
                       type="button"

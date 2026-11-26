@@ -1,3 +1,4 @@
+import type { QuantityValue } from '../../../common/units/quantity';
 import { Injectable } from '@nestjs/common';
 import { InvoiceStatus, PaymentMethod, Prisma } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
@@ -270,7 +271,7 @@ export class InvoicesRepository implements InvoicePdf {
       issuedAt: Date;
       items: {
         description: string;
-        quantity: number;
+        quantity: QuantityValue;
         unitPrice: Prisma.Decimal;
         total: Prisma.Decimal;
         ivaRate: number;

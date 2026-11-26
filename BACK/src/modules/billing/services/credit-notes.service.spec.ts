@@ -383,7 +383,7 @@ describe('CreditNotesService', () => {
           items: [{ invoiceItemId: 'ii-1', quantity: 1 }],
           restock: [{ invoiceItemId: 'ii-1', quantity: 2 }],
         },
-        'vuelven al stock hasta 1 unidades',
+        'vuelven al stock hasta 1',
       ],
     ])('rejects restocking %j', async (request, message) => {
       await expect(

@@ -6,5 +6,8 @@
   "transform": {
     "^.+\\.(t|j)s$": "ts-jest"
   },
-  "setupFilesAfterEnv": ["<rootDir>/platform-context.setup.ts"]
+  "setupFilesAfterEnv": [
+    "<rootDir>/platform-context.setup.ts",
+    "<rootDir>/decimal-equality.setup.ts"
+  ]
 }

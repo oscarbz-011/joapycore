@@ -1,5 +1,6 @@
 'use client';
 
+import { quantityDecimals } from '@/lib/quantity';
 import { apiErrorMessage } from '@/lib/api/api-error';
 
 import { useState } from 'react';
@@ -163,7 +164,8 @@ export default function InitialStockPage() {
               <NumericInput
                 className={NUM_CLS}
                 value={effectiveQuantity}
-                onChange={(v) => set('quantity', Math.max(0, Math.round(v)))}
+                onChange={(v) => set('quantity', Math.max(0, v))}
+                decimals={quantityDecimals(product)}
                 disabled={product?.isSerialized}
               />
               {product?.isSerialized && (

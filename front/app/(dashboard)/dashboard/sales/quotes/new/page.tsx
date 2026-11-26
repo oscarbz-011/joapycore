@@ -1,4 +1,5 @@
 'use client';
+import { quantityDecimals } from '@/lib/quantity';
 import { money, sumMoney } from '@/lib/money';
 
 import { resolveWarehouseId, warehouseChoices } from '@/lib/sale-warehouse';
@@ -116,7 +117,7 @@ function QuoteLineRow({ line, products, onChange, onRemove }: {
           )}
         </div>
         <div className="w-20">
-          <NumericInput value={line.quantity} onChange={(v) => onChange({ ...line, quantity: Math.max(1, Math.round(v)) })} className={NUM_CLS} placeholder="Cant." />
+          <NumericInput value={line.quantity} onChange={(v) => onChange({ ...line, quantity: Math.max(0, v) })} decimals={line.mode === 'CATALOG' ? quantityDecimals(line.product) : 3} className={NUM_CLS} placeholder="Cant." />
         </div>
         <div className="w-32">
           <NumericInput value={line.unitPrice} onChange={(v) => onChange({ ...line, unitPrice: v })} className={NUM_CLS} placeholder="Precio" />

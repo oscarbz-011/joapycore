@@ -103,6 +103,6 @@ describe('StockLedgerService.assertAvailable (PostgreSQL)', () => {
       where: { tenantId, productId },
       _sum: { quantity: true },
     });
-    expect(total._sum.quantity).toBe(0);
+    expect(total._sum.quantity).toEqual(0);
   });
 });

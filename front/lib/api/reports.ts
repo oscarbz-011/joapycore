@@ -1,3 +1,4 @@
+import type { QuantityValue } from '@/lib/quantity';
 import { apiClient } from './client';
 
 export interface SalesReportSummary {
@@ -11,7 +12,7 @@ export interface SalesReportSummary {
 export interface SalesReport {
   summary: SalesReportSummary;
   byMonth: { month: string; revenue: number; orders: number }[];
-  topProducts: { name: string; quantity: number; revenue: number }[];
+  topProducts: { name: string; quantity: QuantityValue; revenue: number }[];
 }
 
 export interface StockItem {
@@ -21,7 +22,7 @@ export interface StockItem {
   category: string;
   brand: string;
   isSerialized: boolean;
-  stock: number;
+  stock: QuantityValue;
   costPrice: number;
   salePrice: number;
   stockValue: number;

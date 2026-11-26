@@ -18,7 +18,7 @@ function formatPrice(n: number) {
 }
 
 
-function quoteTotal(items: { unitPrice: number; quantity: number }[]) {
+function quoteTotal(items: { unitPrice: number; quantity: number | string }[]) {
   return sumMoney(items.map((i) => money(i.unitPrice).mul(i.quantity))).toNumber();
 }
 

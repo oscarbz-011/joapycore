@@ -15,6 +15,7 @@ function makeProduct(overrides = {}) {
     model: 'HRT-500',
     description: null,
     isSerialized: false,
+    unitCode: 77,
     unit: 'unidad',
     costPrice: 2_000_000,
     salePrice: 2_500_000,
@@ -174,7 +175,7 @@ describe('ProductsService', () => {
   describe('findOneWithStock', () => {
     it('uses getStock for non-serialized products', async () => {
       productsRepository.findById.mockResolvedValue(
-        makeProduct({ isSerialized: false }),
+        makeProduct({ isSerialized: false, unitCode: 77 }),
       );
 
       const result = await service.findOneWithStock('tenant-1', 'prod-1');
@@ -189,7 +190,7 @@ describe('ProductsService', () => {
 
     it('uses getSerializedStock for serialized products', async () => {
       productsRepository.findById.mockResolvedValue(
-        makeProduct({ isSerialized: true }),
+        makeProduct({ isSerialized: true, unitCode: 77 }),
       );
 
       const result = await service.findOneWithStock('tenant-1', 'prod-1');
@@ -219,6 +220,7 @@ describe('ProductsService', () => {
       brandId: 'brand-1',
       name: 'Heladera Samsung',
       isSerialized: false,
+      unitCode: 77,
       costPrice: 2_000_000,
       salePrice: 2_500_000,
     };
@@ -603,7 +605,7 @@ describe('ProductsService', () => {
   describe('addUnits', () => {
     it('throws UnprocessableEntityException for non-serialized product', async () => {
       productsRepository.findById.mockResolvedValue(
-        makeProduct({ isSerialized: false }),
+        makeProduct({ isSerialized: false, unitCode: 77 }),
       );
 
       await expect(
@@ -618,7 +620,7 @@ describe('ProductsService', () => {
 
     it('creates units and emits stock.movement.created for serialized product', async () => {
       productsRepository.findById.mockResolvedValue(
-        makeProduct({ isSerialized: true }),
+        makeProduct({ isSerialized: true, unitCode: 77 }),
       );
       productUnitsRepository.createMany.mockResolvedValue({ count: 2 });
 
@@ -717,7 +719,7 @@ describe('ProductsService', () => {
 
     it('moves only the selected serialized units and records paired history', async () => {
       productsRepository.findById.mockResolvedValue(
-        makeProduct({ isSerialized: true }),
+        makeProduct({ isSerialized: true, unitCode: 77 }),
       );
       warehousesRepository.findById
         .mockResolvedValueOnce({ id: 'wh-1', isActive: true })
@@ -745,7 +747,7 @@ describe('ProductsService', () => {
 
     it('marks a serialized negative adjustment as ADJUSTED_OUT', async () => {
       productsRepository.findById.mockResolvedValue(
-        makeProduct({ isSerialized: true }),
+        makeProduct({ isSerialized: true, unitCode: 77 }),
       );
       productUnitsRepository.markAdjustedOut.mockResolvedValue(1);
 

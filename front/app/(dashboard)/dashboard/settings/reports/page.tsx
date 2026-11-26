@@ -1,5 +1,6 @@
 'use client';
 
+import { formatQty, qty } from '@/lib/quantity';
 import { useQuery } from '@tanstack/react-query';
 import { AlertTriangle, ArrowDown, CheckCircle, Clock, TrendingUp } from 'lucide-react';
 import { useState } from 'react';
@@ -121,7 +122,7 @@ function SalesTab() {
                     <tr key={p.name} className="hover:bg-muted/20">
                       <td className="px-5 py-3 text-muted-foreground/60 tabular-nums">{i + 1}</td>
                       <td className="px-5 py-3 text-muted-foreground">{p.name}</td>
-                      <td className="px-5 py-3 text-right text-muted-foreground">{p.quantity}</td>
+                      <td className="px-5 py-3 text-right text-muted-foreground">{formatQty(p.quantity)}</td>
                       <td className="px-5 py-3 text-right font-medium text-foreground">{fmt(p.revenue)}</td>
                     </tr>
                   ))}
@@ -179,8 +180,8 @@ function StockTab() {
                   </thead>
                   <tbody className="divide-y divide-border">
                     {data.products.map((p) => {
-                      const isOut = p.stock <= 0;
-                      const isLow = p.stock > 0 && p.stock <= 5;
+                      const isOut = qty(p.stock).lte(0);
+                      const isLow = qty(p.stock).gt(0) && qty(p.stock).lte(5);
                       return (
                         <tr key={p.id} className="hover:bg-muted/20">
                           <td className="px-5 py-3">
@@ -189,7 +190,7 @@ function StockTab() {
                           </td>
                           <td className="px-5 py-3 text-muted-foreground">{p.category}</td>
                           <td className={`px-5 py-3 text-right font-semibold tabular-nums ${isOut ? 'text-destructive' : isLow ? 'text-amber-600' : 'text-foreground'}`}>
-                            {p.stock}
+                            {formatQty(p.stock)}
                           </td>
                           <td className="px-5 py-3 text-right text-muted-foreground">{fmt(p.salePrice)}</td>
                           <td className="px-5 py-3 text-right text-muted-foreground">{fmt(p.stockValue)}</td>

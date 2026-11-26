@@ -130,8 +130,8 @@ model Product {
   salePrice              Decimal?       @map("sale_price") @db.Decimal(23, 8)
   additionalMarkup       Decimal?       @map("additional_markup") @db.Decimal(23, 8)
   additionalMarkupType   MarkupType?    @map("additional_markup_type")
-  stockMin               Int            @default(0) @map("stock_min")
-  stockInitial           Int            @default(0) @map("stock_initial")
+  stockMin               Decimal        @default(0) @map("stock_min") @db.Decimal(18, 8)
+  stockInitial           Decimal        @default(0) @map("stock_initial") @db.Decimal(18, 8)
   ivaTaxRate             Decimal        @default(10) @map("iva_tax_rate") @db.Decimal(11, 8)
   ivaIncluded            Boolean        @default(false) @map("iva_included")
   status                 ProductStatus  @default(DRAFT)
@@ -219,8 +219,8 @@ model ProductBatch {
   batchNumber         String    @map("batch_number")
   entryDate           DateTime  @map("entry_date")
   unitCost            Decimal   @map("unit_cost") @db.Decimal(23, 8)
-  quantity            Int
-  remainingQty        Int       @map("remaining_qty")
+  quantity            Decimal @db.Decimal(18, 8)
+  remainingQty        Decimal   @map("remaining_qty") @db.Decimal(18, 8)
   purchaseOrderItemId String?   @map("purchase_order_item_id")
   expiresAt           DateTime? @map("expires_at")
   createdAt           DateTime  @default(now()) @map("created_at")
@@ -247,7 +247,7 @@ model StockMovement {
   batchId           String?                 @map("batch_id")
   type              StockMovementType
   reason            MovementReason?         @map("reason")
-  quantity          Int
+  quantity          Decimal @db.Decimal(18, 8)
   referenceId       String?                 @map("reference_id")
   initialSourceType StockInitialSourceType? @map("initial_source_type")
   notes             String?

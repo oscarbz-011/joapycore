@@ -4,7 +4,6 @@ import {
   ArrayMinSize,
   IsArray,
   IsEnum,
-  IsInt,
   IsNumber,
   IsOptional,
   IsPositive,
@@ -23,8 +22,8 @@ export class ComboItemDto {
   productId: string;
 
   @ApiProperty()
-  @IsInt()
-  @Min(1)
+  @IsNumber({ maxDecimalPlaces: 3 })
+  @IsPositive()
   quantity: number;
 }
 

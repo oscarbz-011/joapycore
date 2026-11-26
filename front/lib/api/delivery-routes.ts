@@ -1,3 +1,4 @@
+import type { QuantityValue } from '@/lib/quantity';
 import { apiClient } from './client';
 import type { DeliveryNoteStatus } from './logistics';
 
@@ -34,8 +35,8 @@ export interface RouteStop {
   deliveredAt: string | null;
   saleOrderId: string;
   /** Unidades del pedido, sumando todos sus productos. */
-  units: number;
-  items: { name: string; quantity: number }[];
+  units: QuantityValue;
+  items: { name: string; quantity: QuantityValue }[];
   customer: {
     id: string;
     name: string;

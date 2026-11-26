@@ -1,3 +1,4 @@
+import type { QuantityValue } from '@/lib/quantity';
 import { apiClient } from './client';
 import type {
   AttachedFile,
@@ -58,9 +59,9 @@ export interface RemissionNoteItem {
   invoiceItemId: string | null;
   description: string;
   unitCode: number;
-  quantity: number;
+  quantity: QuantityValue;
   serialNumbers: string[];
-  receivedQuantity: number | null;
+  receivedQuantity: QuantityValue | null;
   receivedSerials: string[];
 }
 
@@ -123,7 +124,7 @@ export interface TransferStockRow {
   description: string;
   unitCode: number;
   isSerialized: boolean;
-  quantity: number;
+  quantity: QuantityValue;
   serialNumbers: string[];
 }
 
@@ -132,9 +133,9 @@ export interface RemitableItem {
   productId: string;
   description: string;
   unitCode: number;
-  quantity: number;
-  remitted: number;
-  remitable: number;
+  quantity: QuantityValue;
+  remitted: QuantityValue;
+  remitable: QuantityValue;
   isSerialized: boolean;
   soldSerials: string[];
 }

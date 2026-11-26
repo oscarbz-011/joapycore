@@ -1,3 +1,10 @@
+import { unitSymbol } from '../../../common/units/units-of-measure';
+import {
+  assertQuantityForUnit,
+  qty,
+  remainingQty,
+} from '../../../common/units/quantity';
+import type { QuantityValue } from '../../../common/units/quantity';
 import { UnprocessableEntityException } from '@nestjs/common';
 import type { RemissionMotive } from '@prisma/client';
 import { startOfBusinessDay } from '../../../common/utils/business-date.util';
@@ -64,7 +71,7 @@ export function goodsDescription(product: {
 
 export interface RemitableSource {
   invoiceItemId: string;
-  quantity: number;
+  quantity: QuantityValue;
   saleOrderItemId: string | null;
 }
 
@@ -85,9 +92,9 @@ export interface RemitableItem {
   productId: string;
   description: string;
   unitCode: number;
-  quantity: number;
-  remitted: number;
-  remitable: number;
+  quantity: QuantityValue;
+  remitted: QuantityValue;
+  remitable: QuantityValue;
   isSerialized: boolean;
   soldSerials: string[];
 }
@@ -99,7 +106,7 @@ export interface RemitableItem {
 export function remitableItems(
   items: RemitableSource[],
   saleItems: SaleItemForRemission[],
-  remitted: Map<string, number>,
+  remitted: ReadonlyMap<string, QuantityValue>,
   soldSerials: Map<string, string[]>,
   sentSerials: Map<string, string[]> = new Map(),
 ): RemitableItem[] {
@@ -118,7 +125,7 @@ export function remitableItems(
         unitCode: sale.product.unitCode,
         quantity: item.quantity,
         remitted: already,
-        remitable: Math.max(item.quantity - already, 0),
+        remitable: remainingQty(item.quantity, already),
         isSerialized: sale.product.isSerialized,
         soldSerials: (soldSerials.get(sale.id) ?? []).filter(
           (serial) =>
@@ -134,18 +141,18 @@ export interface RemissionLine {
   invoiceItemId: string | null;
   description: string;
   unitCode: number;
-  quantity: number;
+  quantity: QuantityValue;
   serialNumbers: string[];
 }
 
 function assertSerials(
   description: string,
-  quantity: number,
+  quantity: QuantityValue,
   serials: string[],
   allowed: string[] | null,
 ) {
   const unique = new Set(serials.map((s) => s.trim()).filter(Boolean));
-  if (unique.size !== serials.length || unique.size !== quantity) {
+  if (unique.size !== serials.length || !qty(quantity).eq(unique.size)) {
     throw new UnprocessableEntityException(
       `Elegí un número de serie distinto por cada unidad de "${description}"`,
     );
@@ -161,7 +168,7 @@ function assertSerials(
 export function buildSaleLines(
   requested: {
     invoiceItemId: string;
-    quantity: number;
+    quantity: QuantityValue;
     serialNumbers?: string[];
   }[],
   available: RemitableItem[],
@@ -180,11 +187,16 @@ export function buildSaleLines(
       );
     }
     seen.add(req.invoiceItemId);
-    if (req.quantity > item.remitable) {
+    assertQuantityForUnit(req.quantity, {
+      name: item.description,
+      unitCode: item.unitCode,
+      isSerialized: item.isSerialized,
+    });
+    if (qty(req.quantity).gt(item.remitable)) {
       throw new UnprocessableEntityException(
-        item.remitable === 0
+        qty(item.remitable).isZero()
           ? `"${item.description}" ya se envió completo en otra nota de remisión`
-          : `De "${item.description}" quedan ${item.remitable} unidades por enviar`,
+          : `De "${item.description}" quedan ${qty(item.remitable).toString()} ${unitSymbol(item.unitCode)} por enviar`,
       );
     }
     const serials = req.serialNumbers ?? [];
@@ -219,7 +231,7 @@ export interface ProductForTransfer {
 export function buildTransferLines(
   requested: {
     productId: string;
-    quantity: number;
+    quantity: QuantityValue;
     serialNumbers?: string[];
   }[],
   products: ProductForTransfer[],
@@ -236,6 +248,7 @@ export function buildTransferLines(
       throw new UnprocessableEntityException(`"${description}" está repetido`);
     }
     seen.add(req.productId);
+    assertQuantityForUnit(req.quantity, { ...product, name: description });
     const serials = req.serialNumbers ?? [];
     if (product.isSerialized) {
       assertSerials(description, req.quantity, serials, null);
@@ -259,14 +272,18 @@ export interface DispatchedItem {
   id: string;
   productId: string | null;
   description: string;
-  quantity: number;
+  quantity: QuantityValue;
   serialNumbers: string[];
 }
 
 export interface ReceptionPlan {
-  received: { productId: string; quantity: number; serialNumbers: string[] }[];
+  received: {
+    productId: string;
+    quantity: QuantityValue;
+    serialNumbers: string[];
+  }[];
   lost: { productId: string; serialNumbers: string[] }[];
-  items: { itemId: string; quantity: number; serialNumbers: string[] }[];
+  items: { itemId: string; quantity: QuantityValue; serialNumbers: string[] }[];
   hasDifferences: boolean;
 }
 
@@ -278,7 +295,7 @@ export function buildReception(
   dispatched: DispatchedItem[],
   requested: {
     itemId: string;
-    receivedQuantity: number;
+    receivedQuantity: QuantityValue;
     receivedSerials?: string[];
   }[],
   notes: string | undefined,
@@ -312,9 +329,9 @@ export function buildReception(
         `Indicá cuánto llegó de "${item.description}"`,
       );
     }
-    if (req.receivedQuantity > item.quantity) {
+    if (qty(req.receivedQuantity).gt(item.quantity)) {
       throw new UnprocessableEntityException(
-        `De "${item.description}" se despacharon ${item.quantity}: no pueden llegar más`,
+        `De "${item.description}" se despacharon ${qty(item.quantity).toString()}: no pueden llegar más`,
       );
     }
     const serialized = item.serialNumbers.length > 0;
@@ -325,7 +342,7 @@ export function buildReception(
       const unique = new Set(serials);
       if (
         unique.size !== serials.length ||
-        unique.size !== req.receivedQuantity
+        !qty(req.receivedQuantity).eq(unique.size)
       ) {
         throw new UnprocessableEntityException(
           `Marcá un número de serie por cada unidad de "${item.description}" que llegó`,
@@ -344,8 +361,8 @@ export function buildReception(
         `"${item.description}" no se controla por número de serie`,
       );
     }
-    if (req.receivedQuantity < item.quantity) plan.hasDifferences = true;
-    if (req.receivedQuantity > 0) {
+    if (qty(req.receivedQuantity).lt(item.quantity)) plan.hasDifferences = true;
+    if (qty(req.receivedQuantity).gt(0)) {
       plan.received.push({
         productId: item.productId,
         quantity: req.receivedQuantity,

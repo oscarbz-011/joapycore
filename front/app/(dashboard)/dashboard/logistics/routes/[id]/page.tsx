@@ -1,5 +1,6 @@
 'use client';
 
+import { formatQty } from '@/lib/quantity';
 import { useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
@@ -257,7 +258,7 @@ export default function DeliveryRoutePage() {
                             {stop.customer.reference ? ` (${stop.customer.reference})` : ''}
                           </TableCell>
                           <TableCell className="tabular-nums">{stop.customer.phone ?? '—'}</TableCell>
-                          <TableCell className="text-right tabular-nums">{stop.units}</TableCell>
+                          <TableCell className="text-right tabular-nums">{formatQty(stop.units)}</TableCell>
                           <TableCell className="text-right tabular-nums text-muted-foreground">
                             {!located ? 'Sin ubicación' : leg === null ? '—' : `+${formatKm(leg)}`}
                           </TableCell>
@@ -457,7 +458,7 @@ function AddDeliveries({
                     <TableCell className="max-w-72 whitespace-normal text-muted-foreground">
                       {stop.customer.address ?? 'Sin dirección'}
                     </TableCell>
-                    <TableCell className="text-right tabular-nums">{stop.units}</TableCell>
+                    <TableCell className="text-right tabular-nums">{formatQty(stop.units)}</TableCell>
                     <TableCell className="text-right tabular-nums text-muted-foreground">
                       {stop.customer.latitude === null ? 'Sin ubicación' : `+${formatKm(cost.extraKm)}`}
                     </TableCell>

@@ -1,3 +1,4 @@
+import type { QuantityValue } from '../../../common/units/quantity';
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../prisma/prisma.service';
 
@@ -43,7 +44,7 @@ export class ProductComponentsRepository {
     data: {
       productId: string;
       componentId: string;
-      quantity: number;
+      quantity: QuantityValue;
       notes?: string;
     },
   ) {
@@ -56,7 +57,7 @@ export class ProductComponentsRepository {
   update(
     tenantId: string,
     id: string,
-    data: { quantity?: number; notes?: string | null },
+    data: { quantity?: QuantityValue; notes?: string | null },
   ) {
     return this.prisma.productComponent.updateMany({
       where: { tenantId, id },

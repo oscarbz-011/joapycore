@@ -185,7 +185,7 @@ describe('Entrega → descuento de stock (PostgreSQL)', () => {
     await notes.complete(tenantId, note.id, undefined);
 
     expect(await orderStatus(orderId)).toBe('DELIVERED');
-    expect(await stockOf(tenantId, productId)).toBe(7);
+    expect(await stockOf(tenantId, productId)).toEqual(7);
     const outboxRows = await prisma.outboxEvent.findMany({
       where: { tenantId },
       select: { eventName: true, status: true },
@@ -202,7 +202,7 @@ describe('Entrega → descuento de stock (PostgreSQL)', () => {
       saleOrderId: orderId,
       deliveryNoteId: note.id,
     });
-    expect(await stockOf(tenantId, productId)).toBe(7);
+    expect(await stockOf(tenantId, productId)).toEqual(7);
   });
 
   it('keeps the delivery and retries the stock-out when Sales fails once', async () => {
@@ -225,7 +225,7 @@ describe('Entrega → descuento de stock (PostgreSQL)', () => {
     });
     expect(event).toMatchObject({ status: 'FAILED', attempts: 1 });
     expect(await orderStatus(orderId)).toBe('CONFIRMED');
-    expect(await stockOf(tenantId, productId)).toBe(10);
+    expect(await stockOf(tenantId, productId)).toEqual(10);
 
     await prisma.outboxEvent.update({
       where: { id: event.id },
@@ -234,7 +234,7 @@ describe('Entrega → descuento de stock (PostgreSQL)', () => {
     await outbox.processDue();
 
     expect(await orderStatus(orderId)).toBe('DELIVERED');
-    expect(await stockOf(tenantId, productId)).toBe(7);
+    expect(await stockOf(tenantId, productId)).toEqual(7);
     spy.mockRestore();
   });
 
@@ -247,11 +247,11 @@ describe('Entrega → descuento de stock (PostgreSQL)', () => {
     await sales.deliver(tenantId, orderId);
 
     expect(await orderStatus(orderId)).toBe('DELIVERED');
-    expect(await stockOf(tenantId, productId)).toBe(7);
+    expect(await stockOf(tenantId, productId)).toEqual(7);
     await expect(sales.deliver(tenantId, orderId)).rejects.toBeInstanceOf(
       UnprocessableEntityException,
     );
-    expect(await stockOf(tenantId, productId)).toBe(7);
+    expect(await stockOf(tenantId, productId)).toEqual(7);
   });
 
   it('keeps Sales out of the delivery while Logistics is active', async () => {
@@ -264,7 +264,7 @@ describe('Entrega → descuento de stock (PostgreSQL)', () => {
       /desde Logística/,
     );
     expect(await orderStatus(orderId)).toBe('INVOICED');
-    expect(await stockOf(tenantId, productId)).toBe(10);
+    expect(await stockOf(tenantId, productId)).toEqual(10);
   });
 
   it('does not deliver another tenant’s order', async () => {
@@ -273,7 +273,7 @@ describe('Entrega → descuento de stock (PostgreSQL)', () => {
 
     await expect(sales.deliver(own.tenantId, other.orderId)).rejects.toThrow();
     expect(await orderStatus(other.orderId)).toBe('INVOICED');
-    expect(await stockOf(other.tenantId, other.productId)).toBe(10);
+    expect(await stockOf(other.tenantId, other.productId)).toEqual(10);
   });
 
   it('on activation, closes what Sales delivered and opens what is pending', async () => {

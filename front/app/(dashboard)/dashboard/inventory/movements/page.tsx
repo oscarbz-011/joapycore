@@ -1,5 +1,6 @@
 'use client';
 
+import { formatQty, qty, quantityDecimals, type QuantityValue } from '@/lib/quantity';
 import { RequirePermission } from '@/components/require-permission';
 
 import { apiErrorMessage } from '@/lib/api/api-error';
@@ -40,8 +41,8 @@ function fmtDate(iso: string) {
   }).format(new Date(iso));
 }
 
-function fmtQty(quantity: number) {
-  return quantity > 0 ? `+${quantity}` : String(quantity);
+function fmtQty(quantity: QuantityValue) {
+  return qty(quantity).gt(0) ? `+${formatQty(quantity)}` : formatQty(quantity);
 }
 
 const REASON_LABELS: Record<MovementReason, string> = {
@@ -176,7 +177,8 @@ function NewMovementModal({ onClose }: { onClose: () => void }) {
                 <Label>Cantidad *</Label>
                 <NumericInput
                   value={form.quantity}
-                  onChange={(v) => set('quantity', Math.max(1, Math.round(v)))}
+                  onChange={(v) => set('quantity', Math.max(0, v))}
+                  decimals={quantityDecimals(product)}
                   className={NUM_CLS}
                   required
                 />
@@ -445,7 +447,7 @@ export default function MovementsPage() {
                     </td>
                     <td className={cn(
                       'px-4 py-3 text-right font-mono font-bold tabular-nums',
-                      m.quantity > 0 ? 'text-emerald-600' : 'text-destructive',
+                      qty(m.quantity).gt(0) ? 'text-emerald-600' : 'text-destructive',
                     )}>
                       {fmtQty(m.quantity)}
                     </td>

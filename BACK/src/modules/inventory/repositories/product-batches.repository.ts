@@ -1,3 +1,4 @@
+import type { Prisma } from '@prisma/client';
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { PrismaClientOrTx } from '../../../prisma/types';
@@ -5,7 +6,7 @@ import { PrismaClientOrTx } from '../../../prisma/types';
 export interface UpsertBatchInput {
   batchNumber: string;
   unitCost: number;
-  quantity: number;
+  quantity: Prisma.Decimal;
   expiresAt?: Date;
 }
 
@@ -66,12 +67,12 @@ export class ProductBatchesRepository {
 
   decrementRemaining(
     id: string,
-    qty: number,
+    quantity: Prisma.Decimal,
     client: PrismaClientOrTx = this.prisma,
   ) {
     return client.productBatch.update({
       where: { id },
-      data: { remainingQty: { decrement: qty } },
+      data: { remainingQty: { decrement: quantity } },
     });
   }
 

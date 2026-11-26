@@ -1,4 +1,5 @@
 'use client';
+import { formatQty } from '@/lib/quantity';
 import { money, sumMoney } from '@/lib/money';
 
 import { apiErrorMessage } from '@/lib/api/api-error';
@@ -163,9 +164,9 @@ export default function QuoteDetailPage() {
                 <div className="min-w-0 flex-1">
                   <p className="text-sm text-foreground">{item.product?.name ?? item.description ?? 'Ítem'}</p>
                   {item.specNotes && <p className="text-xs text-muted-foreground whitespace-pre-line mt-0.5">{item.specNotes}</p>}
-                  <p className="text-xs text-muted-foreground/60 mt-0.5">{item.quantity} × {formatPrice(item.unitPrice)}</p>
+                  <p className="text-xs text-muted-foreground/60 mt-0.5">{formatQty(item.quantity)} × {formatPrice(item.unitPrice)}</p>
                 </div>
-                <p className="text-sm font-medium text-foreground shrink-0">{formatPrice(item.quantity * item.unitPrice)}</p>
+                <p className="text-sm font-medium text-foreground shrink-0">{formatPrice(money(item.unitPrice).mul(item.quantity).toNumber())}</p>
               </div>
             ))}
           </div>

@@ -1,3 +1,4 @@
+import type { QuantityValue } from '@/lib/quantity';
 import { apiClient } from './client';
 
 // Producción: recetas (de qué está hecho un producto fabricado) y órdenes de
@@ -8,7 +9,7 @@ export interface ProductComponent {
   id: string;
   productId: string;
   componentId: string;
-  quantity: number;
+  quantity: QuantityValue;
   notes: string | null;
   component: {
     id: string;
@@ -35,8 +36,8 @@ export const PRODUCTION_STATUS_LABEL: Record<ProductionOrderStatus, string> = {
 export interface ProductionOrderItem {
   id: string;
   componentId: string;
-  plannedQuantity: number;
-  usedQuantity: number;
+  plannedQuantity: QuantityValue;
+  usedQuantity: QuantityValue;
   component: { id: string; name: string; unitCode: number; costPrice: number | null };
 }
 
@@ -44,7 +45,7 @@ export interface ProductionOrder {
   id: string;
   orderNumber: number;
   productId: string;
-  quantity: number;
+  quantity: QuantityValue;
   status: ProductionOrderStatus;
   warehouseId: string | null;
   startedAt: string | null;

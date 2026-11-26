@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import {
   NotFoundException,
   UnprocessableEntityException,
@@ -35,7 +36,7 @@ describe('UnlocatedStockService', () => {
     productUnitsRepository = { locateUnassignedUnits: jest.fn() };
     stockMovementsRepository = {
       lockProducts: jest.fn(),
-      sumUnlocated: jest.fn().mockResolvedValue(2),
+      sumUnlocated: jest.fn().mockResolvedValue(new Prisma.Decimal(2)),
       sumByProductsAndWarehouse: jest.fn().mockResolvedValue(new Map()),
       create: jest
         .fn()
@@ -100,7 +101,9 @@ describe('UnlocatedStockService', () => {
   });
 
   it('moves only the requested part of the balance', async () => {
-    stockMovementsRepository.sumUnlocated.mockResolvedValue(5);
+    stockMovementsRepository.sumUnlocated.mockResolvedValue(
+      new Prisma.Decimal(5),
+    );
 
     await service.assign('tenant-1', { ...dto, quantity: 3 });
 
@@ -123,7 +126,9 @@ describe('UnlocatedStockService', () => {
   });
 
   it('rejects when the product has nothing unlocated', async () => {
-    stockMovementsRepository.sumUnlocated.mockResolvedValue(0);
+    stockMovementsRepository.sumUnlocated.mockResolvedValue(
+      new Prisma.Decimal(0),
+    );
 
     await expect(service.assign('tenant-1', dto)).rejects.toThrow(
       'no tiene stock sin depósito',
@@ -132,7 +137,9 @@ describe('UnlocatedStockService', () => {
   });
 
   it('charges a negative unlocated balance to the warehouse', async () => {
-    stockMovementsRepository.sumUnlocated.mockResolvedValue(-2);
+    stockMovementsRepository.sumUnlocated.mockResolvedValue(
+      new Prisma.Decimal(-2),
+    );
     stockMovementsRepository.sumByProductsAndWarehouse.mockResolvedValue(
       new Map([['prod-1::wh-1', 10]]),
     );
@@ -152,7 +159,9 @@ describe('UnlocatedStockService', () => {
   });
 
   it('rejects a negative balance the warehouse cannot absorb', async () => {
-    stockMovementsRepository.sumUnlocated.mockResolvedValue(-2);
+    stockMovementsRepository.sumUnlocated.mockResolvedValue(
+      new Prisma.Decimal(-2),
+    );
     stockMovementsRepository.sumByProductsAndWarehouse.mockResolvedValue(
       new Map([['prod-1::wh-1', 1]]),
     );

@@ -1,3 +1,4 @@
+import { sumQty, type QuantityValue } from '@/lib/quantity';
 // La pantalla del repartidor: una sola lista con lo que tiene por hacer,
 // agrupada por ruta y en el orden del recorrido, y aparte lo que le asignaron
 // fuera de una ruta.
@@ -57,7 +58,7 @@ export interface DeliveryCardData {
   phone: string | null;
   latitude: number | null;
   longitude: number | null;
-  items: { name: string; quantity: number }[];
+  items: { name: string; quantity: QuantityValue }[];
 }
 
 export function cardFromNote(note: DeliveryNote): DeliveryCardData {
@@ -209,9 +210,9 @@ export interface MyStopGroup {
 }
 
 function mergeItems(lists: DeliveryCardData['items'][]): DeliveryCardData['items'] {
-  const merged = new Map<string, number>();
+  const merged = new Map<string, QuantityValue>();
   for (const item of lists.flat()) {
-    merged.set(item.name, (merged.get(item.name) ?? 0) + item.quantity);
+    merged.set(item.name, sumQty([merged.get(item.name) ?? 0, item.quantity]).toNumber());
   }
   return [...merged].map(([name, quantity]) => ({ name, quantity }));
 }

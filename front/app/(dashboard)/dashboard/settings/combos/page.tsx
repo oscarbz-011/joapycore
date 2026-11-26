@@ -1,4 +1,5 @@
 'use client';
+import { qty, quantityDecimals } from '@/lib/quantity';
 import { money, sumMoney } from '@/lib/money';
 
 import { usePermission } from '@/lib/permissions';
@@ -53,7 +54,7 @@ function ComboForm({
   const [fixedPrice, setFixedPrice] = useState(initial?.fixedPrice ?? 0);
   const [discountPercentage, setDiscountPercentage] = useState(initial?.discountPercentage ?? 0);
   const [items, setItems] = useState<ComboItemPayload[]>(
-    initial?.items.map((i) => ({ productId: i.productId, quantity: i.quantity })) ?? [],
+    initial?.items.map((i) => ({ productId: i.productId, quantity: qty(i.quantity).toNumber() })) ?? [],
   );
 
   const listTotal = items.reduce((sum, it) => {
@@ -101,7 +102,8 @@ function ComboForm({
               <div className="w-20">
                 <NumericInput
                   value={item.quantity}
-                  onChange={(v) => setItems((prev) => prev.map((it, i) => (i === idx ? { ...it, quantity: Math.max(1, Math.round(v)) } : it)))}
+                  onChange={(v) => setItems((prev) => prev.map((it, i) => (i === idx ? { ...it, quantity: Math.max(0, v) } : it)))}
+                  decimals={quantityDecimals(products.find((p) => p.id === item.productId))}
                   className={NUM_CLS}
                 />
               </div>

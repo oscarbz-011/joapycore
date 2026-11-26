@@ -1,5 +1,6 @@
 'use client';
 
+import { formatQty, qty } from '@/lib/quantity';
 import { Suspense, useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -329,7 +330,7 @@ function IssueCreditNote() {
                             {item.isSerialized && line.restockQuantity > 0 && (
                               <fieldset className="mt-2 space-y-1.5">
                                 <legend className="text-xs text-muted-foreground">
-                                  Números de serie que vuelven ({line.serialNumbers.length} de {line.restockQuantity})
+                                  Números de serie que vuelven ({line.serialNumbers.length} de {formatQty(line.restockQuantity)})
                                 </legend>
                                 <div className="flex flex-wrap gap-x-4 gap-y-1.5">
                                   {item.soldSerials.map((serial) => {
@@ -354,8 +355,8 @@ function IssueCreditNote() {
                               </fieldset>
                             )}
                           </td>
-                          <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">{item.quantity}</td>
-                          <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">{item.creditableQuantity}</td>
+                          <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">{formatQty(item.quantity)}</td>
+                          <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">{formatQty(item.creditableQuantity)}</td>
                           <td className="whitespace-nowrap px-4 py-3 text-right tabular-nums text-muted-foreground">{money(item.unitPrice)}</td>
                           <td className="px-4 py-3 text-right text-muted-foreground">{ivaLabel(item.ivaRate)}</td>
                           {kind === 'ITEMS' && (
@@ -364,7 +365,7 @@ function IssueCreditNote() {
                                 aria-label={`Unidades de ${item.description} a acreditar`}
                                 inputMode="numeric"
                                 className="ml-auto w-20 text-right"
-                                disabled={item.creditableQuantity === 0}
+                                disabled={qty(item.creditableQuantity).isZero()}
                                 value={line.quantity ? String(line.quantity) : ''}
                                 onChange={(e) => {
                                   const quantity = Number(e.target.value.replace(/\D/g, '') || 0);

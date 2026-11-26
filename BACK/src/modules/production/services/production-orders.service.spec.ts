@@ -13,8 +13,8 @@ function makeProduct(overrides = {}) {
     name: 'Mesa de comedor',
     kind: 'MANUFACTURED' as const,
     status: 'ACTIVE' as const,
-    unit: 'unidad',
     isSerialized: false,
+    unitCode: 77,
     ...overrides,
   };
 }
@@ -34,7 +34,7 @@ function makeOrder(overrides = {}) {
         componentId: 'tablero-1',
         plannedQuantity: new Prisma.Decimal(6),
         usedQuantity: 0,
-        component: { id: 'tablero-1', name: 'Tablero MDF', unit: 'unidad' },
+        component: { id: 'tablero-1', name: 'Tablero MDF', unitCode: 77 },
       },
     ],
     ...overrides,
@@ -72,7 +72,7 @@ describe('ProductionOrdersService', () => {
         {
           componentId: 'tablero-1',
           quantity: 3,
-          component: { id: 'tablero-1', name: 'Tablero MDF', unit: 'unidad' },
+          component: { id: 'tablero-1', name: 'Tablero MDF', unitCode: 77 },
         },
       ]),
     };
@@ -136,9 +136,20 @@ describe('ProductionOrdersService', () => {
       );
     });
 
+    it('refuses to produce a fraction of a product counted by the unit', async () => {
+      await expect(
+        service.create('tenant-1', 'user-1', {
+          productId: 'mesa-1',
+          quantity: 1.5,
+          warehouseId: 'wh-1',
+        }),
+      ).rejects.toThrow('"Mesa de comedor" se cuenta por unidad entera');
+      expect(repository.create).not.toHaveBeenCalled();
+    });
+
     it('refuses a serialized product: no hay de dónde sacar los N/S', async () => {
       sources.findProduct.mockResolvedValue(
-        makeProduct({ isSerialized: true }),
+        makeProduct({ isSerialized: true, unitCode: 77 }),
       );
 
       await expect(service.create('tenant-1', 'user-1', dto)).rejects.toThrow(
@@ -257,8 +268,7 @@ describe('ProductionOrdersService', () => {
       expect(eventEmitter.emitAsync).not.toHaveBeenCalled();
     });
 
-    // Hasta que el stock admita decimales: 0,5 litros se guardaban como 0.
-    it('refuses a consumption with decimals instead of losing them in the stock', async () => {
+    it('refuses half of a component that is counted by the unit', async () => {
       await expect(
         service.complete(
           'tenant-1',
@@ -266,24 +276,47 @@ describe('ProductionOrdersService', () => {
           { consumptions: [{ componentId: 'tablero-1', usedQuantity: 0.5 }] },
           'user-1',
         ),
-      ).rejects.toThrow(/unidades enteras.*\(0\.5\)/);
+      ).rejects.toThrow('"Tablero MDF" se cuenta por unidad entera');
 
       expect(repository.updateItemUsedQuantity).not.toHaveBeenCalled();
       expect(eventEmitter.emitAsync).not.toHaveBeenCalled();
     });
 
-    it('refuses an order to produce a fraction of a product', async () => {
+    it('consumes a measured component with its decimals', async () => {
       repository.findById.mockResolvedValue(
         makeOrder({
           status: 'IN_PROGRESS',
-          quantity: 1.5,
-          product: { id: 'mesa-1', name: 'Mesa', unit: 'unidad' },
+          items: [
+            {
+              id: 'item-1',
+              componentId: 'tablero-1',
+              plannedQuantity: 6,
+              usedQuantity: 0,
+              component: {
+                id: 'tablero-1',
+                name: 'Tablero MDF',
+                unitCode: 109,
+              },
+            },
+          ],
         }),
       );
+      sources.getStock.mockResolvedValue(
+        new Map([['tablero-1', new Prisma.Decimal(10)]]),
+      );
 
-      await expect(
-        service.complete('tenant-1', 'po-1', {}, 'user-1'),
-      ).rejects.toThrow(/Mesa a producir \(1\.5\)/);
+      await service.complete(
+        'tenant-1',
+        'po-1',
+        { consumptions: [{ componentId: 'tablero-1', usedQuantity: 2.375 }] },
+        'user-1',
+      );
+
+      expect(repository.updateItemUsedQuantity).toHaveBeenCalledWith(
+        'item-1',
+        new Prisma.Decimal('2.375'),
+        expect.anything(),
+      );
     });
 
     it('refuses to complete an order that is not IN_PROGRESS', async () => {

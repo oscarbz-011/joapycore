@@ -1,5 +1,6 @@
 'use client';
 
+import { formatQty } from '@/lib/quantity';
 import { unitSymbol } from '@/lib/units-of-measure';
 import { useState } from 'react';
 import Link from 'next/link';
@@ -257,7 +258,7 @@ export function StockTransferDialog({ onClose }: StockTransferDialogProps) {
                     <SelectTrigger className="w-full">
                       <span className="min-w-0 flex-1 truncate text-left text-sm">
                         {source
-                          ? `${source.label} (${source.quantity})`
+                          ? `${source.label} (${formatQty(source.quantity)})`
                           : '— Seleccionar —'}
                       </span>
                     </SelectTrigger>
@@ -265,7 +266,7 @@ export function StockTransferDialog({ onClose }: StockTransferDialogProps) {
                       <SelectItem value="none">— Seleccionar —</SelectItem>
                       {sources.map((item) => (
                         <SelectItem key={item.id} value={item.id}>
-                          {item.label} ({item.quantity})
+                          {item.label} ({formatQty(item.quantity)})
                         </SelectItem>
                       ))}
                     </SelectContent>

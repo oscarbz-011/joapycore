@@ -6,7 +6,6 @@ import {
   IsBoolean,
   IsEnum,
   IsIn,
-  IsInt,
   IsNumber,
   IsOptional,
   IsPositive,
@@ -62,7 +61,7 @@ export class CreateProductDto {
       'Stock mínimo: al llegar a esta cantidad el producto se marca para reposición',
   })
   @IsOptional()
-  @IsInt()
+  @IsNumber({ maxDecimalPlaces: 3 })
   @Min(0)
   stockMin?: number;
 

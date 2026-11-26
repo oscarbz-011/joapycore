@@ -1,3 +1,4 @@
+import { qty } from '@/lib/quantity';
 import type { StockResult } from './api/inventory';
 
 export interface WarehouseChoice {
@@ -19,10 +20,11 @@ export function warehouseChoices(
     .map((warehouse) => ({
       id: warehouse.id,
       name: warehouse.name,
-      quantity:
+      quantity: qty(
         row?.stockByWarehouse.find(
           (location) => location.warehouseId === warehouse.id,
-        )?.quantity ?? 0,
+        )?.quantity,
+      ).toNumber(),
     }));
 }
 
@@ -58,8 +60,8 @@ export function unassignedStock(
   stock: StockResult | undefined,
   productId: string,
 ): number {
-  return (
+  return qty(
     stock?.items.find((item) => item.product.id === productId)
-      ?.unassignedStock ?? 0
-  );
+      ?.unassignedStock,
+  ).toNumber();
 }

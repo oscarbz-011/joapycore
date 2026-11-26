@@ -1,3 +1,4 @@
+import type { QuantityValue } from '@/lib/quantity';
 import { apiClient, LONG_REQUEST_TIMEOUT_MS } from './client';
 import type { PaymentMethod } from './payments';
 import type { AdvanceMovementKind, OrderAdvance } from '../advance';
@@ -86,6 +87,7 @@ function normalizeCatalogItem(raw: SupplierCatalogItem): SupplierCatalogItem {
     ...raw,
     price: numberOrNull(raw.price),
     conversionFactor: numberOrNull(raw.conversionFactor),
+    minOrderQuantity: numberOrNull(raw.minOrderQuantity),
     priceTiers: (raw.priceTiers ?? []).map((tier) => ({
       minQuantity: Number(tier.minQuantity),
       price: Number(tier.price),
@@ -153,9 +155,9 @@ function normalizeSupplier(raw: Supplier): Supplier {
 export interface PurchaseOrderItem {
   id: string;
   productId: string;
-  quantity: number;
+  quantity: QuantityValue;
   unitCost: number;
-  receivedQty: number;
+  receivedQty: QuantityValue;
   // Código y descripción del proveedor, si la línea salió de su catálogo.
   supplierSku: string | null;
   supplierDescription: string | null;
@@ -252,7 +254,7 @@ export interface PurchaseReceiptItem {
   id: string;
   purchaseOrderItemId: string;
   productId: string;
-  quantity: number;
+  quantity: QuantityValue;
   unitCost: number;
   batchNumber: string | null;
   expiresAt: string | null;

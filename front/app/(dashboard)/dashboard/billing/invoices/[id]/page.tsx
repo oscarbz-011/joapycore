@@ -1,5 +1,6 @@
 "use client";
 
+import { formatQty } from '@/lib/quantity';
 import { RequirePermission } from "@/components/require-permission";
 import { EntityTimeline } from "@/components/communications/entity-timeline";
 import { SeriesNumberingFields } from "@/components/billing/series-numbering-fields";
@@ -552,7 +553,7 @@ export default function InvoiceDetailPage() {
                   {lines.map((line) => (
                     <tr key={line.id}>
                       <td className="px-5 py-3 font-medium text-foreground">{line.description}</td>
-                      <td className="px-5 py-3 text-right tabular-nums text-muted-foreground">{line.quantity}</td>
+                      <td className="px-5 py-3 text-right tabular-nums text-muted-foreground">{formatQty(line.quantity)}</td>
                       {!isCredit && (
                         <td className="px-5 py-3 text-right tabular-nums text-muted-foreground">
                           {formatPrice(line.unitPrice)}

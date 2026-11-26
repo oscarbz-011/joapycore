@@ -48,8 +48,8 @@ export class CreditNoteItemDto {
   invoiceItemId!: string;
 
   @ApiProperty({ example: 1 })
-  @IsInt()
-  @Min(1)
+  @IsNumber({ maxDecimalPlaces: 3 })
+  @IsPositive()
   quantity!: number;
 }
 
@@ -59,8 +59,8 @@ export class RestockLineDto {
   invoiceItemId!: string;
 
   @ApiProperty({ example: 1 })
-  @IsInt()
-  @Min(1)
+  @IsNumber({ maxDecimalPlaces: 3 })
+  @IsPositive()
   quantity!: number;
 
   @ApiPropertyOptional({

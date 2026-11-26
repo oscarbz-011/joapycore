@@ -1,3 +1,4 @@
+import { qty, type QuantityValue } from '@/lib/quantity';
 import type { StockResult, StockRow } from './api/inventory';
 
 export interface StockColumn {
@@ -51,13 +52,13 @@ export function stockColumns(
 }
 
 export function stockQuantity(row: StockRow, column: StockColumn): number {
-  if (column.kind === 'total') return row.totalStock;
-  if (column.kind === 'unassigned') return row.unassignedStock;
-  return (
+  if (column.kind === 'total') return qty(row.totalStock).toNumber();
+  if (column.kind === 'unassigned') return qty(row.unassignedStock).toNumber();
+  return qty(
     row.stockByWarehouse.find(
       (quantity) => quantity.warehouseId === column.warehouseId,
-    )?.quantity ?? 0
-  );
+    )?.quantity,
+  ).toNumber();
 }
 
 export type StockLevel = 'out' | 'low' | 'ok';
@@ -66,9 +67,9 @@ export type StockLevel = 'out' | 'low' | 'ok';
  * Nivel de reposición según el total de la empresa. minimum = 0 significa
  * "sin mínimo configurado": el producto solo se marca cuando se queda sin stock.
  */
-export function stockLevel(total: number, minimum: number): StockLevel {
-  if (total <= 0) return 'out';
-  if (minimum > 0 && total <= minimum) return 'low';
+export function stockLevel(total: QuantityValue, minimum: QuantityValue): StockLevel {
+  if (qty(total).lte(0)) return 'out';
+  if (qty(minimum).gt(0) && qty(total).lte(qty(minimum))) return 'low';
   return 'ok';
 }
 

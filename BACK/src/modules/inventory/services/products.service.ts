@@ -1,3 +1,4 @@
+import { assertQuantityForUnit } from '../../../common/units/quantity';
 import { DEFAULT_UNIT_CODE } from '../../../common/units/units-of-measure';
 import {
   BadRequestException,
@@ -310,6 +311,7 @@ export class ProductsService {
       );
     }
 
+    assertQuantityForUnit(dto.quantity, product);
     const serialNumbers = dto.serialNumbers ?? [];
     if (product.isSerialized && serialNumbers.length !== dto.quantity) {
       throw new UnprocessableEntityException(

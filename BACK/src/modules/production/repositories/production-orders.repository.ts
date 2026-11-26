@@ -81,7 +81,7 @@ export class ProductionOrdersRepository {
 
   updateItemUsedQuantity(
     id: string,
-    usedQuantity: number,
+    usedQuantity: Prisma.Decimal,
     client: PrismaClientOrTx = this.prisma,
   ) {
     return client.productionOrderItem.update({

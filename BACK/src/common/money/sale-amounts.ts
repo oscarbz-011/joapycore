@@ -1,3 +1,4 @@
+import type { QuantityValue } from '../units/quantity';
 import {
   money,
   roundGuaranies,
@@ -8,7 +9,7 @@ import {
 
 export interface SaleLine {
   unitPrice: MoneyValue;
-  quantity: number;
+  quantity: QuantityValue;
 }
 
 export interface Surcharge {

@@ -31,8 +31,8 @@ export class VolumeDiscountDto {
 
 export class QuantityDiscountDto {
   @ApiProperty({ description: 'Unidades de la orden desde las que aplica' })
-  @IsInt()
-  @Min(1)
+  @IsNumber({ maxDecimalPlaces: 3 })
+  @IsPositive()
   minQuantity: number;
 
   @ApiProperty({ description: 'Porcentaje de descuento sobre el total' })

@@ -1,3 +1,5 @@
+import Decimal from 'decimal.js';
+import { formatQty, qty, sumQty } from '@/lib/quantity';
 import type {
   ReceiveRemissionPayload,
   RemissionCompany,
@@ -200,8 +202,8 @@ export function transferLinesProblem(
   if (chosen.length === 0) return 'Elegí qué mercadería se traslada';
   for (const row of chosen) {
     const quantity = lineQuantity(lines[row.productId], row.isSerialized);
-    if (quantity > row.quantity) {
-      return `De ${row.description} hay ${row.quantity} en el depósito de origen`;
+    if (qty(quantity).gt(qty(row.quantity))) {
+      return `De ${row.description} hay ${formatQty(row.quantity)} en el depósito de origen`;
     }
   }
   return null;
@@ -229,8 +231,8 @@ export function saleLinesProblem(
   if (chosen.length === 0) return 'Elegí qué mercadería se envía';
   for (const item of chosen) {
     const quantity = lineQuantity(lines[item.invoiceItemId], item.isSerialized);
-    if (quantity > item.remitable) {
-      return `De ${item.description} quedan ${item.remitable} por enviar`;
+    if (qty(quantity).gt(qty(item.remitable))) {
+      return `De ${item.description} quedan ${formatQty(item.remitable)} por enviar`;
     }
   }
   return null;
@@ -269,15 +271,16 @@ const isSerializedItem = (item: DispatchedItem) => item.serialNumbers.length > 0
 /** Por defecto llegó todo lo despachado: se desmarca o se corrige lo que falta. */
 export function fullReception(items: DispatchedItem[]): Record<string, GoodsDraftLine> {
   return Object.fromEntries(
-    items.map((item) => [item.id, { quantity: item.quantity, serialNumbers: [...item.serialNumbers] }]),
+    items.map((item) => [item.id, { quantity: qty(item.quantity).toNumber(), serialNumbers: [...item.serialNumbers] }]),
   );
 }
 
 export function missingUnits(items: DispatchedItem[], lines: Record<string, GoodsDraftLine>): number {
-  return items.reduce(
-    (sum, item) => sum + Math.max(item.quantity - lineQuantity(lines[item.id], isSerializedItem(item)), 0),
-    0,
-  );
+  return sumQty(
+    items.map((item) =>
+      Decimal.max(qty(item.quantity).minus(lineQuantity(lines[item.id], isSerializedItem(item))), 0),
+    ),
+  ).toNumber();
 }
 
 export function receptionProblem(
@@ -287,8 +290,8 @@ export function receptionProblem(
 ): string | null {
   for (const item of items) {
     const received = lineQuantity(lines[item.id], isSerializedItem(item));
-    if (received > item.quantity) {
-      return `De ${item.description} se despacharon ${item.quantity}: no pueden llegar más`;
+    if (qty(received).gt(qty(item.quantity))) {
+      return `De ${item.description} se despacharon ${formatQty(item.quantity)}: no pueden llegar más`;
     }
   }
   if (missingUnits(items, lines) > 0 && notes.trim().length < 5) {

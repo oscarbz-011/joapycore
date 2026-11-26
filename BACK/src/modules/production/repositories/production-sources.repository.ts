@@ -1,3 +1,4 @@
+import { qty } from '../../../common/units/quantity';
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../prisma/prisma.service';
 
@@ -28,6 +29,6 @@ export class ProductionSourcesRepository {
       where: { tenantId, productId: { in: productIds } },
       _sum: { quantity: true },
     });
-    return new Map(sums.map((s) => [s.productId, s._sum.quantity ?? 0]));
+    return new Map(sums.map((s) => [s.productId, qty(s._sum.quantity)]));
   }
 }

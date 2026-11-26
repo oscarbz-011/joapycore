@@ -1,5 +1,6 @@
 "use client";
 
+import { formatQty, qty } from "@/lib/quantity";
 import { apiErrorMessage } from "@/lib/api/api-error";
 import { OrderDirectDelivery } from "@/components/sales/order-direct-delivery";
 import { Slot } from "@/modules/slot";
@@ -283,7 +284,7 @@ function CreateOrderModal({
         : listTotal * (1 - (combo.discountPercentage ?? 0) / 100);
 
     const newLines: LineItem[] = combo.items.map((comboItem, idx) => {
-      const lineListPrice = comboItem.product.salePrice * comboItem.quantity;
+      const lineListPrice = money(comboItem.product.salePrice).mul(comboItem.quantity).toNumber();
       // Reparte targetTotal proporcionalmente al peso de cada línea en el
       // precio de lista, así cada línea queda con un precio con sentido y
       // la suma da exacto — el ajuste de redondeo va en la última línea.
@@ -291,7 +292,7 @@ function CreateOrderModal({
       const allocated = isLast
         ? targetTotal -
           combo.items.slice(0, -1).reduce((s, it) => {
-            const w = (it.product.salePrice * it.quantity) / (listTotal || 1);
+            const w = money(it.product.salePrice).mul(it.quantity).toNumber() / (listTotal || 1);
             return s + Math.round(targetTotal * w);
           }, 0)
         : Math.round(targetTotal * (lineListPrice / (listTotal || 1)));
@@ -300,8 +301,10 @@ function CreateOrderModal({
       return {
         productId: comboItem.productId,
         product,
-        quantity: comboItem.quantity,
-        unitPrice: comboItem.quantity > 0 ? allocated / comboItem.quantity : 0,
+        quantity: qty(comboItem.quantity).toNumber(),
+        unitPrice: qty(comboItem.quantity).gt(0)
+          ? money(allocated).div(qty(comboItem.quantity)).toNumber()
+          : 0,
         serialInput: "",
         comboGroupId,
         comboId: combo.id,
@@ -1268,10 +1271,10 @@ function OrderDetailPanel({
                 </div>
                 <div className="text-right shrink-0">
                   <p className="text-sm text-muted-foreground">
-                    {item.quantity} × {formatPrice(itemUnitPrice(order, item))}
+                    {formatQty(item.quantity)} × {formatPrice(itemUnitPrice(order, item))}
                   </p>
                   <p className="text-sm font-medium text-foreground">
-                    {formatPrice(item.quantity * itemUnitPrice(order, item))}
+                    {formatPrice(money(itemUnitPrice(order, item)).mul(item.quantity).toNumber())}
                   </p>
                 </div>
               </div>

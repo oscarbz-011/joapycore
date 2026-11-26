@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import {
   buildCreditLines,
   creditableItems,
@@ -31,11 +32,11 @@ describe('creditableItems', () => {
     const result = creditableItems(2_231_500, items, new Map([['ii-2', 1]]));
     expect(result[0]).toMatchObject({
       unitPrice: 1_100_000,
-      creditableQuantity: 2,
+      creditableQuantity: new Prisma.Decimal(2),
     });
     expect(result[1]).toMatchObject({
       unitPrice: 10_500,
-      creditableQuantity: 2,
+      creditableQuantity: new Prisma.Decimal(2),
     });
   });
 
@@ -99,7 +100,7 @@ describe('buildCreditLines', () => {
   });
 
   it.each([
-    [[{ invoiceItemId: 'ii-1', quantity: 3 }], 'hasta 2 unidades'],
+    [[{ invoiceItemId: 'ii-1', quantity: 3 }], 'se pueden acreditar hasta 2'],
     [[{ invoiceItemId: 'otro', quantity: 1 }], 'no es de esta factura'],
     [
       [

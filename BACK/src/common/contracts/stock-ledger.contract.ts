@@ -1,11 +1,12 @@
 import type { Prisma } from '@prisma/client';
 import type { StockDemand } from '../utils/stock-availability.util';
+import type { Quantity, QuantityValue } from '../units/quantity';
 
 /** Línea de un pedido que mueve stock. */
 export interface StockLine {
   saleItemId: string;
   productId: string | null;
-  quantity: number;
+  quantity: QuantityValue;
   warehouseId: string | null;
   isSerialized: boolean;
 }
@@ -13,7 +14,7 @@ export interface StockLine {
 /** Mercadería devuelta por el cliente que vuelve al stock. */
 export interface ReturnLine {
   saleItemId: string;
-  quantity: number;
+  quantity: QuantityValue;
   serialNumbers: string[];
 }
 
@@ -27,7 +28,7 @@ export interface ReturnableItem {
 /** Mercadería que pasa de un depósito a otro. */
 export interface TransferLine {
   productId: string;
-  quantity: number;
+  quantity: QuantityValue;
   serialNumbers: string[];
 }
 
@@ -54,7 +55,7 @@ export interface StockReception {
 /** Lo que hay disponible de un producto en un depósito. */
 export interface AvailableStock {
   productId: string;
-  quantity: number;
+  quantity: Quantity;
   /** N/S en stock y sin asignar a una venta (solo serializados). */
   serialNumbers: string[];
 }
@@ -98,7 +99,7 @@ export interface StockLedger {
     tx: Prisma.TransactionClient,
     tenantId: string,
     itemIds: string[],
-  ): Promise<Map<string, number>>;
+  ): Promise<Map<string, Quantity>>;
   /** Revierte la reserva vigente de cada ítem, si tiene. */
   releaseReservations(
     tx: Prisma.TransactionClient,

@@ -1,3 +1,4 @@
+import type { QuantityValue } from '../../../common/units/quantity';
 import { Injectable } from '@nestjs/common';
 import { PurchaseOrderStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
@@ -237,7 +238,7 @@ export class PurchaseOrdersRepository implements PurchaseOrderPdf {
 
   updateItemReceivedQty(
     id: string,
-    receivedQty: number,
+    receivedQty: QuantityValue,
     client: PrismaClientOrTx = this.prisma,
   ) {
     return client.purchaseOrderItem.update({

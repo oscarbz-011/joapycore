@@ -1,4 +1,5 @@
 "use client";
+import { formatQty } from '@/lib/quantity';
 import { money, roundGuaranies, sumMoney } from "@/lib/money";
 
 import { apiErrorMessage } from "@/lib/api/api-error";
@@ -432,7 +433,7 @@ export function InvoiceDetailModal({
                             {item.description}
                           </td>
                           <td className="px-4 py-2.5 text-center text-muted-foreground">
-                            {item.quantity}
+                            {formatQty(item.quantity)}
                           </td>
                           <td className="px-4 py-2.5 text-right font-mono text-muted-foreground">
                             {formatPrice(Number(item.unitPrice))}

@@ -263,7 +263,7 @@ model InvoiceItem {
   id          String  @id @default(uuid())
   invoiceId   String  @map("invoice_id")
   description String
-  quantity    Int
+  quantity    Decimal @db.Decimal(18, 8)
   unitPrice   Decimal @map("unit_price") @db.Decimal(23, 8)
   total       Decimal @db.Decimal(23, 8)
 
@@ -346,13 +346,13 @@ model CreditNoteItem {
   creditNoteId    String   @map("credit_note_id")
   invoiceItemId   String?  @map("invoice_item_id")
   description     String
-  quantity        Int
+  quantity        Decimal @db.Decimal(18, 8)
   unitPrice       Decimal  @map("unit_price") @db.Decimal(23, 8)
   total           Decimal  @db.Decimal(23, 8)
   ivaRate         Decimal? @map("iva_rate") @db.Decimal(11, 8)
   ivaAmount       Decimal? @map("iva_amount") @db.Decimal(23, 8)
   // Cuánto de lo devuelto volvió al stock y con qué números de serie.
-  restockQuantity Int      @default(0) @map("restock_quantity")
+  restockQuantity Decimal  @default(0) @map("restock_quantity") @db.Decimal(18, 8)
   serialNumbers   String[] @default([]) @map("serial_numbers")
 
   creditNote  CreditNote   @relation(fields: [creditNoteId], references: [id])
@@ -529,10 +529,10 @@ model RemissionNoteItem {
   invoiceItemId    String?  @map("invoice_item_id")
   description      String
   unitCode         Int      @map("unit_code")
-  quantity         Int
+  quantity         Decimal @db.Decimal(18, 8)
   serialNumbers    String[] @default([]) @map("serial_numbers")
   // Lo que llegó al destino; null mientras el traslado está en tránsito.
-  receivedQuantity Int?     @map("received_quantity")
+  receivedQuantity Decimal? @map("received_quantity") @db.Decimal(18, 8)
   receivedSerials  String[] @default([]) @map("received_serials")
 
   remissionNote RemissionNote @relation(fields: [remissionNoteId], references: [id])

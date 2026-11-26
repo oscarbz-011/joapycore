@@ -1,4 +1,5 @@
 'use client';
+import { formatQty, qty } from '@/lib/quantity';
 import { sumMoney } from '@/lib/money';
 
 import type { ReactNode } from 'react';
@@ -246,12 +247,12 @@ export default function CreditNoteDetailPage() {
                   {note.items.map((item) => (
                     <tr key={item.id}>
                       <td className="px-5 py-3 font-medium text-foreground">{item.description}</td>
-                      <td className="px-5 py-3 text-right tabular-nums text-muted-foreground">{item.quantity}</td>
+                      <td className="px-5 py-3 text-right tabular-nums text-muted-foreground">{formatQty(item.quantity)}</td>
                       <td className="px-5 py-3 text-right tabular-nums text-muted-foreground">{money(Number(item.unitPrice))}</td>
                       <td className="px-5 py-3 text-right text-muted-foreground">{ivaLabel(item.ivaRate)}</td>
                       <td className="px-5 py-3 text-right font-medium tabular-nums text-foreground">{money(Number(item.total))}</td>
                       <td className="px-5 py-3 text-right tabular-nums text-muted-foreground">
-                        {item.restockQuantity > 0 ? item.restockQuantity : '—'}
+                        {qty(item.restockQuantity).gt(0) ? formatQty(item.restockQuantity) : '—'}
                       </td>
                       <td className="px-5 py-3 font-mono text-xs text-muted-foreground">
                         {item.serialNumbers.length > 0 ? item.serialNumbers.join(', ') : '—'}
