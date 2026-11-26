@@ -51,6 +51,8 @@ export class StockSourcesRepository {
         id: true,
         productId: true,
         quantity: true,
+        unitCode: true,
+        unitFactor: true,
         warehouseId: true,
         product: { select: { name: true, unitCode: true, isSerialized: true } },
       },

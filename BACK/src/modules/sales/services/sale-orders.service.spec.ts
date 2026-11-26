@@ -80,7 +80,10 @@ describe('SaleOrdersService', () => {
     findPendingApprovals: jest.Mock;
     findLastQuoteNumber: jest.Mock;
   };
-  let productsRepository: { findManyByIds: jest.Mock };
+  let productsRepository: {
+    findManyByIds: jest.Mock;
+    findPresentationsByIds: jest.Mock;
+  };
   let guarantorsRepository: { findBySaleOrder: jest.Mock; create: jest.Mock };
   let creditEvaluationService: {
     getCustomerCreditHistory: jest.Mock;
@@ -113,7 +116,10 @@ describe('SaleOrdersService', () => {
       findPendingApprovals: jest.fn(),
       findLastQuoteNumber: jest.fn().mockResolvedValue(null),
     };
-    productsRepository = { findManyByIds: jest.fn() };
+    productsRepository = {
+      findManyByIds: jest.fn(),
+      findPresentationsByIds: jest.fn().mockResolvedValue([]),
+    };
     guarantorsRepository = {
       findBySaleOrder: jest.fn().mockResolvedValue([]),
       create: jest.fn().mockResolvedValue({ id: 'guarantor-1' }),
@@ -545,6 +551,85 @@ describe('SaleOrdersService', () => {
       expect(tx.stockMovement.create).not.toHaveBeenCalled();
     });
 
+    it('sells a presentation and reserves what it holds in the product unit', async () => {
+      productsRepository.findManyByIds.mockResolvedValue([
+        makeProduct({ isSerialized: false, unitCode: 109, name: 'MDF 18 mm' }),
+      ]);
+      productsRepository.findPresentationsByIds.mockResolvedValue([
+        {
+          id: 'pres-1',
+          productId: 'prod-1',
+          name: 'Plancha entera',
+          unitCode: 77,
+          factor: new Prisma.Decimal('5.0325'),
+          isActive: true,
+        },
+      ]);
+
+      await service.create(
+        'tenant-1',
+        {
+          ...baseDto,
+          items: [{ ...baseDto.items[0], presentationId: 'pres-1' }],
+        },
+        undefined,
+        false,
+        ['sales:create'],
+      );
+
+      expect(productsRepository.findPresentationsByIds).toHaveBeenCalledWith(
+        'tenant-1',
+        ['pres-1'],
+      );
+      expect(tx.saleOrderItem.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          quantity: 2,
+          presentationId: 'pres-1',
+          presentationName: 'Plancha entera',
+          unitCode: 77,
+          unitFactor: new Prisma.Decimal('5.0325'),
+        }),
+      });
+      expect(tx.stockMovement.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          type: 'RESERVED',
+          quantity: new Prisma.Decimal('-10.065'),
+        }),
+      });
+    });
+
+    it('sells cuts by pieces and reserves the area they take', async () => {
+      productsRepository.findManyByIds.mockResolvedValue([
+        makeProduct({ isSerialized: false, unitCode: 109, name: 'MDF 18 mm' }),
+      ]);
+
+      await service.create(
+        'tenant-1',
+        {
+          ...baseDto,
+          items: [{ ...baseDto.items[0], cut: { length: 1.2, width: 0.6 } }],
+        },
+        undefined,
+        false,
+        ['sales:create'],
+      );
+
+      expect(tx.saleOrderItem.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          quantity: 2,
+          unitFactor: new Prisma.Decimal('0.72'),
+          cutLength: new Prisma.Decimal('1.2'),
+          cutWidth: new Prisma.Decimal('0.6'),
+        }),
+      });
+      expect(tx.stockMovement.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          type: 'RESERVED',
+          quantity: new Prisma.Decimal('-1.44'),
+        }),
+      });
+    });
+
     it('omits financedUnitPrice for a cash sale', async () => {
       productsRepository.findManyByIds.mockResolvedValue([
         makeProduct({ isSerialized: false, unitCode: 77 }),
@@ -954,6 +1039,30 @@ describe('SaleOrdersService', () => {
         data: expect.objectContaining({
           type: 'RESERVED',
           quantity: -2,
+          referenceId: 'item-1',
+        }),
+      });
+    });
+
+    it('reserves a line sold in presentations in the product unit', async () => {
+      tx.saleOrderItem.findMany.mockResolvedValue([
+        {
+          ...makeOrderItem(),
+          unitFactor: new Prisma.Decimal(100),
+          warehouseId: 'wh-1',
+          product: { name: 'Cable', isSerialized: false, unitCode: 87 },
+        },
+      ]);
+      saleOrdersRepository.findById.mockResolvedValue(
+        makeOrder({ status: 'CONFIRMED' }),
+      );
+
+      await service.confirm('tenant-1', 'order-1');
+
+      expect(tx.stockMovement.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          type: 'RESERVED',
+          quantity: -200,
           referenceId: 'item-1',
         }),
       });

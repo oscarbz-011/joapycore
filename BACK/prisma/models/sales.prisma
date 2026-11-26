@@ -291,6 +291,18 @@ model SaleOrderItem {
   quantity    Decimal @db.Decimal(18, 8)
   unitPrice   Decimal @map("unit_price") @db.Decimal(23, 8)
 
+  // En qué se vendió: `quantity` y `unitPrice` están en esa unidad y el stock
+  // mueve quantity × unitFactor en la unidad del producto. Sin presentación
+  // ni corte, factor 1. El nombre queda copiado para que el historial no
+  // cambie si se edita la presentación.
+  presentationId   String?  @map("presentation_id")
+  presentationName String?  @map("presentation_name")
+  unitCode         Int?     @map("unit_code")
+  unitFactor       Decimal  @default(1) @map("unit_factor") @db.Decimal(18, 8)
+  cutLength        Decimal? @map("cut_length") @db.Decimal(12, 3)
+  cutWidth         Decimal? @map("cut_width") @db.Decimal(12, 3)
+  cutHeight        Decimal? @map("cut_height") @db.Decimal(12, 3)
+
   // Notas/especificaciones opcionales por línea (dimensiones, materiales,
   // etc.) — uso libre, pensado para presupuestos de rubros con líneas a
   // medida (carpintería, herrería). No afecta precio ni stock.

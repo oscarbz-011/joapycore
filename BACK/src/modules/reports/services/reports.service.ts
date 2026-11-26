@@ -1,4 +1,4 @@
-import { qty, sumQty } from '../../../common/units/quantity';
+import { baseQuantity, qty, sumQty } from '../../../common/units/quantity';
 import type { QuantityValue } from '../../../common/units/quantity';
 import {
   money,
@@ -66,7 +66,8 @@ export class ReportsService {
           quantity: qty(0),
           revenue: 0,
         };
-        e.quantity = qty(e.quantity).plus(item.quantity);
+        // En la unidad del producto: suma bien aunque se venda en presentaciones.
+        e.quantity = qty(e.quantity).plus(baseQuantity(item));
         e.revenue = money(e.revenue)
           .plus(money(item.unitPrice).mul(item.quantity))
           .toNumber();

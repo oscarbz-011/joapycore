@@ -420,6 +420,8 @@ model SalesConfig {
   id            String   @id @default(uuid())
   tenantId      String   @unique @map("tenant_id")
   combosEnabled Boolean  @default(false) @map("combos_enabled")
+  // Vender en presentaciones y cortes a medida. null = lo que trae el rubro.
+  presentationsEnabled Boolean? @map("presentations_enabled")
   createdAt     DateTime @default(now()) @map("created_at")
   updatedAt     DateTime @updatedAt @map("updated_at")
 

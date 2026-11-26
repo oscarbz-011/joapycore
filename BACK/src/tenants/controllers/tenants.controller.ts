@@ -248,15 +248,12 @@ export class TenantsController {
   @Put('sales-config')
   @Permissions('tenants:update')
   @ApiOperation({
-    summary: 'Enable or disable sales sub-features (combos, etc.)',
+    summary: 'Enable or disable sales sub-features (combos, presentations)',
   })
   setSalesConfig(
     @CurrentTenant() tenantId: string,
     @Body() dto: UpsertSalesConfigDto,
   ) {
-    return this.salesConfigService.setCombosEnabled(
-      tenantId,
-      dto.combosEnabled,
-    );
+    return this.salesConfigService.update(tenantId, dto);
   }
 }

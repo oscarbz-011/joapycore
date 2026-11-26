@@ -80,6 +80,13 @@ export class ProductsRepository {
     });
   }
 
+  findPresentationsByIds(tenantId: string, ids: string[]) {
+    if (ids.length === 0) return Promise.resolve([]);
+    return this.prisma.productPresentation.findMany({
+      where: { tenantId, id: { in: ids } },
+    });
+  }
+
   findForTransfer(
     tenantId: string,
     ids: string[],

@@ -29,6 +29,8 @@ import { UnlocatedStockService } from './services/unlocated-stock.service';
 import { WarehousesModule } from '../warehouses/warehouses.module';
 import { AlertsModule } from '../alerts/alerts.module';
 
+import { ProductPresentationsService } from './services/product-presentations.service';
+import { ProductPresentationsRepository } from './repositories/product-presentations.repository';
 @Module({
   imports: [WarehousesModule, AlertsModule],
   controllers: [
@@ -44,6 +46,7 @@ import { AlertsModule } from '../alerts/alerts.module';
     BrandsService,
     CategoriesService,
     ProductsService,
+    ProductPresentationsService,
     StockEntryService,
     StockService,
     UnlocatedStockService,
@@ -52,6 +55,7 @@ import { AlertsModule } from '../alerts/alerts.module';
     ProductsRepository,
     ProductUnitsRepository,
     ProductSuppliersRepository,
+    ProductPresentationsRepository,
     ProductBatchesRepository,
     StockMovementsRepository,
     StockRepository,

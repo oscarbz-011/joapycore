@@ -1,3 +1,4 @@
+import { baseQuantity } from '../../../common/units/quantity';
 import { Injectable } from '@nestjs/common';
 import { OnDomainEvent } from '../../../common/events/on-domain-event.decorator';
 import { PrismaService } from '../../../prisma/prisma.service';
@@ -50,7 +51,7 @@ export class InventoryOnInvoiceListener {
               productId: item.productId,
               warehouseId: item.warehouseId ?? undefined,
               type: 'IN',
-              quantity: item.quantity,
+              quantity: baseQuantity(item),
               referenceId: invoiceId,
             },
             tx,

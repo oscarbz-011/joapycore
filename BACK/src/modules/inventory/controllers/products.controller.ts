@@ -22,13 +22,21 @@ import { AddProductUnitsDto } from '../dto/add-product-units.dto';
 import { CreateStockMovementDto } from '../dto/create-stock-movement.dto';
 import { CreateProductSupplierDto } from '../dto/create-product-supplier.dto';
 import { UpdateProductSupplierDto } from '../dto/update-product-supplier.dto';
+import {
+  CreateProductPresentationDto,
+  UpdateProductPresentationDto,
+} from '../dto/product-presentation.dto';
+import { ProductPresentationsService } from '../services/product-presentations.service';
 
 @ApiTags('Inventory')
 @ApiBearerAuth()
 @RequiredModule('inventory')
 @Controller('inventory/products')
 export class ProductsController {
-  constructor(private readonly productsService: ProductsService) {}
+  constructor(
+    private readonly productsService: ProductsService,
+    private readonly presentationsService: ProductPresentationsService,
+  ) {}
 
   @Get()
   @Permissions('inventory:products:read')
@@ -170,5 +178,37 @@ export class ProductsController {
     @Param('supplierId') supplierId: string,
   ) {
     return this.productsService.removeProductSupplier(tenantId, id, supplierId);
+  }
+
+  // ── Presentations ────────────────────────────────────────────────────────────
+
+  @Get(':id/presentations')
+  @Permissions('inventory:products:read')
+  @ApiOperation({ summary: 'Listar las presentaciones del producto' })
+  getPresentations(@CurrentTenant() tenantId: string, @Param('id') id: string) {
+    return this.presentationsService.list(tenantId, id);
+  }
+
+  @Post(':id/presentations')
+  @Permissions('inventory:products:update')
+  @ApiOperation({ summary: 'Agregar una presentación al producto' })
+  addPresentation(
+    @CurrentTenant() tenantId: string,
+    @Param('id') id: string,
+    @Body() dto: CreateProductPresentationDto,
+  ) {
+    return this.presentationsService.create(tenantId, id, dto);
+  }
+
+  @Patch(':id/presentations/:presentationId')
+  @Permissions('inventory:products:update')
+  @ApiOperation({ summary: 'Editar o desactivar una presentación' })
+  updatePresentation(
+    @CurrentTenant() tenantId: string,
+    @Param('id') id: string,
+    @Param('presentationId') presentationId: string,
+    @Body() dto: UpdateProductPresentationDto,
+  ) {
+    return this.presentationsService.update(tenantId, id, presentationId, dto);
   }
 }
