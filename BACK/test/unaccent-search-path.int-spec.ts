@@ -4,32 +4,48 @@
  * de la base no recrea clientes ni productos (sus columnas search_text usan
  * esta función).
  *
+ * CI crea el schema con `prisma db push`, que no corre el SQL de las
+ * migraciones: la prueba lo aplica ella misma y deshace todo al terminar.
+ *
  * Correr con: pnpm test:int
  */
 import 'dotenv/config';
-import { ConfigService } from '@nestjs/config';
-import { PrismaService } from '../src/prisma/prisma.service';
+import { readFileSync } from 'fs';
+import { join } from 'path';
+import { Client } from 'pg';
 
-describe('immutable_unaccent (PostgreSQL)', () => {
-  let prisma: PrismaService;
+const MIGRATION = join(
+  __dirname,
+  '../prisma/migrations/20261126100000_unaccent_search_path/migration.sql',
+);
+
+const describeWithOwner = process.env.MIGRATE_DATABASE_URL
+  ? describe
+  : describe.skip;
+
+describeWithOwner('immutable_unaccent (PostgreSQL)', () => {
+  const owner = new Client({
+    connectionString: process.env.MIGRATE_DATABASE_URL,
+  });
 
   beforeAll(async () => {
-    prisma = new PrismaService(new ConfigService(process.env));
-    await prisma.$connect();
+    await owner.connect();
+    await owner.query('BEGIN');
+    await owner.query('CREATE EXTENSION IF NOT EXISTS unaccent');
+    await owner.query(readFileSync(MIGRATION, 'utf8'));
   });
 
   afterAll(async () => {
-    await prisma.$disconnect();
+    await owner.query('ROLLBACK');
+    await owner.end();
   });
 
   it('removes accents with an empty search_path, as during a restore', async () => {
-    const [row] = await prisma.$transaction(async (tx) => {
-      await tx.$executeRawUnsafe(`SELECT set_config('search_path', '', true)`);
-      return tx.$queryRawUnsafe<{ value: string }[]>(
-        `SELECT public.immutable_unaccent('Benítez Ñandutí') AS value`,
-      );
-    });
+    await owner.query(`SELECT set_config('search_path', '', true)`);
+    const { rows } = await owner.query<{ value: string }>(
+      `SELECT public.immutable_unaccent('Benítez Ñandutí') AS value`,
+    );
 
-    expect(row.value).toBe('Benitez Nanduti');
+    expect(rows[0].value).toBe('Benitez Nanduti');
   });
 });
