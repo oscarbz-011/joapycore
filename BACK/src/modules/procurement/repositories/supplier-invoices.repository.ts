@@ -16,7 +16,7 @@ const RECEIPT_FOR_INVOICE = {
         id: true,
         quantity: true,
         unitCost: true,
-        product: { select: { id: true, name: true, unit: true } },
+        product: { select: { id: true, name: true, unitCode: true } },
       },
     },
   },
@@ -30,7 +30,7 @@ const WITH_DETAIL = {
     include: {
       purchaseReceiptItem: {
         select: {
-          product: { select: { id: true, name: true, unit: true } },
+          product: { select: { id: true, name: true, unitCode: true } },
           purchaseReceipt: { select: { id: true, receiptNumber: true } },
         },
       },

@@ -113,7 +113,6 @@ export async function seedSupermercado(prisma: PrismaClient) {
         tenantId: tenant.id,
         categoryId: categories.get(p.category),
         name: p.name,
-        unit: 'unidad',
         costPrice: p.cost,
         salePrice: p.sale,
         stockInitial: 100,

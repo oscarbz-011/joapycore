@@ -123,8 +123,8 @@ describe('draft of art. 33', () => {
 });
 
 const STOCK: TransferStockRow[] = [
-  { productId: 'p-rice', description: 'Arroz', unit: 'kg', isSerialized: false, quantity: 10, serialNumbers: [] },
-  { productId: 'p-tv', description: 'Televisor', unit: 'unidad', isSerialized: true, quantity: 2, serialNumbers: ['SN-1', 'SN-2'] },
+  { productId: 'p-rice', description: 'Arroz', unitCode: 83, isSerialized: false, quantity: 10, serialNumbers: [] },
+  { productId: 'p-tv', description: 'Televisor', unitCode: 77, isSerialized: true, quantity: 2, serialNumbers: ['SN-1', 'SN-2'] },
 ];
 
 describe('transfer lines', () => {
@@ -152,7 +152,7 @@ const ITEMS: RemitableItem[] = [
     invoiceItemId: 'ii-rice',
     productId: 'p-rice',
     description: 'Arroz',
-    unit: 'kg',
+    unitCode: 83,
     quantity: 10,
     remitted: 4,
     remitable: 6,
@@ -163,7 +163,7 @@ const ITEMS: RemitableItem[] = [
     invoiceItemId: 'ii-tv',
     productId: 'p-tv',
     description: 'Televisor',
-    unit: 'unidad',
+    unitCode: 77,
     quantity: 1,
     remitted: 0,
     remitable: 1,

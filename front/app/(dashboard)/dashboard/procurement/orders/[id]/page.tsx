@@ -1,5 +1,6 @@
 'use client';
 
+import { unitSymbol } from '@/lib/units-of-measure';
 import { useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
@@ -385,7 +386,7 @@ export default function PurchaseOrderDetailPage() {
                           {item.product.model ?? '—'}
                         </td>
                         <td className="px-4 py-3 text-right tabular-nums whitespace-nowrap text-foreground">
-                          {item.quantity} {item.product.unit}
+                          {item.quantity} {unitSymbol(item.product.unitCode)}
                         </td>
                         <td className="px-4 py-3 text-right font-mono tabular-nums whitespace-nowrap text-muted-foreground">
                           {formatPrice(Number(item.unitCost))}

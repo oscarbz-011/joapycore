@@ -1,3 +1,4 @@
+import { DEFAULT_UNIT_CODE } from '../../../common/units/units-of-measure';
 import {
   BadRequestException,
   ConflictException,
@@ -128,7 +129,6 @@ export class ProductsService {
     costPrice: unknown;
     salePrice: unknown;
     categoryId: string | null;
-    unit: string | null;
   }): string[] {
     const missing: string[] = [];
     const num = (v: unknown): number | null =>
@@ -143,7 +143,6 @@ export class ProductsService {
     if (cost === null || cost <= 0) missing.push('precio de costo');
     if (sale === null || sale <= 0) missing.push('precio de venta');
     if (!product.categoryId) missing.push('categoría');
-    if (!product.unit) missing.push('unidad de medida');
     return missing;
   }
 
@@ -155,7 +154,6 @@ export class ProductsService {
       costPrice: dto.costPrice,
       salePrice: dto.salePrice,
       categoryId: dto.categoryId ?? null,
-      unit: dto.unit ?? 'unidad',
     });
 
     // El tipo se pide solo si el caller lo manda; si no, lo define el rubro
@@ -184,7 +182,7 @@ export class ProductsService {
       isSerialized: dto.isSerialized,
       usesLots: dto.usesLots ?? false,
       stockMin: dto.stockMin,
-      unit: dto.unit ?? 'unidad',
+      unitCode: dto.unitCode ?? DEFAULT_UNIT_CODE,
       costPrice: dto.costPrice,
       salePrice: dto.salePrice,
       status: missing.length ? ProductStatus.DRAFT : ProductStatus.ACTIVE,
@@ -202,7 +200,6 @@ export class ProductsService {
         costPrice: dto.costPrice ?? current.costPrice,
         salePrice: dto.salePrice ?? current.salePrice,
         categoryId: dto.categoryId ?? current.categoryId,
-        unit: dto.unit ?? current.unit,
       });
       if (missing.length) {
         throw new UnprocessableEntityException(

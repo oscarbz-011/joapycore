@@ -75,7 +75,7 @@ export class DocumentSourcesRepository {
         branch: true,
         supplier: true,
         items: {
-          include: { product: { select: { name: true, unit: true } } },
+          include: { product: { select: { name: true, unitCode: true } } },
         },
       },
     });

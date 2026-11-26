@@ -1,9 +1,11 @@
+import { UNIT_CODES } from '../../../common/units/units-of-measure';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import {
   ArrayUnique,
   IsArray,
   IsBoolean,
   IsEnum,
+  IsIn,
   IsInt,
   IsNumber,
   IsOptional,
@@ -45,10 +47,14 @@ export class UpdateProductDto {
   @IsString()
   description?: string;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({
+    description: 'Código de la tabla de unidades de medida de SIFEN',
+  })
   @IsOptional()
-  @IsString()
-  unit?: string;
+  @IsIn(UNIT_CODES, {
+    message: 'La unidad de medida no está en la tabla de SIFEN',
+  })
+  unitCode?: number;
 
   @ApiPropertyOptional()
   @IsOptional()

@@ -1,3 +1,4 @@
+import { unitSymbol } from '../../../common/units/units-of-measure';
 import { money, sumMoney, type MoneyValue } from '../../../common/money/money';
 import { numberToWordsEs } from '../../../common/utils/number-to-words.util';
 import type { PdfTableVariable } from '../../../files/pdf/tiptap-to-html.converter';
@@ -33,7 +34,7 @@ export interface PurchaseOrderForPdf {
     unitCost: unknown;
     supplierSku: string | null;
     supplierDescription: string | null;
-    product: { name: string; unit: string };
+    product: { name: string; unitCode: number };
   }[];
 }
 
@@ -69,7 +70,7 @@ export function buildPurchaseOrderVariables(order: PurchaseOrderForPdf): {
       item.supplierSku ?? '—',
       item.supplierDescription ?? item.product.name,
       String(item.quantity),
-      item.product.unit,
+      unitSymbol(item.product.unitCode),
       `Gs. ${formatMoney(unitCost)}`,
       `Gs. ${formatMoney(money(unitCost).mul(item.quantity))}`,
     ];

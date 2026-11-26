@@ -80,7 +80,7 @@ const detailSelect = {
       productId: true,
       invoiceItemId: true,
       description: true,
-      unit: true,
+      unitCode: true,
       quantity: true,
       serialNumbers: true,
       receivedQuantity: true,

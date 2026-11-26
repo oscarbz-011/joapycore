@@ -1,5 +1,6 @@
 'use client';
 
+import { unitSymbol } from '@/lib/units-of-measure';
 import { type ReactNode, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
@@ -321,7 +322,7 @@ export default function RemissionNoteDetailPage() {
                   {note.items.map((item) => (
                     <tr key={item.id}>
                       <td className="px-5 py-3 font-medium text-foreground">{item.description}</td>
-                      <td className="px-5 py-3 text-muted-foreground">{item.unit}</td>
+                      <td className="px-5 py-3 text-muted-foreground">{unitSymbol(item.unitCode)}</td>
                       <td className="px-5 py-3 text-right tabular-nums text-foreground">{item.quantity}</td>
                       <td className="px-5 py-3 font-mono text-xs text-muted-foreground">
                         {item.serialNumbers.length > 0 ? item.serialNumbers.join(', ') : '—'}

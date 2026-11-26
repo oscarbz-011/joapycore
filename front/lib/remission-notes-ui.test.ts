@@ -102,8 +102,8 @@ describe('transfer between branches', () => {
     state.search = 'from=wh-a&to=wh-b';
     state.data['remission-notes/transfer-options'] = TRANSFER_OPTIONS;
     state.data['remission-notes/transfer-stock/wh-a'] = [
-      { productId: 'p-rice', description: 'Arroz', unit: 'kg', isSerialized: false, quantity: 10, serialNumbers: [] },
-      { productId: 'p-tv', description: 'Televisor LG', unit: 'unidad', isSerialized: true, quantity: 1, serialNumbers: ['SN-1'] },
+      { productId: 'p-rice', description: 'Arroz', unitCode: 83, isSerialized: false, quantity: 10, serialNumbers: [] },
+      { productId: 'p-tv', description: 'Televisor LG', unitCode: 77, isSerialized: true, quantity: 1, serialNumbers: ['SN-1'] },
     ];
     const html = render(TransferPage, {});
     expect(html).toContain('Central · Centro');
@@ -143,7 +143,7 @@ describe('sale', () => {
         invoiceItemId: 'ii-rice',
         productId: 'p-rice',
         description: 'Arroz',
-        unit: 'kg',
+        unitCode: 83,
         quantity: 10,
         remitted: 4,
         remitable: 6,
@@ -242,7 +242,7 @@ const NOTE: RemissionNoteDetail = {
       productId: 'p-tv',
       invoiceItemId: null,
       description: 'Televisor LG',
-      unit: 'unidad',
+      unitCode: 77,
       quantity: 1,
       serialNumbers: ['SN-1'],
       receivedQuantity: null,
@@ -253,7 +253,7 @@ const NOTE: RemissionNoteDetail = {
       productId: 'p-rice',
       invoiceItemId: null,
       description: 'Arroz',
-      unit: 'kg',
+      unitCode: 83,
       quantity: 10,
       serialNumbers: [],
       receivedQuantity: null,

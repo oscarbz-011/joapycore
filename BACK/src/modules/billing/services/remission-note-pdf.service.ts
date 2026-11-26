@@ -1,3 +1,4 @@
+import { unitSymbol } from '../../../common/units/units-of-measure';
 import { Injectable, Logger } from '@nestjs/common';
 import { FilesService } from '../../../files/files.service';
 import { PdfService } from '../../../files/pdf/pdf.service';
@@ -135,7 +136,7 @@ export class RemissionNotePdfService {
           headers: ['Cantidad', 'Unidad', 'Descripción', 'N° de serie'],
           rows: note.items.map((item) => [
             String(item.quantity),
-            item.unit,
+            unitSymbol(item.unitCode),
             item.description,
             item.serialNumbers.join(', '),
           ]),

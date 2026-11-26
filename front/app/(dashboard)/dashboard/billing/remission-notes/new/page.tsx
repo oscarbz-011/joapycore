@@ -1,5 +1,6 @@
 'use client';
 
+import { unitSymbol } from '@/lib/units-of-measure';
 import { Suspense, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -316,7 +317,7 @@ function NewTransferRemission() {
                                 </fieldset>
                               )}
                             </td>
-                            <td className="px-4 py-3 text-muted-foreground">{row.unit}</td>
+                            <td className="px-4 py-3 text-muted-foreground">{unitSymbol(row.unitCode)}</td>
                             <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">{row.quantity}</td>
                             <td className="px-4 py-3 text-right">
                               {row.isSerialized ? (

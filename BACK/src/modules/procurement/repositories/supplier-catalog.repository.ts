@@ -17,7 +17,7 @@ export interface CatalogFilters {
 const UNLINKED_SCAN_LIMIT = 500;
 
 const ITEM_INCLUDE = {
-  product: { select: { id: true, name: true, unit: true } },
+  product: { select: { id: true, name: true, unitCode: true } },
   priceTiers: {
     select: { minQuantity: true, price: true },
     orderBy: { minQuantity: 'asc' },

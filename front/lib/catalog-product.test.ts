@@ -59,7 +59,7 @@ describe('catalogProductFormFrom', () => {
       name: 'ABRIDOR DE VINHO SMARTFY AV01B 10W BLACK',
       categoryId: '',
       brandId: '',
-      unit: 'unidad',
+      unitCode: 77,
       costPrice: 10_000,
       salePrice: 0,
       isSerialized: false,
@@ -96,7 +96,7 @@ describe('toCatalogProductPayload', () => {
       name: '  Abridor de vino  ',
       categoryId: 'cat-1',
       brandId: 'brand-1',
-      unit: ' ',
+      unitCode: 109,
       salePrice: 80_000,
     });
 
@@ -104,7 +104,7 @@ describe('toCatalogProductPayload', () => {
       name: 'Abridor de vino',
       categoryId: 'cat-1',
       brandId: 'brand-1',
-      unit: 'unidad',
+      unitCode: 109,
       costPrice: 54_000,
       salePrice: 80_000,
       isSerialized: false,

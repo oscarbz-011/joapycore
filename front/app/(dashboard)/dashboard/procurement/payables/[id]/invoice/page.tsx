@@ -1,5 +1,6 @@
 'use client';
 
+import { unitSymbol } from '@/lib/units-of-measure';
 import { useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
@@ -82,14 +83,14 @@ export default function NewSupplierInvoicePage() {
   const receipts = receiptsQuery.data ?? [];
   const chosen = receipts.filter((receipt) => selected.includes(receipt.id));
 
-  const lines: (InvoiceLine & { receiptNumber: number; unit: string })[] = chosen.flatMap(
+  const lines: (InvoiceLine & { receiptNumber: number; unitCode: number })[] = chosen.flatMap(
     (receipt) =>
       receipt.purchaseReceipt.items.map((item) => {
         const edit = edits[item.id] ?? {};
         return {
           receiptItemId: item.id,
           productName: item.product.name,
-          unit: item.product.unit,
+          unitCode: item.product.unitCode,
           receiptNumber: receipt.purchaseReceipt.receiptNumber,
           receivedQuantity: item.quantity,
           receivedUnitCost: item.unitCost,
@@ -418,7 +419,7 @@ export default function NewSupplierInvoicePage() {
                             {line.productName}
                           </td>
                           <td className="px-4 py-3 text-right tabular-nums whitespace-nowrap text-muted-foreground">
-                            {line.receivedQuantity} {line.unit}
+                            {line.receivedQuantity} {unitSymbol(line.unitCode)}
                           </td>
                           <td className="px-4 py-3 text-right font-mono tabular-nums whitespace-nowrap text-muted-foreground">
                             {gs(line.receivedUnitCost)}

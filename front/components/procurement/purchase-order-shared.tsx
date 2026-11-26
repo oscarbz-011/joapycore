@@ -1,4 +1,5 @@
 'use client';
+import { unitSymbol } from '@/lib/units-of-measure';
 import { money, sumMoney } from '@/lib/money';
 
 // Piezas de las órdenes de compra que comparten la lista y la pantalla de
@@ -231,7 +232,7 @@ export function ReceiveModal({
                     {item.product.model && <p className="text-xs text-muted-foreground/60">{item.product.model}</p>}
                   </div>
                   <span className="text-xs text-muted-foreground">
-                    Saldo pendiente: <strong>{pending}</strong> {item.product.unit}
+                    Saldo pendiente: <strong>{pending}</strong> {unitSymbol(item.product.unitCode)}
                   </span>
                 </div>
 

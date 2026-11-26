@@ -123,7 +123,7 @@ describe('RemissionNotesService (PostgreSQL)', () => {
             name,
             status: 'ACTIVE',
             isSerialized,
-            unit: 'unidad',
+            unitCode: 77,
           },
           select: { id: true },
         })

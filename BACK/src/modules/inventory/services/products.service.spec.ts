@@ -305,18 +305,18 @@ describe('ProductsService', () => {
 
       expect(productsRepository.create).toHaveBeenCalledWith(
         'tenant-1',
-        expect.objectContaining({ name: 'Heladera Samsung', unit: 'unidad' }),
+        expect.objectContaining({ name: 'Heladera Samsung', unitCode: 77 }),
       );
     });
 
-    it('uses provided unit when given', async () => {
+    it('uses the SIFEN unit given', async () => {
       productsRepository.create.mockResolvedValue(makeProduct());
 
-      await service.create('tenant-1', { ...baseDto, unit: 'caja' });
+      await service.create('tenant-1', { ...baseDto, unitCode: 131 });
 
       expect(productsRepository.create).toHaveBeenCalledWith(
         'tenant-1',
-        expect.objectContaining({ unit: 'caja' }),
+        expect.objectContaining({ unitCode: 131 }),
       );
     });
 
@@ -451,7 +451,6 @@ describe('ProductsService', () => {
       costPrice: 100,
       salePrice: 150,
       categoryId: 'cat-1',
-      unit: 'unidad',
     };
 
     it('returns an empty list for a complete ficha', () => {
@@ -464,14 +463,8 @@ describe('ProductsService', () => {
           costPrice: null,
           salePrice: null,
           categoryId: null,
-          unit: null,
         }),
-      ).toEqual([
-        'precio de costo',
-        'precio de venta',
-        'categoría',
-        'unidad de medida',
-      ]);
+      ).toEqual(['precio de costo', 'precio de venta', 'categoría']);
     });
 
     it('treats a price of 0 as missing — null is "pendiente", 0 is not a real price here', () => {

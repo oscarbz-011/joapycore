@@ -19,7 +19,7 @@ export interface InvoiceablePayable {
       id: string;
       quantity: number;
       unitCost: number;
-      product: { id: string; name: string; unit: string };
+      product: { id: string; name: string; unitCode: number };
     }[];
   };
 }
@@ -33,7 +33,7 @@ export interface SupplierInvoiceItem {
   receivedQuantity: number;
   receivedUnitCost: number;
   purchaseReceiptItem: {
-    product: { id: string; name: string; unit: string };
+    product: { id: string; name: string; unitCode: number };
     purchaseReceipt: { id: string; receiptNumber: number };
   };
 }

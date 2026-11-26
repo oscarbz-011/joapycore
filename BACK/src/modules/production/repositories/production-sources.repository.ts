@@ -14,7 +14,7 @@ export class ProductionSourcesRepository {
         name: true,
         kind: true,
         status: true,
-        unit: true,
+        unitCode: true,
         isSerialized: true,
       },
     });
