@@ -23,6 +23,9 @@ import {
   formatPrice,
   type LineItem,
   LineItemRow,
+  lineStockQuantity,
+  saleUnitPayload,
+  savedSaleUnit,
   CreditOptions,
 } from "../../../../../../components/sales/order-line-items";
 import { Button } from "@/components/ui/button";
@@ -50,6 +53,11 @@ export default function AdjustOrderPage() {
     queryFn: () =>
       inventoryApi.listProductsWithStock(salesChannelProductFilters("NORMAL")),
   });
+  const { data: salesConfig } = useQuery({
+    queryKey: ["sales-config"],
+    queryFn: settingsApi.getSalesConfig,
+  });
+  const presentationsEnabled = salesConfig?.presentationsEnabled ?? false;
   const { data: creditConfig } = useQuery({
     queryKey: ["credit-config"],
     queryFn: settingsApi.getCredit,
@@ -76,6 +84,8 @@ export default function AdjustOrderPage() {
           unitPrice: i.unitPrice,
           serialInput: i.productUnits.map((u) => u.serialNumber).join("\n"),
           warehouseId: i.warehouseId ?? undefined,
+          saleUnit: savedSaleUnit(i),
+          unitFactor: qty(i.unitFactor ?? 1).toNumber(),
         })),
     );
     setInstallments(order.installments ?? activePlans[0]?.installments ?? 0);
@@ -94,11 +104,12 @@ export default function AdjustOrderPage() {
             productId: it.productId,
             quantity: Number(it.quantity),
             unitPrice: Number(it.unitPrice),
+            ...saleUnitPayload(it),
             warehouseId:
               resolveWarehouseId(
                 it.warehouseId,
                 warehouseChoices(stock, it.productId),
-                Number(it.quantity),
+                lineStockQuantity(it),
               ) || undefined,
             serialNumbers: it.product?.isSerialized
               ? it.serialInput
@@ -145,7 +156,10 @@ export default function AdjustOrderPage() {
     ]);
   }
 
-  const stockIssues = findStockIssues(items, products);
+  const stockIssues = findStockIssues(
+    items.map((it) => ({ productId: it.productId, quantity: lineStockQuantity(it) })),
+    products,
+  );
   const canSave =
     items.length > 0 &&
     items.every((it) => it.productId && it.quantity > 0) &&
@@ -254,6 +268,7 @@ export default function AdjustOrderPage() {
               item={item}
               products={products}
               stock={stock}
+              presentationsEnabled={presentationsEnabled}
               onChange={(updated) => updateItem(index, updated)}
               onRemove={() => removeItem(index)}
             />

@@ -189,6 +189,15 @@ export interface SaleOrderItem {
   financedUnitPrice: number | null;
   ivaRate: number | null;
   ivaAmount: number | null;
+  // En qué se vendió: cantidad y precio están en esa presentación o corte, y
+  // el stock mueve quantity × unitFactor en la unidad del producto.
+  presentationId?: string | null;
+  presentationName?: string | null;
+  unitCode?: number | null;
+  unitFactor?: QuantityValue;
+  cutLength?: QuantityValue | null;
+  cutWidth?: QuantityValue | null;
+  cutHeight?: QuantityValue | null;
   product: {
     id: string;
     name: string;
@@ -266,6 +275,8 @@ export interface CreateSaleOrderItem {
   comboId?: string;
   comboGroupId?: string;
   specNotes?: string;
+  presentationId?: string;
+  cut?: { length?: number; width?: number; height?: number };
 }
 
 // ── Combos ──────────────────────────────────────────────────────────────────

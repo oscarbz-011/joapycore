@@ -1,5 +1,8 @@
 'use client';
 import { quantityDecimals } from '@/lib/quantity';
+import { SaleUnitPicker, type SaleUnitValue } from '@/components/sales/sale-unit-picker';
+import { lineStockQuantity, saleUnitPayload } from '@/components/sales/order-line-items';
+import { settingsApi } from '@/lib/api/settings';
 import { money, sumMoney } from '@/lib/money';
 
 import { resolveWarehouseId, warehouseChoices } from '@/lib/sale-warehouse';
@@ -41,6 +44,8 @@ interface QuoteLine {
   quantity: number;
   unitPrice: number;
   specNotes: string;
+  saleUnit?: SaleUnitValue;
+  unitFactor?: number | null;
 }
 
 function emptyLine(): QuoteLine {
@@ -63,11 +68,13 @@ function formatPrice(n: number) {
 
 // ── Line row ─────────────────────────────────────────────────────────────────
 
-function QuoteLineRow({ line, products, onChange, onRemove }: {
+function QuoteLineRow({ line, products, onChange, onRemove, presentationsEnabled }: {
   line: QuoteLine; products: Product[];
   onChange: (updated: QuoteLine) => void;
   onRemove: () => void;
+  presentationsEnabled: boolean;
 }) {
+  const soldInOtherUnit = !!(line.saleUnit?.presentationId || line.saleUnit?.cut);
   const subtotal = line.quantity * line.unitPrice;
   return (
     <div className="rounded-2xl border border-border p-3 space-y-2">
@@ -99,7 +106,7 @@ function QuoteLineRow({ line, products, onChange, onRemove }: {
             <SearchSelect<Product>
               items={products}
               value={line.productId}
-              onChange={(id, product) => onChange({ ...line, productId: id, product, unitPrice: product ? Number(product.salePrice) : 0 })}
+              onChange={(id, product) => onChange({ ...line, productId: id, product, unitPrice: product ? Number(product.salePrice) : 0, saleUnit: undefined, unitFactor: 1 })}
               getKey={(p) => p.id}
               getLabel={(p) => `${p.name}${p.model ? ` (${p.model})` : ''}`}
               getDescription={(p) => p.category?.name ?? null}
@@ -117,13 +124,30 @@ function QuoteLineRow({ line, products, onChange, onRemove }: {
           )}
         </div>
         <div className="w-20">
-          <NumericInput value={line.quantity} onChange={(v) => onChange({ ...line, quantity: Math.max(0, v) })} decimals={line.mode === 'CATALOG' ? quantityDecimals(line.product) : 3} className={NUM_CLS} placeholder="Cant." />
+          <NumericInput value={line.quantity} onChange={(v) => onChange({ ...line, quantity: Math.max(0, v) })} decimals={line.mode === 'CATALOG' ? (soldInOtherUnit ? 0 : quantityDecimals(line.product)) : 3} className={NUM_CLS} placeholder="Cant." />
         </div>
         <div className="w-32">
           <NumericInput value={line.unitPrice} onChange={(v) => onChange({ ...line, unitPrice: v })} className={NUM_CLS} placeholder="Precio" />
         </div>
         <div className="w-28 pt-2 text-right text-sm font-medium text-muted-foreground">{formatPrice(subtotal)}</div>
       </div>
+
+      {line.mode === 'CATALOG' && line.product && (
+        <SaleUnitPicker
+          enabled={presentationsEnabled}
+          product={line.product}
+          value={line.saleUnit ?? {}}
+          onChange={(saleUnit, change) =>
+            onChange({
+              ...line,
+              saleUnit,
+              unitFactor: change.factor,
+              unitPrice: change.unitPrice ?? line.unitPrice,
+              quantity: saleUnit.presentationId || saleUnit.cut ? Math.max(1, Math.round(line.quantity)) : line.quantity,
+            })
+          }
+        />
+      )}
 
       <div>
         <Textarea
@@ -155,6 +179,8 @@ export default function NewQuotePage() {
   const [error, setError] = useState('');
 
   const { data: customers = [] } = useQuery({ queryKey: ['sale-customers'], queryFn: salesApi.listCustomers });
+  const { data: salesConfig } = useQuery({ queryKey: ['sales-config'], queryFn: settingsApi.getSalesConfig });
+  const presentationsEnabled = salesConfig?.presentationsEnabled ?? false;
   const { data: products = [] } = useQuery({
     queryKey: ['products', 'NORMAL'],
     queryFn: () =>
@@ -185,7 +211,7 @@ export default function NewQuotePage() {
 
   function goToNewCustomer() {
     const draft: QuoteDraft = {
-      lines: lines.map(({ mode, productId, description, quantity, unitPrice, specNotes }) => ({ mode, productId, description, quantity, unitPrice, specNotes })),
+      lines: lines.map(({ mode, productId, description, quantity, unitPrice, specNotes, saleUnit, unitFactor }) => ({ mode, productId, description, quantity, unitPrice, specNotes, saleUnit, unitFactor })),
       notes,
     };
     sessionStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
@@ -213,9 +239,10 @@ export default function NewQuotePage() {
           unitPrice: Number(l.unitPrice),
           warehouseId:
             l.mode === 'CATALOG'
-              ? resolveWarehouseId(undefined, warehouseChoices(stock, l.productId), Number(l.quantity)) || undefined
+              ? resolveWarehouseId(undefined, warehouseChoices(stock, l.productId), lineStockQuantity(l)) || undefined
               : undefined,
           specNotes: l.specNotes.trim() || undefined,
+          ...(l.mode === 'CATALOG' ? saleUnitPayload(l) : {}),
         })),
       };
       return salesApi.createOrder(dto);
@@ -359,6 +386,7 @@ export default function NewQuotePage() {
                   key={idx}
                   line={line}
                   products={products}
+                  presentationsEnabled={presentationsEnabled}
                   onChange={(updated) => setLines((prev) => prev.map((l, i) => (i === idx ? updated : l)))}
                   onRemove={() => setLines((prev) => prev.filter((_, i) => i !== idx))}
                 />

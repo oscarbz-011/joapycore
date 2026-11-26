@@ -1,6 +1,8 @@
 "use client";
 
-import { formatQty, quantityDecimals } from "@/lib/quantity";
+import { formatQty, qty, quantityDecimals } from "@/lib/quantity";
+import { SaleUnitPicker, type SaleUnitValue } from "./sale-unit-picker";
+import type { CreateSaleOrderItem, SaleOrderItem } from "@/lib/api/sales";
 import { AlertTriangle, Trash2 } from "lucide-react";
 import { NumericInput } from "../numeric-input";
 import { SearchSelect } from "../../app/(dashboard)/dashboard/components/search-select";
@@ -55,6 +57,44 @@ export interface LineItem {
   comboGroupId?: string;
   comboId?: string;
   comboName?: string;
+  // Presentación o corte a medida; vacío = en la unidad del producto.
+  saleUnit?: SaleUnitValue;
+  // Cuánto de la unidad del producto lleva cada unidad vendida (null = falta
+  // medir el corte). Sin presentación ni corte, 1.
+  unitFactor?: number | null;
+}
+
+/** Lo que la línea saca del stock, en la unidad del producto. */
+export function lineStockQuantity(item: Pick<LineItem, "quantity" | "unitFactor">): number {
+  return qty(item.quantity).mul(item.unitFactor ?? 1).toNumber();
+}
+
+/** Presentación o corte de una línea ya guardada, para volver a editarla. */
+export function savedSaleUnit(
+  item: Pick<SaleOrderItem, "presentationId" | "cutLength" | "cutWidth" | "cutHeight">,
+): SaleUnitValue | undefined {
+  if (item.presentationId) return { presentationId: item.presentationId };
+  const size = (value: SaleOrderItem["cutLength"]) =>
+    value == null ? undefined : qty(value).toNumber();
+  if (item.cutLength == null) return undefined;
+  return {
+    cut: {
+      length: size(item.cutLength),
+      width: size(item.cutWidth),
+      height: size(item.cutHeight),
+    },
+  };
+}
+
+/** Presentación o corte de la línea, como lo espera la API. */
+export function saleUnitPayload(
+  item: Pick<LineItem, "saleUnit">,
+): Pick<CreateSaleOrderItem, "presentationId" | "cut"> {
+  if (item.saleUnit?.presentationId) {
+    return { presentationId: item.saleUnit.presentationId };
+  }
+  if (item.saleUnit?.cut) return { cut: item.saleUnit.cut };
+  return {};
 }
 
 export function LineItemRow({
@@ -63,6 +103,7 @@ export function LineItemRow({
   stock,
   onChange,
   onRemove,
+  presentationsEnabled = false,
 }: {
   item: LineItem;
   products: ProductWithStock[];
@@ -70,13 +111,16 @@ export function LineItemRow({
   stock?: StockResult;
   onChange: (updated: LineItem) => void;
   onRemove: () => void;
+  presentationsEnabled?: boolean;
 }) {
   const subtotal = item.quantity * item.unitPrice;
+  const stockQuantity = lineStockQuantity(item);
+  const soldInOtherUnit = !!(item.saleUnit?.presentationId || item.saleUnit?.cut);
   const choices = warehouseChoices(stock, item.productId);
   const warehouseId = resolveWarehouseId(
     item.warehouseId,
     choices,
-    item.quantity,
+    stockQuantity,
   );
   const warehouse = choices.find((choice) => choice.id === warehouseId);
   const unassigned = unassignedStock(stock, item.productId);
@@ -85,7 +129,7 @@ export function LineItemRow({
   const available = warehouse
     ? warehouse.quantity
     : Number(item.product?.stock ?? 0);
-  const insufficientStock = item.product !== null && item.quantity > available;
+  const insufficientStock = item.product !== null && stockQuantity > available;
   return (
     <div
       className={cn(
@@ -106,6 +150,8 @@ export function LineItemRow({
                 unitPrice: product ? Number(product.salePrice) : 0,
                 serialInput: "",
                 warehouseId: undefined,
+                saleUnit: undefined,
+                unitFactor: 1,
               })
             }
             getKey={(p) => p.id}
@@ -126,7 +172,7 @@ export function LineItemRow({
           <NumericInput
             value={item.quantity}
             onChange={(v) => onChange({ ...item, quantity: Math.max(0, v) })}
-            decimals={quantityDecimals(item.product)}
+            decimals={soldInOtherUnit ? 0 : quantityDecimals(item.product)}
             placeholder="Cant."
             className={NUM_CLS}
             required
@@ -152,6 +198,30 @@ export function LineItemRow({
           <Trash2 size={15} />
         </button>
       </div>
+      {item.product && (
+        <SaleUnitPicker
+          enabled={presentationsEnabled}
+          product={{
+            id: item.product.id,
+            unitCode: item.product.unitCode,
+            salePrice: item.product.salePrice,
+            isSerialized: item.product.isSerialized,
+          }}
+          value={item.saleUnit ?? {}}
+          onChange={(saleUnit, change) =>
+            onChange({
+              ...item,
+              saleUnit,
+              unitFactor: change.factor,
+              unitPrice: change.unitPrice ?? item.unitPrice,
+              quantity:
+                saleUnit.presentationId || saleUnit.cut
+                  ? Math.max(1, Math.round(item.quantity))
+                  : item.quantity,
+            })
+          }
+        />
+      )}
       {item.product && choices.length > 0 && (
         <div className="flex flex-wrap items-center gap-2">
           <Label className="text-xs text-muted-foreground">Sale de</Label>
@@ -191,7 +261,7 @@ export function LineItemRow({
         <div className="flex items-center gap-1.5 text-xs font-medium text-destructive">
           <AlertTriangle size={13} />
           Stock insuficiente{warehouse ? ` en ${warehouse.name}` : ""}:
-          disponible {available}, solicitado {formatQty(item.quantity)}.
+          disponible {formatQty(available)}, solicitado {formatQty(stockQuantity)}.
           {unassigned > 0 &&
             ` Hay ${unassigned} sin depósito asignado: asignalo desde Inventario → Movimientos.`}
         </div>

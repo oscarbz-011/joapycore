@@ -55,9 +55,11 @@ export interface CreditConfig {
 }
 
 export interface SalesConfig {
-  id: string;
-  tenantId: string;
   combosEnabled: boolean;
+  /** Ya resuelto: lo que eligió la empresa o, si no eligió, lo de su rubro. */
+  presentationsEnabled: boolean;
+  /** Lo que eligió la empresa; null = sigue a su rubro. */
+  presentationsChosen: boolean | null;
 }
 
 export const settingsApi = {
@@ -152,4 +154,8 @@ export const settingsApi = {
 
   setCombosEnabled: (combosEnabled: boolean): Promise<SalesConfig> =>
     apiClient.put('/tenants/me/sales-config', { combosEnabled }).then((r) => r.data),
+
+  /** null vuelve a lo que trae el rubro de la empresa. */
+  setPresentationsEnabled: (presentationsEnabled: boolean | null): Promise<SalesConfig> =>
+    apiClient.put('/tenants/me/sales-config', { presentationsEnabled }).then((r) => r.data),
 };

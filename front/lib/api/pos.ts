@@ -103,6 +103,8 @@ export interface CreatePosSaleItem {
   // Depósito del que sale el ítem — obligatorio para ítems con producto.
   warehouseId?: string;
   serialNumbers?: string[];
+  presentationId?: string;
+  cut?: { length?: number; width?: number; height?: number };
 }
 
 export interface CreatePosSalePayment {

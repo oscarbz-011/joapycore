@@ -300,6 +300,45 @@ export interface UpdateProductSupplierPayload {
   isPreferred?: boolean;
 }
 
+/** Otra forma de vender un producto; el stock sigue en la unidad del producto. */
+export interface ProductPresentation {
+  id: string;
+  productId: string;
+  name: string;
+  unitCode: number;
+  factor: number;
+  length: number | null;
+  width: number | null;
+  height: number | null;
+  salePrice: number;
+  isActive: boolean;
+}
+
+export interface ProductPresentationPayload {
+  name: string;
+  unitCode?: number;
+  factor?: number;
+  length?: number;
+  width?: number;
+  height?: number;
+  salePrice: number;
+  isActive?: boolean;
+}
+
+const toNumberOrNull = (value: unknown) =>
+  value == null || value === '' ? null : Number(value);
+
+export function normalizePresentation(raw: ProductPresentation): ProductPresentation {
+  return {
+    ...raw,
+    factor: Number(raw.factor),
+    salePrice: Number(raw.salePrice),
+    length: toNumberOrNull(raw.length),
+    width: toNumberOrNull(raw.width),
+    height: toNumberOrNull(raw.height),
+  };
+}
+
 const DECIMAL_FIELDS = [
   'costPrice',
   'salePrice',
@@ -402,6 +441,26 @@ export const inventoryApi = {
 
   removeProductSupplier: (id: string, supplierId: string): Promise<void> =>
     apiClient.delete(`/inventory/products/${id}/suppliers/${supplierId}`).then(() => undefined),
+
+  // Presentaciones
+  getPresentations: (productId: string): Promise<ProductPresentation[]> =>
+    apiClient
+      .get(`/inventory/products/${productId}/presentations`)
+      .then((r) => (r.data as ProductPresentation[]).map(normalizePresentation)),
+
+  addPresentation: (productId: string, dto: ProductPresentationPayload): Promise<ProductPresentation> =>
+    apiClient
+      .post(`/inventory/products/${productId}/presentations`, dto)
+      .then((r) => normalizePresentation(r.data)),
+
+  updatePresentation: (
+    productId: string,
+    id: string,
+    dto: Partial<ProductPresentationPayload>,
+  ): Promise<ProductPresentation> =>
+    apiClient
+      .patch(`/inventory/products/${productId}/presentations/${id}`, dto)
+      .then((r) => normalizePresentation(r.data)),
 
   // Categories
   listCategories: (): Promise<Category[]> =>
