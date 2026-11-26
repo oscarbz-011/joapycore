@@ -1,3 +1,5 @@
+import { qty, sumQty } from '../../../common/units/quantity';
+import type { QuantityValue } from '../../../common/units/quantity';
 import {
   money,
   roundGuaranies,
@@ -30,7 +32,9 @@ export class ReportsService {
       to: dateTo ? new Date(dateTo) : undefined,
     });
 
-    const itemsTotal = (items: { unitPrice: unknown; quantity: number }[]) =>
+    const itemsTotal = (
+      items: { unitPrice: unknown; quantity: QuantityValue }[],
+    ) =>
       sumMoney(
         items.map((i) => money(i.unitPrice as MoneyValue).mul(i.quantity)),
       );
@@ -52,17 +56,17 @@ export class ReportsService {
     // Top products by revenue
     const productMap = new Map<
       string,
-      { name: string; quantity: number; revenue: number }
+      { name: string; quantity: QuantityValue; revenue: number }
     >();
     for (const order of orders) {
       for (const item of order.items) {
         if (!item.productId || !item.product) continue; // skip free-text service lines
         const e = productMap.get(item.productId) ?? {
           name: item.product.name,
-          quantity: 0,
+          quantity: qty(0),
           revenue: 0,
         };
-        e.quantity += item.quantity;
+        e.quantity = qty(e.quantity).plus(item.quantity);
         e.revenue = money(e.revenue)
           .plus(money(item.unitPrice).mul(item.quantity))
           .toNumber();
@@ -92,11 +96,9 @@ export class ReportsService {
     const products = await this.stock.productsWithMovements(tenantId);
 
     const items = products.map((p) => {
-      const stock = p.stockMovements.reduce((acc, m) => {
-        if (m.type === 'IN' || m.type === 'ADJUSTMENT') return acc + m.quantity;
-        if (m.type === 'OUT') return acc - m.quantity;
-        return acc;
-      }, 0);
+      // Las salidas y reservas se guardan negativas: el stock es la suma de
+      // todos los movimientos, igual que en el resto del sistema.
+      const stock = sumQty(p.stockMovements.map((m) => m.quantity));
       return {
         id: p.id,
         name: p.name,
@@ -117,10 +119,10 @@ export class ReportsService {
 
     const totalStockValue = sumMoney(items.map((i) => i.stockValue)).toNumber();
     const lowStock = items.filter(
-      (i) => !i.isSerialized && i.stock > 0 && i.stock <= 5,
+      (i) => !i.isSerialized && i.stock.gt(0) && i.stock.lte(5),
     ).length;
     const outOfStock = items.filter(
-      (i) => !i.isSerialized && i.stock <= 0,
+      (i) => !i.isSerialized && i.stock.lte(0),
     ).length;
 
     return {

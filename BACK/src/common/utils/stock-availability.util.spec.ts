@@ -1,3 +1,4 @@
+import { qty, sumQty } from '../units/quantity';
 import { UnprocessableEntityException } from '@nestjs/common';
 import {
   aggregateDemands,
@@ -18,7 +19,7 @@ describe('aggregateDemands', () => {
         {
           productId: 'a',
           warehouseId: 'wh-1',
-          quantity: 4,
+          quantity: qty(4),
           name: 'Heladera',
         },
       ],
@@ -27,7 +28,7 @@ describe('aggregateDemands', () => {
         {
           productId: 'a',
           warehouseId: 'wh-2',
-          quantity: 1,
+          quantity: qty(1),
           name: 'Heladera',
         },
       ],
@@ -40,7 +41,7 @@ describe('assertDemandsCovered', () => {
     new Map(
       entries.map(([id, quantity, name]) => [
         `${id}::wh-1`,
-        { productId: id, warehouseId: 'wh-1', quantity, name },
+        { productId: id, warehouseId: 'wh-1', quantity: qty(quantity), name },
       ]),
     );
 
@@ -77,6 +78,21 @@ describe('assertDemandsCovered', () => {
     expect(() =>
       assertDemandsCovered(totals([['a', 1, 'A']]), new Map([['a::wh-1', -2]])),
     ).toThrow('A (disponible 0, pedido 1)');
+  });
+
+  it('compares decimal quantities exactly', () => {
+    expect(() =>
+      assertDemandsCovered(
+        totals([['a', 0.3, 'Cable']]),
+        new Map([['a::wh-1', '0.29999999']]),
+      ),
+    ).toThrow('Cable (disponible 0.29999999, pedido 0.3)');
+    expect(() =>
+      assertDemandsCovered(
+        totals([['a', 0.3]]),
+        new Map([['a::wh-1', sumQty([0.1, 0.2])]]),
+      ),
+    ).not.toThrow();
   });
 
   it('throws a 422', () => {

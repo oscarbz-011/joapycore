@@ -52,7 +52,7 @@ export class StockSourcesRepository {
         productId: true,
         quantity: true,
         warehouseId: true,
-        product: { select: { isSerialized: true } },
+        product: { select: { name: true, unitCode: true, isSerialized: true } },
       },
     });
   }

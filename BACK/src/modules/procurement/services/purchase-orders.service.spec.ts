@@ -71,6 +71,7 @@ describe('PurchaseOrdersService', () => {
           id: 'prod-1',
           name: 'Heladera Samsung',
           status: 'ACTIVE',
+          unitCode: 77,
           isPurchasable: true,
         },
       ]),
@@ -232,6 +233,7 @@ describe('PurchaseOrdersService', () => {
             id: 'prod-1',
             name: 'Heladera Samsung',
             status,
+            unitCode: 77,
             isPurchasable: true,
           },
         ]);
@@ -250,6 +252,7 @@ describe('PurchaseOrdersService', () => {
           id: 'prod-1',
           name: 'Heladera Samsung',
           status: 'INACTIVE',
+          unitCode: 77,
           isPurchasable: true,
         },
       ]);
@@ -265,6 +268,7 @@ describe('PurchaseOrdersService', () => {
           id: 'prod-1',
           name: 'Mesa de comedor 6 sillas',
           status: 'ACTIVE',
+          unitCode: 77,
           isPurchasable: false,
         },
       ]);
@@ -282,6 +286,7 @@ describe('PurchaseOrdersService', () => {
           id: 'prod-1',
           name: 'Tablero MDF 18mm',
           status: 'ACTIVE',
+          unitCode: 77,
           isPurchasable: true,
         },
       ]);
@@ -302,7 +307,13 @@ describe('PurchaseOrdersService', () => {
     };
     const withStatus = (status: string) =>
       sources.findProductStatuses.mockResolvedValue([
-        { id: 'prod-1', name: 'Abridor', status, isPurchasable: true },
+        {
+          id: 'prod-1',
+          name: 'Abridor',
+          status,
+          unitCode: 77,
+          isPurchasable: true,
+        },
       ]);
 
     // Al decidir una compra desde la comparación de catálogos el producto se

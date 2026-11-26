@@ -1,5 +1,6 @@
 'use client';
 
+import { formatQty, qty } from '@/lib/quantity';
 import { useState } from 'react';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
@@ -131,7 +132,7 @@ export default function BatchesPage() {
                 {pagination.items.map((batch) => {
                   const expired = isExpired(batch.expiresAt);
                   const expiringSoon = !expired && isExpiringSoon(batch.expiresAt);
-                  const depleted = batch.remainingQty <= 0;
+                  const depleted = qty(batch.remainingQty).lte(0);
                   return (
                     <tr key={batch.id} className="hover:bg-muted/20 transition-colors">
                       <td className="px-4 py-3">
@@ -157,7 +158,7 @@ export default function BatchesPage() {
                         {fmtPrice(batch.unitCost)}
                       </td>
                       <td className="px-4 py-3 text-right font-mono text-muted-foreground tabular-nums">
-                        {batch.quantity}
+                        {formatQty(batch.quantity)}
                       </td>
                       <td
                         className={cn(
@@ -165,7 +166,7 @@ export default function BatchesPage() {
                           depleted ? 'text-muted-foreground/40' : 'text-foreground',
                         )}
                       >
-                        {batch.remainingQty}
+                        {formatQty(batch.remainingQty)}
                       </td>
                     </tr>
                   );

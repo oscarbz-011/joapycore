@@ -1,5 +1,7 @@
 'use client';
 
+import { money } from '@/lib/money';
+import { formatQty, qty } from '@/lib/quantity';
 import { unitSymbol } from '@/lib/units-of-measure';
 import { useState, type ReactNode } from 'react';
 import Link from 'next/link';
@@ -372,8 +374,9 @@ export default function PurchaseOrderDetailPage() {
                 </thead>
                 <tbody className="divide-y divide-border">
                   {order.items.map((item) => {
-                    const percent =
-                      item.quantity > 0 ? (item.receivedQty / item.quantity) * 100 : 0;
+                    const percent = qty(item.quantity).gt(0)
+                      ? qty(item.receivedQty).div(qty(item.quantity)).mul(100).toNumber()
+                      : 0;
                     return (
                       <tr key={item.id}>
                         <td className="px-4 py-3 font-mono text-xs whitespace-nowrap text-muted-foreground">
@@ -386,13 +389,13 @@ export default function PurchaseOrderDetailPage() {
                           {item.product.model ?? '—'}
                         </td>
                         <td className="px-4 py-3 text-right tabular-nums whitespace-nowrap text-foreground">
-                          {item.quantity} {unitSymbol(item.product.unitCode)}
+                          {formatQty(item.quantity)} {unitSymbol(item.product.unitCode)}
                         </td>
                         <td className="px-4 py-3 text-right font-mono tabular-nums whitespace-nowrap text-muted-foreground">
                           {formatPrice(Number(item.unitCost))}
                         </td>
                         <td className="px-4 py-3 text-right font-mono font-medium tabular-nums whitespace-nowrap text-foreground">
-                          {formatPrice(item.quantity * Number(item.unitCost))}
+                          {formatPrice(money(item.unitCost).mul(item.quantity).toNumber())}
                         </td>
                         {tracksReceipt && (
                           <td className="px-4 py-3">
@@ -401,8 +404,8 @@ export default function PurchaseOrderDetailPage() {
                                 className="h-1.5 flex-1 rounded-full bg-muted/30"
                                 role="progressbar"
                                 aria-valuemin={0}
-                                aria-valuemax={item.quantity}
-                                aria-valuenow={item.receivedQty}
+                                aria-valuemax={qty(item.quantity).toNumber()}
+                                aria-valuenow={qty(item.receivedQty).toNumber()}
                                 aria-label={`Recibido de ${item.product.name}`}
                               >
                                 <div
@@ -411,7 +414,7 @@ export default function PurchaseOrderDetailPage() {
                                 />
                               </div>
                               <span className="text-xs tabular-nums whitespace-nowrap text-muted-foreground">
-                                {item.receivedQty}/{item.quantity}
+                                {formatQty(item.receivedQty)}/{formatQty(item.quantity)}
                               </span>
                             </div>
                           </td>
@@ -478,7 +481,7 @@ export default function PurchaseOrderDetailPage() {
                               {item.batchNumber ?? '—'}
                             </td>
                             <td className="px-4 py-3 text-right tabular-nums text-foreground">
-                              {item.quantity}
+                              {formatQty(item.quantity)}
                             </td>
                             <td className="px-4 py-3 text-muted-foreground">
                               {receipt.createdBy

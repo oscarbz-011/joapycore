@@ -1,3 +1,4 @@
+import type { QuantityValue } from '@/lib/quantity';
 import { apiClient } from './client';
 import type { APStatus } from './payables';
 import type { SupplierInvoiceStatus } from '../supplier-invoice';
@@ -17,7 +18,7 @@ export interface InvoiceablePayable {
     purchaseOrder: { id: string; orderNumber: string | null };
     items: {
       id: string;
-      quantity: number;
+      quantity: QuantityValue;
       unitCost: number;
       product: { id: string; name: string; unitCode: number };
     }[];
@@ -28,9 +29,9 @@ export interface SupplierInvoiceItem {
   id: string;
   purchaseReceiptItemId: string;
   accountsPayableId: string;
-  quantity: number;
+  quantity: QuantityValue;
   unitCost: number;
-  receivedQuantity: number;
+  receivedQuantity: QuantityValue;
   receivedUnitCost: number;
   purchaseReceiptItem: {
     product: { id: string; name: string; unitCode: number };

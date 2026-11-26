@@ -90,6 +90,9 @@ describe('inventory stock columns', () => {
 describe('stock level', () => {
   it('flags a product with no stock regardless of its minimum', () => {
     expect(stockLevel(0, 0)).toBe('out');
+    expect(stockLevel('0.000', '5')).toBe('out');
+    expect(stockLevel('4.5', '5')).toBe('low');
+    expect(stockLevel('5.001', '5')).toBe('ok');
     expect(stockLevel(-2, 5)).toBe('out');
   });
 

@@ -1,3 +1,4 @@
+import type { QuantityValue } from '@/lib/quantity';
 import { apiClient } from './client';
 import type { Customer } from './sales';
 import type { DeliveryMethod, SellerRequestStatus } from '../delivery-method';
@@ -8,7 +9,7 @@ export type DeliveryCheckpoint = 'LEFT_WAREHOUSE' | 'IN_TRANSIT' | 'ARRIVED' | '
 
 export interface DeliveryNoteItem {
   id: string;
-  quantity: number;
+  quantity: QuantityValue;
   unitPrice: number;
   // Precio con interés de crédito ya aplicado — presente solo en ítems de
   // ventas a crédito. Usar este valor en vez de unitPrice cuando esté

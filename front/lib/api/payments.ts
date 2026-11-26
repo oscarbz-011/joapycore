@@ -1,3 +1,4 @@
+import type { QuantityValue } from '@/lib/quantity';
 import { apiClient } from './client';
 
 export type ARStatus = 'PENDING' | 'PARTIAL' | 'PAID' | 'CANCELLED';
@@ -30,7 +31,7 @@ export interface AccountsReceivable {
     issuedAt: string | null;
     invoiceNumber: string | null;
     invoicePrefix: string | null;
-    items: { description: string; quantity: number }[];
+    items: { description: string; quantity: QuantityValue }[];
     saleOrder: {
       id: string;
       saleType: 'CASH' | 'CREDIT';

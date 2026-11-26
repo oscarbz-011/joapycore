@@ -1,3 +1,4 @@
+import { qty } from '@/lib/quantity';
 import { sumMoney } from '@/lib/money';
 import type { CatalogOffer, OfferSupplier } from './api/procurement';
 import { priceValidity } from './catalog-validity';
@@ -87,7 +88,7 @@ function quoteLine(
     item.conversionFactor && item.conversionFactor > 0
       ? item.conversionFactor
       : 1;
-  const needed = Math.ceil(need.quantity / factor);
+  const needed = qty(need.quantity).div(factor).ceil().toNumber();
   const supplierQuantity = Math.max(needed, item.minOrderQuantity ?? 1);
 
   // Los tramos vienen ordenados por cantidad: rige el último que se alcanza.

@@ -1,4 +1,9 @@
 import {
+  assertQuantityForUnit,
+  qty,
+  remainingQty,
+} from '../../../common/units/quantity';
+import {
   Injectable,
   NotFoundException,
   UnprocessableEntityException,
@@ -98,10 +103,11 @@ export class PurchaseReceiptsService {
           `Item ${line.purchaseOrderItemId} not found in this order`,
         );
       }
-      const remaining = item.quantity - item.receivedQty;
-      if (line.quantity > remaining) {
+      assertQuantityForUnit(line.quantity, item.product);
+      const remaining = remainingQty(item.quantity, item.receivedQty);
+      if (qty(line.quantity).gt(remaining)) {
         throw new UnprocessableEntityException(
-          `La cantidad para ${item.product.name} (${line.quantity}) supera el saldo pendiente (${remaining})`,
+          `La cantidad para ${item.product.name} (${qty(line.quantity).toString()}) supera el saldo pendiente (${remaining.toString()})`,
         );
       }
       if (item.product.isSerialized) {
@@ -150,7 +156,7 @@ export class PurchaseReceiptsService {
         const item = itemsById.get(line.purchaseOrderItemId)!;
         await this.purchaseOrdersRepository.updateItemReceivedQty(
           item.id,
-          item.receivedQty + line.quantity,
+          qty(item.receivedQty).plus(line.quantity),
           tx,
         );
       }
@@ -159,8 +165,8 @@ export class PurchaseReceiptsService {
         orderId,
         tx,
       );
-      const allReceived = updatedItems.every(
-        (i) => i.receivedQty >= i.quantity,
+      const allReceived = updatedItems.every((i) =>
+        qty(i.receivedQty).gte(i.quantity),
       );
       const nextStatus = allReceived ? 'RECEIVED' : 'PARTIALLY_RECEIVED';
       await this.purchaseOrdersRepository.updateStatus(

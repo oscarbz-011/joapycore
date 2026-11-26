@@ -1,5 +1,6 @@
 'use client';
 
+import { formatQty, qty } from '@/lib/quantity';
 import { unitSymbol } from '@/lib/units-of-measure';
 import { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
@@ -104,7 +105,7 @@ export default function SaleRemissionPage() {
   const numberProblem = needsDocumentNumber(selectedSeries)
     ? documentNumberError(documentNumber, selectedSeries)
     : null;
-  const nothingLeft = items.length > 0 && items.every((item) => item.remitable === 0);
+  const nothingLeft = items.length > 0 && items.every((item) => qty(item.remitable).isZero());
 
   const problem =
     (items.length === 0 ? 'La factura no tiene mercadería para enviar' : null) ??
@@ -210,7 +211,7 @@ export default function SaleRemissionPage() {
                         <tr key={item.invoiceItemId} className="align-top">
                           <td className="px-4 py-3">
                             <span className="font-medium text-foreground">{item.description}</span>
-                            {item.isSerialized && item.remitable > 0 && (
+                            {item.isSerialized && qty(item.remitable).gt(0) && (
                               <fieldset className="mt-2 space-y-1.5">
                                 <legend className="text-xs text-muted-foreground">
                                   Números de serie que se envían ({line.serialNumbers.length})
@@ -237,9 +238,9 @@ export default function SaleRemissionPage() {
                             )}
                           </td>
                           <td className="px-4 py-3 text-muted-foreground">{unitSymbol(item.unitCode)}</td>
-                          <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">{item.quantity}</td>
-                          <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">{item.remitted}</td>
-                          <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">{item.remitable}</td>
+                          <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">{formatQty(item.quantity)}</td>
+                          <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">{formatQty(item.remitted)}</td>
+                          <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">{formatQty(item.remitable)}</td>
                           <td className="px-4 py-3 text-right">
                             {item.isSerialized ? (
                               <span className="tabular-nums text-foreground">{lineQuantity(line, true) || '—'}</span>
@@ -248,7 +249,7 @@ export default function SaleRemissionPage() {
                                 aria-label={`Cantidad de ${item.description} a enviar`}
                                 inputMode="numeric"
                                 className="ml-auto w-24 text-right"
-                                disabled={issue.isPending || item.remitable === 0}
+                                disabled={issue.isPending || qty(item.remitable).isZero()}
                                 value={line.quantity ? String(line.quantity) : ''}
                                 onChange={(e) =>
                                   setLine(item.invoiceItemId, {

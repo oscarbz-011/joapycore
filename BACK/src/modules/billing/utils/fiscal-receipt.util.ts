@@ -1,3 +1,4 @@
+import type { QuantityValue } from '../../../common/units/quantity';
 import type {
   BillingModality,
   DocumentType,
@@ -67,7 +68,7 @@ export interface InvoiceForReceipt {
   series?: { printLayout: unknown } | null;
   items: {
     description: string;
-    quantity: number;
+    quantity: QuantityValue;
     unitPrice: Numeric;
     total: Numeric;
     ivaRate: Numeric | null;

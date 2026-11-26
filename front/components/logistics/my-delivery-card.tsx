@@ -1,5 +1,6 @@
 'use client';
 
+import { formatQty } from '@/lib/quantity';
 import Link from 'next/link';
 import { CheckCircle2, MapPin, Package, Phone, Truck } from 'lucide-react';
 import type { FailDeliveryPayload } from '@/lib/api/delivery-routes';
@@ -103,7 +104,7 @@ export function MyDeliveryCard({
               <Package size={14} aria-hidden />
               <span className="sr-only">Productos</span>
             </dt>
-            <dd>{data.items.map((item) => `${item.quantity} × ${item.name}`).join(' · ')}</dd>
+            <dd>{data.items.map((item) => `${formatQty(item.quantity)} × ${item.name}`).join(' · ')}</dd>
           </div>
         )}
       </dl>

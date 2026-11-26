@@ -1,5 +1,6 @@
 'use client';
 
+import { formatQty } from '@/lib/quantity';
 import { unitSymbol } from '@/lib/units-of-measure';
 import { Suspense, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -318,7 +319,7 @@ function NewTransferRemission() {
                               )}
                             </td>
                             <td className="px-4 py-3 text-muted-foreground">{unitSymbol(row.unitCode)}</td>
-                            <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">{row.quantity}</td>
+                            <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">{formatQty(row.quantity)}</td>
                             <td className="px-4 py-3 text-right">
                               {row.isSerialized ? (
                                 <span className="tabular-nums text-foreground">

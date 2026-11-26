@@ -1,3 +1,4 @@
+import { qty } from '../../../common/units/quantity';
 import { Injectable, Logger } from '@nestjs/common';
 import { OnDomainEvent } from '../../../common/events/on-domain-event.decorator';
 import { MovementReason, StockMovementType } from '@prisma/client';
@@ -39,16 +40,6 @@ export class InventoryOnProductionListener {
 
   private async process(event: ProductionOrderCompletedEvent) {
     const { tenantId, productionOrderId } = event;
-    const quantities = [
-      event.quantity,
-      ...event.consumed.map((l) => l.quantity),
-    ];
-    if (!quantities.every((q) => Number.isInteger(q))) {
-      throw new Error(
-        `La orden de producción ${productionOrderId} trae cantidades con decimales y el stock se lleva en enteros`,
-      );
-    }
-
     await this.prisma.$transaction(async (tx) => {
       // Idempotencia: si esta orden ya generó movimientos, no repetir (mismo
       // criterio que el listener de recepción).
@@ -60,7 +51,7 @@ export class InventoryOnProductionListener {
 
       // 1) Salida de cada componente consumido.
       for (const line of event.consumed) {
-        if (line.quantity <= 0) continue;
+        if (qty(line.quantity).lte(0)) continue;
         await this.stockMovements.create(
           {
             tenantId,
@@ -68,7 +59,7 @@ export class InventoryOnProductionListener {
             type: StockMovementType.OUT,
             reason: MovementReason.PRODUCTION_OUT,
             // Negativo: el stock se calcula sumando movimientos.
-            quantity: -Math.abs(line.quantity),
+            quantity: qty(line.quantity).abs().neg(),
             warehouseId: event.warehouseId,
             referenceId: productionOrderId,
           },

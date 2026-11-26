@@ -163,7 +163,7 @@ describe('Lote vendido: Inventario → outbox → Ventas (PostgreSQL)', () => {
     const batch = await prisma.productBatch.findUniqueOrThrow({
       where: { id: oldestBatchId },
     });
-    expect(batch.remainingQty).toBe(2);
+    expect(batch.remainingQty).toEqual(2);
     expect(await prisma.outboxEvent.count({ where: { tenantId } })).toBe(1);
   });
 });

@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import { UnprocessableEntityException } from '@nestjs/common';
 import { StockLedgerService } from './stock-ledger.service';
 
@@ -117,14 +118,14 @@ describe('StockLedgerService', () => {
             productId: 'p-rice',
             warehouseId: 'wh-1',
             quantity: 5,
-            product: { isSerialized: false },
+            product: { isSerialized: false, unitCode: 77 },
           },
           {
             id: 'soi-tv',
             productId: 'p-tv',
             warehouseId: 'wh-1',
             quantity: 2,
-            product: { isSerialized: true },
+            product: { isSerialized: true, unitCode: 77 },
           },
           {
             id: 'soi-free',
@@ -270,8 +271,8 @@ describe('StockLedgerService', () => {
       };
       products = {
         findForTransfer: jest.fn().mockResolvedValue([
-          { id: 'p-rice', name: 'Arroz', isSerialized: false },
-          { id: 'p-tv', name: 'Televisor', isSerialized: true },
+          { id: 'p-rice', name: 'Arroz', isSerialized: false, unitCode: 77 },
+          { id: 'p-tv', name: 'Televisor', isSerialized: true, unitCode: 77 },
         ]),
       };
       ledger = new StockLedgerService(
@@ -435,9 +436,9 @@ describe('StockLedgerService', () => {
       {
         sumByWarehouse: jest.fn().mockResolvedValue(
           new Map([
-            ['p-rice', 5],
-            ['p-tv', 2],
-            ['p-gone', 0],
+            ['p-rice', new Prisma.Decimal(5)],
+            ['p-tv', new Prisma.Decimal(2)],
+            ['p-gone', new Prisma.Decimal(0)],
           ]),
         ),
       } as any,

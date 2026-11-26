@@ -1,3 +1,4 @@
+import { qty, type Quantity } from '../../../common/units/quantity';
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
@@ -156,7 +157,7 @@ export class CreditNotesRepository {
     tenantId: string,
     invoiceId: string,
     client: PrismaClientOrTx = this.prisma,
-  ): Promise<Map<string, number>> {
+  ): Promise<Map<string, Quantity>> {
     const rows = await client.creditNoteItem.groupBy({
       by: ['invoiceItemId'],
       where: {
@@ -168,7 +169,7 @@ export class CreditNotesRepository {
     return new Map(
       rows
         .filter((r) => r.invoiceItemId)
-        .map((r) => [r.invoiceItemId as string, r._sum.quantity ?? 0]),
+        .map((r) => [r.invoiceItemId as string, qty(r._sum.quantity)]),
     );
   }
 

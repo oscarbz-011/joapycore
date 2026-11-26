@@ -44,7 +44,7 @@ export function chargedUnitPrice(
 
 export interface SaleLine {
   unitPrice: MoneyValue;
-  quantity: number;
+  quantity: MoneyValue;
 }
 
 export interface Surcharge {

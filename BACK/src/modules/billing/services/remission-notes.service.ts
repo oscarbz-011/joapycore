@@ -1,3 +1,4 @@
+import { qty } from '../../../common/units/quantity';
 import {
   ConflictException,
   Inject,
@@ -213,13 +214,13 @@ export class RemissionNotesService {
             unitCode: product.unitCode,
             isSerialized: product.isSerialized,
             quantity: product.isSerialized
-              ? stock.serialNumbers.length
+              ? qty(stock.serialNumbers.length)
               : stock.quantity,
             serialNumbers: product.isSerialized ? stock.serialNumbers : [],
           },
         ];
       })
-      .filter((row) => row.quantity > 0)
+      .filter((row) => row.quantity.gt(0))
       .sort((a, b) => a.description.localeCompare(b.description, 'es'));
   }
 

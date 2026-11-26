@@ -1,5 +1,7 @@
 'use client';
 
+import Decimal from 'decimal.js';
+import { formatQty, qty } from '@/lib/quantity';
 import { unitSymbol } from '@/lib/units-of-measure';
 import { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
@@ -147,7 +149,7 @@ export default function ReceiveRemissionPage() {
                   const serialized = item.serialNumbers.length > 0;
                   const line = lineOf(item.id);
                   const arrived = lineQuantity(line, serialized);
-                  const short = Math.max(item.quantity - arrived, 0);
+                  const short = Decimal.max(qty(item.quantity).minus(arrived), 0).toNumber();
                   return (
                     <tr key={item.id} className="align-top">
                       <td className="px-4 py-3">
@@ -155,7 +157,7 @@ export default function ReceiveRemissionPage() {
                         {serialized && (
                           <fieldset className="mt-2 space-y-1.5">
                             <legend className="text-xs text-muted-foreground">
-                              Números de serie que llegaron ({line.serialNumbers.length} de {item.quantity})
+                              Números de serie que llegaron ({line.serialNumbers.length} de {formatQty(item.quantity)})
                             </legend>
                             <div className="flex flex-wrap gap-x-4 gap-y-1.5">
                               {item.serialNumbers.map((serial) => (
@@ -179,7 +181,7 @@ export default function ReceiveRemissionPage() {
                         )}
                       </td>
                       <td className="px-4 py-3 text-muted-foreground">{unitSymbol(item.unitCode)}</td>
-                      <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">{item.quantity}</td>
+                      <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">{formatQty(item.quantity)}</td>
                       <td className="px-4 py-3 text-right">
                         {serialized ? (
                           <span className="tabular-nums text-foreground">{arrived}</span>

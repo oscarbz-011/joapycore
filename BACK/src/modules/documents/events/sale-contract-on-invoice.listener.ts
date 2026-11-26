@@ -1,3 +1,4 @@
+import type { QuantityValue } from '../../../common/units/quantity';
 import { Injectable, Logger } from '@nestjs/common';
 import { roundGuaranies, type MoneyValue } from '../../../common/money/money';
 import { saleAmounts } from '../../../common/money/sale-amounts';
@@ -114,7 +115,7 @@ function buildPairedInstallmentsTable(
 // el recargo de entrega como una línea más, así suman el total del crédito.
 function contractItemRows(saleOrder: {
   items: {
-    quantity: number;
+    quantity: QuantityValue;
     unitPrice: MoneyValue;
     financedUnitPrice: MoneyValue | null;
     description: string | null;

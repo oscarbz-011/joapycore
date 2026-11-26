@@ -262,9 +262,9 @@ describe('RemissionNotesService (PostgreSQL)', () => {
       branch: { id: branchA },
     });
     expect(note.items).toHaveLength(2);
-    expect(await stockAt(rice, fromWarehouse)).toBe(6);
-    expect(await stockAt(rice, toWarehouse)).toBe(0);
-    expect(await stockAt(tv, toWarehouse)).toBe(0);
+    expect(await stockAt(rice, fromWarehouse)).toEqual(6);
+    expect(await stockAt(rice, toWarehouse)).toEqual(0);
+    expect(await stockAt(tv, toWarehouse)).toEqual(0);
     expect(await unitOf(1)).toMatchObject({ status: 'IN_TRANSIT' });
     const inTransit = await service.transferStock(tenantId, fromWarehouse);
     expect(inTransit.find((r) => r.productId === tv)?.serialNumbers).toEqual([
@@ -285,8 +285,8 @@ describe('RemissionNotesService (PostgreSQL)', () => {
     });
 
     expect(received).toMatchObject({ transitStatus: 'RECEIVED' });
-    expect(await stockAt(rice, toWarehouse)).toBe(4);
-    expect(await stockAt(tv, toWarehouse)).toBe(1);
+    expect(await stockAt(rice, toWarehouse)).toEqual(4);
+    expect(await stockAt(tv, toWarehouse)).toEqual(1);
     expect(await unitOf(1)).toMatchObject({
       status: 'IN_STOCK',
       warehouseId: toWarehouse,
@@ -346,9 +346,9 @@ describe('RemissionNotesService (PostgreSQL)', () => {
     });
     expect(
       received.items.find((i) => i.productId === rice)?.receivedQuantity,
-    ).toBe(3);
-    expect(await stockAt(rice, fromWarehouse)).toBe(5);
-    expect(await stockAt(rice, toWarehouse)).toBe(3);
+    ).toEqual(3);
+    expect(await stockAt(rice, fromWarehouse)).toEqual(5);
+    expect(await stockAt(rice, toWarehouse)).toEqual(3);
     expect(await unitOf(1)).toMatchObject({ status: 'ADJUSTED_OUT' });
     expect(await unitOf(2)).toMatchObject({
       status: 'IN_STOCK',
@@ -384,7 +384,7 @@ describe('RemissionNotesService (PostgreSQL)', () => {
     ).rejects.toThrow();
 
     expect(await prisma.remissionNote.count({ where: { tenantId } })).toBe(0);
-    expect(await stockAt(rice, toWarehouse)).toBe(0);
+    expect(await stockAt(rice, toWarehouse)).toEqual(0);
     const series = await prisma.billingSeries.findUnique({
       where: { id: seriesId },
     });
@@ -405,8 +405,8 @@ describe('RemissionNotesService (PostgreSQL)', () => {
     });
 
     expect(voided.status).toBe('VOIDED');
-    expect(await stockAt(rice, fromWarehouse)).toBe(10);
-    expect(await stockAt(rice, toWarehouse)).toBe(0);
+    expect(await stockAt(rice, fromWarehouse)).toEqual(10);
+    expect(await stockAt(rice, toWarehouse)).toEqual(0);
     expect(await unitOf(2)).toMatchObject({
       status: 'IN_STOCK',
       warehouseId: fromWarehouse,
@@ -429,7 +429,7 @@ describe('RemissionNotesService (PostgreSQL)', () => {
     ]);
 
     expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
-    expect(await stockAt(rice, fromWarehouse)).toBe(4);
+    expect(await stockAt(rice, fromWarehouse)).toEqual(4);
     const numbers = await prisma.remissionNote.findMany({
       where: { tenantId },
       select: { number: true },
@@ -460,7 +460,7 @@ describe('RemissionNotesService (PostgreSQL)', () => {
         items: [{ itemId: note.items[0].id, receivedQuantity: 1 }],
       }),
     ).rejects.toThrow('no encontrada');
-    expect(await stockAt(rice, toWarehouse)).toBe(0);
+    expect(await stockAt(rice, toWarehouse)).toEqual(0);
   });
 
   describe('sale', () => {
@@ -567,7 +567,7 @@ describe('RemissionNotesService (PostgreSQL)', () => {
       });
       await expect(
         service.issueForSale(tenantId, invoice.id, sale(3)),
-      ).rejects.toThrow('quedan 2 unidades');
+      ).rejects.toThrow('quedan 2 UNI por enviar');
       await service.voidNote(tenantId, first.id, { reason: 'Se reprogramó' });
       await expect(
         service.issueForSale(tenantId, invoice.id, sale(5)),
@@ -575,7 +575,7 @@ describe('RemissionNotesService (PostgreSQL)', () => {
         number: '0000002',
       });
 
-      expect(await stockAt(rice, fromWarehouse)).toBe(10);
+      expect(await stockAt(rice, fromWarehouse)).toEqual(10);
       const history = await prisma.billingDocumentEvent.findMany({
         where: { tenantId, invoiceId: invoice.id },
         select: { type: true },

@@ -1,3 +1,4 @@
+import { assertQuantityForUnit } from '../../../common/units/quantity';
 import { money, sumMoney } from '../../../common/money/money';
 import {
   ConflictException,
@@ -99,6 +100,12 @@ export class PurchaseOrdersService {
       tenantId,
       productIds,
     );
+    const productsById = new Map(products.map((p) => [p.id, p]));
+    for (const item of dto.items) {
+      const product = productsById.get(item.productId);
+      if (product) assertQuantityForUnit(item.quantity, product);
+    }
+
     // Un producto fabricado internamente (MANUFACTURED, ej. el mueble de una
     // carpintería) no se le compra a un proveedor: su stock entra por una
     // orden de producción. El flag es editable por producto para los casos

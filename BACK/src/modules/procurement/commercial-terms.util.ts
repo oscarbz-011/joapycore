@@ -1,3 +1,5 @@
+import { qty } from '../../common/units/quantity';
+import type { QuantityValue } from '../../common/units/quantity';
 import { UnprocessableEntityException } from '@nestjs/common';
 import { money, type MoneyValue } from '../../common/money/money';
 
@@ -9,7 +11,7 @@ export interface VolumeDiscount {
 
 /** Precio de un ítem del catálogo desde cierta cantidad. */
 export interface PriceTier {
-  minQuantity: number;
+  minQuantity: QuantityValue;
   price: number;
 }
 
@@ -47,11 +49,11 @@ export function normalizePriceTiers(
 ): PriceTier[] {
   const sorted = [...(tiers ?? [])]
     .map(({ minQuantity, price }) => ({ minQuantity, price }))
-    .sort((a, b) => a.minQuantity - b.minQuantity);
+    .sort((a, b) => qty(a.minQuantity).cmp(b.minQuantity));
 
   sorted.forEach((tier, index) => {
     const previous = sorted[index - 1];
-    if (previous && tier.minQuantity === previous.minQuantity) {
+    if (previous && qty(tier.minQuantity).eq(previous.minQuantity)) {
       throw new UnprocessableEntityException(
         'Hay dos precios por cantidad para la misma cantidad',
       );
@@ -68,7 +70,7 @@ export function normalizePriceTiers(
 
 /** Descuento sobre el total de la orden, desde cierta cantidad de unidades. */
 export interface QuantityDiscount {
-  minQuantity: number;
+  minQuantity: QuantityValue;
   percent: number;
 }
 
@@ -77,12 +79,12 @@ export function normalizeQuantityDiscounts(
 ): QuantityDiscount[] {
   const sorted = [...(discounts ?? [])]
     .map(({ minQuantity, percent }) => ({ minQuantity, percent }))
-    .sort((a, b) => a.minQuantity - b.minQuantity);
+    .sort((a, b) => qty(a.minQuantity).cmp(b.minQuantity));
 
   sorted.forEach((tier, index) => {
     const previous = sorted[index - 1];
     if (!previous) return;
-    if (tier.minQuantity === previous.minQuantity) {
+    if (qty(tier.minQuantity).eq(previous.minQuantity)) {
       throw new UnprocessableEntityException(
         'Hay dos descuentos por cantidad que empiezan en la misma cantidad',
       );

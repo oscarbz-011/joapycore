@@ -1,5 +1,6 @@
 'use client';
 
+import { formatQty, qty } from '@/lib/quantity';
 import { unitSymbol } from '@/lib/units-of-measure';
 import { useState } from 'react';
 import Link from 'next/link';
@@ -92,9 +93,9 @@ export default function NewSupplierInvoicePage() {
           productName: item.product.name,
           unitCode: item.product.unitCode,
           receiptNumber: receipt.purchaseReceipt.receiptNumber,
-          receivedQuantity: item.quantity,
+          receivedQuantity: qty(item.quantity).toNumber(),
           receivedUnitCost: item.unitCost,
-          quantity: edit.quantity === undefined ? item.quantity : amount(edit.quantity),
+          quantity: edit.quantity === undefined ? qty(item.quantity).toNumber() : amount(edit.quantity),
           unitCost: edit.unitCost === undefined ? item.unitCost : amount(edit.unitCost),
         };
       }),
@@ -419,7 +420,7 @@ export default function NewSupplierInvoicePage() {
                             {line.productName}
                           </td>
                           <td className="px-4 py-3 text-right tabular-nums whitespace-nowrap text-muted-foreground">
-                            {line.receivedQuantity} {unitSymbol(line.unitCode)}
+                            {formatQty(line.receivedQuantity)} {unitSymbol(line.unitCode)}
                           </td>
                           <td className="px-4 py-3 text-right font-mono tabular-nums whitespace-nowrap text-muted-foreground">
                             {gs(line.receivedUnitCost)}

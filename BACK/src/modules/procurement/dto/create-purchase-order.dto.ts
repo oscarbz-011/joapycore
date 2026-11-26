@@ -20,7 +20,7 @@ export class PurchaseOrderItemDto {
   productId: string;
 
   @ApiProperty()
-  @IsNumber()
+  @IsNumber({ maxDecimalPlaces: 3 })
   @IsPositive()
   quantity: number;
 

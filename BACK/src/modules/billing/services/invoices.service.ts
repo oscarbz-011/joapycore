@@ -1,3 +1,4 @@
+import type { QuantityValue } from '../../../common/units/quantity';
 import { sumMoney } from '../../../common/money/money';
 import {
   Injectable,
@@ -432,7 +433,7 @@ export class InvoicesService {
       issuedAt: Date;
       items: {
         description: string;
-        quantity: number;
+        quantity: QuantityValue;
         unitPrice: Prisma.Decimal;
         total: Prisma.Decimal;
         ivaRate: number;

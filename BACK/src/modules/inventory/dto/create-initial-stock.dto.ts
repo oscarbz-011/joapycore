@@ -4,13 +4,11 @@ import {
   IsArray,
   IsDateString,
   IsEnum,
-  IsInt,
   IsNumber,
   IsOptional,
   IsPositive,
   IsString,
   IsUUID,
-  Min,
 } from 'class-validator';
 
 // Flujo propio de carga inicial (reason=INITIAL) — deliberadamente NO
@@ -22,8 +20,8 @@ export class CreateInitialStockDto {
   productId: string;
 
   @ApiProperty({ minimum: 1 })
-  @IsInt()
-  @Min(1)
+  @IsNumber({ maxDecimalPlaces: 3 })
+  @IsPositive()
   quantity: number;
 
   @ApiProperty()

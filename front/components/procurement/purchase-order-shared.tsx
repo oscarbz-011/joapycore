@@ -1,4 +1,5 @@
 'use client';
+import { qty, quantityStep } from '@/lib/quantity';
 import { unitSymbol } from '@/lib/units-of-measure';
 import { money, sumMoney } from '@/lib/money';
 
@@ -119,14 +120,14 @@ export function ReceiveModal({
   onSaved: () => void;
 }) {
   const queryClient = useQueryClient();
-  const pendingItems = order.items.filter((i) => i.receivedQty < i.quantity);
+  const pendingItems = order.items.filter((i) => qty(i.receivedQty).lt(qty(i.quantity)));
   const [warehouseId, setWarehouseId] = useState('');
   const [notes, setNotes] = useState('');
   const [lines, setLines] = useState<Record<string, ReceiptLineState>>(
     Object.fromEntries(
       pendingItems.map((i) => [
         i.id,
-        { quantity: i.quantity - i.receivedQty, serials: '', batchNumber: '', expiresAt: '' },
+        { quantity: qty(i.quantity).minus(qty(i.receivedQty)).toNumber(), serials: '', batchNumber: '', expiresAt: '' },
       ]),
     ),
   );
@@ -222,7 +223,7 @@ export function ReceiveModal({
           </div>
 
           {pendingItems.map((item) => {
-            const pending = item.quantity - item.receivedQty;
+            const pending = qty(item.quantity).minus(qty(item.receivedQty)).toNumber();
             const line = lines[item.id];
             return (
               <div key={item.id} className="rounded-xl border border-border p-4 space-y-3">
@@ -253,12 +254,13 @@ export function ReceiveModal({
                       <Label>Cantidad a recibir ahora</Label>
                       <input
                         type="number"
-                        min={1}
+                        min={0}
                         max={pending}
+                        step={quantityStep(item.product.unitCode, item.product.isSerialized)}
                         className={NUM_CLS}
                         value={line.quantity || ''}
                         onChange={(e) =>
-                          updateLine(item.id, { quantity: Math.min(pending, parseInt(e.target.value) || 1) })
+                          updateLine(item.id, { quantity: Math.min(pending, Number(e.target.value) || 0) })
                         }
                       />
                     </div>

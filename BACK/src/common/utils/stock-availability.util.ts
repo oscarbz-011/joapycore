@@ -1,9 +1,11 @@
 import { UnprocessableEntityException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
+import { qty, type Quantity, type QuantityValue } from '../units/quantity';
 
 export interface StockDemand {
   productId: string;
   warehouseId: string;
-  quantity: number;
+  quantity: QuantityValue;
   /** Nombre para el mensaje de error; si falta se muestra el id. */
   name?: string;
 }
@@ -11,7 +13,7 @@ export interface StockDemand {
 export interface AggregatedDemand {
   productId: string;
   warehouseId: string;
-  quantity: number;
+  quantity: Quantity;
   name?: string;
 }
 
@@ -25,15 +27,16 @@ export function aggregateDemands(
 ): Map<string, AggregatedDemand> {
   const totals = new Map<string, AggregatedDemand>();
   for (const d of demands) {
-    if (d.quantity <= 0) continue;
+    const quantity = qty(d.quantity);
+    if (quantity.lte(0)) continue;
     const key = stockDemandKey(d.productId, d.warehouseId);
     const entry = totals.get(key) ?? {
       productId: d.productId,
       warehouseId: d.warehouseId,
-      quantity: 0,
+      quantity: qty(0),
       name: d.name,
     };
-    entry.quantity += d.quantity;
+    entry.quantity = entry.quantity.plus(quantity);
     totals.set(key, entry);
   }
   return totals;
@@ -46,15 +49,15 @@ export function aggregateDemands(
  */
 export function assertDemandsCovered(
   totals: Map<string, AggregatedDemand>,
-  available: Map<string, number>,
+  available: ReadonlyMap<string, QuantityValue>,
 ): void {
   const missing = [...totals.keys()]
     .sort()
     .map((productId) => {
       const { quantity, name } = totals.get(productId)!;
-      const have = available.get(productId) ?? 0;
-      return have < quantity
-        ? `${name ?? productId} (disponible ${Math.max(have, 0)}, pedido ${quantity})`
+      const have = qty(available.get(productId));
+      return have.lt(quantity)
+        ? `${name ?? productId} (disponible ${Prisma.Decimal.max(have, 0).toString()}, pedido ${quantity.toString()})`
         : null;
     })
     .filter((m): m is string => m !== null);

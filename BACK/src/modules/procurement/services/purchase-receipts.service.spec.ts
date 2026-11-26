@@ -15,7 +15,12 @@ function makeOrderItem(overrides = {}) {
     quantity: 10,
     receivedQty: 0,
     unitCost: 2_000_000,
-    product: { id: 'prod-1', name: 'Heladera Samsung', isSerialized: false },
+    product: {
+      id: 'prod-1',
+      name: 'Heladera Samsung',
+      isSerialized: false,
+      unitCode: 77,
+    },
     ...overrides,
   };
 }
@@ -147,7 +152,12 @@ describe('PurchaseReceiptsService', () => {
       makeOrder({
         items: [
           makeOrderItem({
-            product: { id: 'prod-1', name: 'TV', isSerialized: true },
+            product: {
+              id: 'prod-1',
+              name: 'TV',
+              isSerialized: true,
+              unitCode: 77,
+            },
           }),
         ],
       }),

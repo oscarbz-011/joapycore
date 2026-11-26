@@ -133,7 +133,7 @@ describe('credit note draft', () => {
     [{ total: 0 }, 'al menos un ítem'],
     [{ kind: 'AMOUNT' as const, total: 0 }, 'importe del descuento'],
     [{ total: 3_000_000 }, 'supera lo que queda por acreditar'],
-    [{ lines: { ...lines, 'ii-2': { quantity: 2, restockQuantity: 0, serialNumbers: [] } } }, 'hasta 1 unidades'],
+    [{ lines: { ...lines, 'ii-2': { quantity: 2, restockQuantity: 0, serialNumbers: [] } } }, 'acreditar hasta 1'],
     [{ lines: { ...lines, 'ii-1': { quantity: 1, restockQuantity: 2, serialNumbers: ['SN-1', 'SN-2'] } } }, 'vuelven al stock hasta 1'],
     [{ lines: { ...lines, 'ii-1': { quantity: 1, restockQuantity: 1, serialNumbers: [] } } }, 'un número de serie por cada unidad'],
   ])('rejects %j', (overrides, message) => {

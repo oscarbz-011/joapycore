@@ -5,7 +5,6 @@ import {
   ArrayNotEmpty,
   IsArray,
   IsDateString,
-  IsInt,
   IsNotEmpty,
   IsNumber,
   IsOptional,
@@ -22,7 +21,7 @@ export class SupplierInvoiceLineDto {
   purchaseReceiptItemId: string;
 
   @ApiProperty({ description: 'Cantidad facturada (0 = no la facturó)' })
-  @IsInt()
+  @IsNumber({ maxDecimalPlaces: 3 })
   @Min(0)
   quantity: number;
 

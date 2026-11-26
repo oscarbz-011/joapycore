@@ -3,11 +3,11 @@ import {
   ArrayNotEmpty,
   ArrayUnique,
   IsArray,
-  IsInt,
+  IsNumber,
   IsOptional,
+  IsPositive,
   IsString,
   IsUUID,
-  Min,
 } from 'class-validator';
 
 export class AssignUnlocatedStockDto {
@@ -25,8 +25,8 @@ export class AssignUnlocatedStockDto {
       'Cantidad a asignar. Si se omite se asigna todo el saldo sin depósito',
   })
   @IsOptional()
-  @IsInt()
-  @Min(1)
+  @IsNumber({ maxDecimalPlaces: 3 })
+  @IsPositive()
   quantity?: number;
 
   @ApiPropertyOptional({

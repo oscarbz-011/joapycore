@@ -1,3 +1,4 @@
+import type { QuantityValue } from '../units/quantity';
 import type { BillingModality, PaymentMethod, Prisma } from '@prisma/client';
 
 /**
@@ -82,7 +83,7 @@ export interface PreprintedLayout {
 
 export interface FiscalReceiptLine {
   description: string;
-  quantity: number;
+  quantity: QuantityValue;
   unitPrice: number;
   total: number;
   ivaRate: number;

@@ -1,3 +1,4 @@
+import type { QuantityValue } from '../../../common/units/quantity';
 import {
   money,
   roundGuaranies,
@@ -28,7 +29,7 @@ const DEFAULT_IVA_RATE = 10;
 
 export interface SaleItemForInvoice {
   id?: string;
-  quantity: number;
+  quantity: QuantityValue;
   unitPrice: MoneyValue;
   financedUnitPrice?: MoneyValue | null;
   description?: string | null;
@@ -37,7 +38,7 @@ export interface SaleItemForInvoice {
 
 function withIva(
   description: string,
-  quantity: number,
+  quantity: QuantityValue,
   unitPrice: Money,
   ivaRateValue: MoneyValue,
 ) {

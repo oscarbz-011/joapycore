@@ -10,20 +10,19 @@ import {
   ProductionOrderStatus,
 } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
-import { money } from '../../../common/money/money';
+import {
+  assertDecimalsForUnit,
+  assertQuantityForUnit,
+  qty,
+  type Quantity,
+  type QuantityValue,
+} from '../../../common/units/quantity';
 import { ProductionOrdersRepository } from '../repositories/production-orders.repository';
 import { ProductionSourcesRepository } from '../repositories/production-sources.repository';
 import { CreateProductionOrderDto } from '../dto/create-production-order.dto';
 import { CompleteProductionOrderDto } from '../dto/complete-production-order.dto';
 import type { AuditLogEvent } from '../../../audit/audit-log.event';
 import type { ProductionOrderCompletedEvent } from '../events/production-order-completed.event';
-
-function toNum(value: unknown): number {
-  if (typeof value === 'object' && value !== null && 'toNumber' in value) {
-    return (value as { toNumber(): number }).toNumber();
-  }
-  return Number(value ?? 0);
-}
 
 @Injectable()
 export class ProductionOrdersService {
@@ -72,6 +71,8 @@ export class ProductionOrdersService {
       );
     }
 
+    assertQuantityForUnit(dto.quantity, product);
+
     // Sin receta no hay nada que consumir: sería un alta de stock disfrazada
     // de producción, y para eso ya existe el ajuste de inventario.
     const recipe = await this.repository.findRecipe(tenantId, dto.productId);
@@ -103,7 +104,7 @@ export class ProductionOrdersService {
           tenantId,
           productionOrderId: created.id,
           componentId: line.componentId,
-          plannedQuantity: money(line.quantity).mul(dto.quantity),
+          plannedQuantity: qty(line.quantity).mul(dto.quantity),
         })),
         tx,
       );
@@ -165,15 +166,21 @@ export class ProductionOrdersService {
     const byComponent = new Map(
       (dto.consumptions ?? []).map((c) => [c.componentId, c.usedQuantity]),
     );
-    const consumed = order.items.map((item) => ({
-      itemId: item.id,
-      componentId: item.componentId,
-      componentName: item.component.name,
-      quantity:
-        byComponent.get(item.componentId) ?? toNum(item.plannedQuantity),
-    }));
+    // Lo que carga el usuario respeta la unidad del componente; lo
+    // planificado sale de la receta y puede tener más decimales.
+    const consumed = order.items.map((item) => {
+      const used = byComponent.get(item.componentId);
+      return {
+        itemId: item.id,
+        componentId: item.componentId,
+        componentName: item.component.name,
+        quantity:
+          used === undefined
+            ? qty(item.plannedQuantity)
+            : assertDecimalsForUnit(used, item.component),
+      };
+    });
 
-    this.assertWholeQuantities(order, consumed);
     await this.assertEnoughStock(tenantId, order, consumed);
 
     await this.prisma.$transaction(async (tx) => {
@@ -203,7 +210,7 @@ export class ProductionOrdersService {
       tenantId,
       productionOrderId: id,
       productId: order.productId,
-      quantity: toNum(order.quantity),
+      quantity: qty(order.quantity),
       warehouseId: order.warehouseId,
       consumed: consumed.map((c) => ({
         productId: c.componentId,
@@ -248,27 +255,6 @@ export class ProductionOrdersService {
     return this.findOne(tenantId, id);
   }
 
-  // El stock todavía se lleva en unidades enteras: guardar un decimal lo
-  // truncaría en silencio (0,5 litros quedaban como 0).
-  private assertWholeQuantities(
-    order: { quantity: unknown; product?: { name: string } | null },
-    consumed: { componentName: string; quantity: number }[],
-  ) {
-    const fractional = consumed
-      .filter((line) => !money(line.quantity).isInteger())
-      .map((line) => `${line.componentName} (${line.quantity})`);
-    if (!money(order.quantity as string).isInteger()) {
-      fractional.unshift(
-        `${order.product?.name ?? 'El producto'} a producir (${String(order.quantity)})`,
-      );
-    }
-    if (fractional.length > 0) {
-      throw new UnprocessableEntityException(
-        `El stock todavía se lleva en unidades enteras y estas cantidades tienen decimales: ${fractional.join(', ')}`,
-      );
-    }
-  }
-
   // No se puede fabricar con materia prima que no está. Se valida al iniciar
   // (temprano, para no arrancar algo inviable) y otra vez al completar, porque
   // entre medio pudo consumirse en otra orden o venderse.
@@ -277,14 +263,14 @@ export class ProductionOrdersService {
     order: {
       items: {
         componentId: string;
-        plannedQuantity: unknown;
+        plannedQuantity: QuantityValue;
         component: { name: string };
       }[];
     },
     consumed?: {
       componentId: string;
       componentName: string;
-      quantity: number;
+      quantity: Quantity;
     }[],
   ) {
     const lines =
@@ -292,7 +278,7 @@ export class ProductionOrdersService {
       order.items.map((i) => ({
         componentId: i.componentId,
         componentName: i.component.name,
-        quantity: toNum(i.plannedQuantity),
+        quantity: qty(i.plannedQuantity),
       }));
 
     const stock = await this.sources.getStock(
@@ -302,11 +288,11 @@ export class ProductionOrdersService {
 
     const missing = lines
       .filter(
-        (l) => l.quantity > 0 && (stock.get(l.componentId) ?? 0) < l.quantity,
+        (l) => l.quantity.gt(0) && qty(stock.get(l.componentId)).lt(l.quantity),
       )
       .map(
         (l) =>
-          `${l.componentName} (necesita ${l.quantity}, hay ${stock.get(l.componentId) ?? 0})`,
+          `${l.componentName} (necesita ${l.quantity.toString()}, hay ${qty(stock.get(l.componentId)).toString()})`,
       );
 
     if (missing.length) {

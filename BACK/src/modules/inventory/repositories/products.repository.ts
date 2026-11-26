@@ -1,3 +1,8 @@
+import {
+  qty,
+  type Quantity,
+  type QuantityValue,
+} from '../../../common/units/quantity';
 import { Injectable } from '@nestjs/common';
 import {
   MovementReason,
@@ -137,24 +142,27 @@ export class ProductsRepository {
         : [],
     ]);
 
-    const stockMap = new Map<string, number>();
+    const stockMap = new Map<string, Quantity>();
     (
-      movSums as { productId: string; _sum: { quantity: number | null } }[]
-    ).forEach((s) => stockMap.set(s.productId, s._sum.quantity ?? 0));
+      movSums as {
+        productId: string;
+        _sum: { quantity: Prisma.Decimal | null };
+      }[]
+    ).forEach((s) => stockMap.set(s.productId, qty(s._sum.quantity)));
     (unitCounts as { productId: string; _count: { id: number } }[]).forEach(
-      (s) => stockMap.set(s.productId, s._count.id),
+      (s) => stockMap.set(s.productId, qty(s._count.id)),
     );
 
-    return products.map((p) => ({ ...p, stock: stockMap.get(p.id) ?? 0 }));
+    return products.map((p) => ({ ...p, stock: qty(stockMap.get(p.id)) }));
   }
 
   // Stock for non-serialized products: sum of movements
-  async getStock(tenantId: string, productId: string): Promise<number> {
+  async getStock(tenantId: string, productId: string): Promise<Quantity> {
     const result = await this.prisma.stockMovement.aggregate({
       where: { tenantId, productId },
       _sum: { quantity: true },
     });
-    return result._sum.quantity ?? 0;
+    return qty(result._sum.quantity);
   }
 
   // Stock for serialized products: count of IN_STOCK units
@@ -170,7 +178,7 @@ export class ProductsRepository {
     data: {
       type: StockMovementType;
       reason?: MovementReason;
-      quantity: number;
+      quantity: QuantityValue;
       warehouseId?: string;
       referenceId?: string;
       notes?: string;
@@ -263,7 +271,7 @@ export class ProductsRepository {
     tenantId: string,
     productId: string,
     data: {
-      quantity: number;
+      quantity: QuantityValue;
       fromWarehouseId?: string;
       toWarehouseId: string;
       notes?: string;
@@ -277,7 +285,7 @@ export class ProductsRepository {
           productId,
           type: 'OUT',
           reason: 'TRANSFER',
-          quantity: -data.quantity,
+          quantity: qty(data.quantity).neg(),
           warehouseId: data.fromWarehouseId,
           referenceId,
           notes: data.notes,
@@ -289,7 +297,7 @@ export class ProductsRepository {
           productId,
           type: 'IN',
           reason: 'TRANSFER',
-          quantity: data.quantity,
+          quantity: qty(data.quantity),
           warehouseId: data.toWarehouseId,
           referenceId,
           notes: data.notes,
@@ -303,11 +311,11 @@ export class ProductsRepository {
     tenantId: string,
     productId: string,
     warehouseId: string,
-  ): Promise<number> {
+  ): Promise<Quantity> {
     const result = await this.prisma.stockMovement.aggregate({
       where: { tenantId, productId, warehouseId },
       _sum: { quantity: true },
     });
-    return result._sum.quantity ?? 0;
+    return qty(result._sum.quantity);
   }
 }

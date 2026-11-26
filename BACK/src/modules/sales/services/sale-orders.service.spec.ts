@@ -23,6 +23,7 @@ function makeProduct(overrides = {}) {
     tenantId: 'tenant-1',
     name: 'Heladera Samsung',
     isSerialized: false,
+    unitCode: 77,
     unit: 'unidad',
     costPrice: 2_000_000,
     salePrice: 2_500_000,
@@ -377,7 +378,7 @@ describe('SaleOrdersService', () => {
 
     it('creates a PENDING order with non-serialized product', async () => {
       productsRepository.findManyByIds.mockResolvedValue([
-        makeProduct({ isSerialized: false }),
+        makeProduct({ isSerialized: false, unitCode: 77 }),
       ]);
 
       const result = await service.create(
@@ -455,7 +456,7 @@ describe('SaleOrdersService', () => {
 
     it('throws UnprocessableEntityException when serialized product has wrong serial count', async () => {
       productsRepository.findManyByIds.mockResolvedValue([
-        makeProduct({ isSerialized: true }),
+        makeProduct({ isSerialized: true, unitCode: 77 }),
       ]);
 
       const dto = {
@@ -477,7 +478,7 @@ describe('SaleOrdersService', () => {
 
     it('persists financedUnitPrice on each item for a credit sale', async () => {
       productsRepository.findManyByIds.mockResolvedValue([
-        makeProduct({ isSerialized: false }),
+        makeProduct({ isSerialized: false, unitCode: 77 }),
       ]);
       prisma.creditPlan.findFirst.mockResolvedValue({ interestRate: 20 });
 
@@ -512,7 +513,7 @@ describe('SaleOrdersService', () => {
 
     it('rejects a credit order immediately when the product has no stock', async () => {
       productsRepository.findManyByIds.mockResolvedValue([
-        makeProduct({ isSerialized: false }),
+        makeProduct({ isSerialized: false, unitCode: 77 }),
       ]);
       tx.stockMovement.groupBy.mockResolvedValue([
         { productId: 'prod-1', warehouseId: 'wh-1', _sum: { quantity: 0 } },
@@ -546,7 +547,7 @@ describe('SaleOrdersService', () => {
 
     it('omits financedUnitPrice for a cash sale', async () => {
       productsRepository.findManyByIds.mockResolvedValue([
-        makeProduct({ isSerialized: false }),
+        makeProduct({ isSerialized: false, unitCode: 77 }),
       ]);
 
       await service.create('tenant-1', baseDto, undefined, false, [
@@ -562,7 +563,7 @@ describe('SaleOrdersService', () => {
 
     it("uses the current user's branch when assigned", async () => {
       productsRepository.findManyByIds.mockResolvedValue([
-        makeProduct({ isSerialized: false }),
+        makeProduct({ isSerialized: false, unitCode: 77 }),
       ]);
       prisma.user.findFirst.mockResolvedValue({ branchId: 'branch-user' });
 
@@ -584,7 +585,7 @@ describe('SaleOrdersService', () => {
 
     it("falls back to the tenant's main branch when the user has none assigned", async () => {
       productsRepository.findManyByIds.mockResolvedValue([
-        makeProduct({ isSerialized: false }),
+        makeProduct({ isSerialized: false, unitCode: 77 }),
       ]);
       prisma.user.findFirst.mockResolvedValue({ branchId: null });
       prisma.branch.findFirst.mockResolvedValue({ id: 'branch-main' });
@@ -606,7 +607,7 @@ describe('SaleOrdersService', () => {
 
     it('sets branchId to null when there is no user and no main branch configured', async () => {
       productsRepository.findManyByIds.mockResolvedValue([
-        makeProduct({ isSerialized: false }),
+        makeProduct({ isSerialized: false, unitCode: 77 }),
       ]);
 
       await service.create('tenant-1', baseDto, undefined, false, [
@@ -647,7 +648,7 @@ describe('SaleOrdersService', () => {
 
     it('generates a PRES-AA-NNNNNN quoteNumber and emits sale.order.quoted for a QUOTE', async () => {
       productsRepository.findManyByIds.mockResolvedValue([
-        makeProduct({ isSerialized: false }),
+        makeProduct({ isSerialized: false, unitCode: 77 }),
       ]);
       saleOrdersRepository.findLastQuoteNumber.mockResolvedValue(null);
 
@@ -732,7 +733,7 @@ describe('SaleOrdersService', () => {
 
     it('creates a DELIVERED order in one transaction and emits sale.payment.collected', async () => {
       productsRepository.findManyByIds.mockResolvedValue([
-        makeProduct({ isSerialized: false }),
+        makeProduct({ isSerialized: false, unitCode: 77 }),
       ]);
 
       const result = await service.createPosSale(
@@ -770,7 +771,7 @@ describe('SaleOrdersService', () => {
 
     it('saves inside the transaction it is given and leaves publishing to the caller', async () => {
       productsRepository.findManyByIds.mockResolvedValue([
-        makeProduct({ isSerialized: false }),
+        makeProduct({ isSerialized: false, unitCode: 77 }),
       ]);
 
       const result = await service.createPosSaleInTransaction(
@@ -795,7 +796,7 @@ describe('SaleOrdersService', () => {
 
     it('rejects the sale when there is not enough stock', async () => {
       productsRepository.findManyByIds.mockResolvedValue([
-        makeProduct({ isSerialized: false }),
+        makeProduct({ isSerialized: false, unitCode: 77 }),
       ]);
       tx.stockMovement.groupBy.mockResolvedValue([
         { productId: 'prod-1', warehouseId: 'wh-1', _sum: { quantity: 1 } },
@@ -809,7 +810,7 @@ describe('SaleOrdersService', () => {
 
     it('rejects when the POS session is not OPEN (closed mid-request)', async () => {
       productsRepository.findManyByIds.mockResolvedValue([
-        makeProduct({ isSerialized: false }),
+        makeProduct({ isSerialized: false, unitCode: 77 }),
       ]);
       tx.posSession.findFirst.mockResolvedValue(null);
 
@@ -822,7 +823,7 @@ describe('SaleOrdersService', () => {
 
     it('resolves a walk-in "Consumidor Final" customer when customerId is omitted', async () => {
       productsRepository.findManyByIds.mockResolvedValue([
-        makeProduct({ isSerialized: false }),
+        makeProduct({ isSerialized: false, unitCode: 77 }),
       ]);
       tx.customer.findFirst.mockResolvedValue(null); // no walk-in customer yet for this tenant
 
@@ -845,7 +846,7 @@ describe('SaleOrdersService', () => {
 
     it('throws UnprocessableEntityException when a serialized product has the wrong serial count', async () => {
       productsRepository.findManyByIds.mockResolvedValue([
-        makeProduct({ isSerialized: true }),
+        makeProduct({ isSerialized: true, unitCode: 77 }),
       ]);
 
       const dto = {
@@ -867,7 +868,7 @@ describe('SaleOrdersService', () => {
 
     it("resolves branchId from the cashier's user before opening the transaction", async () => {
       productsRepository.findManyByIds.mockResolvedValue([
-        makeProduct({ isSerialized: false }),
+        makeProduct({ isSerialized: false, unitCode: 77 }),
       ]);
       prisma.user.findFirst.mockResolvedValue({ branchId: 'branch-cashier' });
 
@@ -886,7 +887,7 @@ describe('SaleOrdersService', () => {
 
     it("falls back to the tenant's main branch when the cashier has no branch assigned", async () => {
       productsRepository.findManyByIds.mockResolvedValue([
-        makeProduct({ isSerialized: false }),
+        makeProduct({ isSerialized: false, unitCode: 77 }),
       ]);
       prisma.user.findFirst.mockResolvedValue({ branchId: null });
       prisma.branch.findFirst.mockResolvedValue({ id: 'branch-main' });
@@ -940,7 +941,7 @@ describe('SaleOrdersService', () => {
         {
           ...makeOrderItem(),
           warehouseId: 'wh-1',
-          product: { name: 'Heladera', isSerialized: false },
+          product: { name: 'Heladera', isSerialized: false, unitCode: 77 },
         },
       ]);
       saleOrdersRepository.findById.mockResolvedValue(
@@ -963,7 +964,7 @@ describe('SaleOrdersService', () => {
         {
           ...makeOrderItem(),
           warehouseId: 'wh-1',
-          product: { name: 'Heladera', isSerialized: false },
+          product: { name: 'Heladera', isSerialized: false, unitCode: 77 },
         },
       ]);
       tx.stockMovement.groupBy.mockImplementation(({ by }: { by: string[] }) =>
@@ -987,7 +988,7 @@ describe('SaleOrdersService', () => {
         {
           ...makeOrderItem({ quantity: 5 }),
           warehouseId: 'wh-1',
-          product: { name: 'Heladera', isSerialized: false },
+          product: { name: 'Heladera', isSerialized: false, unitCode: 77 },
         },
       ]);
       tx.stockMovement.groupBy.mockImplementation(({ by }: { by: string[] }) =>
@@ -1275,7 +1276,11 @@ describe('SaleOrdersService', () => {
         {
           ...makeOrderItem({ quantity: 2 }),
           warehouseId: 'wh-1',
-          product: { name: 'Heladera Samsung', isSerialized: false },
+          product: {
+            name: 'Heladera Samsung',
+            isSerialized: false,
+            unitCode: 77,
+          },
         },
       ]);
       tx.stockMovement.groupBy.mockImplementation(({ by }: { by: string[] }) =>

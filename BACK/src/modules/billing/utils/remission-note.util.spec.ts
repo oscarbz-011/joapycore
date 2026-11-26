@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import {
   buildReception,
   buildSaleLines,
@@ -101,7 +102,7 @@ describe('remitableItems', () => {
       expect.objectContaining({
         invoiceItemId: 'ii-tv',
         description: 'Televisor LG',
-        remitable: 2,
+        remitable: new Prisma.Decimal(2),
         isSerialized: true,
         soldSerials: ['SN-1', 'SN-2'],
       }),
@@ -109,7 +110,7 @@ describe('remitableItems', () => {
         invoiceItemId: 'ii-rice',
         unitCode: 83,
         remitted: 4,
-        remitable: 6,
+        remitable: new Prisma.Decimal(6),
       }),
     ]);
   });
@@ -170,7 +171,7 @@ describe('buildSaleLines', () => {
 
   it.each([
     [[{ invoiceItemId: 'ii-install', quantity: 1 }], 'no es mercadería'],
-    [[{ invoiceItemId: 'ii-rice', quantity: 7 }], 'quedan 6 unidades'],
+    [[{ invoiceItemId: 'ii-rice', quantity: 7 }], 'quedan 6 kg por enviar'],
     [
       [
         { invoiceItemId: 'ii-rice', quantity: 1 },

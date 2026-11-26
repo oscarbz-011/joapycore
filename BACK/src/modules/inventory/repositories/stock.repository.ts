@@ -1,3 +1,5 @@
+import { qty, sumQty, type Quantity } from '../../../common/units/quantity';
+import type { Prisma } from '@prisma/client';
 import { Injectable } from '@nestjs/common';
 import type { OrderChannel } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
@@ -13,7 +15,7 @@ export interface StockWarehouseQuantity {
   warehouseId: string;
   warehouseName: string;
   isActive: boolean;
-  quantity: number;
+  quantity: Quantity;
 }
 
 export interface StockRow {
@@ -25,11 +27,11 @@ export interface StockRow {
     brand: { id: string; name: string } | null;
     salesChannels: OrderChannel[];
     salePrice: number | null;
-    stockMin: number;
+    stockMin: Prisma.Decimal;
   };
-  totalStock: number;
+  totalStock: Quantity;
   stockByWarehouse: StockWarehouseQuantity[];
-  unassignedStock: number;
+  unassignedStock: Quantity;
 }
 
 export interface StockResult {
@@ -116,38 +118,38 @@ export class StockRepository {
         : [],
     ]);
 
-    const quantities = new Map<string, Map<string | null, number>>();
+    const quantities = new Map<string, Map<string | null, Quantity>>();
     const setQuantity = (
       productId: string,
       warehouseId: string | null,
-      quantity: number,
+      quantity: Quantity,
     ) => {
       const byWarehouse =
-        quantities.get(productId) ?? new Map<string | null, number>();
+        quantities.get(productId) ?? new Map<string | null, Quantity>();
       byWarehouse.set(warehouseId, quantity);
       quantities.set(productId, byWarehouse);
     };
     for (const group of movementGroups) {
-      setQuantity(group.productId, group.warehouseId, group._sum.quantity ?? 0);
+      setQuantity(group.productId, group.warehouseId, qty(group._sum.quantity));
     }
     for (const group of unitGroups) {
-      setQuantity(group.productId, group.warehouseId, group._count.id);
+      setQuantity(group.productId, group.warehouseId, qty(group._count.id));
     }
 
-    const warehouseTotals = new Map<string, number>();
+    const warehouseTotals = new Map<string, Quantity>();
     for (const byWarehouse of quantities.values()) {
       for (const [warehouseId, quantity] of byWarehouse) {
         if (warehouseId) {
           warehouseTotals.set(
             warehouseId,
-            (warehouseTotals.get(warehouseId) ?? 0) + quantity,
+            qty(warehouseTotals.get(warehouseId)).plus(quantity),
           );
         }
       }
     }
     const visibleWarehouses = warehouses.filter(
       (warehouse) =>
-        warehouse.isActive || (warehouseTotals.get(warehouse.id) ?? 0) !== 0,
+        warehouse.isActive || !qty(warehouseTotals.get(warehouse.id)).isZero(),
     );
     const rowWarehouses = filters.warehouseId
       ? visibleWarehouses.filter(
@@ -164,20 +166,17 @@ export class StockRepository {
           salePrice: salePrice === null ? null : Number(salePrice),
         };
         const byWarehouse =
-          quantities.get(product.id) ?? new Map<string | null, number>();
+          quantities.get(product.id) ?? new Map<string | null, Quantity>();
         return {
           product,
-          totalStock: [...byWarehouse.values()].reduce(
-            (total, quantity) => total + quantity,
-            0,
-          ),
+          totalStock: sumQty([...byWarehouse.values()]),
           stockByWarehouse: rowWarehouses.map((warehouse) => ({
             warehouseId: warehouse.id,
             warehouseName: warehouse.name,
             isActive: warehouse.isActive,
-            quantity: byWarehouse.get(warehouse.id) ?? 0,
+            quantity: qty(byWarehouse.get(warehouse.id)),
           })),
-          unassignedStock: byWarehouse.get(null) ?? 0,
+          unassignedStock: qty(byWarehouse.get(null)),
         };
       }),
     };

@@ -64,7 +64,7 @@ model SupplierCatalogItem {
   validFrom             DateTime?             @map("valid_from")
   validTo               DateTime?             @map("valid_to")
   // Cantidad mínima que el proveedor vende de este ítem, en su unidad.
-  minOrderQuantity      Int?                  @map("min_order_quantity")
+  minOrderQuantity      Decimal?              @map("min_order_quantity") @db.Decimal(18, 8)
   // No hay integración con el stock del proveedor: es un dato que se carga
   // a mano, con la fecha en que se actualizó para saber qué tan viejo es.
   availability          SupplierAvailability?
@@ -199,8 +199,8 @@ model PurchaseOrderItem {
   id                  String  @id @default(uuid())
   purchaseOrderId     String  @map("purchase_order_id")
   productId           String  @map("product_id")
-  quantity            Int
-  receivedQty         Int     @default(0) @map("received_qty")
+  quantity            Decimal @db.Decimal(18, 8)
+  receivedQty         Decimal @default(0) @map("received_qty") @db.Decimal(18, 8)
   unitCost            Decimal @map("unit_cost") @db.Decimal(23, 8)
   // Copia del ítem del catálogo del proveedor con que se pidió: la orden
   // tiene que seguir diciendo lo mismo aunque el catálogo cambie o el ítem se
@@ -252,7 +252,7 @@ model PurchaseReceiptItem {
   purchaseReceiptId   String    @map("purchase_receipt_id")
   purchaseOrderItemId String    @map("purchase_order_item_id")
   productId           String    @map("product_id")
-  quantity            Int
+  quantity            Decimal @db.Decimal(18, 8)
   unitCost            Decimal   @map("unit_cost") @db.Decimal(23, 8)
   batchNumber         String?   @map("batch_number")
   expiresAt           DateTime? @map("expires_at")
@@ -358,10 +358,10 @@ model SupplierInvoiceItem {
   purchaseReceiptItemId String  @map("purchase_receipt_item_id")
   accountsPayableId     String  @map("accounts_payable_id")
   // Lo que dice la factura.
-  quantity              Int
+  quantity              Decimal @db.Decimal(18, 8)
   unitCost              Decimal @map("unit_cost") @db.Decimal(23, 8)
   // Lo que se había recibido, tal como estaba al cargar la factura.
-  receivedQuantity      Int     @map("received_quantity")
+  receivedQuantity      Decimal @map("received_quantity") @db.Decimal(18, 8)
   receivedUnitCost      Decimal @map("received_unit_cost") @db.Decimal(23, 8)
 
   supplierInvoice     SupplierInvoice     @relation(fields: [supplierInvoiceId], references: [id], onDelete: Cascade)
@@ -406,7 +406,7 @@ model SupplierCatalogPriceTier {
   tenantId      String  @map("tenant_id")
   id            String  @id @default(uuid())
   catalogItemId String  @map("catalog_item_id")
-  minQuantity   Int     @map("min_quantity")
+  minQuantity   Decimal @map("min_quantity") @db.Decimal(18, 8)
   price         Decimal @db.Decimal(23, 8)
 
   catalogItem SupplierCatalogItem @relation(fields: [catalogItemId], references: [id], onDelete: Cascade)
@@ -434,7 +434,7 @@ model SupplierQuantityDiscount {
   tenantId    String  @map("tenant_id")
   id          String  @id @default(uuid())
   supplierId  String  @map("supplier_id")
-  minQuantity Int     @map("min_quantity")
+  minQuantity Decimal @map("min_quantity") @db.Decimal(18, 8)
   percent     Decimal @db.Decimal(11, 8)
 
   supplier Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)

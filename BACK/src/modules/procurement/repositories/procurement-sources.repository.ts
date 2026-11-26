@@ -10,7 +10,14 @@ export class ProcurementSourcesRepository {
   findProductStatuses(tenantId: string, ids: string[]) {
     return this.prisma.product.findMany({
       where: { tenantId, id: { in: ids }, deletedAt: null },
-      select: { id: true, name: true, status: true, isPurchasable: true },
+      select: {
+        id: true,
+        name: true,
+        status: true,
+        isPurchasable: true,
+        unitCode: true,
+        isSerialized: true,
+      },
     });
   }
 

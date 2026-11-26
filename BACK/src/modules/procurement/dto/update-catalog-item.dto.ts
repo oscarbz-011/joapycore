@@ -5,7 +5,6 @@ import {
   ArrayMaxSize,
   IsArray,
   IsEnum,
-  IsInt,
   IsNumber,
   IsOptional,
   IsPositive,
@@ -18,8 +17,8 @@ import {
 
 export class PriceTierDto {
   @ApiProperty({ description: 'Cantidad desde la que rige el precio' })
-  @IsInt()
-  @Min(2)
+  @IsNumber({ maxDecimalPlaces: 3 })
+  @IsPositive()
   minQuantity: number;
 
   @ApiProperty({ description: 'Precio por unidad del proveedor' })
@@ -89,8 +88,8 @@ export class UpdateCatalogItemDto extends CatalogValidityDto {
     nullable: true,
   })
   @IsOptional()
-  @IsInt()
-  @Min(1)
+  @IsNumber({ maxDecimalPlaces: 3 })
+  @IsPositive()
   minOrderQuantity?: number | null;
 
   @ApiPropertyOptional({

@@ -1,5 +1,6 @@
 "use client";
 
+import { qty } from '@/lib/quantity';
 import { resolveWarehouseId, warehouseChoices } from '@/lib/sale-warehouse';
 import { useSaleStock } from '@/lib/use-sale-stock';
 import { apiErrorMessage } from "@/lib/api/api-error";
@@ -71,7 +72,7 @@ export default function AdjustOrderPage() {
         .map((i) => ({
           productId: i.productId!,
           product: products.find((p) => p.id === i.productId) ?? null,
-          quantity: i.quantity,
+          quantity: qty(i.quantity).toNumber(),
           unitPrice: i.unitPrice,
           serialInput: i.productUnits.map((u) => u.serialNumber).join("\n"),
           warehouseId: i.warehouseId ?? undefined,

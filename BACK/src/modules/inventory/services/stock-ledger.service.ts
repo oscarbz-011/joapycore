@@ -1,4 +1,9 @@
 import {
+  assertQuantityForUnit,
+  qty,
+  type Quantity,
+} from '../../../common/units/quantity';
+import {
   Injectable,
   NotFoundException,
   UnprocessableEntityException,
@@ -93,7 +98,7 @@ export class StockLedgerService implements StockLedger {
     tx: Prisma.TransactionClient,
     tenantId: string,
     itemIds: string[],
-  ): Promise<Map<string, number>> {
+  ): Promise<Map<string, Quantity>> {
     if (itemIds.length === 0) return new Map();
     const sums = await this.stockMovements.sumReservationsByReference(
       tenantId,
@@ -101,7 +106,9 @@ export class StockLedgerService implements StockLedger {
       tx,
     );
     return new Map(
-      [...sums.entries()].filter(([, q]) => q < 0).map(([id, q]) => [id, -q]),
+      [...sums.entries()]
+        .filter(([, q]) => q.lt(0))
+        .map(([id, q]) => [id, q.neg()]),
     );
   }
 
@@ -117,7 +124,7 @@ export class StockLedgerService implements StockLedger {
     );
     for (const item of items) {
       const quantity = reserved.get(item.id);
-      if (!item.productId || !quantity) continue;
+      if (!item.productId || !quantity || quantity.isZero()) continue;
       await this.stockMovements.create(
         {
           tenantId,
@@ -227,7 +234,7 @@ export class StockLedgerService implements StockLedger {
     referenceId: string,
     lines: ReturnLine[],
   ): Promise<void> {
-    const wanted = lines.filter((l) => l.quantity > 0);
+    const wanted = lines.filter((l) => qty(l.quantity).gt(0));
     if (wanted.length === 0) return;
     const items = await this.stockSources.findSaleItemsForReturn(
       tenantId,
@@ -243,8 +250,9 @@ export class StockLedgerService implements StockLedger {
           'Uno de los ítems devueltos no mueve stock',
         );
       }
+      if (item.product) assertQuantityForUnit(line.quantity, item.product);
       if (item.product?.isSerialized) {
-        if (line.serialNumbers.length !== line.quantity) {
+        if (!qty(line.quantity).eq(line.serialNumbers.length)) {
           throw new UnprocessableEntityException(
             'Elegí un número de serie por cada unidad que vuelve al stock',
           );
@@ -255,7 +263,7 @@ export class StockLedgerService implements StockLedger {
           line.serialNumbers,
           tx,
         );
-        if (restored !== line.quantity) {
+        if (!qty(line.quantity).eq(restored)) {
           throw new UnprocessableEntityException(
             'Algún número de serie no corresponde a esta venta o ya volvió al stock',
           );
@@ -269,7 +277,7 @@ export class StockLedgerService implements StockLedger {
           warehouseId: item.warehouseId,
           type: 'IN',
           reason: 'CUSTOMER_RETURN',
-          quantity: line.quantity,
+          quantity: qty(line.quantity),
           referenceId,
         },
         tx,
@@ -291,7 +299,7 @@ export class StockLedgerService implements StockLedger {
     await this.assertActiveWarehouse(tx, tenantId, fromWarehouseId);
     await this.assertActiveWarehouse(tx, tenantId, toWarehouseId);
 
-    const lines = dispatch.lines.filter((l) => l.quantity > 0);
+    const lines = dispatch.lines.filter((l) => qty(l.quantity).gt(0));
     if (lines.length === 0) {
       throw new UnprocessableEntityException('El traslado no tiene mercadería');
     }
@@ -330,7 +338,7 @@ export class StockLedgerService implements StockLedger {
           toWarehouseId,
           tx,
         );
-        if (moved !== line.quantity) {
+        if (!qty(line.quantity).eq(moved)) {
           throw new UnprocessableEntityException(
             `Algún número de serie de ${product.name} no está disponible en el depósito de origen`,
           );
@@ -343,7 +351,7 @@ export class StockLedgerService implements StockLedger {
           warehouseId: fromWarehouseId,
           type: 'OUT',
           reason: 'TRANSFER',
-          quantity: -line.quantity,
+          quantity: qty(line.quantity).neg(),
           referenceId: dispatch.referenceId,
           notes: dispatch.notes,
         },
@@ -358,7 +366,7 @@ export class StockLedgerService implements StockLedger {
     reception: StockReception,
   ): Promise<void> {
     await this.assertActiveWarehouse(tx, tenantId, reception.warehouseId);
-    const lines = reception.lines.filter((l) => l.quantity > 0);
+    const lines = reception.lines.filter((l) => qty(l.quantity).gt(0));
     const lost = reception.lostSerials.filter(
       (l) => l.serialNumbers.length > 0,
     );
@@ -378,7 +386,7 @@ export class StockLedgerService implements StockLedger {
           reception.warehouseId,
           tx,
         );
-        if (received !== line.quantity) {
+        if (!qty(line.quantity).eq(received)) {
           throw new UnprocessableEntityException(
             `Algún número de serie de ${product.name} no está en tránsito`,
           );
@@ -391,7 +399,7 @@ export class StockLedgerService implements StockLedger {
           warehouseId: reception.warehouseId,
           type: 'IN',
           reason: 'TRANSFER',
-          quantity: line.quantity,
+          quantity: qty(line.quantity),
           referenceId: reception.referenceId,
           notes: reception.notes,
         },
@@ -433,7 +441,7 @@ export class StockLedgerService implements StockLedger {
 
   private uniqueSerials(line: TransferLine, name: string): string[] {
     const serials = [...new Set(line.serialNumbers)];
-    if (serials.length !== line.quantity) {
+    if (!qty(line.quantity).eq(serials.length)) {
       throw new UnprocessableEntityException(
         `Elegí un número de serie por cada unidad de ${name}`,
       );
@@ -458,7 +466,7 @@ export class StockLedgerService implements StockLedger {
       ]);
     }
     return [...balances]
-      .filter(([, quantity]) => quantity > 0)
+      .filter(([, quantity]) => quantity.gt(0))
       .map(([productId, quantity]) => ({
         productId,
         quantity,
@@ -480,7 +488,7 @@ export class StockLedgerService implements StockLedger {
           productId: line.productId,
           warehouseId: line.warehouseId,
           type,
-          quantity: -line.quantity,
+          quantity: qty(line.quantity).neg(),
           referenceId: line.saleItemId,
         },
         tx,

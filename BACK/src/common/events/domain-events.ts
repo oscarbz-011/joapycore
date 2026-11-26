@@ -1,3 +1,4 @@
+import type { QuantityValue } from '../units/quantity';
 import type { Industry } from '@prisma/client';
 import type { AuditLogEvent } from '../../audit/audit-log.event';
 import type { SessionInvalidateEvent } from './session-invalidate.event';
@@ -90,7 +91,7 @@ export interface DomainEvents {
   'stock.movement.created': Tenant & {
     productId: string;
     type: string;
-    quantity: number;
+    quantity: QuantityValue;
   };
   // Primer lote del que salió cada renglón de una venta entregada.
   'inventory.batch.consumed': SaleOrderRef & {
@@ -99,9 +100,9 @@ export interface DomainEvents {
   'production.order.completed': Tenant & {
     productionOrderId: string;
     productId: string;
-    quantity: number;
+    quantity: QuantityValue;
     warehouseId: string | null;
-    consumed: { productId: string; quantity: number }[];
+    consumed: { productId: string; quantity: QuantityValue }[];
   };
   'purchase.order.confirmed': Tenant & { purchaseOrderId: string };
   'purchase.order.pdf.requested': Tenant & {

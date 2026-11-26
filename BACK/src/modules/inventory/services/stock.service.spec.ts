@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import { StockService } from './stock.service';
 
 const row = (id: string, stockMin: number) => ({
@@ -9,7 +10,7 @@ const row = (id: string, stockMin: number) => ({
     brand: null,
     salesChannels: ['NORMAL'],
     salePrice: 100,
-    stockMin,
+    stockMin: new Prisma.Decimal(stockMin),
   },
   totalStock: 3,
   stockByWarehouse: [],

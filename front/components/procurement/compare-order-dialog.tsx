@@ -1,5 +1,6 @@
 'use client';
 
+import { formatQty } from '@/lib/quantity';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -164,7 +165,7 @@ export function CompareOrderDialog({
                   </td>
                   <td className="px-3 py-2 text-foreground">{line.description}</td>
                   <td className="px-3 py-2 text-right tabular-nums text-foreground">
-                    {line.quantity}
+                    {formatQty(line.quantity)}
                   </td>
                   <td className="px-3 py-2 text-right font-mono tabular-nums whitespace-nowrap text-muted-foreground">
                     {gs(line.unitCost)}

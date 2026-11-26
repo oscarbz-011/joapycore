@@ -12,6 +12,7 @@ function makeProduct(overrides = {}) {
     tenantId: 'tenant-1',
     name: 'Aceite 5W30',
     isSerialized: false,
+    unitCode: 77,
     usesLots: false,
     ...overrides,
   };
@@ -79,7 +80,7 @@ describe('StockEntryService', () => {
 
     it('creates ProductUnit rows for a serialized product, never a StockMovement', async () => {
       productsRepository.findById.mockResolvedValue(
-        makeProduct({ isSerialized: true }),
+        makeProduct({ isSerialized: true, unitCode: 77 }),
       );
 
       await service.registerEntry('tenant-1', {
@@ -131,7 +132,7 @@ describe('StockEntryService', () => {
 
     it('rejects a serialized entry whose serial count does not match quantity', async () => {
       productsRepository.findById.mockResolvedValue(
-        makeProduct({ isSerialized: true }),
+        makeProduct({ isSerialized: true, unitCode: 77 }),
       );
 
       await expect(

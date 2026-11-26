@@ -1,3 +1,4 @@
+import { formatQty, qty } from '@/lib/quantity';
 import { money as exact, sumMoney } from '@/lib/money';
 import type {
   BillingEvent,
@@ -153,11 +154,11 @@ export function creditDraftProblem(params: {
     const line = lines[item.invoiceItemId];
     if (!line) continue;
     const credited = kind === 'TOTAL' ? item.quantity : line.quantity;
-    if (kind === 'ITEMS' && line.quantity > item.creditableQuantity) {
-      return `De "${item.description}" se pueden acreditar hasta ${item.creditableQuantity} unidades`;
+    if (kind === 'ITEMS' && qty(line.quantity).gt(qty(item.creditableQuantity))) {
+      return `De "${item.description}" se pueden acreditar hasta ${formatQty(item.creditableQuantity)}`;
     }
-    if (line.restockQuantity > credited) {
-      return `De "${item.description}" vuelven al stock hasta ${credited} unidades`;
+    if (qty(line.restockQuantity).gt(qty(credited))) {
+      return `De "${item.description}" vuelven al stock hasta ${formatQty(credited)}`;
     }
     if (item.isSerialized && line.restockQuantity !== line.serialNumbers.length) {
       return `Elegí un número de serie por cada unidad de "${item.description}" que vuelve al stock`;

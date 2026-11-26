@@ -1,3 +1,4 @@
+import { qty } from '@/lib/quantity';
 import type {
   AssignUnlocatedStockPayload,
   CreateGlobalMovementPayload,
@@ -32,19 +33,19 @@ export type TransferRequest =
 export function transferSources(row: StockRow | null): TransferSource[] {
   if (!row) return [];
   const sources: TransferSource[] = [];
-  if (row.unassignedStock !== 0) {
+  if (!qty(row.unassignedStock).isZero()) {
     sources.push({
       id: UNLOCATED_SOURCE,
       label: 'Sin depósito asignado',
-      quantity: row.unassignedStock,
+      quantity: qty(row.unassignedStock).toNumber(),
     });
   }
   for (const location of row.stockByWarehouse) {
-    if (location.isActive && location.quantity > 0) {
+    if (location.isActive && qty(location.quantity).gt(0)) {
       sources.push({
         id: location.warehouseId,
         label: location.warehouseName,
-        quantity: location.quantity,
+        quantity: qty(location.quantity).toNumber(),
       });
     }
   }

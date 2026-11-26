@@ -330,9 +330,9 @@ function CreateOrderModal({
                       </div>
                       <div className="w-20">
                         <input
-                          type="number" min={1} placeholder="Cant." aria-label="Cantidad" className={NUM_CLS}
+                          type="number" min={0} step="any" placeholder="Cant." aria-label="Cantidad" className={NUM_CLS}
                           value={item.quantity || ''}
-                          onChange={(e) => patchLine(item.key, { quantity: parseInt(e.target.value) || 0 })}
+                          onChange={(e) => patchLine(item.key, { quantity: Number(e.target.value) || 0 })}
                         />
                       </div>
                       <div className="w-32">

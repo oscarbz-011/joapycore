@@ -288,7 +288,7 @@ model SaleOrderItem {
   description String? // requerido cuando productId es null
   batchId     String? @map("batch_id")
   warehouseId String? @map("warehouse_id")
-  quantity    Int
+  quantity    Decimal @db.Decimal(18, 8)
   unitPrice   Decimal @map("unit_price") @db.Decimal(23, 8)
 
   // Notas/especificaciones opcionales por línea (dimensiones, materiales,
@@ -355,7 +355,7 @@ model SaleComboItem {
   id        String @id @default(uuid())
   comboId   String @map("combo_id")
   productId String @map("product_id")
-  quantity  Int
+  quantity  Decimal @db.Decimal(18, 8)
 
   combo   SaleCombo @relation(fields: [comboId], references: [id])
   product Product   @relation(fields: [productId], references: [id])
