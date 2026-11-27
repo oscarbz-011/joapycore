@@ -1,4 +1,5 @@
 "use client";
+import { amountToPay, money } from "@/lib/money";
 
 import { formatQty } from '@/lib/quantity';
 import { RequirePermission } from "@/components/require-permission";
@@ -425,6 +426,13 @@ export default function InvoiceDetailPage() {
 
   const customerName = `${customer.firstName} ${customer.lastName}`.trim();
   const lines = invoiceDetailLines(invoice.items, Number(invoice.total), isCredit);
+  const rounding = money(invoice.rounding ?? 0);
+  const toPay = money(invoice.total).minus(rounding).toNumber();
+  // Antes de emitir: contado en efectivo se cobra redondeado hacia abajo a 50.
+  const issuePreview =
+    !isCredit && form.paymentMethod
+      ? amountToPay(invoice.total, [{ amount: invoice.total, method: form.paymentMethod }]).toNumber()
+      : null;
   const iva = invoiceIvaSummary(lines);
   const conditionLabel = isCredit
     ? `Crédito${invoice.saleOrder.installments ? ` · ${invoice.saleOrder.installments} cuotas` : ""}`
@@ -511,7 +519,7 @@ export default function InvoiceDetailPage() {
 
       {/* Key facts */}
       <dl className="mb-6 grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-border bg-border md:grid-cols-4">
-        <KeyFact label="Total" value={formatPrice(Number(invoice.total))} strong />
+        <KeyFact label="Total a pagar" value={formatPrice(toPay)} strong />
         <KeyFact label="Condición" value={conditionLabel} />
         <KeyFact
           label="Emitida"
@@ -580,11 +588,17 @@ export default function InvoiceDetailPage() {
                 <TotalRow label="Total IVA" value={iva.ivaTotal} />
               </dl>
               <div className="flex flex-col justify-end sm:items-end">
+                {!rounding.isZero() && (
+                  <dl className="mb-2 space-y-1 text-sm sm:text-right">
+                    <TotalRow label="Total" value={Number(invoice.total)} />
+                    <TotalRow label="Redondeo (efectivo)" value={-rounding.toNumber()} />
+                  </dl>
+                )}
                 <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/60">
                   Total a pagar
                 </span>
                 <span className="text-2xl font-bold tabular-nums text-foreground">
-                  {formatPrice(Number(invoice.total))}
+                  {formatPrice(toPay)}
                 </span>
               </div>
             </div>
@@ -779,6 +793,12 @@ export default function InvoiceDetailPage() {
                       ))}
                     </SelectContent>
                   </Select>
+                  {issuePreview != null && issuePreview !== Number(invoice.total) && (
+                    <p className="text-xs text-muted-foreground">
+                      En efectivo se cobra {formatPrice(issuePreview)}: se redondea hacia abajo a 50 a
+                      favor del cliente.
+                    </p>
+                  )}
                 </div>
               )}
 

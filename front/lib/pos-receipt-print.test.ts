@@ -38,7 +38,7 @@ function receipt(overrides: Partial<PosReceipt> = {}): PosReceipt {
     buyer: { name: 'Sin Nombre', document: 'X', address: null },
     relatedDocument: null,
     lines: [],
-    totals: { exempt: 0, taxed5: 0, taxed10: 0, iva5: 0, iva10: 0, ivaTotal: 0, total: 0 },
+    totals: { exempt: 0, taxed5: 0, taxed10: 0, iva5: 0, iva10: 0, ivaTotal: 0, total: 0, rounding: 0, toPay: 0 },
     formLayout: null,
     copy: false,
     terminalName: 'Caja 1',

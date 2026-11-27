@@ -89,3 +89,29 @@ export function installmentPlan(total: MoneyValue, count: number) {
     rest: parts.length > 1 ? parts[1].toNumber() : null,
   };
 }
+
+// Res. SDCU 1670/2022 (SEDECO) y SIFEN: lo que se paga en efectivo se
+// redondea hacia abajo al múltiplo de 50, a favor del cliente. Igual que el
+// backend (common/money/cash-rounding.ts).
+const CASH_STEP = 50;
+
+export interface PaymentPart {
+  amount: MoneyValue;
+  method: string;
+}
+
+const isCash = (p: PaymentPart) => p.method === 'CASH';
+
+/** Redondeo (dRedon): solo sobre lo que queda por cobrar en efectivo. */
+export function cashRounding(total: MoneyValue, payments: readonly PaymentPart[]): Decimal {
+  if (!payments.some(isCash)) return ZERO;
+  const electronic = sumMoney(payments.filter((p) => !isCash(p)).map((p) => p.amount || 0));
+  const cashDue = money(total).minus(electronic);
+  if (cashDue.lte(0)) return ZERO;
+  return cashDue.mod(CASH_STEP);
+}
+
+/** Lo que hay que cobrar: el total menos el redondeo del efectivo. */
+export function amountToPay(total: MoneyValue, payments: readonly PaymentPart[]): Decimal {
+  return money(total).minus(cashRounding(total, payments));
+}

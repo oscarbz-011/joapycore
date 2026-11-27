@@ -134,7 +134,10 @@ export function receiptHtml(receipt: PosReceipt): string {
     line('Exentas', gs(totals.exempt)),
     line('Gravadas 5%', gs(totals.taxed5)),
     line('Gravadas 10%', gs(totals.taxed10)),
-    line('TOTAL A PAGAR Gs.', gs(totals.total), true),
+    ...(totals.rounding > 0
+      ? [line('Total', gs(totals.total)), line('Redondeo (efectivo)', `-${gs(totals.rounding)}`)]
+      : []),
+    line('TOTAL A PAGAR Gs.', gs(totals.toPay), true),
     `<div class="strong">Liquidación del IVA</div>`,
     line('IVA 5%', gs(totals.iva5)),
     line('IVA 10%', gs(totals.iva10)),

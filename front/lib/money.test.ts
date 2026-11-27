@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  amountToPay,
+  cashRounding,
   chargedUnitPrice,
   roundGuaranies,
   saleAmounts,
@@ -64,5 +66,21 @@ describe("money", () => {
     });
     expect(percentWithInterest.surcharge.toString()).toBe("2613");
     expect(percentWithInterest.total.toString()).toBe("39946");
+  });
+});
+
+describe("cash rounding", () => {
+  const cash = (amount: number) => ({ amount, method: "CASH" });
+  const card = (amount: number) => ({ amount, method: "CARD" });
+
+  it("rounds cash down to 50, as in the SIFEN manual", () => {
+    expect(cashRounding(107_437, [cash(107_437)]).toNumber()).toBe(37);
+    expect(amountToPay(47_789, [cash(50_000)]).toNumber()).toBe(47_750);
+  });
+
+  it("charges electronic payments exact and rounds only the cash part", () => {
+    expect(cashRounding(15_483, [card(15_483)]).toNumber()).toBe(0);
+    expect(cashRounding(15_483, [card(10_000), cash(0)]).toNumber()).toBe(33);
+    expect(amountToPay(15_483, [card(10_020), cash(0)]).toNumber()).toBe(15_470);
   });
 });

@@ -104,7 +104,12 @@ export interface FiscalReceipt {
     iva5: number;
     iva10: number;
     ivaTotal: number;
+    /** Suma de las líneas. */
     total: number;
+    /** Redondeo del efectivo (dRedon); 0 si no hubo. */
+    rounding: number;
+    /** Lo que se cobró: total - rounding. */
+    toPay: number;
   };
   formLayout: PreprintedLayout | null;
 }
@@ -209,6 +214,8 @@ export interface Invoice {
   issuedAt: string | null;
   dueDate: string | null;
   total: number;
+  /** Redondeo del efectivo (dRedon): se cobró total - rounding. */
+  rounding?: number | string | null;
   notes: string | null;
   paymentMethod: PaymentMethod | null;
   createdAt: string;
