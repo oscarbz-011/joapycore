@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import { PaymentSourcesRepository } from '../repositories/payment-sources.repository';
 import { PaymentsOnInvoiceListener } from './payments-on-invoice.listener';
 
@@ -62,6 +63,29 @@ describe('PaymentsOnInvoiceListener', () => {
           invoiceId: 'inv-1',
           amount: 2_500_000,
         }),
+      );
+    });
+
+    it('creates the AR of a cash invoice for what is paid, without the cash rounding', async () => {
+      arRepository.findByInvoice.mockResolvedValue(null);
+      prisma.invoice.findFirst.mockResolvedValue({
+        total: 15_483,
+        rounding: 33,
+        dueDate: null,
+        saleOrder: { saleType: 'CASH', loan: null },
+      });
+
+      await listener.handle({
+        tenantId: 'tenant-1',
+        invoiceId: 'inv-1',
+        saleOrderId: 'order-1',
+        paymentCondition: 'CASH',
+        total: 15_483,
+        dueDate: null,
+      });
+
+      expect(arRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({ amount: new Prisma.Decimal(15_450) }),
       );
     });
 

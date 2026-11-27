@@ -114,6 +114,10 @@ model Invoice {
   issuedAt    DateTime?     @map("issued_at")
   dueDate     DateTime?     @map("due_date")
   total       Decimal       @db.Decimal(23, 8)
+  // dRedon: lo que se descontó al redondear hacia abajo a 50 la parte pagada
+  // en efectivo. `total` sigue siendo la suma de las líneas; se cobró
+  // total - rounding.
+  rounding    Decimal       @default(0) @db.Decimal(23, 8)
   notes       String?
 
   // Solo para invoiceType=INTEREST: qué recibo de cobro generó esta factura.

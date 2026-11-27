@@ -11,7 +11,6 @@ import {
   type InvoicePdf,
 } from '../../../common/contracts/document-pdf.contract';
 import { TemplateKind } from '@prisma/client';
-import { numberToWordsEs } from '../../../common/utils/number-to-words.util';
 import { DocxTemplateService } from '../../../files/docx/docx-template.service';
 import { unflattenVariables } from '../../../files/docx/docx-variables.util';
 import { FilesService } from '../../../files/files.service';
@@ -19,6 +18,7 @@ import type { PdfTableVariable } from '../../../files/pdf/tiptap-to-html.convert
 import { PdfService } from '../../../files/pdf/pdf.service';
 import { DocumentSourcesRepository } from '../repositories/document-sources.repository';
 import { DEFAULT_INVOICE_TEMPLATE } from '../constants/default-templates.constant';
+import { invoiceTotalVariables } from '../builders/invoice-total-variables';
 import { DocumentsRepository } from '../repositories/documents.repository';
 import {
   invoiceFiscalVariables,
@@ -216,8 +216,7 @@ export class InvoiceOnIssueListener {
       'factura.iva5': formatMoney(ivaTotals['5']),
       'factura.iva10': formatMoney(ivaTotals['10']),
       'factura.totalIva': formatMoney(ivaTotals['5'].plus(ivaTotals['10'])),
-      'factura.total': formatMoney(invoiceTotal),
-      'factura.totalEnLetras': numberToWordsEs(money(invoiceTotal).toNumber()),
+      ...invoiceTotalVariables(invoiceTotal, invoice.rounding),
     };
 
     const tableVariables: Record<string, PdfTableVariable> = {

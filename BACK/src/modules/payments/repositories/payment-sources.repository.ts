@@ -22,6 +22,7 @@ export class PaymentSourcesRepository {
       select: {
         status: true,
         total: true,
+        rounding: true,
         dueDate: true,
         saleOrder: {
           select: {

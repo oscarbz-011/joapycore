@@ -1,4 +1,5 @@
 import type { QuantityValue } from '../../../common/units/quantity';
+import { issueRounding } from '../../../common/money/cash-rounding';
 import { sumMoney } from '../../../common/money/money';
 import {
   Injectable,
@@ -166,6 +167,12 @@ export class InvoicesService {
             {
               dueDate: dto.dueDate ? new Date(dto.dueDate) : undefined,
               paymentMethod: dto.paymentMethod ?? null,
+              rounding: issueRounding({
+                total: invoice.total,
+                current: invoice.rounding,
+                paymentCondition: dto.paymentCondition,
+                paymentMethod: dto.paymentMethod,
+              }),
               notes: dto.notes,
               ...(numbering ?? {}),
             },
@@ -324,6 +331,12 @@ export class InvoicesService {
       {
         dueDate: dto.dueDate ? new Date(dto.dueDate) : undefined,
         paymentMethod: dto.paymentMethod ?? null,
+        rounding: issueRounding({
+          total: invoice.total,
+          current: invoice.rounding,
+          paymentCondition: dto.paymentCondition,
+          paymentMethod: dto.paymentMethod,
+        }),
         notes: dto.notes,
         ...numbering,
       },

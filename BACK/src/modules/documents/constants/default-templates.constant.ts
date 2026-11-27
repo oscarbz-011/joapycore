@@ -84,6 +84,7 @@ export const DEFAULT_INVOICE_TEMPLATE = `<!DOCTYPE html>
     <div style="flex:1;text-align:right">
       <div class="label">Total a pagar (en letras)</div>
       <div>GUARANIES: {{factura.totalEnLetras}}.-</div>
+      <div>{{factura.redondeo}}</div>
       <div style="font-size:16px;font-weight:700;margin-top:4px">Gs. {{factura.total}}</div>
     </div>
   </div>

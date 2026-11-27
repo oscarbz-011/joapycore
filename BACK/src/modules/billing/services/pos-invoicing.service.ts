@@ -19,6 +19,7 @@ import { BillingEventsRepository } from '../repositories/billing-events.reposito
 import { InvoicesRepository } from '../repositories/invoices.repository';
 import { buildFiscalReceipt } from '../utils/fiscal-receipt.util';
 import { toInvoiceItem } from '../utils/invoice-items.util';
+import { cashRounding } from '../../../common/money/cash-rounding';
 import { sumMoney } from '../../../common/money/money';
 import { BillingSeriesService, seriesProblem } from './billing-series.service';
 
@@ -92,12 +93,14 @@ export class PosInvoicingService implements BillingGateway {
 
     const items = order.items.map(toInvoiceItem);
     const total = sumMoney(items.map((item) => item.total));
+    const rounding = cashRounding(total, order.salePayments);
     const invoice = await this.invoicesRepository.createPaid(
       tenantId,
       {
         saleOrderId: input.saleOrderId,
         numbering,
         total,
+        rounding,
         issuedAt: input.at,
         paymentMethod: input.paymentMethod,
         anonymousBuyer: input.anonymousBuyer,

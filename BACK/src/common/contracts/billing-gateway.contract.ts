@@ -121,7 +121,12 @@ export interface FiscalReceipt {
     iva5: number;
     iva10: number;
     ivaTotal: number;
+    /** Suma de las líneas. */
     total: number;
+    /** Lo que se descontó al redondear el efectivo (dRedon); 0 si no hubo. */
+    rounding: number;
+    /** Lo que se cobró: total - rounding. */
+    toPay: number;
   };
   /** Solo con talonario de imprenta: cómo imprimir sobre la hoja. */
   formLayout: PreprintedLayout | null;

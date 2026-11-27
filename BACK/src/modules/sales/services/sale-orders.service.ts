@@ -4,6 +4,7 @@ import {
   type QuantityValue,
 } from '../../../common/units/quantity';
 import { resolveSaleUnit } from '../sale-unit.util';
+import { assertPaymentsCover } from '../../../common/money/cash-rounding';
 import {
   ConflictException,
   ForbiddenException,
@@ -1233,6 +1234,10 @@ export class SaleOrdersService implements SalesGateway {
     dto: CollectPaymentDto,
     userId?: string,
   ) {
+    const pending = await this.saleOrdersRepository.findById(tenantId, id);
+    if (!pending) throw new NotFoundException('Pedido no encontrado');
+    assertPaymentsCover(pending.total ?? 0, dto.payments);
+
     const paymentCollectedEvent = await this.prisma.$transaction(async (tx) => {
       const transitioned = await this.saleOrdersRepository.transition(
         tenantId,
@@ -1552,6 +1557,8 @@ export class SaleOrdersService implements SalesGateway {
     const productMap = new Map(products.map((p) => [p.id, p]));
 
     const { subtotal, total } = this.computeTotals(dto);
+    // Lo cobrado cubre el total; el efectivo va redondeado hacia abajo a 50.
+    assertPaymentsCover(total, dto.payments);
     const branchId = await this.resolveBranchId(tenantId, userId);
 
     {
