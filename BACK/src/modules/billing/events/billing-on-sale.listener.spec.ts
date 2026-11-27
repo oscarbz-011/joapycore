@@ -61,6 +61,7 @@ describe('BillingOnSaleListener', () => {
 
     prisma.saleOrder.findFirst.mockResolvedValue({
       saleType: 'CASH',
+      salePayments: [],
       items: [],
     });
     await listener.handle({ tenantId: TENANT, saleOrderId: ORDER_ID });
@@ -71,6 +72,7 @@ describe('BillingOnSaleListener', () => {
   it('sums item cash prices for a CASH sale', async () => {
     prisma.saleOrder.findFirst.mockResolvedValue({
       saleType: 'CASH',
+      salePayments: [],
       items: [makeItem({ quantity: 2, unitPrice: new Prisma.Decimal(500000) })],
     });
     await listener.handle({ tenantId: TENANT, saleOrderId: ORDER_ID });
@@ -88,9 +90,46 @@ describe('BillingOnSaleListener', () => {
     );
   });
 
+  it('stores the cash rounding of a CASH sale paid in cash', async () => {
+    prisma.saleOrder.findFirst.mockResolvedValue({
+      saleType: 'CASH',
+      salePayments: [
+        { amount: new Prisma.Decimal(15450), paymentMethod: 'CASH' },
+      ],
+      items: [makeItem({ quantity: 1, unitPrice: new Prisma.Decimal(15483) })],
+    });
+    await listener.handle({ tenantId: TENANT, saleOrderId: ORDER_ID });
+
+    expect(invoicesRepository.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        total: new Prisma.Decimal(15483),
+        rounding: new Prisma.Decimal(33),
+      }),
+      expect.anything(),
+    );
+  });
+
+  it('never rounds a CREDIT sale: the installments add up exact', async () => {
+    prisma.saleOrder.findFirst.mockResolvedValue({
+      saleType: 'CREDIT',
+      interestRate: null,
+      salePayments: [
+        { amount: new Prisma.Decimal(5483), paymentMethod: 'CASH' },
+      ],
+      items: [makeItem({ quantity: 1, unitPrice: new Prisma.Decimal(15483) })],
+    });
+    await listener.handle({ tenantId: TENANT, saleOrderId: ORDER_ID });
+
+    expect(invoicesRepository.create).toHaveBeenCalledWith(
+      expect.objectContaining({ rounding: new Prisma.Decimal(0) }),
+      expect.anything(),
+    );
+  });
+
   it('breaks down the IVA included in each item by the product rate', async () => {
     prisma.saleOrder.findFirst.mockResolvedValue({
       saleType: 'CASH',
+      salePayments: [],
       items: [
         makeItem({ quantity: 1, unitPrice: new Prisma.Decimal(110000) }),
         makeItem({
@@ -210,6 +249,7 @@ describe('BillingOnSaleListener', () => {
   it('charges the surcharge of a CASH sale without interest', async () => {
     prisma.saleOrder.findFirst.mockResolvedValue({
       saleType: 'CASH',
+      salePayments: [],
       interestRate: new Prisma.Decimal(10),
       surchargeType: 'PERCENTAGE',
       surchargeAmount: new Prisma.Decimal(5),
@@ -323,6 +363,7 @@ describe('BillingOnSaleListener', () => {
   it('emits audit.log after creating the invoice', async () => {
     prisma.saleOrder.findFirst.mockResolvedValue({
       saleType: 'CASH',
+      salePayments: [],
       items: [makeItem()],
     });
     await listener.handle({ tenantId: TENANT, saleOrderId: ORDER_ID });

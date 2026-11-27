@@ -27,6 +27,8 @@ const FISCAL = {
     iva10: 20_000,
     ivaTotal: 20_000,
     total: 220_000,
+    rounding: 0,
+    toPay: 220_000,
   },
 };
 

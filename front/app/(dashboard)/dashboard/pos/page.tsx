@@ -1,5 +1,5 @@
 'use client';
-import { money as exact, sumMoney } from '@/lib/money';
+import { amountToPay, cashRounding, money as exact, sumMoney } from '@/lib/money';
 import { formatQty, qty, quantityDecimals } from '@/lib/quantity';
 import { SaleUnitPicker, type SaleUnitValue } from '@/components/sales/sale-unit-picker';
 import { lineStockQuantity, saleUnitPayload } from '@/components/sales/order-line-items';
@@ -349,6 +349,10 @@ function SaleScreen({ session }: { session: ActivePosSession }) {
 
   const total = sumMoney(cart.map((l) => exact(l.unitPrice).mul(l.quantity))).toNumber();
   const paidTotal = sumMoney(payments.map((p) => p.amount || 0)).toNumber();
+  // El efectivo se cobra redondeado hacia abajo a 50; lo electrónico, exacto.
+  const paymentParts = payments.map((p) => ({ amount: p.amount || 0, method: p.method }));
+  const rounding = cashRounding(total, paymentParts).toNumber();
+  const toPay = amountToPay(total, paymentParts).toNumber();
 
   function addProduct(product: ProductWithStock) {
     setCart((c) => {
@@ -441,7 +445,8 @@ function SaleScreen({ session }: { session: ActivePosSession }) {
   });
 
   function chargeExact() {
-    setPayments([{ key: 'p0', method: payments[0]?.method ?? 'CASH', amount: total }]);
+    const method = payments[0]?.method ?? 'CASH';
+    setPayments([{ key: 'p0', method, amount: amountToPay(total, [{ amount: total, method }]).toNumber() }]);
   }
 
   const reprint = useMutation({
@@ -452,7 +457,7 @@ function SaleScreen({ session }: { session: ActivePosSession }) {
 
   const serialsOk = cart.every((l) => !l.isSerialized || l.serialNumbers.length === l.quantity);
   const canCharge =
-    cart.length > 0 && total > 0 && paidTotal >= total && serialsOk && !blocker && !numberProblem;
+    cart.length > 0 && total > 0 && paidTotal >= toPay && serialsOk && !blocker && !numberProblem;
 
   return (
     <div className="space-y-6">
@@ -627,6 +632,18 @@ function SaleScreen({ session }: { session: ActivePosSession }) {
               <p className="text-sm font-semibold text-foreground">Total</p>
               <p className="text-lg font-semibold text-foreground">{money(total)}</p>
             </div>
+            {rounding > 0 && (
+              <div className="space-y-1 text-sm">
+                <div className="flex items-center justify-between text-muted-foreground">
+                  <span>Redondeo del efectivo</span>
+                  <span>-{money(rounding)}</span>
+                </div>
+                <div className="flex items-center justify-between font-semibold text-foreground">
+                  <span>A cobrar</span>
+                  <span>{money(toPay)}</span>
+                </div>
+              </div>
+            )}
 
             <div className="space-y-2">
               {payments.map((p, i) => (
@@ -685,9 +702,9 @@ function SaleScreen({ session }: { session: ActivePosSession }) {
               </div>
             </div>
 
-            {total > 0 && paidTotal !== total && (
+            {total > 0 && paidTotal !== toPay && (
               <p className="text-xs text-muted-foreground">
-                {paidTotal < total ? `Faltan ${money(total - paidTotal)}` : `Vuelto ${money(paidTotal - total)}`}
+                {paidTotal < toPay ? `Faltan ${money(toPay - paidTotal)}` : `Vuelto ${money(paidTotal - toPay)}`}
               </p>
             )}
 

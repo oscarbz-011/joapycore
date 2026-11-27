@@ -196,7 +196,7 @@ export class PosSalesService {
       amount: toNum(p.amount),
     }));
     const paid = sumMoney(payments.map((p) => p.amount));
-    const change = paid.minus(money(fiscal.totals.total));
+    const change = paid.minus(money(fiscal.totals.toPay));
     const { terminal, cashier } = sale.posSession;
     return {
       ...fiscal,

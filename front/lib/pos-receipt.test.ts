@@ -43,6 +43,8 @@ function makeReceipt(overrides: Partial<PosReceipt> = {}): PosReceipt {
       iva10: 20_000,
       ivaTotal: 20_000,
       total: 220_000,
+      rounding: 0,
+      toPay: 220_000,
     },
     copy: false,
     terminalName: 'Caja 1',
@@ -114,6 +116,16 @@ describe('receiptHtml', () => {
     const html = receiptHtml(makeReceipt());
     expect(html).toContain('Licuadora &lt;Pro&gt;');
     expect(html).not.toContain('<Pro>');
+  });
+
+  it('prints the rounded total to pay without a rounding row', () => {
+    const base = makeReceipt();
+    const html = receiptHtml(
+      makeReceipt({ totals: { ...base.totals, total: 15_483, rounding: 33, toPay: 15_450 } }),
+    );
+    expect(html).toContain('15.450');
+    expect(html).not.toContain('Redondeo');
+    expect(html).not.toContain('15.483');
   });
 
   it('shows the change', () => {

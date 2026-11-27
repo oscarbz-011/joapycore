@@ -21,6 +21,7 @@ export const receiptSelect = {
   timbradoValidUntil: true,
   issuedAt: true,
   total: true,
+  rounding: true,
   anonymousBuyer: true,
   status: true,
   invoiceType: true,
@@ -304,6 +305,7 @@ export class InvoicesRepository implements InvoicePdf {
       saleOrderId: string;
       numbering: SeriesNumbering;
       total: Prisma.Decimal;
+      rounding: Prisma.Decimal;
       issuedAt: Date;
       paymentMethod: PaymentMethod | null;
       anonymousBuyer: boolean;
@@ -322,6 +324,7 @@ export class InvoicesRepository implements InvoicePdf {
         status: 'PAID',
         ...data.numbering,
         total: data.total,
+        rounding: data.rounding,
         issuedAt: data.issuedAt,
         paymentMethod: data.paymentMethod,
         anonymousBuyer: data.anonymousBuyer,

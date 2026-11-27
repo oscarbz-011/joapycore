@@ -3,6 +3,7 @@ import { OnDomainEvent } from '../../../common/events/on-domain-event.decorator'
 import { AccountsReceivableRepository } from '../repositories/accounts-receivable.repository';
 import { PaymentSourcesRepository } from '../repositories/payment-sources.repository';
 import type { DomainEvents } from '../../../common/events/domain-events';
+import { money } from '../../../common/money/money';
 
 type InvoiceIssuedEvent = DomainEvents['invoice.issued'];
 
@@ -46,7 +47,8 @@ export class PaymentsOnInvoiceListener {
     const arAmount =
       invoice.saleOrder?.saleType === 'CREDIT' && invoice.saleOrder.loan
         ? invoice.saleOrder.loan.totalAmount
-        : invoice.total;
+        : // Lo que se cobra: sin el redondeo del efectivo.
+          money(invoice.total).minus(money(invoice.rounding));
 
     await this.arRepository.create({
       tenantId: event.tenantId,

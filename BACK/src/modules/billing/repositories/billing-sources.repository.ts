@@ -24,6 +24,7 @@ export class BillingSourcesRepository {
         interestRate: true,
         surchargeType: true,
         surchargeAmount: true,
+        salePayments: { select: { amount: true, paymentMethod: true } },
         items: {
           select: {
             id: true,

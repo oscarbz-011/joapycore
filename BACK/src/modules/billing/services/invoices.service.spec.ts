@@ -14,6 +14,7 @@ function makeInvoice(overrides = {}) {
     saleOrderId: 'order-1',
     status: 'PENDING' as const,
     total: { toString: () => '2500000' },
+    rounding: { toString: () => '0' },
     issuedAt: null,
     dueDate: null,
     notes: null,
@@ -369,6 +370,38 @@ describe('InvoicesService', () => {
         expect.any(Date),
         expect.any(Date),
         expect.objectContaining(NUMBERING),
+        tx,
+      );
+    });
+
+    it('rounds a cash invoice paid in cash and charges a transfer exact', async () => {
+      invoicesRepository.findById.mockResolvedValue(
+        makeInvoice({ total: { toString: () => '15483' } }),
+      );
+
+      await service.issue('tenant-1', 'inv-1', {
+        paymentCondition: 'CASH',
+        paymentMethod: 'CASH',
+      });
+      expect(invoicesRepository.claimIssue).toHaveBeenLastCalledWith(
+        'tenant-1',
+        'inv-1',
+        expect.any(Date),
+        expect.any(Date),
+        expect.objectContaining({ rounding: new Prisma.Decimal(33) }),
+        tx,
+      );
+
+      await service.issue('tenant-1', 'inv-1', {
+        paymentCondition: 'CASH',
+        paymentMethod: 'BANK_TRANSFER',
+      });
+      expect(invoicesRepository.claimIssue).toHaveBeenLastCalledWith(
+        'tenant-1',
+        'inv-1',
+        expect.any(Date),
+        expect.any(Date),
+        expect.objectContaining({ rounding: new Prisma.Decimal(0) }),
         tx,
       );
     });

@@ -57,6 +57,7 @@ describe('PosInvoicingService', () => {
     billingSources = {
       findSaleOrderForInvoicing: jest.fn().mockResolvedValue({
         saleType: 'CASH',
+        salePayments: [],
         items: [
           {
             id: 'soi-1',
@@ -115,6 +116,7 @@ describe('PosInvoicingService', () => {
           saleOrderId: 'order-1',
           numbering: NUMBERING,
           total: new Prisma.Decimal(220000),
+          rounding: new Prisma.Decimal(0),
           issuedAt: AT,
           paymentMethod: 'CASH',
           anonymousBuyer: true,
@@ -131,6 +133,37 @@ describe('PosInvoicingService', () => {
             },
           ],
         },
+        tx,
+      );
+    });
+
+    it('keeps the lines total and stores the cash rounding apart', async () => {
+      billingSources.findSaleOrderForInvoicing.mockResolvedValue({
+        saleType: 'CASH',
+        salePayments: [
+          { amount: new Prisma.Decimal(10000), paymentMethod: 'CARD' },
+          { amount: new Prisma.Decimal(5450), paymentMethod: 'CASH' },
+        ],
+        items: [
+          {
+            id: 'soi-1',
+            quantity: 1,
+            unitPrice: new Prisma.Decimal(15483),
+            financedUnitPrice: null,
+            description: null,
+            product: { name: 'Licuadora', ivaTaxRate: new Prisma.Decimal(10) },
+          },
+        ],
+      });
+
+      await service.issuePosInvoice(tx, 'tenant-1', input);
+
+      expect(invoicesRepository.createPaid).toHaveBeenCalledWith(
+        'tenant-1',
+        expect.objectContaining({
+          total: new Prisma.Decimal(15483),
+          rounding: new Prisma.Decimal(33),
+        }),
         tx,
       );
     });

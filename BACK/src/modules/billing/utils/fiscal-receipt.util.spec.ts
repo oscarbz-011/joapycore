@@ -114,6 +114,21 @@ describe('buildFiscalReceipt', () => {
       iva10: 12_000,
       ivaTotal: 17_000,
       total: 267_000,
+      rounding: 0,
+      toPay: 267_000,
+    });
+  });
+
+  it('shows the cash rounding and what was paid, keeping the IVA of the lines', () => {
+    const totals = buildFiscalReceipt({
+      ...makeInvoice(),
+      rounding: 37,
+    }).totals;
+    expect(totals).toMatchObject({
+      total: 267_000,
+      rounding: 37,
+      toPay: 266_963,
+      ivaTotal: 17_000,
     });
   });
 

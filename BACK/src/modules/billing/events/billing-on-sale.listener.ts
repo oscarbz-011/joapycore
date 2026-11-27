@@ -4,6 +4,7 @@ import { OnDomainEvent } from '../../../common/events/on-domain-event.decorator'
 import { PrismaService } from '../../../prisma/prisma.service';
 import { BillingSourcesRepository } from '../repositories/billing-sources.repository';
 import { InvoicesRepository } from '../repositories/invoices.repository';
+import { cashRounding } from '../../../common/money/cash-rounding';
 import { money, sumMoney } from '../../../common/money/money';
 import { saleAmounts } from '../../../common/money/sale-amounts';
 import {
@@ -66,6 +67,11 @@ export class BillingOnSaleListener {
     const items = order.items.map(toInvoiceItem);
     if (!surcharge.isZero()) items.push(surchargeInvoiceItem(surcharge));
     const total = sumMoney(items.map((item) => item.total));
+    // Al contado, lo pagado en efectivo se redondea hacia abajo a 50.
+    const rounding =
+      order.saleType === 'CASH'
+        ? cashRounding(total, order.salePayments)
+        : money(0);
 
     if (order.saleType === 'CREDIT') {
       const loan = await this.billingSources.findLoanTotalBySaleOrder(
@@ -81,7 +87,7 @@ export class BillingOnSaleListener {
 
     const invoice = await this.prisma.$transaction(async (tx) => {
       const inv = await this.invoicesRepository.create(
-        { tenantId, saleOrderId, status: 'PENDING', total },
+        { tenantId, saleOrderId, status: 'PENDING', total, rounding },
         tx,
       );
 

@@ -762,6 +762,35 @@ describe('SaleOrdersService', () => {
     });
   });
 
+  describe('collectPayment', () => {
+    const payment = (amount: number, paymentMethod: 'CASH' | 'CARD') => ({
+      payments: [{ amount, paymentMethod, paymentDate: '2026-11-27' }],
+    });
+
+    it('asks for the rest before moving the order', async () => {
+      saleOrdersRepository.findById.mockResolvedValue(
+        makeOrder({ total: 15_483 }),
+      );
+
+      await expect(
+        service.collectPayment('tenant-1', 'order-1', payment(15_400, 'CASH')),
+      ).rejects.toThrow('Faltan Gs. 50 por cobrar');
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+    });
+
+    it('does not find an order of another company', async () => {
+      saleOrdersRepository.findById.mockResolvedValue(null);
+
+      await expect(
+        service.collectPayment('tenant-2', 'order-1', payment(15_450, 'CASH')),
+      ).rejects.toThrow('Pedido no encontrado');
+      expect(saleOrdersRepository.findById).toHaveBeenCalledWith(
+        'tenant-2',
+        'order-1',
+      );
+    });
+  });
+
   // ── createPosSale ────────────────────────────────────────────────────────────
 
   describe('createPosSale', () => {
@@ -785,6 +814,41 @@ describe('SaleOrdersService', () => {
       await expect(
         service.createPosSale('tenant-1', baseDto, 'session-1', 'user-1'),
       ).resolves.toBeDefined();
+    });
+
+    it('takes cash rounded down to 50 and refuses to charge less', async () => {
+      productsRepository.findManyByIds.mockResolvedValue([
+        makeProduct({ salesChannels: ['POS'] }),
+      ]);
+      const sale = (amount: number) => ({
+        items: [{ ...baseDto.items[0], quantity: 1, unitPrice: 15_483 }],
+        payments: [{ amount, paymentMethod: 'CASH' as const }],
+      });
+
+      await expect(
+        service.createPosSale('tenant-1', sale(15_450), 'session-1', 'user-1'),
+      ).resolves.toBeDefined();
+      await expect(
+        service.createPosSale('tenant-1', sale(15_400), 'session-1', 'user-1'),
+      ).rejects.toThrow('Faltan Gs. 50 por cobrar');
+    });
+
+    it('does not take more than the total by card', async () => {
+      productsRepository.findManyByIds.mockResolvedValue([
+        makeProduct({ salesChannels: ['POS'] }),
+      ]);
+
+      await expect(
+        service.createPosSale(
+          'tenant-1',
+          {
+            ...baseDto,
+            payments: [{ amount: 6_000_000, paymentMethod: 'CARD' as const }],
+          },
+          'session-1',
+          'user-1',
+        ),
+      ).rejects.toThrow('no se puede cobrar más que el total');
     });
 
     it('rejects POS when only NORMAL is enabled', async () => {

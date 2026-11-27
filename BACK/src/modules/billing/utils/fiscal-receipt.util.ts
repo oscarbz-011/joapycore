@@ -43,6 +43,7 @@ export interface InvoiceForReceipt {
   timbradoValidUntil: Date | null;
   issuedAt: Date | null;
   total: Numeric;
+  rounding?: Numeric | null;
   anonymousBuyer: boolean;
   tenant: {
     name: string;
@@ -155,6 +156,10 @@ export function buildFiscalReceipt(invoice: InvoiceForReceipt): FiscalReceipt {
     iva10: iva10.toNumber(),
     ivaTotal: iva5.plus(iva10).toNumber(),
     total: money(invoice.total).toNumber(),
+    rounding: money(invoice.rounding ?? 0).toNumber(),
+    toPay: money(invoice.total)
+      .minus(money(invoice.rounding ?? 0))
+      .toNumber(),
   };
 
   const branch =
@@ -234,6 +239,8 @@ export function buildCreditNoteReceipt(
     timbradoValidUntil: note.timbradoValidUntil,
     issuedAt: note.issuedAt,
     total: note.total,
+    // El redondeo es de lo cobrado en la factura, no de la nota.
+    rounding: 0,
     series: note.series,
     items: note.items,
   });
