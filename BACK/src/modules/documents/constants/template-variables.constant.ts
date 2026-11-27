@@ -238,11 +238,6 @@ export const TEMPLATE_KIND_DEFS: Record<TemplateKind, TemplateKindDef> = {
       { key: 'factura.iva5', label: 'Total IVA 5%', type: 'text' },
       { key: 'factura.iva10', label: 'Total IVA 10%', type: 'text' },
       { key: 'factura.totalIva', label: 'Total IVA (5% + 10%)', type: 'text' },
-      {
-        key: 'factura.redondeo',
-        label: 'Redondeo del efectivo (fila completa, vacía si no hubo)',
-        type: 'text',
-      },
       { key: 'factura.total', label: 'Total a pagar', type: 'text' },
       {
         key: 'factura.totalEnLetras',

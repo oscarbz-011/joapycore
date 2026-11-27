@@ -118,15 +118,14 @@ describe('receiptHtml', () => {
     expect(html).not.toContain('<Pro>');
   });
 
-  it('shows the cash rounding and charges the rounded total', () => {
+  it('prints the rounded total to pay without a rounding row', () => {
     const base = makeReceipt();
     const html = receiptHtml(
       makeReceipt({ totals: { ...base.totals, total: 15_483, rounding: 33, toPay: 15_450 } }),
     );
-    expect(html).toContain('Redondeo (efectivo)');
-    expect(html).toContain('-33');
     expect(html).toContain('15.450');
-    expect(receiptHtml(base)).not.toContain('Redondeo');
+    expect(html).not.toContain('Redondeo');
+    expect(html).not.toContain('15.483');
   });
 
   it('shows the change', () => {
